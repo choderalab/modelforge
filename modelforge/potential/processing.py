@@ -120,7 +120,10 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
         )
 
         return per_system_property.scatter_reduce(
-            0, indices.long().unsqueeze(1), per_atom_property, reduce=self.reduction_mode,
+            0,
+            indices.long().unsqueeze(1),
+            per_atom_property,
+            reduce=self.reduction_mode,
         )
 
 
@@ -285,7 +288,11 @@ def default_charge_conservation(
     # Calculate the sum of partial charges for each molecule
     predicted_per_system_total_charge = torch.zeros_like(
         per_system_total_charge, dtype=per_atom_charge.dtype
-    ).scatter_add_(0, mol_indices.long().unsqueeze(1), per_atom_charge,)
+    ).scatter_add_(
+        0,
+        mol_indices.long().unsqueeze(1),
+        per_atom_charge,
+    )
 
     # Calculate the number of atoms in each molecule
     num_atoms_per_system = mol_indices.bincount(
@@ -365,17 +372,18 @@ class ChargeConservation(torch.nn.Module):
 class PerAtomEnergy(torch.nn.Module):
 
     def __init__(
-        self, per_atom_energy: Dict[str, bool], dataset_statistics: Dict[str, float],
+        self,
+        per_atom_energy: Dict[str, bool],
+        dataset_statistics: Dict[str, float],
     ):
-        
         """
-        Process per atom energies. Depending on what has been requested in the per_atom_energy dictionary, the per atom energies are normalized and/or reduced to per system energies. 
+        Process per atom energies. Depending on what has been requested in the per_atom_energy dictionary, the per atom energies are normalized and/or reduced to per system energies.
         Parameters
         ----------
         per_atom_energy : Dict[str, bool]
             A dictionary containing the per atom energy processing options.
         dataset_statistics : Dict[str, float]
-         
+
         """
         super().__init__()
 
@@ -556,9 +564,7 @@ class CoulombPotential(torch.nn.Module):
         ) * (1 / pairwise_distances)
 
         # Compute the Coulomb interaction term
-        coulomb_interactions = (
-            per_atom_charge[idx_i] * per_atom_charge[idx_j]
-        ) * chi_r
+        coulomb_interactions = (per_atom_charge[idx_i] * per_atom_charge[idx_j]) * chi_r
 
         # Sum over all interactions for each molecule
         data["electrostatic_energy"] = (

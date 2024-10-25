@@ -783,8 +783,8 @@ def test_calculate_energies_and_forces(
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
     nr_of_atoms_per_batch = nnp_input.atomic_subsystem_indices.shape[0]
 
-    assert E_inference.shape == (nr_of_mols, 1) # per system
-    assert F_inference.shape == (nr_of_atoms_per_batch, 3) #  per atom
+    assert E_inference.shape == (nr_of_mols, 1)  # per system
+    assert F_inference.shape == (nr_of_atoms_per_batch, 3)  #  per atom
 
     # make sure that both agree on E and F
     assert torch.allclose(E_inference, E_training, atol=1e-4)
@@ -825,7 +825,7 @@ def test_calculate_energies_and_forces(
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
     nr_of_atoms_per_batch = nnp_input.atomic_subsystem_indices.shape[0]
 
-    assert E_inference.shape == (nr_of_mols, 1) # per system
+    assert E_inference.shape == (nr_of_mols, 1)  # per system
     assert F_inference.shape == (nr_of_atoms_per_batch, 3)  #  per atom
 
     # make sure that both agree on E and F
@@ -886,7 +886,7 @@ def test_calculate_energies_and_forces_with_jax(
 
     # forward pass
     result = potential(nnp_input)["per_system_energy"]
-    assert result.shape == batch.metadata.per_system_energy.shape 
+    assert result.shape == batch.metadata.per_system_energy.shape
 
     from modelforge.utils.io import import_
 

@@ -181,10 +181,13 @@ def test_forward_and_backward(mode):
         energy["per_system_energy"].sum(), mf_input.positions
     )[0]
     per_atom_force = -derivative
-    
+
     # same input, same output
-    assert torch.isclose(energy['per_system_energy'][0], energy['per_system_energy'][1], rtol=1e-4)
+    assert torch.isclose(
+        energy["per_system_energy"][0], energy["per_system_energy"][1], rtol=1e-4
+    )
     assert torch.allclose(per_atom_force[0:5], per_atom_force[5:10], rtol=1e-4)
+
 
 def test_representation():
     # Compare the reference radial symmetry function output against the the
@@ -213,10 +216,8 @@ def test_representation():
         max_distance=max_distance.to(unit.nanometer).m,
         min_distance=min_distance.to(unit.nanometer).m,
     )
-    
-    calculated_rsf = rsf(
-        d_ij.to(unit.nanometer).m
-    )  # torch.Size([5,1, 8])
+
+    calculated_rsf = rsf(d_ij.to(unit.nanometer).m)  # torch.Size([5,1, 8])
     cutoff_module = CosineAttenuationFunction(max_distance.to(unit.nanometer).m)
 
     rcut_ij = cutoff_module(d_ij.to(unit.nanometer).m)  # torch.Size([5])

@@ -526,8 +526,12 @@ def test_forward_pass_with_all_datasets(
     assert "per_system_energy" in output
     assert "per_atom_energy" in output
 
-    assert output["per_system_energy"].shape[0] == 64
-    assert output["per_atom_energy"].shape[0] == batch.metadata.atomic_numbers.shape[0]
+    assert (
+        output["per_system_energy"].shape == batch.metadata.per_system_energy.shape
+    )  # per system
+    assert (
+        output["per_atom_energy"].shape[0] == batch.metadata.per_atom_force.shape[0]
+    )  # per atom
 
     pair_list = batch.nnp_input.pair_list
     # pairlist is in ascending order in row 0

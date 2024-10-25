@@ -632,8 +632,29 @@ class NeuralNetworkPotentialFactory:
         use_default_dataset_statistic: bool = False,
     ) -> PotentialTrainer:
         """
-        Create a
+        Create a lightning trainer object to train the neural network potential.
 
+        Parameters
+        ----------
+        potential_parameter : T_NNP_Parameters]
+            Parameters specific to the neural network potential.
+        runtime_parameter : Optional[RuntimeParameters], optional
+            Parameters for configuring the runtime environment (default is
+            None).
+        training_parameter : Optional[TrainingParameters], optional
+            Parameters for configuring training (default is None).
+        dataset_parameter : Optional[DatasetParameters], optional
+            Parameters for configuring the dataset (default is None).
+        dataset_statistic : Dict[str, Dict[str, float]], optional
+            Dataset statistics for normalization (default is provided).
+        potential_seed : Optional[int], optional
+            Seed for random number generation (default is None).
+        use_default_dataset_statistic : bool, optional
+            Whether to use default dataset statistics (default is False).
+        Returns
+        -------
+        PotentialTrainer
+            An instantiated neural network potential for training.
         """
         from modelforge.utils.misc import seed_random_number
 

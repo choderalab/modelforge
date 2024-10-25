@@ -394,7 +394,7 @@ class PerAtomEnergy(torch.nn.Module):
         scaled_values = self.scale(per_atom_property)
         per_system_energy = self.reduction(indices, scaled_values)
 
-        data["per_system_energy"] = per_system_energy
+        data["per_system_energy"] = per_system_energy.unsqueeze(-1)
         data["per_atom_energy"] = data["per_atom_energy"].detach()
 
         return data

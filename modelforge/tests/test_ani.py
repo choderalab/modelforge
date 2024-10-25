@@ -156,3 +156,73 @@ def test_ani():
         ref_atomic_energies.flatten(),
         rtol=1e-3,
     )
+
+
+@pytest.mark.parametrize("mode", ["inference", "training"])
+def test_forward_and_backward(mode):
+    # Test modelforge ANI implementation
+    # Test forward and backward pass
+
+    import torch
+
+    model = setup_potential_for_test(
+        use=mode,
+        potential_seed=42,
+        potential_name="ani2x",
+        simulation_environment="PyTorch",
+        use_training_mode_neighborlist=True,
+        jit=False,
+    )
+
+    _, _, _, mf_input = setup_two_methanes()
+
+    energy = model(mf_input)
+    derivative = torch.autograd.grad(
+        energy["per_system_energy"].sum(), mf_input.positions
+    )[0]
+    per_atom_force = -derivative
+    
+    # same input, same output
+    assert torch.isclose(energy['per_system_energy'][0], energy['per_system_energy'][1], rtol=1e-4)
+    assert torch.allclose(per_atom_force[0:5], per_atom_force[5:10], rtol=1e-4)
+
+def test_representation():
+    # Compare the reference radial symmetry function output against the the
+    # implemented radial symmetry function
+    import torch
+    from modelforge.potential import (
+        AniRadialBasisFunction,
+        CosineAttenuationFunction,
+    )
+    from openff.units import unit
+    from .precalculated_values import (
+        provide_reference_values_for_test_ani_test_compare_rsf,
+    )
+
+    # set up relevant variables
+    d_ij = unit.Quantity(
+        torch.tensor([[3.5201], [2.6756], [2.1641], [3.0990], [4.5180]]), unit.angstrom
+    )
+    max_distance = unit.Quantity(5.0, unit.angstrom)
+    min_distance = unit.Quantity(0.8, unit.angstrom)
+    radial_dist_divisions = 8
+
+    # pass parameters to the radial symmetry function
+    rsf = AniRadialBasisFunction(
+        number_of_radial_basis_functions=radial_dist_divisions,
+        max_distance=max_distance.to(unit.nanometer).m,
+        min_distance=min_distance.to(unit.nanometer).m,
+    )
+    
+    calculated_rsf = rsf(
+        d_ij.to(unit.nanometer).m
+    )  # torch.Size([5,1, 8])
+    cutoff_module = CosineAttenuationFunction(max_distance.to(unit.nanometer).m)
+
+    rcut_ij = cutoff_module(d_ij.to(unit.nanometer).m)  # torch.Size([5])
+    calculated_rsf = calculated_rsf * rcut_ij
+
+    # get the precalculated output obtained from torchani for the same d_ij and
+    # cutoff values
+    reference_rsf = provide_reference_values_for_test_ani_test_compare_rsf()
+    assert torch.allclose(calculated_rsf, reference_rsf, rtol=1e-4)

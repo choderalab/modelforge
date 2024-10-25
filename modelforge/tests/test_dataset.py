@@ -647,9 +647,9 @@ def test_dataset_generation(dataset_name, datamodule_factory, prep_temp_dir):
         # this isn't set when dataset is in 'fit' mode
         pass
 
-    # the dataloader automatically splits and batches the dataset
-    # for the training set it batches the 800 training datapoints (of 1000 total) in 13 batches
-    # all with 64 points until the last which has 32
+    # the dataloader automatically splits and batches the dataset for the
+    # training set it batches the 800 training datapoints (of 1000 total) in 13
+    # batches all with 64 points until the last which has 32
 
     assert len(train_dataloader) == 13  # nr of batches
     batch_data = [v_ for v_ in train_dataloader]

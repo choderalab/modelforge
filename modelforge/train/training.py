@@ -190,7 +190,7 @@ class CalculateProperties(torch.nn.Module):
             A dictionary containing the true and predicted energies.
         """
         per_system_energy_true = batch.metadata.per_system_energy.to(torch.float32)
-        per_system_energy_predict = model_prediction["per_system_energy"].unsqueeze(1)
+        per_system_energy_predict = model_prediction["per_system_energy"]
 
         assert per_system_energy_true.shape == per_system_energy_predict.shape, (
             f"Shapes of true and predicted energies do not match: "

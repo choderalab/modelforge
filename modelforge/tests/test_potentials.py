@@ -527,7 +527,7 @@ def test_forward_pass_with_all_datasets(
     assert "per_atom_energy" in output
 
     assert output["per_system_energy"].shape[0] == 64
-    assert output["per_atom_energy"].shape == batch.nnp_input.atomic_numbers.shape
+    assert output["per_atom_energy"].shape[0] == batch.metadata.atomic_numbers.shape[0]
 
     pair_list = batch.nnp_input.pair_list
     # pairlist is in ascending order in row 0
@@ -783,8 +783,8 @@ def test_calculate_energies_and_forces(
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
     nr_of_atoms_per_batch = nnp_input.atomic_subsystem_indices.shape[0]
 
-    assert E_inference.shape == torch.Size([nr_of_mols])
-    assert F_inference.shape == (nr_of_atoms_per_batch, 3)
+    assert E_inference.shape == (nr_of_mols, 1) # per system
+    assert F_inference.shape == (nr_of_atoms_per_batch, 3) #  per atom
 
     # make sure that both agree on E and F
     assert torch.allclose(E_inference, E_training, atol=1e-4)
@@ -825,8 +825,8 @@ def test_calculate_energies_and_forces(
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
     nr_of_atoms_per_batch = nnp_input.atomic_subsystem_indices.shape[0]
 
-    assert E_inference.shape == torch.Size([nr_of_mols])
-    assert F_inference.shape == (nr_of_atoms_per_batch, 3)  #  only one molecule
+    assert E_inference.shape == (nr_of_mols, 1) # per system
+    assert F_inference.shape == (nr_of_atoms_per_batch, 3)  #  per atom
 
     # make sure that both agree on E and F
     assert torch.allclose(E_inference, E_training, atol=1e-4)
@@ -867,12 +867,12 @@ def test_calculate_energies_and_forces_with_jax(
     from modelforge.jax import convert_NNPInput_to_jax
 
     # get input and set up model
-    nnp_input = single_batch_with_batchsize(
+    batch = single_batch_with_batchsize(
         batch_size=1, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
-    ).nnp_input
+    )
 
     # conver tinput to jax
-    nnp_input = convert_NNPInput_to_jax(nnp_input)
+    nnp_input = convert_NNPInput_to_jax(batch.nnp_input)
 
     potential = setup_potential_for_test(
         potential_name,
@@ -886,6 +886,7 @@ def test_calculate_energies_and_forces_with_jax(
 
     # forward pass
     result = potential(nnp_input)["per_system_energy"]
+    assert result.shape == batch.metadata.per_system_energy.shape 
 
     from modelforge.utils.io import import_
 
@@ -899,8 +900,7 @@ def test_calculate_energies_and_forces_with_jax(
     # test output shapes
     nr_of_mols = get_nr_of_mols(nnp_input)
     nr_of_atoms_per_batch = nnp_input.atomic_subsystem_indices.shape[0]
-    assert result.shape == torch.Size([nr_of_mols])  #  only one molecule
-    assert forces.shape == (nr_of_atoms_per_batch, 3)  #  only one molecule
+    assert forces.shape == batch.metadata.per_atom_force.shape
 
 
 @pytest.mark.parametrize(

@@ -457,8 +457,6 @@ class TrainingAdapter(pL.LightningModule):
                 len(mixing_scheme) < nr_of_epochs
             ), "The number of epochs is less than the number of steps in the weight scheduling"
             # Fill up the rest of the epochs with the target weight
-            a = nr_of_epochs - mixing_scheme.shape[0]
-            b = torch.ones(a) * target_weight
             weights_scheduling[key] = torch.cat(
                 [
                     mixing_scheme,

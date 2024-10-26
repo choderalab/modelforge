@@ -1207,6 +1207,7 @@ def read_config_and_train(
         The configured trainer instance after running the training process.
     """
     from modelforge.potential.potential import NeuralNetworkPotentialFactory
+
     (
         training_parameter,
         dataset_parameter,

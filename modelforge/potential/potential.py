@@ -8,7 +8,6 @@ import lightning as pl
 import torch
 from loguru import logger as log
 from openff.units import unit
-from torch.nn import Module
 from modelforge.potential.neighbors import PairlistData
 
 from modelforge.dataset.dataset import DatasetParameters
@@ -37,7 +36,10 @@ T_NNP_Parameters = TypeVar(
 )
 
 
-from typing import Callable, Literal, Optional, Union
+from typing import Callable, Literal, Optional, Union, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from modelforge.train.training import PotentialTrainer
 
 import numpy as np
 
@@ -517,8 +519,6 @@ def setup_potential(
 
 from openff.units import unit
 
-from modelforge.train.training import PotentialTrainer
-
 
 class NeuralNetworkPotentialFactory:
 
@@ -630,7 +630,7 @@ class NeuralNetworkPotentialFactory:
         },
         potential_seed: Optional[int] = None,
         use_default_dataset_statistic: bool = False,
-    ) -> PotentialTrainer:
+    ) -> "PotentialTrainer":
         """
         Create a lightning trainer object to train the neural network potential.
 
@@ -657,6 +657,7 @@ class NeuralNetworkPotentialFactory:
             An instantiated neural network potential for training.
         """
         from modelforge.utils.misc import seed_random_number
+        from modelforge.train.training import PotentialTrainer
 
         if potential_seed is not None:
             log.info(f"Setting random seed to: {potential_seed}")

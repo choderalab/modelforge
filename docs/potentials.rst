@@ -58,7 +58,7 @@ Each potential currently implements the total energy prediction with per-atom
 forces within a given cutoff radius. The models can be trained on energies and
 forces. PaiNN and PhysNet can also predict partial charges and
 calculate long-range interactions using reaction fields or Coulomb potential.
-PaiNN can additionally use ultipole expansions.
+PaiNN can additionally use multipole expansions.
 
 Using TOML files to configure potentials
 --------------------------------------------
@@ -99,6 +99,49 @@ the parameters for the postprocessing operations. Explanation of fields in
 Default parameter files for each potential are available in `modelforge/tests/data/potential_defaults`. These files can be used as starting points for creating new potential configuration files.
 
 .. note:: All parameters in the configuration files have units attached where applicable. Units within modelforge a represented using the `openff.units` package (https://docs.openforcefield.org/projects/units/en/stable/index.html), which is a wrapper around the `pint` package. Definition of units within the TOML files must unit names available in the `openff.units` package (https://github.com/openforcefield/openff-units/blob/main/openff/units/data/defaults.txt).
+
+Use cases of the factory class
+--------------------------------------------
+
+There are three main use cases of the :class:`~modelforge.potential.potential.NeuralNetworkPotentialFactory`:
+
+1. Create and train a model, then save the state_dict of its potential. Load the state_dict to the potential of an existing trainer (with defined hyperparameters) to resume training.
+
+2. Load a potential for inference from a saved state_dict.
+
+3. Load an inference from a checkpoint file.
+
+.. note:: The general idea to handle these use cases is that always call `generate_trainer()` to create or load a trainer; use `generate_potential()` for loading inference potential (this is also how `load_inference_model_from_checkpoint()` is implemented).
+
+.. code-block:: python
+    :linenos:
+
+    # Use case 1
+    trainer = NeuralNetworkPotentialFactory.generate_trainer(
+            potential_parameter=config["potential"],
+            training_parameter=config["training"],
+            runtime_parameter=config["runtime"],
+            dataset_parameter=config["dataset"],
+        )
+    torch.save(trainer.lightning_module.state_dict(), file_path)
+    trainer2 = NeuralNetworkPotentialFactory.generate_trainer(
+            potential_parameter=config2["potential"],
+            training_parameter=config2["training"],
+            runtime_parameter=config2["runtime"],
+            dataset_parameter=config2["dataset"],
+        )
+    trainer2.lightning_module.load_state_dict(torch.load(file_path))
+
+    # Use case 2
+    potential = NeuralNetworkPotentialFactory.generate_potential(
+        simulation_environment="PyTorch",
+        potential_parameter=config["potential"],
+    )
+    potential.load_state_dict(torch.load(file_path))
+
+    # Use case 3
+    from modelforge.potential.potential import load_inference_model_from_checkpoint
+    potential = load_inference_model_from_checkpoint(ckpt_file)
 
 Example
 ------------------------------------

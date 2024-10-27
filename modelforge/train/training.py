@@ -579,8 +579,8 @@ class TrainingAdapter(pL.LightningModule):
         # Update and log metrics
         self._update_metrics(self.test_metrics, predict_target)
         # Save predictions and targets for plotting
-        self.test_preds.update({batch_idx: predict_target.detach()['per_system_energy_predict']})
-        self.test_targets.update({batch_idx: predict_target.detach()['per_system_energy_true']})
+        self.test_preds.update({batch_idx: predict_target['per_system_energy_predict'].detach()})
+        self.test_targets.update({batch_idx: predict_target['per_system_energy_true'].detach()})
 
 
     def _get_tensors(self, preds: Dict[int, torch.Tensor], targets: Dict[int, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor, int, int]:
@@ -641,12 +641,14 @@ class TrainingAdapter(pL.LightningModule):
             total_length = max_length * self.trainer.world_size
             gathered_preds = gathered_preds.reshape(total_length)[:total_length - pad_size * self.trainer.world_size]
             gathered_targets = gathered_targets.reshape(total_length)[:total_length - pad_size * self.trainer.world_size]
-            errors = (gathered_targets - gathered_preds).cpu().numpy()
+            errors = (gathered_targets - gathered_preds)
+            if errors.size == 0:
+                log.warning("Errors array is empty.")
 
             # Create regression plot
             regression_fig = self._create_regression_plot(
-                gathered_targets.numpy(),
-                gathered_preds.numpy(),
+                gathered_targets,
+                gathered_preds,
                 title=f'Validation Regression Plot - Epoch {self.current_epoch}'
             )
             # Generate error histogram plot
@@ -675,17 +677,31 @@ class TrainingAdapter(pL.LightningModule):
         None
         """
         
-        if self.training_parameter.experiment_logger.logger_name.lower() == 'wandb' and self.current_epoch % 1 == 0:
+        logger_name = self.training_parameter.experiment_logger.logger_name.lower()
+        plot_frequency = self.training_parameter.plot_frequency
+        
+        # skit logging if current_epoch == 0
+        #if self.current_epoch == 0:
+        #    return
+        
+        if logger_name == 'wandb':
             import wandb  
-            # Log histogram of errors and regression plot
-            self.logger.experiment.log({
-                f"{phase}/regression_plot": wandb.Image(regression_fig),
-                f"{phase}/error_histogram": wandb.Image(histogram_fig)
-            }, step=self.current_epoch)
+            if phase == 'test' or self.current_epoch % plot_frequency == 0:
+            # NOTE: only log every nth epoch for validation, but always log for test
+                # Log histogram of errors and regression plot
+                self.logger.experiment.log(
+                    {f"{phase}/regression_plot": wandb.Image(regression_fig)},
+                    #step=self.current_epoch
+                )
+                self.logger.experiment.log(
+                    {f"{phase}/error_histogram": wandb.Image(histogram_fig)},
+                    #step=self.current_epoch
+                )
             
-        elif self.training_parameter.experiment_logger.logger_name.lower() == 'tensorboard' and self.current_epoch % 1 == 0:
-            self.logger.experiment.add_figure(f"{phase}/regression_plot", regression_fig, self.current_epoch)
-            self.logger.experiment.add_figure(f"{phase}/error_histogram", histogram_fig, self.current_epoch)
+        elif logger_name == 'tensorboard':
+            if phase == 'test' or self.current_epoch % plot_frequency == 0:
+                self.logger.experiment.add_figure(f"{phase}/regression_plot", regression_fig, self.current_epoch)
+                self.logger.experiment.add_figure(f"{phase}/error_histogram", histogram_fig, self.current_epoch)
         else:
             log.warning(f"No logger found to log {phase} plots")
         
@@ -694,15 +710,15 @@ class TrainingAdapter(pL.LightningModule):
         plt.close(regression_fig)
         plt.close(histogram_fig)
 
-    def _create_regression_plot(self, targets, predictions, title='Regression Plot'):
+    def _create_regression_plot(self, targets:torch.Tensor, predictions:torch.Tensor, title='Regression Plot'):
         """
         Creates a regression plot comparing true targets and predictions.
 
         Parameters
         ----------
-        targets : numpy.ndarray
+        targets : torch.Tensor
             Array of true target values.
-        predictions : numpy.ndarray
+        predictions : torch.Tensor
             Array of predicted values.
         title : str, optional
             Title of the plot. Default is 'Regression Plot'.
@@ -714,17 +730,17 @@ class TrainingAdapter(pL.LightningModule):
         """
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots()
-        ax.scatter(targets, predictions, alpha=0.5)
+        ax.scatter(targets.cpu().numpy(), predictions.cpu().numpy(), alpha=0.5)
         ax.plot([targets.min(), targets.max()], [targets.min(), targets.max()], 'r--')
         ax.set_xlabel('True Values')
         ax.set_ylabel('Predicted Values')
         ax.set_title(title)
         return fig
     
-    def _create_error_histogram(self, errors, title='Error Histogram'):
+    def _create_error_histogram(self, errors:torch.Tensor, title='Error Histogram'):
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots()
-        ax.hist(errors, bins=50, alpha=0.75)
+        ax.hist(errors.cpu().numpy().flatten(), bins=50, alpha=0.75)
         ax.set_xlabel('Error')
         ax.set_ylabel('Frequency')
         ax.set_title(title)
@@ -745,12 +761,14 @@ class TrainingAdapter(pL.LightningModule):
             total_length = max_length * self.trainer.world_size
             gathered_preds = gathered_preds.reshape(total_length)[:total_length - pad_size * self.trainer.world_size]
             gathered_targets = gathered_targets.reshape(total_length)[:total_length - pad_size * self.trainer.world_size]
-            errors = (gathered_targets - gathered_preds).cpu().numpy()
+            errors = (gathered_targets - gathered_preds)
+            if errors.size == 0:
+                log.warning("Errors array is empty.")
 
             # Create regression plot
             regression_fig = self._create_regression_plot(
-                gathered_targets.numpy(),
-                gathered_preds.numpy(),
+                gathered_targets,
+                gathered_preds,
                 title=f'Test Regression Plot - Epoch {self.current_epoch}'
             )
             # Generate error histogram plot
@@ -1159,7 +1177,7 @@ class PotentialTrainer:
             callbacks=self.callbacks,
             benchmark=True,
             inference_mode=False,
-            num_sanity_val_steps=2,
+            num_sanity_val_steps=0,
             gradient_clip_val=1.0,  # FIXME: hardcoded for now
             log_every_n_steps=self.runtime_parameter.log_every_n_steps,
             enable_model_summary=True,

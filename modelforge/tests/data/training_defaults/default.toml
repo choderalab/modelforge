@@ -5,9 +5,10 @@ shift_center_of_mass_to_origin = false
 batch_size = 128
 lr = 5e-4
 monitor = "val/per_system_energy/rmse" # Common monitor key
+plot_frequency = 1
 # ------------------------------------------------------------ #
 [training.experiment_logger]
-logger_name = "tensorboard" # this will set which logger to use
+logger_name = "wandb" # this will set which logger to use
 [training.experiment_logger.tensorboard_configuration]
 save_dir = "logs"
 # ------------------------------------------------------------ #

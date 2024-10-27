@@ -267,6 +267,7 @@ class TrainingParameters(ParametersBase):
     shift_center_of_mass_to_origin: bool
     batch_size: int
     lr: float
+    plot_frequency: int = 5
     lr_scheduler: Optional[SchedulerConfig] = None
     loss_parameter: LossParameter
     early_stopping: Optional[EarlyStopping] = None

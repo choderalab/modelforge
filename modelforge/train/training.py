@@ -439,6 +439,8 @@ class TrainingAdapter(pL.LightningModule):
         self.val_indices: Dict[int, torch.Tensor] = {}
         self.test_indices: Dict[int, torch.Tensor] = {}
         self.train_indices: Dict[int, torch.Tensor] = {}
+        # Initialize variables for tracking fixed top k outliers
+        self.outlier_errors_over_epochs = {}
 
     def forward(self, batch: BatchData) -> Dict[str, torch.Tensor]:
         """
@@ -983,7 +985,8 @@ class TrainingAdapter(pL.LightningModule):
                 gathered_preds,
                 title=f"{phase.capitalize()} Regression Plot - Epoch {self.current_epoch}",
             )
-            # Identify top k errors
+
+            # Identify and track top k errors
             self._identify_top_k_errors(errors, gathered_indices, phase)
 
             # Generate error histogram plot
@@ -991,70 +994,30 @@ class TrainingAdapter(pL.LightningModule):
                 errors,
                 title=f"{phase.capitalize()} Error Histogram - Epoch {self.current_epoch}",
             )
+            self.log_dict(self.outlier_errors_over_epochs, on_epoch=True)
             self._log_plots(phase, regression_fig, histogram_fig)
 
-            # Identify top k errors
-            self._identify_top_k_errors(errors, gathered_indices, phase)
-
     def _identify_top_k_errors(
-        self, errors: torch.Tensor, indices: torch.Tensor, phase: str, k: int = 5
+        self,
+        errors: torch.Tensor,
+        indices: torch.Tensor,
+        phase: Literal["train", "val", "test"],
+        k: int = 5,
     ):
-        """
-        Identifies the top k errors and logs their dataset indices.
 
-        Parameters
-        ----------
-        errors : torch.Tensor
-            Tensor of errors for each data point.
-        indices : torch.Tensor
-            Tensor of dataset indices corresponding to each error.
-        phase : str
-            The phase ('train', 'val', 'test') during which the errors are computed.
-        k : int
-            Number of top errors to identify.
-        """
         # Compute absolute errors
         abs_errors = torch.abs(errors)
         # Flatten tensors
         abs_errors = abs_errors.flatten()
         indices = indices.flatten().long()
 
-        # Get top k errors
         top_k_errors, top_k_indices = torch.topk(abs_errors, k)
-        top_k_dataset_indices = indices[top_k_indices]
-
-        # Log the top k errors and their dataset indices
-        data = []
-        for i in range(k):
-            error = top_k_errors[i].item()
-            dataset_index = top_k_dataset_indices[i].item()
-            data.append([i + 1, dataset_index, error])
-            log.info(
-                f"Phase: {phase}, Top {i+1} Error: {error:.4f}, Dataset Index: {dataset_index}"
-            )
-
-        import wandb
-
-        # Define columns for the table
-        columns = ["Rank", "Dataset Index", "Error"]
-
-        # Create wandb.Table
-        table = wandb.Table(data=data, columns=columns)
-
-        # Log the table to wandb
-        self.logger.experiment.log(
-            {f"{phase}_top_{k}_outliers_epoch_{self.current_epoch}": table},
-            step=self.current_epoch,
-        )
-
-        # Optionally, save these indices and errors for further analysis
-        # For example, you could store them in a class attribute or write to a file
-        if phase == "val":
-            self.top_k_val_errors = data
-        elif phase == "test":
-            self.top_k_test_errors = data
-        elif phase == "training":
-            self.top_k_train_errors = data
+        top_k_indices = indices[top_k_indices]
+        for idx in top_k_indices:
+            key = f"{phase}/outlier_count/{idx}"
+            if key not in self.outlier_errors_over_epochs:
+                self.outlier_errors_over_epochs[key] = 0
+            self.outlier_errors_over_epochs[key] += 1
 
     def on_test_epoch_end(self):
         """Logs metrics at the end of the test epoch."""

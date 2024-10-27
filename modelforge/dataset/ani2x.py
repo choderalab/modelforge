@@ -61,6 +61,14 @@ class ANI2xDataset(HDF5Dataset):
         "forces",
     ]  # All properties within the datafile, aside from SMILES/inchi.
 
+    # Mapping of available properties to the associated PropertyNames
+    _available_properties_association = {
+        "geometry": "positions",
+        "atomic_numbers": "atomic_numbers",
+        "energies": "E",
+        "forces": "F",
+    }
+
     def __init__(
         self,
         dataset_name: str = "ANI2x",

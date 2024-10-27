@@ -68,20 +68,34 @@ class SPICE1OpenFFDataset(HDF5Dataset):
         positions="geometry",
         E="dft_total_energy",
         F="dft_total_force",
-        total_charge="mbis_charges",
+        total_charge="total_charge",
     )
 
+    # commenting out those properties that are cannot be used in our current implementation
     _available_properties = [
         "geometry",
         "atomic_numbers",
         "dft_total_energy",
         "dft_total_force",
-        "mbis_charges",
+        # "mbis_charges",
         "formation_energy",
         "scf_dipole",
         "total_charge",
         "reference_energy",
     ]  # All properties within the datafile, aside from SMILES/inchi.
+
+    # note these are simply mapping to a property with equivalent units in the dataset
+    # not implying we would want to use this for training
+    _available_properties_association = {
+        "geometry": "positions",
+        "atomic_numbers": "atomic_numbers",
+        "dft_total_energy": "E",
+        "dft_total_force": "F",
+        "formation_energy": "E",
+        "scf_dipole": "dipole_moment",
+        "total_charge": "total_charge",
+        "reference_energy": "E",
+    }
 
     def __init__(
         self,
@@ -120,7 +134,7 @@ class SPICE1OpenFFDataset(HDF5Dataset):
             "atomic_numbers",
             "dft_total_energy",
             "dft_total_force",
-            "mbis_charges",
+            "total_charge",
         ]  # NOTE: Default values
 
         self._properties_of_interest = _default_properties_of_interest

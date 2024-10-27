@@ -2,7 +2,7 @@
 This module contains classes and functions for training neural network potentials using PyTorch Lightning.
 """
 
-from typing import Any, Dict, List, Optional, Type, TypeVar
+from typing import Any, Dict, List, Optional, Type, TypeVar, Tuple
 
 import lightning.pytorch as pL
 import torch
@@ -422,6 +422,11 @@ class TrainingAdapter(pL.LightningModule):
             training_parameter.loss_parameter.loss_components, is_loss=True
         )
 
+        self.val_preds:Dict[int, torch.Tensor] = {}
+        self.val_targets:Dict[int, torch.Tensor] = {}
+        self.test_preds: Dict[int, torch.Tensor] = {}
+        self.test_targets: Dict[int, torch.Tensor] = {}
+
     def forward(self, batch: BatchData) -> Dict[str, torch.Tensor]:
         """
         Forward pass to compute energies, forces, and other properties from a
@@ -555,7 +560,11 @@ class TrainingAdapter(pL.LightningModule):
             )
 
         self._update_metrics(self.val_metrics, predict_target)
-
+        # save predictions and targets for regression plot
+        self.val_preds.update({batch_idx: predict_target['per_system_energy_predict']})
+        self.val_targets.update({batch_idx: predict_target['per_system_energy_true']})
+        
+        
     def test_step(self, batch: BatchData, batch_idx: int) -> None:
         """
         Test step to compute the test loss and metrics.
@@ -569,14 +578,188 @@ class TrainingAdapter(pL.LightningModule):
             )
         # Update and log metrics
         self._update_metrics(self.test_metrics, predict_target)
+        # Save predictions and targets for plotting
+        self.test_preds.update({batch_idx: predict_target.detach()['per_system_energy_predict']})
+        self.test_targets.update({batch_idx: predict_target.detach()['per_system_energy_true']})
 
+
+    def _get_tensors(self, preds: Dict[int, torch.Tensor], targets: Dict[int, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor, int, int]:
+        """
+        Gathers and pads prediction and target tensors across processes.
+
+        Parameters
+        ----------
+        preds : Dict[int, torch.Tensor]
+            Dictionary of predictions from different batches.
+        targets : Dict[int, torch.Tensor]
+            Dictionary of targets from different batches.
+
+        Returns
+        -------
+        gathered_preds : torch.Tensor
+            Gathered and padded predictions tensor.
+        gathered_targets : torch.Tensor
+            Gathered and padded targets tensor.
+        max_length : int
+            Maximum length of the tensors across all processes.
+        pad_size : int
+            Amount of padding added to match the maximum length.
+        """
+        # Concatenate the tensors
+        preds_tensor = torch.cat(list(preds.values()))
+        targets_tensor = torch.cat(list(targets.values()))
+        
+        # Get maximum length across all processes
+        local_length = torch.tensor([preds_tensor.size(0)], device=preds_tensor.device)
+        max_length = int(self.all_gather(local_length).max())
+        
+        pad_size = max_length - preds_tensor.size(0)
+        if pad_size > 0:
+            log.debug(f"Padding tensors to the same length: {max_length}")
+            log.debug(f'Triggered at device: {self.global_rank}')
+            preds_tensor = torch.nn.functional.pad(preds_tensor, (0, pad_size))
+            targets_tensor = torch.nn.functional.pad(targets_tensor, (0, pad_size))
+        # Gather across processes
+        gathered_preds = self.all_gather(preds_tensor)
+        gathered_targets = self.all_gather(targets_tensor)
+
+        return gathered_preds, gathered_targets, max_length, pad_size
+    
     def on_validation_epoch_end(self):
         """Logs metrics at the end of the validation epoch."""
         self._log_metrics(self.val_metrics, "val")
 
+        # Gather across processes
+        gathered_preds ,  gathered_targets, max_length, pad_size = self._get_tensors(self.val_preds, self.val_targets)
+        # Clear the dictionaries
+        self.val_preds = {}
+        self.val_targets = {}
+
+        # Proceed only on main process
+        if self.global_rank == 0:
+            # Remove padding
+            total_length = max_length * self.trainer.world_size
+            gathered_preds = gathered_preds.reshape(total_length)[:total_length - pad_size * self.trainer.world_size]
+            gathered_targets = gathered_targets.reshape(total_length)[:total_length - pad_size * self.trainer.world_size]
+            errors = (gathered_targets - gathered_preds).cpu().numpy()
+
+            # Create regression plot
+            regression_fig = self._create_regression_plot(
+                gathered_targets.numpy(),
+                gathered_preds.numpy(),
+                title=f'Validation Regression Plot - Epoch {self.current_epoch}'
+            )
+            # Generate error histogram plot
+            histogram_fig = self._create_error_histogram(
+                errors,
+                title=f'Validation Error Histogram - Epoch {self.current_epoch}'
+            )
+
+            self._log_plots('val', regression_fig, histogram_fig)
+    
+    def _log_plots(self, phase: str, regression_fig, histogram_fig):
+        """
+        Logs the regression and error histogram plots for the given phase.
+
+        Parameters
+        ----------
+        phase : str
+            The phase name ('val' or 'test').
+        regression_fig : matplotlib.figure.Figure
+            The regression plot figure.
+        histogram_fig : matplotlib.figure.Figure
+            The error histogram figure.
+
+        Returns
+        -------
+        None
+        """
+        
+        if self.training_parameter.experiment_logger.logger_name.lower() == 'wandb' and self.current_epoch % 1 == 0:
+            import wandb  
+            # Log histogram of errors and regression plot
+            self.logger.experiment.log({
+                f"{phase}/regression_plot": wandb.Image(regression_fig),
+                f"{phase}/error_histogram": wandb.Image(histogram_fig)
+            }, step=self.current_epoch)
+            
+        elif self.training_parameter.experiment_logger.logger_name.lower() == 'tensorboard' and self.current_epoch % 1 == 0:
+            self.logger.experiment.add_figure(f"{phase}/regression_plot", regression_fig, self.current_epoch)
+            self.logger.experiment.add_figure(f"{phase}/error_histogram", histogram_fig, self.current_epoch)
+        else:
+            log.warning(f"No logger found to log {phase} plots")
+        
+        import matplotlib.pyplot as plt
+        # Close the figures
+        plt.close(regression_fig)
+        plt.close(histogram_fig)
+
+    def _create_regression_plot(self, targets, predictions, title='Regression Plot'):
+        """
+        Creates a regression plot comparing true targets and predictions.
+
+        Parameters
+        ----------
+        targets : numpy.ndarray
+            Array of true target values.
+        predictions : numpy.ndarray
+            Array of predicted values.
+        title : str, optional
+            Title of the plot. Default is 'Regression Plot'.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The regression plot figure.
+        """
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        ax.scatter(targets, predictions, alpha=0.5)
+        ax.plot([targets.min(), targets.max()], [targets.min(), targets.max()], 'r--')
+        ax.set_xlabel('True Values')
+        ax.set_ylabel('Predicted Values')
+        ax.set_title(title)
+        return fig
+    
+    def _create_error_histogram(self, errors, title='Error Histogram'):
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        ax.hist(errors, bins=50, alpha=0.75)
+        ax.set_xlabel('Error')
+        ax.set_ylabel('Frequency')
+        ax.set_title(title)
+        return fig
+
     def on_test_epoch_end(self):
         """Logs metrics at the end of the test epoch."""
         self._log_metrics(self.test_metrics, "test")
+        # Gather across processes
+        gathered_preds, gathered_targets, max_length, pad_size = self._get_tensors(self.test_preds, self.test_targets)
+        # Clear the dictionaries
+        self.test_preds = {}
+        self.test_targets = {}
+
+        # Proceed only on main process
+        if self.global_rank == 0:
+            # Remove padding
+            total_length = max_length * self.trainer.world_size
+            gathered_preds = gathered_preds.reshape(total_length)[:total_length - pad_size * self.trainer.world_size]
+            gathered_targets = gathered_targets.reshape(total_length)[:total_length - pad_size * self.trainer.world_size]
+            errors = (gathered_targets - gathered_preds).cpu().numpy()
+
+            # Create regression plot
+            regression_fig = self._create_regression_plot(
+                gathered_targets.numpy(),
+                gathered_preds.numpy(),
+                title=f'Test Regression Plot - Epoch {self.current_epoch}'
+            )
+            # Generate error histogram plot
+            histogram_fig = self._create_error_histogram(
+                errors,
+                title=f'Test Error Histogram - Epoch {self.current_epoch}'
+            )
+
+            self._log_plots("test", regression_fig, histogram_fig)
 
     def on_train_epoch_end(self):
         """Logs metrics at the end of the training epoch."""
@@ -629,11 +812,34 @@ class TrainingAdapter(pL.LightningModule):
     def configure_optimizers(self):
         """Configures the optimizers and learning rate schedulers."""
 
-        optimizer = self.optimizer_class(
-            self.potential.parameters(),
-            lr=self.learning_rate,
-            weight_decay=1e-2,
-        )
+        # Collect weight parameters
+        weight_params = []
+        # Collect bias parameters
+        bias_params = []
+
+        for name, param in self.potential.named_parameters():
+            if 'weight' in name:
+                weight_params.append(param)
+            elif 'bias' in name:
+                bias_params.append(param)
+            else:
+                raise ValueError(f"Unknown parameter type: {name}")
+
+        # Define parameter groups
+        param_groups = [
+            {
+                'params': weight_params,
+                'lr': self.learning_rate,
+                'weight_decay': 1e-3,  # Apply weight decay to weights
+            },
+            {
+                'params': bias_params,
+                'lr': self.learning_rate,
+                'weight_decay': 0.0,   # No weight decay for biases
+            },
+        ]
+
+        optimizer = torch.optim.AdamW(param_groups)
 
         lr_scheduler = self.lr_scheduler.model_dump()
         interval = lr_scheduler.pop("interval")
@@ -938,7 +1144,7 @@ class PotentialTrainer:
         ):
             from lightning.pytorch.strategies import DDPStrategy
 
-            strategy = DDPStrategy(find_unused_parameters=False)
+            strategy = DDPStrategy(find_unused_parameters=True)
         else:
             strategy = "auto"
 

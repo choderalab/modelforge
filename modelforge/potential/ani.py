@@ -16,10 +16,12 @@ from modelforge.utils.prop import SpeciesAEV, NNPInput
 
 from modelforge.potential.neighbors import PairlistData
 
+
 def init_params(m):
     if isinstance(m, torch.nn.Linear):
         torch.nn.init.kaiming_normal_(m.weight, a=1.0)
         torch.nn.init.zeros_(m.bias)
+
 
 def triu_index(number_of_atoms: int) -> torch.Tensor:
     """

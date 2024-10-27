@@ -179,7 +179,7 @@ def test_train_with_lightning(loss, potential_name, dataset_name, prep_temp_dir)
     # train potential
     get_trainer(config).train_potential().save_checkpoint("test.chp")  # save checkpoint
     # continue training from checkpoint
-    #get_trainer(config).train_potential()
+    # get_trainer(config).train_potential()
 
 
 def test_train_from_single_toml_file(prep_temp_dir):

@@ -422,10 +422,10 @@ class TrainingAdapter(pL.LightningModule):
             training_parameter.loss_parameter.loss_components, is_loss=True
         )
 
-        self.train_preds:Dict[int, torch.Tensor] = {}
-        self.train_targets:Dict[int, torch.Tensor] = {}
-        self.val_preds:Dict[int, torch.Tensor] = {}
-        self.val_targets:Dict[int, torch.Tensor] = {}
+        self.train_preds: Dict[int, torch.Tensor] = {}
+        self.train_targets: Dict[int, torch.Tensor] = {}
+        self.val_preds: Dict[int, torch.Tensor] = {}
+        self.val_targets: Dict[int, torch.Tensor] = {}
         self.test_preds: Dict[int, torch.Tensor] = {}
         self.test_targets: Dict[int, torch.Tensor] = {}
 
@@ -537,8 +537,12 @@ class TrainingAdapter(pL.LightningModule):
 
         # Compute the mean loss for optimization
         total_loss = loss_dict["total_loss"].mean()
-        self.train_preds.update({batch_idx: predict_target['per_system_energy_predict'].detach()})
-        self.train_targets.update({batch_idx: predict_target['per_system_energy_true'].detach()})
+        self.train_preds.update(
+            {batch_idx: predict_target["per_system_energy_predict"].detach()}
+        )
+        self.train_targets.update(
+            {batch_idx: predict_target["per_system_energy_true"].detach()}
+        )
 
         return total_loss
 
@@ -557,10 +561,9 @@ class TrainingAdapter(pL.LightningModule):
 
         self._update_metrics(self.val_metrics, predict_target)
         # save predictions and targets for regression plot
-        self.val_preds.update({batch_idx: predict_target['per_system_energy_predict']})
-        self.val_targets.update({batch_idx: predict_target['per_system_energy_true']})
-        
-        
+        self.val_preds.update({batch_idx: predict_target["per_system_energy_predict"]})
+        self.val_targets.update({batch_idx: predict_target["per_system_energy_true"]})
+
     def test_step(self, batch: BatchData, batch_idx: int) -> None:
         """
         Test step to compute the test loss and metrics.
@@ -575,11 +578,16 @@ class TrainingAdapter(pL.LightningModule):
         # Update and log metrics
         self._update_metrics(self.test_metrics, predict_target)
         # Save predictions and targets for plotting
-        self.test_preds.update({batch_idx: predict_target['per_system_energy_predict'].detach()})
-        self.test_targets.update({batch_idx: predict_target['per_system_energy_true'].detach()})
+        self.test_preds.update(
+            {batch_idx: predict_target["per_system_energy_predict"].detach()}
+        )
+        self.test_targets.update(
+            {batch_idx: predict_target["per_system_energy_true"].detach()}
+        )
 
-
-    def _get_tensors(self, preds: Dict[int, torch.Tensor], targets: Dict[int, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor, int, int]:
+    def _get_tensors(
+        self, preds: Dict[int, torch.Tensor], targets: Dict[int, torch.Tensor]
+    ) -> Tuple[torch.Tensor, torch.Tensor, int, int]:
         """
         Gathers and pads prediction and target tensors across processes.
 
@@ -604,15 +612,15 @@ class TrainingAdapter(pL.LightningModule):
         # Concatenate the tensors
         preds_tensor = torch.cat(list(preds.values()))
         targets_tensor = torch.cat(list(targets.values()))
-        
+
         # Get maximum length across all processes
         local_length = torch.tensor([preds_tensor.size(0)], device=preds_tensor.device)
         max_length = int(self.all_gather(local_length).max())
-        
+
         pad_size = max_length - preds_tensor.size(0)
         if pad_size > 0:
             log.debug(f"Padding tensors to the same length: {max_length}")
-            log.debug(f'Triggered at device: {self.global_rank}')
+            log.debug(f"Triggered at device: {self.global_rank}")
             preds_tensor = torch.nn.functional.pad(preds_tensor, (0, pad_size))
             targets_tensor = torch.nn.functional.pad(targets_tensor, (0, pad_size))
         # Gather across processes
@@ -620,12 +628,12 @@ class TrainingAdapter(pL.LightningModule):
         gathered_targets = self.all_gather(targets_tensor)
 
         return gathered_preds, gathered_targets, max_length, pad_size
-    
+
     def on_validation_epoch_end(self):
         """Logs metrics at the end of the validation epoch."""
         self._log_metrics(self.val_metrics, "val")
-        self._log_figures_for_each_phase(self.val_preds, self.val_targets, 'val')
-    
+        self._log_figures_for_each_phase(self.val_preds, self.val_targets, "val")
+
     def _log_plots(self, phase: str, regression_fig, histogram_fig):
         """
         Logs the regression and error histogram plots for the given phase.
@@ -643,41 +651,49 @@ class TrainingAdapter(pL.LightningModule):
         -------
         None
         """
-        
+
         logger_name = self.training_parameter.experiment_logger.logger_name.lower()
         plot_frequency = self.training_parameter.plot_frequency
-        
+
         # skit logging if current_epoch == 0
-        #if self.current_epoch == 0:
+        # if self.current_epoch == 0:
         #    return
-        
-        if logger_name == 'wandb':
-            import wandb  
-            if phase == 'test' or self.current_epoch % plot_frequency == 0:
-            # NOTE: only log every nth epoch for validation, but always log for test
+
+        if logger_name == "wandb":
+            import wandb
+
+            if phase == "test" or self.current_epoch % plot_frequency == 0:
+                # NOTE: only log every nth epoch for validation, but always log for test
                 # Log histogram of errors and regression plot
                 self.logger.experiment.log(
                     {f"{phase}/regression_plot": wandb.Image(regression_fig)},
-                    #step=self.current_epoch
+                    # step=self.current_epoch
                 )
                 self.logger.experiment.log(
                     {f"{phase}/error_histogram": wandb.Image(histogram_fig)},
-                    #step=self.current_epoch
+                    # step=self.current_epoch
                 )
-            
-        elif logger_name == 'tensorboard':
-            if phase == 'test' or self.current_epoch % plot_frequency == 0:
-                self.logger.experiment.add_figure(f"{phase}/regression_plot", regression_fig, self.current_epoch)
-                self.logger.experiment.add_figure(f"{phase}/error_histogram", histogram_fig, self.current_epoch)
+
+        elif logger_name == "tensorboard":
+            if phase == "test" or self.current_epoch % plot_frequency == 0:
+                self.logger.experiment.add_figure(
+                    f"{phase}/regression_plot", regression_fig, self.current_epoch
+                )
+                self.logger.experiment.add_figure(
+                    f"{phase}/error_histogram", histogram_fig, self.current_epoch
+                )
         else:
             log.warning(f"No logger found to log {phase} plots")
-        
+
         import matplotlib.pyplot as plt
+
         # Close the figures
         plt.close(regression_fig)
         plt.close(histogram_fig)
 
-    def _create_regression_plot(self, targets:torch.Tensor, predictions:torch.Tensor, title='Regression Plot'):
+    def _create_regression_plot(
+        self, targets: torch.Tensor, predictions: torch.Tensor, title="Regression Plot"
+    ):
         """
         Creates a regression plot comparing true targets and predictions.
 
@@ -696,19 +712,21 @@ class TrainingAdapter(pL.LightningModule):
             The regression plot figure.
         """
         import matplotlib.pyplot as plt
+
         fig, ax = plt.subplots()
         targets = targets.cpu().numpy()
         predictions = predictions.cpu().numpy()
         ax.scatter(targets, predictions, alpha=0.5)
-        ax.plot([targets.min(), targets.max()], [targets.min(), targets.max()], 'r--')
-        ax.set_xlabel('True Values')
-        ax.set_ylabel('Predicted Values')
+        ax.plot([targets.min(), targets.max()], [targets.min(), targets.max()], "r--")
+        ax.set_xlabel("True Values")
+        ax.set_ylabel("Predicted Values")
         ax.set_title(title)
         return fig
-    
-    def _create_error_histogram(self, errors:torch.Tensor, title='Error Histogram'):
+
+    def _create_error_histogram(self, errors: torch.Tensor, title="Error Histogram"):
         import matplotlib.pyplot as plt
         import numpy as np
+
         errors_np = errors.cpu().numpy().flatten()
 
         # Compute mean and standard deviation
@@ -719,44 +737,69 @@ class TrainingAdapter(pL.LightningModule):
         bins = 50
 
         # Plot histogram and get bin data
-        counts, bin_edges, patches = ax.hist(errors_np, bins=bins, alpha=0.75, edgecolor='black')
+        counts, bin_edges, patches = ax.hist(
+            errors_np, bins=bins, alpha=0.75, edgecolor="black"
+        )
 
         # Set y-axis to log scale
-        ax.set_yscale('log')
+        ax.set_yscale("log")
 
         # Highlight outlier bins beyond 3 standard deviations
-        for count, edge_left, edge_right, patch in zip(counts, bin_edges[:-1], bin_edges[1:], patches):
-            if (edge_left < mean_error - 3 * std_error) or (edge_right > mean_error + 3 * std_error):
-                patch.set_facecolor('red')
+        for count, edge_left, edge_right, patch in zip(
+            counts, bin_edges[:-1], bin_edges[1:], patches
+        ):
+            if (edge_left < mean_error - 3 * std_error) or (
+                edge_right > mean_error + 3 * std_error
+            ):
+                patch.set_facecolor("red")
             else:
-                patch.set_facecolor('blue')
+                patch.set_facecolor("blue")
 
         # Add vertical lines for mean and standard deviations
-        ax.axvline(mean_error, color='k', linestyle='dashed', linewidth=1, label='Mean')
-        ax.axvline(mean_error + 3 * std_error, color='r', linestyle='dashed', linewidth=1, label='±3 Std Dev')
-        ax.axvline(mean_error - 3 * std_error, color='r', linestyle='dashed', linewidth=1)
+        ax.axvline(mean_error, color="k", linestyle="dashed", linewidth=1, label="Mean")
+        ax.axvline(
+            mean_error + 3 * std_error,
+            color="r",
+            linestyle="dashed",
+            linewidth=1,
+            label="±3 Std Dev",
+        )
+        ax.axvline(
+            mean_error - 3 * std_error, color="r", linestyle="dashed", linewidth=1
+        )
 
-        ax.set_xlabel('Error')
-        ax.set_ylabel('Frequency (Log Scale)')
+        ax.set_xlabel("Error")
+        ax.set_ylabel("Frequency (Log Scale)")
         ax.set_title(title)
         ax.legend()
 
         return fig
 
-    def _log_figures_for_each_phase(self, preds: torch.Tensor, target:torch.Tensor, phase:Literal['train', 'val', 'test']):
+    def _log_figures_for_each_phase(
+        self,
+        preds: torch.Tensor,
+        target: torch.Tensor,
+        phase: Literal["train", "val", "test"],
+    ):
         # Gather across processes
-        gathered_preds, gathered_targets, max_length, pad_size = self._get_tensors(preds, target)
+        gathered_preds, gathered_targets, max_length, pad_size = self._get_tensors(
+            preds, target
+        )
         # Clear the dictionaries
         preds = {}
         target = {}
-        
+
         # Proceed only on main process
         if self.global_rank == 0:
             # Remove padding
             total_length = max_length * self.trainer.world_size
-            gathered_preds = gathered_preds.reshape(total_length)[:total_length - pad_size * self.trainer.world_size]
-            gathered_targets = gathered_targets.reshape(total_length)[:total_length - pad_size * self.trainer.world_size]
-            errors = (gathered_targets - gathered_preds)
+            gathered_preds = gathered_preds.reshape(total_length)[
+                : total_length - pad_size * self.trainer.world_size
+            ]
+            gathered_targets = gathered_targets.reshape(total_length)[
+                : total_length - pad_size * self.trainer.world_size
+            ]
+            errors = gathered_targets - gathered_preds
             if errors.size == 0:
                 log.warning("Errors array is empty.")
 
@@ -764,27 +807,27 @@ class TrainingAdapter(pL.LightningModule):
             regression_fig = self._create_regression_plot(
                 gathered_targets,
                 gathered_preds,
-                title=f'{phase.capitalize()} Regression Plot - Epoch {self.current_epoch}'
+                title=f"{phase.capitalize()} Regression Plot - Epoch {self.current_epoch}",
             )
             # Generate error histogram plot
             histogram_fig = self._create_error_histogram(
                 errors,
-                title=f'{phase.capitalize()} Error Histogram - Epoch {self.current_epoch}'
+                title=f"{phase.capitalize()} Error Histogram - Epoch {self.current_epoch}",
             )
 
             self._log_plots(phase, regression_fig, histogram_fig)
 
-
     def on_test_epoch_end(self):
         """Logs metrics at the end of the test epoch."""
         self._log_metrics(self.test_metrics, "test")
-        self._log_figures_for_each_phase(self.test_preds, self.test_targets, 'test')
+        self._log_figures_for_each_phase(self.test_preds, self.test_targets, "test")
+
     def on_train_epoch_end(self):
         """Logs metrics at the end of the training epoch."""
         self._log_metrics(self.loss_metrics, "loss")
         self._log_learning_rate()
         self._log_histograms()
-        self._log_figures_for_each_phase(self.train_preds, self.train_targets, 'train')
+        self._log_figures_for_each_phase(self.train_preds, self.train_targets, "train")
 
     def _log_learning_rate(self):
         """Logs the current learning rate."""
@@ -837,9 +880,9 @@ class TrainingAdapter(pL.LightningModule):
         bias_params = []
 
         for name, param in self.potential.named_parameters():
-            if 'weight' in name:
+            if "weight" in name:
                 weight_params.append(param)
-            elif 'bias' in name:
+            elif "bias" in name:
                 bias_params.append(param)
             else:
                 raise ValueError(f"Unknown parameter type: {name}")
@@ -847,14 +890,14 @@ class TrainingAdapter(pL.LightningModule):
         # Define parameter groups
         param_groups = [
             {
-                'params': weight_params,
-                'lr': self.learning_rate,
-                'weight_decay': 1e-3,  # Apply weight decay to weights
+                "params": weight_params,
+                "lr": self.learning_rate,
+                "weight_decay": 1e-3,  # Apply weight decay to weights
             },
             {
-                'params': bias_params,
-                'lr': self.learning_rate,
-                'weight_decay': 0.0,   # No weight decay for biases
+                "params": bias_params,
+                "lr": self.learning_rate,
+                "weight_decay": 0.0,  # No weight decay for biases
             },
         ]
 

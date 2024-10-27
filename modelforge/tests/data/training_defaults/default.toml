@@ -8,7 +8,7 @@ monitor = "val/per_system_energy/rmse" # Common monitor key
 plot_frequency = 1
 # ------------------------------------------------------------ #
 [training.experiment_logger]
-logger_name = ".tensorboard" # this will set which logger to use
+logger_name = "tensorboard" # this will set which logger to use
 [training.experiment_logger.tensorboard_configuration]
 save_dir = "logs"
 # ------------------------------------------------------------ #

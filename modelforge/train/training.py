@@ -542,14 +542,6 @@ class TrainingAdapter(pL.LightningModule):
 
         return total_loss
 
-    def on_after_backward(self):
-        # After backward pass
-        for name, param in self.potential.named_parameters():
-            if param.grad is not None or False:
-                log.debug(
-                    f"Parameter: {name}, Gradient Norm: {param.grad.norm().item()}"
-                )
-
     def validation_step(self, batch: BatchData, batch_idx: int) -> None:
         """
         Validation step to compute validation loss and metrics.

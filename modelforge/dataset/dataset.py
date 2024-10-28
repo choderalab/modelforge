@@ -1036,6 +1036,7 @@ class DataModule(pl.LightningDataModule):
             regenerate_cache=self.regenerate_cache,
         )
         torch_dataset = self._create_torch_dataset(dataset)
+
         # if dataset statistics is present load it from disk
         if (
             os.path.exists(self.dataset_statistic_filename)
@@ -1065,19 +1066,47 @@ class DataModule(pl.LightningDataModule):
         log.debug("Process dataset ...")
         self._process_dataset(torch_dataset, AtomicSelfEnergies(atomic_self_energies))
 
-        # calculate the dataset statistic of the dataset
         # This is done __after__ self energies are removed (if requested)
         if training_dataset_statistics is None:
             from modelforge.dataset.utils import calculate_mean_and_variance
 
+            # calculate the dataset statistic of the dataset
+            log.info("Normalizing target energies (E) in the dataset")
             training_dataset_statistics = calculate_mean_and_variance(torch_dataset)
-            # wrap everything in a dictionary and save it to disk
-            dataset_statistic = {
-                "atomic_self_energies": atomic_self_energies,
-                "training_dataset_statistics": training_dataset_statistics,
-            }
+
+            per_sample_energy = torch_dataset.properties_of_interest[
+                "E"
+            ]  # Tensor of shape [num_samples]
+            nr_of_atoms_per_sample = (
+                torch_dataset.single_atom_end_idxs_by_conf
+                - torch_dataset.single_atom_start_idxs_by_conf
+            )
+            # Compute per-atom energies
+            per_atom_energies = per_sample_energy.squeeze(1) / torch.tensor(
+                nr_of_atoms_per_sample, device=per_sample_energy.device
+            )
+
+            # Normalize per-atom energies
+            normalized_per_atom_energies = (
+                per_atom_energies - training_dataset_statistics["per_atom_energy_mean"]
+            ) / training_dataset_statistics["per_atom_energy_stddev"]
+
+            # Scale back to total energies
+            normalized_total_energies = (
+                normalized_per_atom_energies * nr_of_atoms_per_sample
+            )
+            # Update the dataset with normalized total energies
+            torch_dataset.properties_of_interest["E"] = (
+                normalized_total_energies.unsqueeze(1)
+            )
 
             if atomic_self_energies and training_dataset_statistics:
+                # wrap everything in a dictionary and save it to disk
+                dataset_statistic = {
+                    "atomic_self_energies": atomic_self_energies,
+                    "training_dataset_statistics": training_dataset_statistics,
+                }
+
                 log.info(dataset_statistic)
                 # save dataset_statistic dictionary to disk as yaml files
                 self._log_dataset_statistic(dataset_statistic)
@@ -1217,7 +1246,9 @@ class DataModule(pl.LightningDataModule):
         )
 
     def _per_datapoint_operations(
-        self, dataset, self_energies: "AtomicSelfEnergies"
+        self,
+        dataset: TorchDataset,
+        self_energies: "AtomicSelfEnergies",
     ) -> None:
         """
         Removes the self energies from the total energies for each molecule in the dataset .
@@ -1231,7 +1262,7 @@ class DataModule(pl.LightningDataModule):
 
         from tqdm import tqdm
 
-        # remove the self energies if requested
+        # Remove self energies if requested
         log.info("Performing per datapoint operations in the dataset dataset")
         if self.remove_self_energies:
             log.info("Removing self energies from the dataset")

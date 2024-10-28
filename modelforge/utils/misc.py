@@ -9,34 +9,27 @@ from loguru import logger
 class Welford:
     def __init__(self):
         """
-        Implements Welford's online algorithm for computing running variance
-        and standard deviation incrementally.
-
-        This class maintains the count, mean, and M2 sufficient statistics,
-        which is used to calculate variance and standard deviation on the fly
-        as new samples are added via the update() method.
-
-        The running variance/stddev can be retrieved via the variance/stddev properties.
+        Class to compute mean and standard deviation incrementally using Welford's algorithm.
         """
         self._n = 0
         self._mean = 0
         self._M2 = 0
 
-    def update(self, batch: torch.Tensor) -> None:
+    def update(self, per_atom_energies: torch.Tensor) -> None:
         """
         Updates the running mean and variance statistics with a new batch of data.
 
         The mean and sum of squared differences from the mean (M2) are updated with the new batch of data.
         Parameters
         ----------
-        batch: torch.Tensor, required
-            Batch of data to be added to the running statistics.
+        per_atom_energies : torch.Tensor
+            Tensor containing per-atom energy values.
         """
         # Convert batch to a numpy array to handle both scalars and arrays
-        batch_size = len(batch)
+        batch_size = len(per_atom_energies)
 
-        new_mean = torch.mean(batch)
-        new_M2 = torch.sum((batch - new_mean) ** 2)
+        new_mean = torch.mean(per_atom_energies)
+        new_M2 = torch.sum((per_atom_energies - new_mean) ** 2)
 
         delta = new_mean - self._mean
         self._mean += delta * batch_size / (self._n + batch_size)

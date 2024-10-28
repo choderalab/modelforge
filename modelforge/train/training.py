@@ -382,7 +382,19 @@ class TrainingAdapter(pL.LightningModule):
             jit=False,
             use_training_mode_neighborlist=True,
         )
-
+        dataset_dist = dataset_statistic["training_dataset_statistics"]
+        self.register_buffer(
+            "per_atom_energy_mean",
+            torch.tensor(
+                [dataset_dist["per_atom_energy_mean"].to(unit.kilojoule_per_mole).m]
+            ),
+        )
+        self.register_buffer(
+            "per_atom_energy_stddev",
+            torch.tensor(
+                [dataset_dist["per_atom_energy_stddev"].to(unit.kilojoule_per_mole).m]
+            ),
+        )
         self.include_force = (
             "per_atom_force" in training_parameter.loss_parameter.loss_components
         )
@@ -508,6 +520,37 @@ class TrainingAdapter(pL.LightningModule):
             for metric in metric_collection.values():
                 metric.reset()
 
+    def _scale_predict_target(
+        self,
+        predict_target: Dict[str, torch.Tensor],
+        batch: BatchData,
+    ):
+
+        # Retrieve number of atoms per system in the batch
+        num_atoms = batch.metadata.atomic_subsystem_counts
+        # Denormalize the predictions and targets
+        # Formula: (normalized_per_atom_energy * sigma + mu) * num_atoms
+
+        predict_target["per_system_energy_true"] = (
+            (
+                (predict_target["per_system_energy_true"].squeeze(1) / num_atoms)
+                * self.per_atom_energy_stddev
+                + self.per_atom_energy_mean
+            )
+            * num_atoms
+        ).unsqueeze(1)
+
+        predict_target["per_system_energy_predict"] = (
+            (
+                predict_target["per_system_energy_predict"].squeeze(1)
+                * self.per_atom_energy_stddev
+                + self.per_atom_energy_mean
+            )
+            * num_atoms
+        ).unsqueeze(1)
+
+        return predict_target
+
     def training_step(
         self,
         batch: BatchData,
@@ -575,6 +618,7 @@ class TrainingAdapter(pL.LightningModule):
                 batch, self.potential, self.potential.training
             )
 
+        predict_target = self._scale_predict_target(predict_target, batch)
         self._update_metrics(self.val_metrics, predict_target)
 
         # Save energy predictions and targets

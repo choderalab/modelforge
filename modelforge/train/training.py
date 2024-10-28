@@ -548,26 +548,15 @@ class TrainingAdapter(pL.LightningModule):
                 grad_norm = compute_grad_norm(metric.mean(), self)
                 self.log(f"grad_norm/{key}", grad_norm)
 
-        self.train_preds.update(
-            {batch_idx: predict_target["per_system_energy_predict"].detach()}
+        # Save energy predictions and targets
+        self._update_predictions(
+            predict_target,
+            self.train_preds,
+            self.train_targets,
+            self.train_indices,
+            batch_idx,
+            batch,
         )
-        self.train_targets.update(
-            {batch_idx: predict_target["per_system_energy_true"].detach()}
-        )
-        self.train_indices.update(
-            {
-                batch_idx: batch.metadata.atomic_subsystem_indices_referencing_dataset.detach()
-            }
-        )
-
-        # Save force predictions and targets if forces are included
-        if "per_atom_force_predict" in predict_target:
-            self.train_force_preds.update(
-                {batch_idx: predict_target["per_atom_force_predict"].detach()}
-            )
-            self.train_force_targets.update(
-                {batch_idx: predict_target["per_atom_force_true"].detach()}
-            )
 
         # Compute the mean loss for optimization
         total_loss = loss_dict["total_loss"].mean()
@@ -589,24 +578,14 @@ class TrainingAdapter(pL.LightningModule):
         self._update_metrics(self.val_metrics, predict_target)
 
         # Save energy predictions and targets
-        self.val_preds.update({batch_idx: predict_target["per_system_energy_predict"]})
-        self.val_targets.update({batch_idx: predict_target["per_system_energy_true"]})
-        # Save dataset indices
-        d = batch.metadata.atomic_subsystem_indices_referencing_dataset
-        self.val_indices.update(
-            {
-                batch_idx: batch.metadata.atomic_subsystem_indices_referencing_dataset.detach()
-            }
+        self._update_predictions(
+            predict_target,
+            self.val_preds,
+            self.val_targets,
+            self.val_indices,
+            batch_idx,
+            batch,
         )
-
-        # Save force predictions and targets if forces are included
-        if "per_atom_force_predict" in predict_target:
-            self.val_force_preds.update(
-                {batch_idx: predict_target["per_atom_force_predict"].detach()}
-            )
-            self.val_force_targets.update(
-                {batch_idx: predict_target["per_atom_force_true"].detach()}
-            )
 
     def test_step(self, batch: BatchData, batch_idx: int) -> None:
         """
@@ -623,26 +602,55 @@ class TrainingAdapter(pL.LightningModule):
         self._update_metrics(self.test_metrics, predict_target)
 
         # Save energy predictions and targets
-        self.test_preds.update(
-            {batch_idx: predict_target["per_system_energy_predict"].detach()}
+        self._update_predictions(
+            predict_target,
+            self.test_preds,
+            self.test_targets,
+            self.test_indices,
+            batch_idx,
+            batch,
         )
-        self.test_targets.update(
-            {batch_idx: predict_target["per_system_energy_true"].detach()}
+
+
+    def _update_predictions(
+        self,
+        predict_target: Dict[str, torch.Tensor],
+        preds: Dict[int, torch.Tensor],
+        targets: Dict[int, torch.Tensor],
+        indices: Dict[int, torch.Tensor],
+        batch_idx: int,
+        batch: BatchData,
+    ):
+        """
+        Update the predictions and targets dictionaries with the provided data.
+
+        Parameters
+        ----------
+        preds : Dict[int, torch.Tensor]
+            Dictionary of predictions.
+        targets : Dict[int, torch.Tensor]
+            Dictionary of targets.
+        """
+        preds.update(
+            {batch_idx: predict_target["per_system_energy_predict"].detach().cpu()}
+        )
+        targets.update(
+            {batch_idx: predict_target["per_system_energy_true"].detach().cpu()}
+        )
+        # Save dataset indices
+        indices.update(
+            {
+                batch_idx: batch.metadata.atomic_subsystem_indices_referencing_dataset.detach().cpu()
+            }
         )
         # Save force predictions and targets if forces are included
         if "per_atom_force_predict" in predict_target:
-            self.test_force_preds.update(
-                {batch_idx: predict_target["per_atom_force_predict"].detach()}
+            preds.update(
+                {batch_idx: predict_target["per_atom_force_predict"].detach().cpu()}
             )
-            self.test_force_targets.update(
-                {batch_idx: predict_target["per_atom_force_true"].detach()}
+            targets.update(
+                {batch_idx: predict_target["per_atom_force_true"].detach().cpu()}
             )
-        # Save dataset indices
-        self.test_indices.update(
-            {
-                batch_idx: batch.metadata.atomic_subsystem_indices_referencing_dataset.detach()
-            }
-        )
 
     def _get_energy_tensors(
         self,
@@ -779,13 +787,6 @@ class TrainingAdapter(pL.LightningModule):
             )
 
             self._log_plots(phase, None, histogram_fig, force=True)
-
-    def on_validation_epoch_end(self):
-        """Logs metrics at the end of the validation epoch."""
-        self._log_metrics(self.val_metrics, "val")
-        self._log_figures_for_each_phase(
-            self.val_preds, self.val_targets, self.val_indices, "val"
-        )
 
     def _log_plots(self, phase: str, regression_fig, histogram_fig, force=False):
         """
@@ -986,38 +987,42 @@ class TrainingAdapter(pL.LightningModule):
                 title=f"{phase.capitalize()} Regression Plot - Epoch {self.current_epoch}",
             )
 
-            # Identify and track top k errors
-            self._identify_top_k_errors(errors, gathered_indices, phase)
-
             # Generate error histogram plot
             histogram_fig = self._create_error_histogram(
                 errors,
                 title=f"{phase.capitalize()} Error Histogram - Epoch {self.current_epoch}",
             )
-            self.log_dict(self.outlier_errors_over_epochs, on_epoch=True)
             self._log_plots(phase, regression_fig, histogram_fig)
 
-    def _identify_top_k_errors(
+            # Identify and track top k errors
+            if phase == "test" or phase == "train":
+                return
+            self._identify__and_log_top_k_errors(errors, gathered_indices, phase)
+            self.log_dict(self.outlier_errors_over_epochs, on_epoch=True)
+
+    def _identify__and_log_top_k_errors(
         self,
         errors: torch.Tensor,
         indices: torch.Tensor,
         phase: Literal["train", "val", "test"],
-        k: int = 5,
+        k: int = 3,
     ):
 
         # Compute absolute errors
-        abs_errors = torch.abs(errors)
+        abs_errors = torch.abs(errors).detach().cpu()
         # Flatten tensors
         abs_errors = abs_errors.flatten()
-        indices = indices.flatten().long()
+        indices = indices.flatten().long().detach().cpu()
 
         top_k_errors, top_k_indices = torch.topk(abs_errors, k)
-        top_k_indices = indices[top_k_indices]
-        for idx in top_k_indices:
-            key = f"{phase}/outlier_count/{idx}"
+
+        top_k_indices = indices[top_k_indices].tolist()
+        for idx, error in zip(top_k_indices, top_k_errors.tolist()):
+            key = f"outlier_count/{phase}/{idx}"
             if key not in self.outlier_errors_over_epochs:
                 self.outlier_errors_over_epochs[key] = 0
             self.outlier_errors_over_epochs[key] += 1
+            log.info(f"{phase} : Outlier error {error} at index {idx}.")
 
     def on_test_epoch_end(self):
         """Logs metrics at the end of the test epoch."""
@@ -1027,6 +1032,16 @@ class TrainingAdapter(pL.LightningModule):
             self.test_targets,
             self.test_indices,
             "test",
+        )
+
+    def on_validation_epoch_end(self):
+        """Logs metrics at the end of the validation epoch."""
+        self._log_metrics(self.val_metrics, "val")
+        self._log_figures_for_each_phase(
+            self.val_preds,
+            self.val_targets,
+            self.val_indices,
+            "val",
         )
 
     def on_train_epoch_end(self):
@@ -1436,7 +1451,7 @@ class PotentialTrainer:
             benchmark=True,
             inference_mode=False,
             num_sanity_val_steps=0,
-            gradient_clip_val=1.0,  # FIXME: hardcoded for now
+            gradient_clip_val=10.0,  # FIXME: hardcoded for now
             log_every_n_steps=self.runtime_parameter.log_every_n_steps,
             enable_model_summary=True,
             enable_progress_bar=self.runtime_parameter.verbose,  # if true will show progress bar

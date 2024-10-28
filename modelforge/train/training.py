@@ -611,7 +611,6 @@ class TrainingAdapter(pL.LightningModule):
             batch,
         )
 
-
     def _update_predictions(
         self,
         predict_target: Dict[str, torch.Tensor],
@@ -993,11 +992,11 @@ class TrainingAdapter(pL.LightningModule):
                 title=f"{phase.capitalize()} Error Histogram - Epoch {self.current_epoch}",
             )
             self._log_plots(phase, regression_fig, histogram_fig)
+            self._identify__and_log_top_k_errors(errors, gathered_indices, phase)
 
             # Identify and track top k errors
-            if phase == "test" or phase == "train":
+            if phase == "train":
                 return
-            self._identify__and_log_top_k_errors(errors, gathered_indices, phase)
             self.log_dict(self.outlier_errors_over_epochs, on_epoch=True)
 
     def _identify__and_log_top_k_errors(

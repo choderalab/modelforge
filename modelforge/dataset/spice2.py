@@ -82,21 +82,33 @@ class SPICE2Dataset(HDF5Dataset):
         positions="geometry",
         E="dft_total_energy",
         F="dft_total_force",
-        total_charge="mbis_charges",
+        total_charge="total_charge",
         dipole_moment="scf_dipole",
     )
 
+    # for simplicifty, commenting out those properties that are cannot be used in our current implementation
     _available_properties = [
         "geometry",
         "atomic_numbers",
         "dft_total_energy",
         "dft_total_force",
-        "mbis_charges",
+        # "mbis_charges",
         "formation_energy",
         "scf_dipole",
         "total_charge",
         "reference_energy",
     ]  # All properties within the datafile, aside from SMILES/inchi.
+
+    _available_properties_association = {
+        "geometry": "positions",
+        "atomic_numbers": "atomic_numbers",
+        "dft_total_energy": "E",
+        "dft_total_force": "F",
+        "formation_energy": "E",
+        "scf_dipole": "dipole_moment",
+        "total_charge": "total_charge",
+        "reference_energy": "E",
+    }
 
     def __init__(
         self,
@@ -135,7 +147,7 @@ class SPICE2Dataset(HDF5Dataset):
             "atomic_numbers",
             "dft_total_energy",
             "dft_total_force",
-            "mbis_charges",
+            "total_charge",
             "scf_dipole",
         ]  # NOTE: Default values
 

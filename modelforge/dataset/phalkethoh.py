@@ -54,6 +54,16 @@ class PhAlkEthOHDataset(HDF5Dataset):
         "total_charge",
     ]  # All properties within the datafile, aside from SMILES/inchi.
 
+    # Mapping of available properties to the associated PropertyNames
+    _available_properties_association = {
+        "geometry": "positions",
+        "atomic_numbers": "atomic_numbers",
+        "dft_total_energy": "E",
+        "dft_total_force": "F",
+        "scf_dipole": "dipole_moment",
+        "total_charge": "total_charge",
+    }
+
     def __init__(
         self,
         dataset_name: str = "PhAlkEthOH",

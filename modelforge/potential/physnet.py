@@ -584,7 +584,7 @@ class PhysNetCore(torch.nn.Module):
         split_tensors = torch.split(per_atom_prediction, self.predicted_dim, dim=1)
         outputs.update(
             {
-                label: tensor.squeeze(1)
+                label: tensor
                 for label, tensor in zip(self.predicted_properties, split_tensors)
             }
         )

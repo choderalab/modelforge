@@ -196,7 +196,7 @@ class CalculateProperties(torch.nn.Module):
             A dictionary containing the true and predicted energies.
         """
         per_system_energy_true = batch.metadata.per_system_energy.to(torch.float32)
-        per_system_energy_predict = model_prediction["per_system_energy"].unsqueeze(1)
+        per_system_energy_predict = model_prediction["per_system_energy"]
 
         assert per_system_energy_true.shape == per_system_energy_predict.shape, (
             f"Shapes of true and predicted energies do not match: "
@@ -230,17 +230,16 @@ class CalculateProperties(torch.nn.Module):
         nnp_input = batch.nnp_input
         per_atom_charges_predict = model_prediction[
             "per_atom_charge"
-        ]  # Shape: [num_atoms]
+        ]  # Shape: (nr_of_atoms, 1)
 
         # Calculate predicted total charge by summing per-atom charges for each system
-        per_system_total_charge_predict = (
-            torch.zeros_like(model_prediction["per_system_energy"])
-            .scatter_add_(
-                dim=0,
-                index=nnp_input.atomic_subsystem_indices.long(),
-                src=per_atom_charges_predict,
-            )
-            .unsqueeze(-1)
+        a = 4
+        per_system_total_charge_predict = torch.zeros_like(
+            model_prediction["per_system_energy"]
+        ).scatter_add_(
+            dim=0,
+            index=nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
+            src=per_atom_charges_predict,
         )  # Shape: [nr_of_systems, 1]
 
         # Predict the dipole moment
@@ -278,9 +277,9 @@ class CalculateProperties(torch.nn.Module):
         torch.Tensor
             The predicted dipole moment for each system.
         """
-        per_atom_charge = model_predictions["per_atom_charge"]  # Shape: [num_atoms]
+        per_atom_charge = model_predictions["per_atom_charge"]  # Shape: [num_atoms, 1]
         positions = batch.nnp_input.positions  # Shape: [num_atoms, 3]
-        per_atom_charge = per_atom_charge.unsqueeze(-1)  # Shape: [num_atoms, 1]
+        per_atom_charge = per_atom_charge  # Shape: [num_atoms, 1]
         per_atom_dipole_contrib = per_atom_charge * positions  # Shape: [num_atoms, 3]
 
         indices = batch.nnp_input.atomic_subsystem_indices.long()  # Shape: [num_atoms]

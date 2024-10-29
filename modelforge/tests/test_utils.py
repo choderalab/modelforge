@@ -18,19 +18,19 @@ def prep_temp_dir(tmp_path_factory):
     "partial_point_charges, atomic_subsystem_indices, total_charge",
     [
         (
-            torch.zeros(6),
+            torch.zeros(6, 1),
             torch.tensor([0, 0, 1, 1, 1, 1], dtype=torch.int64),
-            torch.tensor([0.0, 1.0]),
+            torch.tensor([0.0, 1.0]).unsqueeze(1),
         ),
         (
-            torch.zeros(6),
+            torch.zeros(6, 1),
             torch.tensor([0, 0, 1, 1, 1, 1], dtype=torch.int64),
-            torch.tensor([-1.0, 2.0]),
+            torch.tensor([-1.0, 2.0]).unsqueeze(1),
         ),
         (
-            torch.rand(6),
+            torch.rand(6, 1),
             torch.tensor([0, 0, 1, 1, 1, 1], dtype=torch.int64),
-            torch.tensor([-1.0, 2.0]),
+            torch.tensor([-1.0, 2.0]).unsqueeze(1),
         ),
     ],
 )
@@ -54,7 +54,7 @@ def test_default_charge_conservation(
 
     # Calculate the total charge per molecule after correction
     predicted_total_charge = torch.zeros_like(total_charge).scatter_add_(
-        0, atomic_subsystem_indices, charges
+        0, atomic_subsystem_indices.unsqueeze(1), charges
     )
 
     # Assert that the predicted total charges match the desired total charges
@@ -313,18 +313,16 @@ def test_energy_readout():
     # a second tensor supplying the indixes for the summation
 
     r = {
-        "per_atom_energy": torch.tensor([3, 3, 1, 1, 1, 1, 1, 1], dtype=torch.float32),
+        "per_atom_energy": torch.tensor(
+            [3, 3, 1, 1, 1, 1, 1, 1], dtype=torch.float32
+        ).unsqueeze(1),
         "atomic_subsystem_index": torch.tensor([0, 0, 1, 1, 1, 1, 1, 1]),
     }
     energy_readout = FromAtomToMoleculeReduction()
     E = energy_readout(r["atomic_subsystem_index"], r["per_atom_energy"])
 
     # check that output has length of total number of molecules in batch
-    assert E.size() == torch.Size(
-        [
-            2,
-        ]
-    )
+    assert E.size() == torch.Size([2, 1])
     # check that the correct values were summed
     assert torch.isclose(E[0], torch.tensor([6.0], dtype=torch.float32))
     assert torch.isclose(E[1], torch.tensor([6.0], dtype=torch.float32))

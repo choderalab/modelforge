@@ -204,7 +204,7 @@ class PaiNNCore(torch.nn.Module):
         # Apply output layers to the atomic embedding
         atomic_embedding = results["per_atom_scalar_representation"]
         for output_name, output_layer in self.output_layers.items():
-            results[output_name] = output_layer(atomic_embedding).squeeze(-1)
+            results[output_name] = output_layer(atomic_embedding)
 
         return results
 

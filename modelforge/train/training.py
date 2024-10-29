@@ -533,7 +533,7 @@ class TrainingAdapter(pL.LightningModule):
             mixing_steps = training_parameter.loss_parameter.mixing_steps[key]
 
             # Create a linear schedule from initial to target weight
-            mixing_scheme = torch.linspace(
+            mixing_scheme = torch.arange(
                 start=initial_weight,
                 end=target_weight,
                 steps=mixing_steps,

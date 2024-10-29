@@ -536,7 +536,7 @@ class TrainingAdapter(pL.LightningModule):
             mixing_scheme = torch.arange(
                 start=initial_weight,
                 end=target_weight,
-                steps=mixing_steps,
+                step=mixing_steps,
             )
             assert (
                 len(mixing_scheme) < nr_of_epochs

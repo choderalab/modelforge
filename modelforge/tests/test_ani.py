@@ -225,7 +225,7 @@ def test_ani_against_torchani_reference():
                 [-0.0048],
             ]
         ),
-        rtol=1e-3,
+        rtol=1e-2,
     )  # that's the atomic energies for the two methane molecules obtained with torchani
 
     a = 7

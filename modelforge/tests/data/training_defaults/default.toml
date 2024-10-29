@@ -20,23 +20,26 @@ job_type = "testing"
 tags = ["v_0.1.0"]
 notes = "testing training"
 # ------------------------------------------------------------ #
+# Learning Rate Scheduler Configuration
 [training.lr_scheduler]
+scheduler_name = "ReduceLROnPlateau"
 frequency = 1
+interval = "epoch"
+monitor = "val/per_system_energy/rmse"
 mode = "min"
 factor = 0.1
 patience = 10
-cooldown = 5
-min_lr = 1e-8
 threshold = 0.1
 threshold_mode = "abs"
-interval = "epoch"
+cooldown = 5
+min_lr = 1e-8
+eps = 1e-8  # Optional, default is 1e-8
 # ------------------------------------------------------------ #
 [training.loss_parameter]
-loss_components = ['per_system_energy'] #, 'per_atom_force'] # use
+loss_components = ['per_system_energy'] #, 'per_atom_force']
 # ------------------------------------------------------------ #
 [training.loss_parameter.weight]
-per_system_energy = 1.0 #NOTE: reciprocal units
-#per_atom_force = 0.001
+per_system_energy = 1.0
 # ------------------------------------------------------------ #
 [training.early_stopping]
 verbose = true

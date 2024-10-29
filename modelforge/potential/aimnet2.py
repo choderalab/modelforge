@@ -146,7 +146,7 @@ class AimNet2Core(torch.nn.Module):
 
             partial_charges = self.charge_conservation(
                 {
-                    "per_atom_charge": partial_charges.squeeze(-1),
+                    "per_atom_charge": partial_charges,
                     "per_system_total_charge": data.per_system_total_charge.to(
                         dtype=torch.float32
                     ),
@@ -154,7 +154,7 @@ class AimNet2Core(torch.nn.Module):
                         dtype=torch.int64
                     ),
                 }
-            )["per_atom_charge"].unsqueeze(-1)
+            )["per_atom_charge"]
 
         return {
             "per_atom_scalar_representation": atomic_embedding,
@@ -192,7 +192,7 @@ class AimNet2Core(torch.nn.Module):
 
         # Compute all specified outputs
         for output_name, output_layer in self.output_layers.items():
-            results[output_name] = output_layer(atomic_embedding).squeeze(-1)
+            results[output_name] = output_layer(atomic_embedding)
         return results
 
 

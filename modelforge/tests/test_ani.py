@@ -189,6 +189,48 @@ def test_ani():
     )
 
 
+def test_ani_against_torchani_reference():
+    import torch
+
+    # get input
+    species, coordinates, device, mf_input = setup_two_methanes()
+
+    # ------------------------------------------ #
+    # setup modelforge potential
+    potential = setup_potential_for_test(
+        use="training",
+        potential_seed=42,
+        potential_name="ani2x",
+        jit=False,
+        local_cache_dir=str(prep_temp_dir),
+    )
+    # load the original ani2x parameter set
+    potential.load_state_dict(torch.load(file_path))
+    # compare to original ani2x dataset
+    atomic_energies = potential(mf_input)["per_atom_energy"]
+
+    assert torch.allclose(
+        atomic_energies,
+        torch.tensor(
+            [
+                [0.0052],
+                [0.0181],
+                [0.0080],
+                [-0.0055],
+                [-0.0048],
+                [0.0052],
+                [0.0181],
+                [0.0080],
+                [-0.0055],
+                [-0.0048],
+            ]
+        ),
+        rtol=1e-3,
+    )  # that's the atomic energies for the two methane molecules obtained with torchani
+
+    a = 7
+
+
 @pytest.mark.parametrize("mode", ["inference", "training"])
 def test_forward_and_backward(mode):
     # Test modelforge ANI implementation

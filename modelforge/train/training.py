@@ -832,7 +832,7 @@ class TrainingAdapter(pL.LightningModule):
             # Create histogram
             histogram_fig = self._create_error_histogram(
                 errors_magnitude,
-                title=f"{phase.capitalize()} Force Error Histogram - Epoch {self.current_epoch}",
+                title=f"{phase.capitalize()} Magnitude of Force Error Histogram - Epoch {self.current_epoch}",
             )
 
             self._log_plots(phase, None, histogram_fig, force=True)

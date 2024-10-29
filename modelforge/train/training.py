@@ -31,7 +31,6 @@ from modelforge.potential.parameters import (
 )
 from modelforge.utils.prop import BatchData
 
-# Define a TypeVar that can be one of the parameter models
 T_NNP_Parameters = TypeVar(
     "T_NNP_Parameters",
     ANI2xParameters,
@@ -52,6 +51,19 @@ __all__ = [
 
 
 def gradient_norm(model):
+    """
+    Compute the total gradient norm of a model.
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        The neural network model.
+
+    Returns
+    -------
+    float
+        The total gradient norm.
+    """
     total_norm = 0.0
     for p in model.parameters():
         if p.grad is not None:
@@ -62,6 +74,21 @@ def gradient_norm(model):
 
 
 def compute_grad_norm(loss, model):
+    """
+    Compute the gradient norm of the loss with respect to the model parameters.
+
+    Parameters
+    ----------
+    loss : torch.Tensor
+        The loss tensor.
+    model : torch.nn.Module
+        The neural network model.
+
+    Returns
+    -------
+    float
+        The total gradient norm.
+    """
     parameters = [p for p in model.parameters() if p.requires_grad]
     grads = torch.autograd.grad(
         loss.sum(),
@@ -81,7 +108,7 @@ def compute_grad_norm(loss, model):
 
 def _exchange_per_atom_energy_for_per_system_energy(prop: str) -> str:
     """
-    Utility function to rename per-atom energy to per-system energy if applicable.
+    Rename 'per_atom_energy' to 'per_system_energy' if applicable.
 
     Parameters
     ----------
@@ -107,17 +134,21 @@ class CalculateProperties(torch.nn.Module):
 
     def __init__(self, requested_properties: List[str]):
         """
-        A utility class for calculating properties such as energies and forces from batches using a neural network model.
+        A utility class for calculating properties such as energies and forces
+        from batches using a neural network model.
 
         Parameters
+        ----------
         requested_properties : List[str]
-            A list of properties to calculate (e.g., per_atom_energy, per_atom_force, per_system_dipole_moment).
+            A list of properties to calculate (e.g., per_atom_energy,
+            per_atom_force, per_system_dipole_moment).
         """
         super().__init__()
         self.requested_properties = requested_properties
         self.include_force = "per_atom_force" in self.requested_properties
         self.include_charges = "per_system_total_charge" in self.requested_properties
 
+        # Ensure all requested properties are supported
         assert all(
             prop in self._SUPPORTED_PROPERTIES for prop in self.requested_properties
         ), f"Unsupported property requested: {self.requested_properties}"
@@ -134,20 +165,20 @@ class CalculateProperties(torch.nn.Module):
         Parameters
         ----------
         batch : BatchData
-            A single batch of data, including input features and target energies.
+            A single batch of data, including input features and target
+            energies.
         model_prediction : Dict[str, torch.Tensor]
             A dictionary containing the predicted energies from the model.
         train_mode : bool
-            Whether to retain the graph for gradient computation (True for training).
-
+            Whether to retain the graph for gradient computation (True for
+            training).
         Returns
         -------
         Dict[str, torch.Tensor]
             A dictionary containing the true and predicted forces.
         """
         nnp_input = batch.nnp_input
-        # Ensure gradients are enabled
-        nnp_input.positions.requires_grad_(True)
+        nnp_input.positions.requires_grad_(True)  # Ensure gradients are enabled
         # Cast to float32 and extract true forces
         per_atom_force_true = batch.metadata.per_atom_force.to(torch.float32)
 
@@ -168,11 +199,13 @@ class CalculateProperties(torch.nn.Module):
         if grad is None:
             raise RuntimeWarning("Force calculation did not return a gradient")
 
-        per_atom_force_predict = -1 * grad  # Forces are the negative gradient of energy
+        per_atom_force_predict = (
+            -grad.contiguous()
+        )  # Forces are the negative gradient of energy
 
         return {
             "per_atom_force_true": per_atom_force_true,
-            "per_atom_force_predict": per_atom_force_predict.contiguous(),
+            "per_atom_force_predict": per_atom_force_predict,
         }
 
     @staticmethod
@@ -181,12 +214,13 @@ class CalculateProperties(torch.nn.Module):
         model_prediction: Dict[str, torch.Tensor],
     ) -> Dict[str, torch.Tensor]:
         """
-        Computes the energies from a given batch using the model.
+        Compute the energies from a given batch using the model.
 
         Parameters
         ----------
         batch : BatchData
-            A single batch of data, including input features and target energies.
+            A single batch of data, including input features and target
+            energies.
         model_prediction : Dict[str, torch.Tensor]
             The neural network model used to compute the energies.
 
@@ -198,6 +232,7 @@ class CalculateProperties(torch.nn.Module):
         per_system_energy_true = batch.metadata.per_system_energy.to(torch.float32)
         per_system_energy_predict = model_prediction["per_system_energy"]
 
+        # Ensure the shapes match
         assert per_system_energy_true.shape == per_system_energy_predict.shape, (
             f"Shapes of true and predicted energies do not match: "
             f"{per_system_energy_true.shape} != {per_system_energy_predict.shape}"
@@ -232,8 +267,8 @@ class CalculateProperties(torch.nn.Module):
             "per_atom_charge"
         ]  # Shape: (nr_of_atoms, 1)
 
-        # Calculate predicted total charge by summing per-atom charges for each system
-        a = 4
+        # Calculate predicted total charge by summing per-atom charges for each
+        # system
         per_system_total_charge_predict = torch.zeros_like(
             model_prediction["per_system_energy"]
         ).scatter_add_(
@@ -372,6 +407,10 @@ class TrainingAdapter(pL.LightningModule):
             Dataset statistics such as mean and standard deviation.
         training_parameter : TrainingParameters
             Training configuration, including optimizer, learning rate, and loss functions.
+        optimizer_class : Type[Optimizer]
+            The optimizer class to use for training.
+        nr_of_training_batches : int, optional
+            Number of training batches (default is -1).
         potential_seed : Optional[int], optional
             Seed for initializing the model (default is None).
         """
@@ -381,6 +420,7 @@ class TrainingAdapter(pL.LightningModule):
         self.save_hyperparameters()
         self.training_parameter = training_parameter
 
+        # Setup the potential model
         self.potential = setup_potential(
             potential_parameter=potential_parameter,
             dataset_statistic=dataset_statistic,
@@ -389,10 +429,12 @@ class TrainingAdapter(pL.LightningModule):
             use_training_mode_neighborlist=True,
         )
 
+        # Determine which properties to include based on loss components
         self.include_force = (
             "per_atom_force" in training_parameter.loss_parameter.loss_components
         )
 
+        # Initialize the property calculation utility
         self.calculate_predictions = CalculateProperties(
             training_parameter.loss_parameter.loss_components
         )
@@ -400,18 +442,11 @@ class TrainingAdapter(pL.LightningModule):
         self.learning_rate = training_parameter.lr
         self.lr_scheduler = training_parameter.lr_scheduler
 
-        # verbose output, only True if requested
-        if training_parameter.verbose:
-            self.log_histograms = True
-            self.log_on_training_step = True
-        else:
-            self.log_histograms = False
-            self.log_on_training_step = False
+        # Setup logging flags based on verbosity
+        self.log_histograms = training_parameter.verbose
+        self.log_on_training_step = training_parameter.verbose
 
-        # Initialize the loss function generate the weights of the loss
-        # components based on the loss components and the loss weights , the
-        # target_weight, and the step size
-
+        # Initialize the loss function with scheduled weights
         weights_scheduling = self._setup_weights_scheduling(
             training_parameter=training_parameter,
         )
@@ -420,7 +455,7 @@ class TrainingAdapter(pL.LightningModule):
             weights_scheduling=weights_scheduling,
         )
 
-        # Initialize performance metrics
+        # Initialize performance metrics for different phases
         self.test_metrics = create_error_metrics(
             training_parameter.loss_parameter.loss_components
         )
@@ -435,6 +470,7 @@ class TrainingAdapter(pL.LightningModule):
             training_parameter.loss_parameter.loss_components, is_loss=True
         )
 
+        # Initialize dictionaries to store predictions and targets
         self.train_preds: Dict[str, Dict[int, torch.Tensor]] = {
             "energy": {},
             "force": {},
@@ -460,32 +496,52 @@ class TrainingAdapter(pL.LightningModule):
             "force": {},
         }
 
+        # Initialize indices for validation and testing NOTE: this indices map
+        # back to the dataset
         self.val_indices: Dict[int, torch.Tensor] = {}
         self.test_indices: Dict[int, torch.Tensor] = {}
         self.train_indices: Dict[int, torch.Tensor] = {}
-        # Initialize variables for tracking variable top k outliers for
-        # validation ant training phase
+
+        # Track outlier errors over epochs
         self.outlier_errors_over_epochs: Dict[str, int] = {}
         self.number_of_training_batches = nr_of_training_batches
 
-    def _setup_weights_scheduling(self, training_parameter: TrainingParameters):
+    def _setup_weights_scheduling(
+        self, training_parameter: TrainingParameters
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Setup weight scheduling for loss components over epochs.
+
+        Parameters
+        ----------
+        training_parameter : TrainingParameters
+            The training configuration.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            A dictionary mapping loss component names to their scheduled
+            weights.
+        """
 
         weights_scheduling: Dict[str, torch.Tensor] = {}
         initial_weights = training_parameter.loss_parameter.weight
         nr_of_epochs = training_parameter.number_of_epochs
-        for key, initial_weight in initial_weights.items():
 
+        for key, initial_weight in initial_weights.items():
             target_weight = training_parameter.loss_parameter.target_weight[key]
             mixing_steps = training_parameter.loss_parameter.mixing_steps[key]
 
-            mixing_scheme = torch.arange(
+            # Create a linear schedule from initial to target weight
+            mixing_scheme = torch.linspace(
                 start=initial_weight,
                 end=target_weight,
-                step=mixing_steps,
+                steps=mixing_steps,
             )
             assert (
                 len(mixing_scheme) < nr_of_epochs
             ), "The number of epochs is less than the number of steps in the weight scheduling"
+
             # Fill up the rest of the epochs with the target weight
             weights_scheduling[key] = torch.cat(
                 [
@@ -493,7 +549,9 @@ class TrainingAdapter(pL.LightningModule):
                     torch.ones(nr_of_epochs - mixing_scheme.shape[0]) * target_weight,
                 ]
             )
-            assert weights_scheduling[key].shape[0] == nr_of_epochs
+            assert (
+                weights_scheduling[key].shape[0] == nr_of_epochs
+            ), "Weight scheduling length mismatch."
         return weights_scheduling
 
     def forward(self, batch: BatchData) -> Dict[str, torch.Tensor]:
@@ -583,10 +641,12 @@ class TrainingAdapter(pL.LightningModule):
             The loss tensor computed for the current training step.
         """
 
+        # Calculate predictions based on the current batch
         predict_target = self.calculate_predictions(
             batch, self.potential, self.training
         )
 
+        # Compute loss using the loss factory
         loss_dict = self.loss(
             predict_target,
             batch,
@@ -601,7 +661,7 @@ class TrainingAdapter(pL.LightningModule):
             # Compute and log gradient norms for each loss component
             if self.training_parameter.log_norm:
                 if key == "total_loss":
-                    continue
+                    continue  # Skip total loss for gradient norm logging
 
                 grad_norm = compute_grad_norm(metric.mean(), self)
                 self.log(f"grad_norm/{key}", grad_norm)
@@ -633,6 +693,7 @@ class TrainingAdapter(pL.LightningModule):
                 batch, self.potential, self.potential.training
             )
 
+        # Update validation metrics
         self._update_metrics(self.val_metrics, predict_target)
 
         # Save energy predictions and targets
@@ -651,8 +712,8 @@ class TrainingAdapter(pL.LightningModule):
         """
         # Ensure positions require gradients for force calculation
         batch.nnp_input.positions.requires_grad_(True)
-        # calculate energy and forces
         with torch.set_grad_enabled(True):
+            # calculate energy and forces
             predict_target = self.calculate_predictions(
                 batch, self.potential, self.training
             )
@@ -683,11 +744,20 @@ class TrainingAdapter(pL.LightningModule):
 
         Parameters
         ----------
-        preds : Dict[int, torch.Tensor]
-            Dictionary of predictions.
-        targets : Dict[int, torch.Tensor]
-            Dictionary of targets.
+        predict_target : Dict[str, torch.Tensor]
+            The predicted and true values for properties.
+        preds : Dict[str, Dict[int, torch.Tensor]]
+            Dictionary to store predictions.
+        targets : Dict[str, Dict[int, torch.Tensor]]
+            Dictionary to store targets.
+        indices : Dict[int, torch.Tensor]
+            Dictionary to store indices referencing the dataset.
+        batch_idx : int
+            The index of the current batch.
+        batch : BatchData
+            The current batch of data.
         """
+        # Update energy predictions and targets
         preds["energy"].update(
             {batch_idx: predict_target["per_system_energy_predict"].detach().cpu()}
         )
@@ -724,19 +794,13 @@ class TrainingAdapter(pL.LightningModule):
             Dictionary of predictions from different batches.
         targets : Dict[int, torch.Tensor]
             Dictionary of targets from different batches.
+        indices : Dict[int, torch.Tensor]
+            Dictionary of indices from different batches.
 
         Returns
         -------
-        gathered_preds : torch.Tensor
-            Gathered and padded predictions tensor.
-        gathered_targets : torch.Tensor
-            Gathered and padded targets tensor.
-        gathered_indices : torch.Tensor
-            Gathered and padded indices tensor.
-        max_length : int
-            Maximum length of the tensors across all processes.
-        pad_size : int
-            Amount of padding added to match the maximum length.
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor, int, int]
+            Gathered predictions, targets, indices, maximum length, and padding size.
         """
         # Concatenate the tensors
         preds_tensor = torch.cat(list(preds.values()))
@@ -767,16 +831,17 @@ class TrainingAdapter(pL.LightningModule):
         """
         Gathers and pads force prediction and target tensors across processes.
 
+        Parameters
+        ----------
+        preds : Dict[int, torch.Tensor]
+            Dictionary of force predictions from different batches.
+        targets : Dict[int, torch.Tensor]
+            Dictionary of force targets from different batches.
+
         Returns
         -------
-        gathered_preds : torch.Tensor
-            Gathered and padded force predictions tensor.
-        gathered_targets : torch.Tensor
-            Gathered and padded force targets tensor.
-        max_length : int
-            Maximum length of the tensors across all processes.
-        pad_size : int
-            Amount of padding added to match the maximum length.
+        Tuple[torch.Tensor, torch.Tensor, int, int]
+            Gathered force predictions, targets, maximum length, and padding size.
         """
         # Concatenate the tensors
         preds_tensor = torch.cat(list(preds.values()))
@@ -808,6 +873,20 @@ class TrainingAdapter(pL.LightningModule):
         indices: Dict[int, torch.Tensor],
         phase: str,
     ):
+        """
+        Log the force error statistics as histograms.
+
+        Parameters
+        ----------
+        preds : Dict[str, Dict[int, torch.Tensor]]
+            Dictionary of force predictions.
+        targets : Dict[str, Dict[int, torch.Tensor]]
+            Dictionary of force targets.
+        indices : Dict[int, torch.Tensor]
+            Dictionary of indices referencing the dataset.
+        phase : str
+            The phase name ('train', 'val', or 'test').
+        """
 
         # Gather tensors
         gathered_preds, gathered_targets, max_length, pad_size = (
@@ -839,16 +918,18 @@ class TrainingAdapter(pL.LightningModule):
 
     def _log_plots(self, phase: str, regression_fig, histogram_fig, force=False):
         """
-        Logs the regression and error histogram plots for the given phase.
+        Log the regression and error histogram plots for the given phase.
 
         Parameters
         ----------
         phase : str
-            The phase name ('val' or 'test').
+            The phase name ('train', 'val', or 'test').
         regression_fig : matplotlib.figure.Figure
             The regression plot figure.
         histogram_fig : matplotlib.figure.Figure
             The error histogram figure.
+        force : bool, optional
+            Whether to indicate force-related plots (default is False).
 
         Returns
         -------
@@ -856,15 +937,14 @@ class TrainingAdapter(pL.LightningModule):
         """
 
         logger_name = self.training_parameter.experiment_logger.logger_name.lower()
-        plot_frequency = self.training_parameter.plot_frequency
-
-        # skit logging if current_epoch == 0
-        # if self.current_epoch == 0:
-        #    return
+        plot_frequency = (
+            self.training_parameter.plot_frequency
+        )  # how often to log plots
 
         if logger_name == "wandb":
             import wandb
 
+            # Log only every nth epoch for validation, but always log for test
             if phase == "test" or self.current_epoch % plot_frequency == 0:
                 # NOTE: only log every nth epoch for validation, but always log
                 # for test
@@ -940,6 +1020,21 @@ class TrainingAdapter(pL.LightningModule):
         return fig
 
     def _create_error_histogram(self, errors: torch.Tensor, title="Error Histogram"):
+        """
+        Create an error histogram plot.
+
+        Parameters
+        ----------
+        errors : torch.Tensor
+            Tensor of error magnitudes.
+        title : str, optional
+            Title of the histogram (default is 'Error Histogram').
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The error histogram figure.
+        """
         import matplotlib.pyplot as plt
         import numpy as np
 
@@ -998,6 +1093,21 @@ class TrainingAdapter(pL.LightningModule):
         indices: Dict[int, torch.Tensor],
         phase: Literal["train", "val", "test"],
     ):
+        """
+        Log regression plots and error histograms for a specific phase.
+
+        Parameters
+        ----------
+        preds : Dict[str, Dict[int, torch.Tensor]]
+            Dictionary of predictions.
+        targets : Dict[str, Dict[int, torch.Tensor]]
+            Dictionary of targets.
+        indices : Dict[int, torch.Tensor]
+            Dictionary of dataset indices.
+        phase : Literal["train", "val", "test"]
+            The phase name.
+
+        """
         # Gather across processes
         gathered_preds, gathered_targets, gathered_indices, max_length, pad_size = (
             self._get_energy_tensors(
@@ -1040,10 +1150,8 @@ class TrainingAdapter(pL.LightningModule):
             self._log_plots(phase, regression_fig, histogram_fig)
             self._identify__and_log_top_k_errors(errors, gathered_indices, phase)
 
-            # Identify and track top k errors
-            if phase == "train":
-                pass
-            else:
+            # Log outlier error counts for non-training phases
+            if phase != "train":
                 self.log_dict(self.outlier_errors_over_epochs, on_epoch=True)
 
     def _identify__and_log_top_k_errors(
@@ -1053,6 +1161,21 @@ class TrainingAdapter(pL.LightningModule):
         phase: Literal["train", "val", "test"],
         k: int = 3,
     ):
+        """
+        Identify and log the top k largest errors.
+
+        Parameters
+        ----------
+        errors : torch.Tensor
+            Tensor of error magnitudes.
+        indices : torch.Tensor
+            Tensor of dataset indices corresponding to the errors.
+        phase : Literal["train", "val", "test"]
+            The phase name.
+        k : int, optional
+            Number of top errors to track (default is 3).
+
+        """
 
         # Compute absolute errors
         abs_errors = torch.abs(errors).detach().cpu()
@@ -1060,6 +1183,7 @@ class TrainingAdapter(pL.LightningModule):
         abs_errors = abs_errors.flatten()
         indices = indices.flatten().long().detach().cpu()
 
+        # Get top k errors and their corresponding indices
         top_k_errors, top_k_indices = torch.topk(abs_errors, k)
 
         top_k_indices = indices[top_k_indices].tolist()
@@ -1071,13 +1195,26 @@ class TrainingAdapter(pL.LightningModule):
             log.info(f"{phase} : Outlier error {error} at index {idx}.")
 
     def _clear_error_tracking(self, preds, targets, incides):
+        """
+        Clear the prediction, target, and index tracking dictionaries.
+
+        Parameters
+        ----------
+        preds : Dict[str, Dict[int, torch.Tensor]]
+            Dictionary of predictions.
+        targets : Dict[str, Dict[int, torch.Tensor]]
+            Dictionary of targets.
+        indices : Dict[int, torch.Tensor]
+            Dictionary of dataset indices.
+
+        """
         for d in [preds, targets]:
             d["energy"].clear()
             d["force"].clear()
         incides.clear()
 
     def on_test_epoch_end(self):
-        """Logs metrics at the end of the test epoch."""
+        """Logs metrics and figures at the end of the test epoch."""
         self._log_metrics(self.test_metrics, "test")
         self._log_figures_for_each_phase(
             self.test_preds,
@@ -1085,7 +1222,7 @@ class TrainingAdapter(pL.LightningModule):
             self.test_indices,
             "test",
         )
-        # Clear the dictionaries # NOTE: these are mutable objects
+        # Clear the dictionaries after logging
         self._clear_error_tracking(
             self.test_preds,
             self.test_targets,
@@ -1093,7 +1230,7 @@ class TrainingAdapter(pL.LightningModule):
         )
 
     def on_validation_epoch_end(self):
-        """Logs metrics at the end of the validation epoch."""
+        """Logs metrics and figures at the end of the validation epoch."""
         self._log_metrics(self.val_metrics, "val")
         self._log_figures_for_each_phase(
             self.val_preds,
@@ -1101,7 +1238,7 @@ class TrainingAdapter(pL.LightningModule):
             self.val_indices,
             "val",
         )
-        # Clear the dictionaries # NOTE: these are mutable objects
+        # Clear the dictionaries after logging
         self._clear_error_tracking(
             self.val_preds,
             self.val_targets,
@@ -1109,7 +1246,7 @@ class TrainingAdapter(pL.LightningModule):
         )
 
     def on_train_epoch_end(self):
-        """Logs metrics at the end of the training epoch."""
+        """Logs metrics, learning rate, histograms, and figures at the end of the training epoch."""
         self._log_metrics(self.loss_metrics, "loss")
         self._log_learning_rate()
         self._log_histograms()
@@ -1126,8 +1263,7 @@ class TrainingAdapter(pL.LightningModule):
                 self.train_indices,
                 "train",
             )
-        # Clear the dictionaries # NOTE: these are mutable objects
-        # Clear the dictionaries # NOTE: these are mutable objects
+        # Clear the dictionaries after logging
         self._clear_error_tracking(
             self.train_preds,
             self.train_targets,
@@ -1149,7 +1285,17 @@ class TrainingAdapter(pL.LightningModule):
             pass
 
     def _log_metrics(self, metrics: ModuleDict, phase: str):
-        """Logs all accumulated metrics for a given phase."""
+        """
+        Log all accumulated metrics for a given phase.
+
+        Parameters
+        ----------
+        metrics : ModuleDict
+            The metrics to log.
+        phase : str
+            The phase name ('train', 'val', or 'test').
+
+        """
         # abbreviate long names to shorter versions
         abbreviate = {
             "MeanAbsoluteError": "mae",
@@ -1169,6 +1315,9 @@ class TrainingAdapter(pL.LightningModule):
                 )
 
     def _log_histograms(self):
+        """
+        Log histograms of model parameters and their gradients if enabled.
+        """
         if self.log_histograms:
             for name, params in self.named_parameters():
                 if params is not None:
@@ -1181,7 +1330,14 @@ class TrainingAdapter(pL.LightningModule):
                     )
 
     def configure_optimizers(self):
-        """Configures the optimizers and learning rate schedulers."""
+        """
+        Configure the optimizers and learning rate schedulers.
+
+        Returns
+        -------
+        Dict[str, Any]
+            A dictionary containing the optimizer and optionally the scheduler.
+        """
         from modelforge.train.parameters import (
             ReduceLROnPlateauConfig,
             CosineAnnealingLRConfig,
@@ -1190,9 +1346,8 @@ class TrainingAdapter(pL.LightningModule):
             CyclicLRConfig,
         )
 
-        # Collect weight parameters
+        # Separate parameters into weight and bias groups
         weight_params = []
-        # Collect bias parameters
         bias_params = []
 
         for name, param in self.potential.named_parameters():
@@ -1201,9 +1356,10 @@ class TrainingAdapter(pL.LightningModule):
             elif "bias" in name or "atomic_scale" in name:
                 bias_params.append(param)
             else:
+                # If parameter type is unknown, raise an error
                 raise ValueError(f"Unknown parameter type: {name}")
 
-        # Define parameter groups
+        # Define parameter groups with different weight decay
         param_groups = [
             {
                 "params": weight_params,
@@ -1327,13 +1483,16 @@ class PotentialTrainer:
         verbose: bool = False,
     ):
         """
-        Initializes the TrainingAdapter with the specified model and training configuration.
+        Initializes the TrainingAdapter with the specified model and training
+        configuration.
 
         Parameters
         ----------
         dataset_parameter : DatasetParameters
             Parameters for the dataset.
-        potential_parameter : Union[ANI2xParameters, SAKEParameters, SchNetParameters, PhysNetParameters, PaiNNParameters, TensorNetParameters]
+        potential_parameter : Union[ANI2xParameters, SAKEParameters,
+        SchNetParameters, PhysNetParameters, PaiNNParameters,
+        TensorNetParameters]
             Parameters for the potential model.
         training_parameter : TrainingParameters
             Parameters for the training process.
@@ -1344,7 +1503,8 @@ class PotentialTrainer:
         use_default_dataset_statistic: bool
             Whether to use default dataset statistic
         optimizer_class : Type[Optimizer], optional
-            The optimizer class to use for training, by default torch.optim.AdamW.
+            The optimizer class to use for training, by default
+            torch.optim.AdamW.
         potential_seed: Optional[int], optional
             Seed to initialize the potential training adapter, default is None.
         verbose : bool, optional
@@ -1353,13 +1513,16 @@ class PotentialTrainer:
 
         super().__init__()
 
+        # Assign parameters to instance variables
         self.dataset_parameter = dataset_parameter
         self.potential_parameter = potential_parameter
         self.training_parameter = training_parameter
         self.runtime_parameter = runtime_parameter
         self.verbose = verbose
 
+        # Setup data module
         self.datamodule = self.setup_datamodule()
+        # Read and assign provided dataset statistics
         self.dataset_statistic = (
             self.read_dataset_statistics()
             if not use_default_dataset_statistic
@@ -1616,7 +1779,7 @@ class PotentialTrainer:
 
     def train_potential(self) -> Trainer:
         """
-        Run the training process.
+        Run the training, validation, and testing processes.
 
         Returns
         -------
@@ -1720,16 +1883,59 @@ def read_config(
     simulation_environment: Optional[str] = None,
 ):
     """
-    Reads one or more TOML configuration files and loads them into the pydantic models.
+    Reads one or more TOML configuration files and loads them into the pydantic
+    models.
 
     Parameters
     ----------
-    (Parameters as described earlier...)
+    condensed_config_path : Optional[str], optional
+        Path to the TOML configuration that contains all parameters for the
+        dataset, potential, training, and runtime parameters. Any other provided
+        configuration files will be ignored.
+    training_parameter_path : Optional[str], optional
+        Path to the TOML file defining the training parameters.
+    dataset_parameter_path : Optional[str], optional
+        Path to the TOML file defining the dataset parameters.
+    potential_parameter_path : Optional[str], optional
+        Path to the TOML file defining the potential parameters.
+    runtime_parameter_path : Optional[str], optional
+        Path to the TOML file defining the runtime parameters. If this is not
+        provided, the code will attempt to use the runtime parameters provided
+        as arguments.
+    accelerator : Optional[str], optional
+        Accelerator type to use. If provided, this overrides the accelerator
+        type in the runtime_defaults configuration.
+    devices : Optional[Union[int, List[int]]], optional
+        Device index/indices to use. If provided, this overrides the devices in
+        the runtime_defaults configuration.
+    number_of_nodes : Optional[int], optional
+        Number of nodes to use. If provided, this overrides the number of nodes
+        in the runtime_defaults configuration.
+    experiment_name : Optional[str], optional
+        Name of the experiment. If provided, this overrides the experiment name
+        in the runtime_defaults configuration.
+    save_dir : Optional[str], optional
+        Directory to save the model. If provided, this overrides the save
+        directory in the runtime_defaults configuration.
+    local_cache_dir : Optional[str], optional
+        Local cache directory. If provided, this overrides the local cache
+        directory in the runtime_defaults configuration.
+    checkpoint_path : Optional[str], optional
+        Path to the checkpoint file. If provided, this overrides the checkpoint
+        path in the runtime_defaults configuration.
+    log_every_n_steps : Optional[int], optional
+        Number of steps to log. If provided, this overrides the
+        log_every_n_steps in the runtime_defaults configuration.
+    simulation_environment : Optional[str], optional
+        Simulation environment. If provided, this overrides the simulation
+        environment in the runtime_defaults configuration.
 
     Returns
     -------
-    Tuple
-        Tuple containing the training, dataset, potential, and runtime parameters.
+    Tuple[TrainingParameters, DatasetParameters, T_NNP_Parameters,
+    RuntimeParameters]
+        Tuple containing the training, dataset, potential, and runtime
+        parameters.
     """
     import toml
 
@@ -1740,6 +1946,7 @@ def read_config(
     runtime_config_dict = {}
 
     if condensed_config_path is not None:
+        # Load all configurations from a single condensed TOML file
         config = toml.load(condensed_config_path)
         log.info(f"Reading config from : {condensed_config_path}")
 

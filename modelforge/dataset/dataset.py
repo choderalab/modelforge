@@ -491,6 +491,7 @@ class HDF5Dataset:
 
         """
         from collections import OrderedDict
+        from modelforge.utils.prop import PropertyUnits
 
         import h5py
         import tqdm
@@ -539,6 +540,7 @@ class HDF5Dataset:
 
                 # initialize each relevant value in data dicts to empty list
                 for value in self.properties_of_interest:
+
                     value_format = hf[next(iter(hf.keys()))][value].attrs["format"]
                     if value_format == "single_rec":
                         single_rec_data[value] = []
@@ -552,6 +554,15 @@ class HDF5Dataset:
                         raise ValueError(
                             f"Unknown format type {value_format} for property {value}"
                         )
+                log.debug(f"Properties of Interest: {self.properties_of_interest}")
+                target_units = {}
+                for key in self._available_properties_association.keys():
+                    for property in self.properties_of_interest:
+                        if key == property:
+                            prop_name = self._available_properties_association[key]
+                            target_units[property] = PropertyUnits[prop_name]
+
+                log.debug(f"Properties of Interest units: {target_units}")
                 self.atomic_subsystem_counts = []  # number of atoms in each record
                 self.n_confs = []  # number of conformers in each record
 
@@ -619,6 +630,7 @@ class HDF5Dataset:
 
                             for value in single_atom_data.keys():
                                 record_array = hf[record][value][()]
+
                                 if record_array.shape[0] != atomic_subsystem_counts_rec:
                                     raise ValueError(
                                         f"Number of atoms for property {value} is inconsistent with other properties for record {record}"
@@ -628,6 +640,14 @@ class HDF5Dataset:
 
                             for value in series_atom_data.keys():
                                 record_array = hf[record][value][()][~configs_nan]
+                                if "u" in hf[record][value].attrs:
+                                    units = hf[record][value].attrs["u"]
+                                    if units != "dimensionless":
+                                        record_array = Quantity(record_array, units).to(
+                                            target_units[value]
+                                        )
+                                        record_array = record_array.magnitude
+
                                 try:
                                     if (
                                         record_array.shape[1]
@@ -653,7 +673,15 @@ class HDF5Dataset:
                                     )
 
                             for value in series_mol_data.keys():
+
                                 record_array = hf[record][value][()][~configs_nan]
+                                if "u" in hf[record][value].attrs:
+                                    units = hf[record][value].attrs["u"]
+                                    if units != "dimensionless":
+                                        record_array = Quantity(record_array, units).to(
+                                            target_units[value]
+                                        )
+                                        record_array = record_array.magnitude
                                 series_mol_data[value].append(record_array)
 
                             for value in single_rec_data.keys():

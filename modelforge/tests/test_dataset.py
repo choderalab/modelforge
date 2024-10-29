@@ -43,14 +43,12 @@ def test_dataset_basic_operations():
         ),
         "atomic_subsystem_counts": atomic_subsystem_counts,
         "n_confs": n_confs,
-        "charges": torch.randint(-1, 2, torch.Size([total_confs, 1])).numpy(),
     }
 
     property_names = PropertyNames(
         atomic_numbers="atomic_numbers",
         positions="geometry",
         E="internal_energy_at_0K",
-        total_charge="charges",
     )
     dataset = TorchDataset(input_data, property_names)
     assert len(dataset) == total_confs
@@ -122,7 +120,6 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
             "geometry",
             "atomic_numbers",
             "internal_energy_at_0K",
-            "charges",
             "dipole_moment",
         ]
         # spot check the processing of the yaml file
@@ -175,7 +172,7 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
             "atomic_numbers",
             "dft_total_energy",
             "dft_total_force",
-            "mbis_charges",
+            "total_charge",
             "scf_dipole",
         ]
 
@@ -183,13 +180,13 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
             "dft_total_energy",
             "geometry",
             "atomic_numbers",
-            "mbis_charges",
+            "total_charge",
         ]
         assert data.properties_of_interest == [
             "dft_total_energy",
             "geometry",
             "atomic_numbers",
-            "mbis_charges",
+            "total_charge",
         ]
     elif dataset_name == "PhAlkEthOH":
         assert data.properties_of_interest == [
@@ -356,7 +353,6 @@ def test_metadata_validation(prep_temp_dir):
             "atomic_numbers",
             "internal_energy_at_0K",
             "geometry",
-            "charges",
             "dipole_moment",
         ],
         "hdf5_checksum": "305a0602860f181fafa75f7c7e3e6de4",

@@ -1267,14 +1267,17 @@ class DataModule(pl.LightningDataModule):
                 )
                 molecule_mass = torch.sum(atomic_masses)
 
+                start_idx_mol = dataset.series_atom_start_idxs_by_conf[i]
+                end_idx_mol = dataset.series_atom_start_idxs_by_conf[i + 1]
+
                 positions = dataset.properties_of_interest["positions"][
-                    start_idx:end_idx
+                    start_idx_mol:end_idx_mol
                 ]
                 center_of_mass = (
                     torch.einsum("i, ij->j", atomic_masses, positions) / molecule_mass
                 )
                 dataset.properties_of_interest["positions"][
-                    start_idx:end_idx
+                    start_idx_mol:end_idx_mol
                 ] -= center_of_mass
 
         from torch.utils.data import DataLoader

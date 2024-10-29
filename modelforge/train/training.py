@@ -11,7 +11,13 @@ from loguru import logger as log
 from openff.units import unit
 from torch.nn import ModuleDict
 from torch.optim import Optimizer
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import (
+    ReduceLROnPlateau,
+    CosineAnnealingLR,
+    CosineAnnealingWarmRestarts,
+    OneCycleLR,
+    CyclicLR,
+)
 
 from modelforge.dataset.dataset import DataModule, DatasetParameters
 from modelforge.potential.parameters import (
@@ -352,6 +358,7 @@ class TrainingAdapter(pL.LightningModule):
         dataset_statistic: Dict[str, Dict[str, unit.Quantity]],
         training_parameter: TrainingParameters,
         optimizer_class: Type[Optimizer],
+        nr_of_training_batches: int = -1,
         potential_seed: Optional[int] = None,
     ):
         """
@@ -401,9 +408,16 @@ class TrainingAdapter(pL.LightningModule):
             self.log_histograms = False
             self.log_on_training_step = False
 
-        # Initialize the loss function
+        # Initialize the loss function generate the weights of the loss
+        # components based on the loss components and the loss weights , the
+        # target_weight, and the step size
+
+        weights_scheduling = self._setup_weights_scheduling(
+            training_parameter=training_parameter,
+        )
         self.loss = LossFactory.create_loss(
-            **training_parameter.loss_parameter.model_dump()
+            loss_components=training_parameter.loss_parameter.loss_components,
+            weights_scheduling=weights_scheduling,
         )
 
         # Initialize performance metrics
@@ -440,6 +454,35 @@ class TrainingAdapter(pL.LightningModule):
         self.train_indices: Dict[int, torch.Tensor] = {}
         # Initialize variables for tracking fixed top k outliers
         self.outlier_errors_over_epochs = {}
+        self.number_of_training_batches = nr_of_training_batches
+
+    def _setup_weights_scheduling(self, training_parameter: TrainingParameters):
+
+        weights_scheduling: Dict[str, torch.Tensor] = {}
+        initial_weights = training_parameter.loss_parameter.weight
+        nr_of_epochs = training_parameter.number_of_epochs
+        for key, initial_weight in initial_weights.items():
+
+            target_weight = training_parameter.loss_parameter.target_weight[key]
+            mixing_steps = training_parameter.loss_parameter.mixing_steps[key]
+
+            mixing_scheme = torch.arange(
+                start=initial_weight,
+                end=target_weight,
+                step=mixing_steps,
+            )
+            assert (
+                len(mixing_scheme) < nr_of_epochs
+            ), "The number of epochs is less than the number of steps in the weight scheduling"
+            # Fill up the rest of the epochs with the target weight
+            weights_scheduling[key] = torch.cat(
+                [
+                    mixing_scheme,
+                    torch.ones(nr_of_epochs - mixing_scheme.shape[0]) * target_weight,
+                ]
+            )
+            assert weights_scheduling[key].shape[0] == nr_of_epochs
+        return weights_scheduling
 
     def forward(self, batch: BatchData) -> Dict[str, torch.Tensor]:
         """
@@ -532,7 +575,11 @@ class TrainingAdapter(pL.LightningModule):
             batch, self.potential, self.training
         )
 
-        loss_dict = self.loss(predict_target, batch)  # Contains per-sample losses
+        loss_dict = self.loss(
+            predict_target,
+            batch,
+            self.current_epoch,
+        )  # Contains per-sample losses
 
         # Update loss metrics with per-sample losses
         batch_size = batch.batch_size()
@@ -1056,6 +1103,10 @@ class TrainingAdapter(pL.LightningModule):
         if self.include_force:
             self._log_force_errors("train")
 
+        # log the weights of the different loss components
+        for key, weight in self.loss.weights_scheduling.items():
+            self.log(f"loss/{key}/weight", weight[self.current_epoch])
+
     def _log_learning_rate(self):
         """Logs the current learning rate."""
         sch = self.lr_schedulers()
@@ -1100,6 +1151,13 @@ class TrainingAdapter(pL.LightningModule):
 
     def configure_optimizers(self):
         """Configures the optimizers and learning rate schedulers."""
+        from modelforge.train.parameters import (
+            ReduceLROnPlateauConfig,
+            CosineAnnealingLRConfig,
+            CosineAnnealingWarmRestartsConfig,
+            OneCycleLRConfig,
+            CyclicLRConfig,
+        )
 
         # Collect weight parameters
         weight_params = []
@@ -1130,22 +1188,89 @@ class TrainingAdapter(pL.LightningModule):
 
         optimizer = torch.optim.AdamW(param_groups)
 
-        lr_scheduler = self.lr_scheduler.model_dump()
-        interval = lr_scheduler.pop("interval")
-        frequency = lr_scheduler.pop("frequency")
-        monitor = lr_scheduler.pop("monitor")
+        lr_scheduler_config = self.lr_scheduler
 
-        lr_scheduler = ReduceLROnPlateau(
-            optimizer,
-            **lr_scheduler,
-        )
+        if lr_scheduler_config is None:
+            return {"optimizer": optimizer}
+
+        interval = lr_scheduler_config.interval
+        frequency = lr_scheduler_config.frequency
+        monitor = (
+            lr_scheduler_config.monitor or self.monitor
+        )  # Use default monitor if not specified
+
+        # Determine the scheduler class and parameters
+        if isinstance(lr_scheduler_config, ReduceLROnPlateauConfig):
+            scheduler_class = ReduceLROnPlateau
+            scheduler_params = lr_scheduler_config.model_dump(
+                exclude={"scheduler_name", "frequency", "interval", "monitor"}
+            )
+        elif isinstance(lr_scheduler_config, CosineAnnealingLRConfig):
+            scheduler_class = CosineAnnealingLR
+            scheduler_params = lr_scheduler_config.model_dump(
+                exclude={"scheduler_name", "frequency", "interval", "monitor"}
+            )
+        elif isinstance(lr_scheduler_config, CosineAnnealingWarmRestartsConfig):
+            scheduler_class = CosineAnnealingWarmRestarts
+            scheduler_params = lr_scheduler_config.model_dump(
+                exclude={"scheduler_name", "frequency", "interval", "monitor"}
+            )
+        elif isinstance(lr_scheduler_config, OneCycleLRConfig):
+            scheduler_class = OneCycleLR
+            scheduler_params = lr_scheduler_config.model_dump(
+                exclude={
+                    "scheduler_name",
+                    "frequency",
+                    "interval",
+                    "monitor",
+                    "steps_per_epoch",
+                    "total_steps",
+                }
+            )
+
+            # Calculate steps_per_epoch
+            steps_per_epoch = self.number_of_training_batches
+            scheduler_params["steps_per_epoch"] = steps_per_epoch
+            scheduler_params["epochs"] = lr_scheduler_config.epochs
+        elif isinstance(lr_scheduler_config, CyclicLRConfig):
+            scheduler_class = CyclicLR
+            scheduler_params = lr_scheduler_config.model_dump(
+                exclude={
+                    "scheduler_name",
+                    "frequency",
+                    "interval",
+                    "monitor",
+                    "epochs_up",
+                    "epochs_down",
+                }
+            )
+
+            # Calculate steps_per_epoch
+            steps_per_epoch = self.number_of_training_batches
+
+            # Calculate step_size_up and step_size_down
+            epochs_up = lr_scheduler_config.epochs_up
+            epochs_down = (
+                lr_scheduler_config.epochs_down or epochs_up
+            )  # Symmetric cycle if not specified
+            step_size_up = int(epochs_up * steps_per_epoch)
+            step_size_down = int(epochs_down * steps_per_epoch)
+
+            scheduler_params["step_size_up"] = step_size_up
+            scheduler_params["step_size_down"] = step_size_down
+        else:
+            raise NotImplementedError(
+                f"Unsupported learning rate scheduler: {lr_scheduler_config.scheduler_name}"
+            )
+        lr_scheduler_instance = scheduler_class(optimizer, **scheduler_params)
 
         scheduler = {
-            "scheduler": lr_scheduler,
+            "scheduler": lr_scheduler_instance,
             "monitor": monitor,  # Name of the metric to monitor
             "interval": interval,
             "frequency": frequency,
         }
+
         return {"optimizer": optimizer, "lr_scheduler": scheduler}
 
 
@@ -1214,8 +1339,6 @@ class PotentialTrainer:
         self.trainer = self.setup_trainer()
         self.optimizer_class = optimizer_class
         self.lightning_module = self.setup_lightning_module(potential_seed)
-        self.learning_rate = self.training_parameter.lr
-        self.lr_scheduler = self.training_parameter.lr_scheduler
 
     def read_dataset_statistics(
         self,
@@ -1304,6 +1427,7 @@ class PotentialTrainer:
             dataset_statistic=self.dataset_statistic,
             training_parameter=self.training_parameter,
             optimizer_class=self.optimizer_class,
+            nr_of_training_batches=len(self.datamodule.train_dataloader()),
             potential_seed=potential_seed,
         )
 
@@ -1426,8 +1550,11 @@ class PotentialTrainer:
         """
         from lightning import Trainer
 
-        # if devices is a list
-        if isinstance(self.runtime_parameter.devices, list) or (
+        # if devices is a list (but longer than 1)
+        if (
+            isinstance(self.runtime_parameter.devices, list)
+            and len(self.runtime_parameter.devices) > 1
+        ) or (
             isinstance(self.runtime_parameter.devices, int)
             and self.runtime_parameter.devices > 1
         ):

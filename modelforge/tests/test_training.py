@@ -96,6 +96,8 @@ def add_force_to_loss_parameter(config):
     t_config = config["training"]
     t_config.loss_parameter.loss_components.append("per_atom_force")
     t_config.loss_parameter.weight["per_atom_force"] = 0.001
+    t_config.loss_parameter.target_weight["per_atom_force"] = 0.001
+    t_config.loss_parameter.mixing_steps["per_atom_force"] = 1
 
 
 def add_dipole_moment_to_loss_parameter(config):
@@ -120,6 +122,12 @@ def add_dipole_moment_to_loss_parameter(config):
     t_config.loss_parameter.weight["per_system_dipole_moment"] = 0.01
     t_config.loss_parameter.weight["per_system_total_charge"] = 0.01
 
+    t_config.loss_parameter.target_weight["per_system_dipole_moment"] = 0.01
+    t_config.loss_parameter.target_weight["per_system_total_charge"] = 0.01
+
+    t_config.loss_parameter.mixing_steps["per_system_dipole_moment"] = 1
+    t_config.loss_parameter.mixing_steps["per_system_total_charge"] = 1
+
     # also add per_atom_charge to predicted properties
 
     p_config = config["potential"]
@@ -135,11 +143,168 @@ def replace_per_system_with_per_atom_loss(config):
     t_config.loss_parameter.weight.pop("per_system_energy")
     t_config.loss_parameter.weight["per_atom_energy"] = 0.999
 
+    t_config.loss_parameter.target_weight.pop("per_system_energy")
+    t_config.loss_parameter.target_weight["per_atom_energy"] = 0.999
+
+    t_config.loss_parameter.mixing_steps.pop("per_system_energy")
+    t_config.loss_parameter.mixing_steps["per_atom_energy"] = 1
+
     # NOTE: the loss is calculate per_atom, but the validation set error is
     # per_system. This is because otherwise it's difficult to compare.
     t_config.early_stopping.monitor = "val/per_system_energy/rmse"
     t_config.monitor = "val/per_system_energy/rmse"
     t_config.lr_scheduler.monitor = "val/per_system_energy/rmse"
+
+
+from typing import Literal
+
+
+from typing import Literal
+from modelforge.train.parameters import (
+    TrainingParameters,
+    ReduceLROnPlateauConfig,
+    CosineAnnealingLRConfig,
+    CosineAnnealingWarmRestartsConfig,
+    CyclicLRConfig,
+    OneCycleLRConfig,
+)
+
+from typing import Literal
+
+
+def use_different_LRScheduler(
+    training_config: TrainingParameters,
+    which_one: Literal[
+        "CosineAnnealingLR",
+        "ReduceLROnPlateau",
+        "CosineAnnealingWarmRestarts",
+        "OneCycleLR",
+        "CyclicLR",
+    ],
+) -> TrainingParameters:
+    """
+    Modifies the training configuration to use a different learning rate scheduler.
+    """
+
+    if which_one == "ReduceLROnPlateau":
+        lr_scheduler_config = ReduceLROnPlateauConfig(
+            scheduler_name="ReduceLROnPlateau",
+            frequency=1,
+            interval="epoch",
+            monitor=training_config.monitor,
+            mode="min",
+            factor=0.1,
+            patience=10,
+            threshold=0.1,
+            threshold_mode="abs",
+            cooldown=5,
+            min_lr=1e-8,
+            eps=1e-8,
+        )
+    elif which_one == "CosineAnnealingLR":
+        lr_scheduler_config = CosineAnnealingLRConfig(
+            scheduler_name="CosineAnnealingLR",
+            frequency=1,
+            interval="epoch",
+            monitor=training_config.monitor,
+            T_max=training_config.number_of_epochs,
+            eta_min=0.0,
+            last_epoch=-1,
+        )
+    elif which_one == "CosineAnnealingWarmRestarts":
+        lr_scheduler_config = CosineAnnealingWarmRestartsConfig(
+            scheduler_name="CosineAnnealingWarmRestarts",
+            frequency=1,
+            interval="epoch",
+            monitor=training_config.monitor,
+            T_0=10,
+            T_mult=2,
+            eta_min=0.0,
+            last_epoch=-1,
+        )
+    elif which_one == "OneCycleLR":
+        lr_scheduler_config = OneCycleLRConfig(
+            scheduler_name="OneCycleLR",
+            frequency=1,
+            interval="step",
+            monitor=None,
+            max_lr=training_config.lr,
+            epochs=training_config.number_of_epochs,  # Use epochs from training config
+            # steps_per_epoch will be calculated at runtime
+            pct_start=0.3,
+            anneal_strategy="cos",
+            cycle_momentum=True,
+            base_momentum=0.85,
+            max_momentum=0.95,
+            div_factor=25.0,
+            final_div_factor=1e4,
+            three_phase=False,
+            last_epoch=-1,
+        )
+    elif which_one == "CyclicLR":
+        lr_scheduler_config = CyclicLRConfig(
+            scheduler_name="CyclicLR",
+            frequency=1,
+            interval="step",
+            monitor=None,
+            base_lr=training_config.lr / 10,
+            max_lr=training_config.lr,
+            epochs_up=1.0,  # For example, increasing phase lasts 1 epoch
+            epochs_down=1.0,  # Decreasing phase lasts 1 epoch
+            mode="triangular",
+            gamma=1.0,
+            scale_mode="cycle",
+            cycle_momentum=True,
+            base_momentum=0.8,
+            max_momentum=0.9,
+            last_epoch=-1,
+        )
+    else:
+        raise ValueError(f"Unsupported scheduler: {which_one}")
+
+    # Update the lr_scheduler in the training configuration
+    training_config.lr_scheduler = lr_scheduler_config
+    return training_config
+
+
+import pytest
+from modelforge.train.parameters import TrainingParameters
+
+
+@pytest.mark.parametrize("potential_name", ["ANI2x"])
+@pytest.mark.parametrize("dataset_name", ["PHALKETHOH"])
+@pytest.mark.parametrize(
+    "lr_scheduler",
+    [
+        "ReduceLROnPlateau",
+        "CosineAnnealingLR",
+        "CosineAnnealingWarmRestarts",
+        "OneCycleLR",
+        "CyclicLR",
+    ],
+)
+def test_learning_rate_scheduler(
+    potential_name,
+    dataset_name,
+    lr_scheduler,
+    prep_temp_dir,
+):
+    """
+    Test that we can train, save, and load checkpoints with different learning rate schedulers.
+    """
+    # Load the configuration into Pydantic models
+    config = load_configs_into_pydantic_models(
+        potential_name, dataset_name, str(prep_temp_dir)
+    )
+
+    # Get the training configuration
+    training_config = config["training"]
+    # Modify the training configuration to use the selected scheduler
+    training_config = use_different_LRScheduler(training_config, lr_scheduler)
+
+    config["training"] = training_config
+    # Proceed with training
+    get_trainer(config).train_potential().save_checkpoint("test.chp")  # save checkpoint
 
 
 @pytest.mark.xdist_group(name="test_training_with_lightning")
@@ -309,7 +474,11 @@ def test_loss_with_dipole_moment(single_batch_with_batchsize, prep_temp_dir):
     ), "Mismatch in shape for total charge predictions."
 
     # Now compute the loss
-    loss_dict = trainer.lightning_module.loss(predict_target=prediction, batch=batch)
+    loss_dict = trainer.lightning_module.loss(
+        predict_target=prediction,
+        batch=batch,
+        epoch_idx=0,
+    )
 
     # Ensure that the loss contains the total_charge and dipole_moment terms
     assert "per_system_total_charge" in loss_dict, "Total charge loss not computed."
@@ -343,9 +512,9 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir):
 
     loss_porperty = ["per_system_energy", "per_atom_force", "per_atom_energy"]
     loss_weights = {
-        "per_system_energy": 0.5,
-        "per_atom_force": 0.5,
-        "per_atom_energy": 0.1,
+        "per_system_energy": torch.tensor([0.5]),
+        "per_atom_force": torch.tensor([0.5]),
+        "per_atom_energy": torch.tensor([0.1]),
     }
     loss = Loss(loss_porperty, loss_weights)
     assert loss is not None
@@ -371,7 +540,7 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir):
     ) == batch.metadata.per_atom_force.size(dim=0)
 
     # pass prediction through loss module
-    loss_output = loss(prediction, batch)
+    loss_output = loss(prediction, batch, epoch_idx=0)
     # let's recalculate the loss (NOTE: we scale the loss by the number of atoms)
     # --------------------------------------------- #
     # make sure that both have gradients

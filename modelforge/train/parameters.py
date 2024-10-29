@@ -3,14 +3,23 @@ This defines pydantic models for the training parameters and runtime parameters.
 """
 
 from enum import Enum
-from typing import Callable, Dict, List, Optional, Type, Union
+from typing import (
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Type,
+    Union,
+    Literal,
+    Annotated,
+)
 
 import torch
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator, Field
 from loguru import logger as log
 
 
-# So we  do not need to set Config parameters in each model
+# So we do not need to set Config parameters in each model
 # we can create a base class that will be inherited by all models
 class ParametersBase(BaseModel):
     model_config = ConfigDict(
@@ -31,11 +40,7 @@ class CaseInsensitiveEnum(str, Enum):
 
 class SchedulerMode(CaseInsensitiveEnum):
     """
-    Enum class for the scheduler mode, allowing "min" ond "max"
-
-    args:
-        min (str): The minimum mode
-        max (str): The maximum mode
+    Enum class for the scheduler mode, allowing "min" and "max"
     """
 
     min = "min"
@@ -45,35 +50,27 @@ class SchedulerMode(CaseInsensitiveEnum):
 class ThresholdMode(CaseInsensitiveEnum):
     """
     Enum class for the threshold mode, allowing "abs" and "rel"
-
-    args:
-        abs (str): The absolute mode
-        rel (str): The relative mode
     """
 
     abs = "abs"
     rel = "rel"
 
 
-# generate an enum class for each registered splitting strategy
-# NOTE: not sure if it is best to allow this to dynamically update
-# or to simply hardcode in the values.  Hardcoded values would be better for
-# documentation, which is really the aim of adding in the dataclasses
-# from modelforge.dataset.utils import REGISTERED_SPLITTING_STRATEGIES
-#
-# SplittingStrategyName = Enum(
-#     "SplittingStrategyName", {name: name for name in REGISTERED_SPLITTING_STRATEGIES}
-# )
+class SchedulerName(CaseInsensitiveEnum):
+    """
+    Enum class for the scheduler names
+    """
+
+    ReduceLROnPlateau = "ReduceLROnPlateau"
+    CosineAnnealingLR = "CosineAnnealingLR"
+    CosineAnnealingWarmRestarts = "CosineAnnealingWarmRestarts"
+    OneCycleLR = "OneCycleLR"
+    CyclicLR = "CyclicLR"
 
 
 class SplittingStrategyName(CaseInsensitiveEnum):
     """
     Enum class for the splitting strategy name
-
-    args:
-        first_come_first_serve (str): The first come first serve strategy
-        random_record_splitting_strategy (str): Split based on records randomly (i.e., all conformers of a molecule are in the same set)
-        random_conformer_splitting_strategy (str): Split based on conformers randomly (i.e., conformers of a molecule can be in different sets)
     """
 
     first_come_first_serve = "first_come_first_serve"
@@ -90,7 +87,6 @@ class AnnealingStrategy(CaseInsensitiveEnum):
     linear = "linear"
 
 
-#
 class Loggers(CaseInsensitiveEnum):
     """
     Enum class for the experiment logger
@@ -100,11 +96,11 @@ class Loggers(CaseInsensitiveEnum):
     tensorboard = "tensorboard"
 
 
-class TensorboardConfig(BaseModel):
+class TensorboardConfig(ParametersBase):
     save_dir: str
 
 
-class WandbConfig(BaseModel):
+class WandbConfig(ParametersBase):
     save_dir: str
     project: str
     group: str
@@ -114,85 +110,215 @@ class WandbConfig(BaseModel):
     notes: Optional[str]
 
 
+# Move SchedulerConfig classes outside of TrainingParameters
+class SchedulerConfigBase(ParametersBase):
+    """
+    Base class for scheduler configurations
+    """
+
+    scheduler_name: SchedulerName
+    frequency: int
+    interval: str
+    monitor: Optional[str] = None
+
+
+class ReduceLROnPlateauConfig(SchedulerConfigBase):
+    """
+    Configuration for ReduceLROnPlateau scheduler
+    """
+
+    scheduler_name: Literal[SchedulerName.ReduceLROnPlateau] = (
+        SchedulerName.ReduceLROnPlateau
+    )
+    mode: SchedulerMode  # 'min' or 'max'
+    factor: float
+    patience: int
+    threshold: float
+    threshold_mode: ThresholdMode  # 'rel' or 'abs'
+    cooldown: int
+    min_lr: float
+    eps: float = 1e-8
+
+
+class CosineAnnealingLRConfig(SchedulerConfigBase):
+    """
+    Configuration for CosineAnnealingLR scheduler
+    """
+
+    scheduler_name: Literal[SchedulerName.CosineAnnealingLR] = (
+        SchedulerName.CosineAnnealingLR
+    )
+    T_max: int
+    eta_min: float = 0.0
+    last_epoch: int = -1
+
+
+class CosineAnnealingWarmRestartsConfig(SchedulerConfigBase):
+    """
+    Configuration for CosineAnnealingWarmRestarts scheduler
+    """
+
+    scheduler_name: Literal[SchedulerName.CosineAnnealingWarmRestarts] = (
+        SchedulerName.CosineAnnealingWarmRestarts
+    )
+    T_0: int
+    T_mult: int = 1
+    eta_min: float = 0.0
+    last_epoch: int = -1
+
+
+class CyclicLRMode(CaseInsensitiveEnum):
+    """
+    Enum class for the CyclicLR modes
+    """
+
+    triangular = "triangular"
+    triangular2 = "triangular2"
+    exp_range = "exp_range"
+
+
+class ScaleMode(CaseInsensitiveEnum):
+    """
+    Enum class for the scale modes
+    """
+
+    cycle = "cycle"
+    iterations = "iterations"
+
+
+class OneCycleLRConfig(SchedulerConfigBase):
+    """
+    Configuration for OneCycleLR scheduler
+    """
+
+    scheduler_name: Literal[SchedulerName.OneCycleLR] = SchedulerName.OneCycleLR
+    max_lr: Union[float, List[float]]
+    epochs: int  # required
+    pct_start: float = 0.3
+    anneal_strategy: AnnealingStrategy = AnnealingStrategy.cos
+    cycle_momentum: bool = True
+    base_momentum: Union[float, List[float]] = 0.85
+    max_momentum: Union[float, List[float]] = 0.95
+    div_factor: float = 25.0
+    final_div_factor: float = 1e4
+    three_phase: bool = False
+    last_epoch: int = -1
+
+    @model_validator(mode="after")
+    def validate_epochs(self):
+        if self.epochs is None:
+            raise ValueError("OneCycleLR requires 'epochs' to be set.")
+        if self.interval != "step":
+            raise ValueError("OneCycleLR requires 'interval' to be set to 'step'.")
+
+        return self
+
+
+class CyclicLRConfig(SchedulerConfigBase):
+    """
+    Configuration for CyclicLR scheduler
+    """
+
+    scheduler_name: Literal[SchedulerName.CyclicLR] = SchedulerName.CyclicLR
+    base_lr: Union[float, List[float]]
+    max_lr: Union[float, List[float]]
+    epochs_up: float  # Duration of the increasing phase in epochs
+    epochs_down: Optional[float] = (
+        None  # Duration of the decreasing phase in epochs (optional)
+    )
+    mode: CyclicLRMode = CyclicLRMode.triangular
+    gamma: float = 1.0
+    scale_mode: ScaleMode = ScaleMode.cycle
+    cycle_momentum: bool = True
+    base_momentum: Union[float, List[float]] = 0.8
+    max_momentum: Union[float, List[float]] = 0.9
+    last_epoch: int = -1
+
+    @model_validator(mode="after")
+    def validate_epochs(self):
+        if self.epochs_up is None:
+            raise ValueError("CyclicLR requires 'epochs_up' to be set.")
+
+        if self.interval != "step":
+            raise ValueError("OneCycleLR requires 'interval' to be set to 'step'.")
+        return self
+
+
+SchedulerConfig = Annotated[
+    Union[
+        ReduceLROnPlateauConfig,
+        CosineAnnealingLRConfig,
+        CosineAnnealingWarmRestartsConfig,
+        OneCycleLRConfig,
+        CyclicLRConfig,
+    ],
+    Field(discriminator="scheduler_name"),
+]
+
+
 class TrainingParameters(ParametersBase):
     """
-    A class to hold the training parameters that inherits from the pydantic BaseModel
-
-    args:
-        nr_of_epochs (int): The number of epochs
-        remove_self_energies (bool): Whether to remove self energies
-        shift_center_of_mass_to_origin (bool): Whether to shift the center of mass to the origin
-        batch_size (int): The batch size,
-        lr (float): The learning rate
-        lr_scheduler (SchedulerConfig): The learning rate scheduler configuration.
-        loss_parameter (LossParameter): The loss parameter
-        early_stopping (EarlyStopping): The early stopping parameters, Optional
-        splitting_strategy (SplittingStrategy): The splitting strategy
+    A class to hold the training parameters
     """
-
-    class SchedulerConfig(ParametersBase):
-        """
-        Scheduler configuration class
-
-        args:
-            frequency (int): The frequency of the scheduler
-            mode (SchedulerMode): The mode of the scheduler (options: "min", "max")
-            factor (float): The factor of the scheduler
-            patience (int): The patience of the scheduler
-            cooldown (int): The cooldown of the scheduler
-            min_learning_rate (float): The minimum learning rate of the scheduler
-            threshold (float): The threshold of the scheduler
-            threshold_mode (ThresholdMode): The threshold mode of the scheduler (options: "abs", "rel")
-            monitor (str): The monitor of the scheduler
-            interval (str): The interval of the scheduler
-
-        """
-
-        frequency: int
-        mode: SchedulerMode
-        factor: float
-        patience: int
-        cooldown: int
-        min_lr: float
-        threshold: float
-        threshold_mode: ThresholdMode
-        monitor: Optional[str] = None
-        interval: str
 
     class LossParameter(ParametersBase):
         """
-        class to hold the loss properties
-
-        args:
-            loss_components (List[str]): The loss property.
-                The length of this list must match the length of loss_weight
-            weight (Dict[str,float]): The loss weight.
-                The keys must correspond to entries in the loss_components list.
-
+        Class to hold the loss properties and mixing scheme
         """
 
-        loss_components: List
+        loss_components: List[str]
         weight: Dict[str, float]
+        target_weight: Optional[Dict[str, float]] = None
+        mixing_steps: Optional[Dict[str, float]] = None
+
+        @model_validator(mode="before")
+        def set_target_weight_defaults(cls, values):
+
+            # if no target_weight is provided, set target_weight to be the same
+            # as weight and mixing_steps to be 1.0
+            if "target_weight" not in values:
+                # set target_weight to be the same as weight
+                values["target_weight"] = values["weight"]
+                d = {}
+                for key in values["target_weight"]:
+                    d[key] = 1.0
+                values["mixing_steps"] = d
+                return values
+
+            # if target weight is not provided for all properties, set the rest
+            # to be the same as weight
+            for key in values["weight"]:
+                # if only a subset of the loss components are provided in target_weight, set the rest to be the same as weight
+                if key not in values["target_weight"]:
+                    values["target_weight"][key] = values["weight"][key]
+                    values["mixing_steps"][key] = 1.0
+            return values
 
         @model_validator(mode="after")
         def ensure_length_match(self) -> "LossParameter":
             loss_components = self.loss_components
-            loss_weight = self.weight
-            if len(loss_components) != len(loss_weight):
+            weight = self.weight
+            if len(loss_components) != len(weight):
                 raise ValueError(
-                    f"The length of loss_components ({len(loss_components)}) and weight ({len(loss_weight)}) must match."
+                    f"The length of loss_components ({len(loss_components)}) and weight ({len(weight)}) must match."
                 )
+            if set(loss_components) != set(weight.keys()):
+                raise ValueError("The keys of weight must match loss_components")
+
+            if self.target_weight or self.mixing_steps:
+                if not (self.target_weight and self.mixing_steps):
+                    raise ValueError(
+                        "If using mixing scheme, target_weight and mixing_steps must all be provided"
+                    )
+                if set(self.target_weight.keys()) != set(loss_components):
+                    raise ValueError(
+                        "The keys of target_weight must match loss_components"
+                    )
             return self
 
     class EarlyStopping(ParametersBase):
         """
-        class to hold the early stopping parameters
-
-        args:
-            verbose (bool): Whether to print the early stopping information
-            monitor (str): The monitor of the early stopping
-            min_delta (float): The minimum delta of the early stopping
-            patience (int): The patience of the early stopping
+        Class to hold the early stopping parameters
         """
 
         verbose: bool
@@ -202,14 +328,7 @@ class TrainingParameters(ParametersBase):
 
     class SplittingStrategy(ParametersBase):
         """
-        class to hold the splitting strategy
-
-        args:
-            name (SplittingStrategyName): The name of the splitting strategy, default is SplittingStrategyName.random_record_splitting_strategy
-                Options are: first_come_first_serve, random_record_splitting_strategy, random_conformer_splitting_strategy
-            data_split (List[float]): The data split, must be a list of length of 3 that sums to 1.
-            seed (int): The seed
-
+        Class to hold the splitting strategy
         """
 
         name: SplittingStrategyName = (
@@ -220,7 +339,6 @@ class TrainingParameters(ParametersBase):
 
         @field_validator("data_split")
         def data_split_must_sum_to_one_and_length_three(cls, v) -> List[float]:
-
             if len(v) != 3:
                 raise ValueError("data_split must have length of 3")
             if sum(v) != 1:
@@ -229,14 +347,7 @@ class TrainingParameters(ParametersBase):
 
     class StochasticWeightAveraging(ParametersBase):
         """
-        class to hold the stochastic weight averaging parameters
-
-        args:
-            swa_lrs (Union[float, List[float]]): The learning rate for stochastic weight averaging
-            swa_epoch_start (float): The epoch start for stochastic weight averaging
-            annealing_epoch (int): The annealing epoch
-            annealing_strategy (AnnealingStrategy): The annealing strategy
-            avg_fn (Optional[Callable]): The average function
+        Class to hold the stochastic weight averaging parameters
         """
 
         swa_lrs: Union[float, List[float]]
@@ -301,11 +412,6 @@ class TrainingParameters(ParametersBase):
 class Accelerator(CaseInsensitiveEnum):
     """
     Enum class for the accelerator, allowing "cpu", "gpu" and "tpu".
-
-    args:
-        cpu (str): The cpu accelerator
-        gpu (str): The gpu accelerator
-        tpu (str): The tpu accelerator
     """
 
     cpu = "cpu"
@@ -315,11 +421,7 @@ class Accelerator(CaseInsensitiveEnum):
 
 class SimulationEnvironment(CaseInsensitiveEnum):
     """
-    Enum class for the simulation environment, allowing "PyTorch"  and "JAX".
-
-    args:
-        PyTorch (str): The torch environment
-        JAX (str): The jax environment
+    Enum class for the simulation environment, allowing "PyTorch" and "JAX".
     """
 
     JAX = "JAX"
@@ -328,19 +430,7 @@ class SimulationEnvironment(CaseInsensitiveEnum):
 
 class RuntimeParameters(ParametersBase):
     """
-    A class to hold the runtime parameters that inherits from the pydantic BaseModel
-
-    args:
-        experiment_name (str): The experiment name
-        accelerator (Accelerator): The accelerator, options are: "cpu", "gpu", "tpu"
-        number_of_nodes (int): The number of nodes
-        devices (int or List[int]): The index/indices of the device
-        local_cache_dir (str): The local cache directory
-        checkpoint_path (str,None): The checkpoint path
-        simulation_environment (SimulationEnvironment):
-            The simulation environment options are: PyTorch or JAX
-        log_every_n_steps (int): The logging frequency
-
+    A class to hold the runtime parameters
     """
 
     experiment_name: str

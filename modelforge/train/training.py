@@ -465,7 +465,7 @@ class TrainingAdapter(pL.LightningModule):
         self.train_indices: Dict[int, torch.Tensor] = {}
         # Initialize variables for tracking variable top k outliers for
         # validation ant training phase
-        self.outlier_errors_over_epochs = {}
+        self.outlier_errors_over_epochs: Dict[str, int] = {}
         self.number_of_training_batches = nr_of_training_batches
 
     def _setup_weights_scheduling(self, training_parameter: TrainingParameters):
@@ -1042,8 +1042,9 @@ class TrainingAdapter(pL.LightningModule):
 
             # Identify and track top k errors
             if phase == "train":
-                return
-            self.log_dict(self.outlier_errors_over_epochs, on_epoch=True)
+                pass
+            else:
+                self.log_dict(self.outlier_errors_over_epochs, on_epoch=True)
 
     def _identify__and_log_top_k_errors(
         self,
@@ -1195,9 +1196,9 @@ class TrainingAdapter(pL.LightningModule):
         bias_params = []
 
         for name, param in self.potential.named_parameters():
-            if "weight" in name:
+            if "weight" in name or "atomic_shift" in name:
                 weight_params.append(param)
-            elif "bias" in name:
+            elif "bias" in name or "atomic_scale" in name:
                 bias_params.append(param)
             else:
                 raise ValueError(f"Unknown parameter type: {name}")

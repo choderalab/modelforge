@@ -435,24 +435,36 @@ class TrainingAdapter(pL.LightningModule):
             training_parameter.loss_parameter.loss_components, is_loss=True
         )
 
-        self.train_preds: Dict[int, torch.Tensor] = {}
-        self.train_targets: Dict[int, torch.Tensor] = {}
-        self.val_preds: Dict[int, torch.Tensor] = {}
-        self.val_targets: Dict[int, torch.Tensor] = {}
-        self.test_preds: Dict[int, torch.Tensor] = {}
-        self.test_targets: Dict[int, torch.Tensor] = {}
-
-        self.train_force_preds: Dict[int, torch.Tensor] = {}
-        self.train_force_targets: Dict[int, torch.Tensor] = {}
-        self.val_force_preds: Dict[int, torch.Tensor] = {}
-        self.val_force_targets: Dict[int, torch.Tensor] = {}
-        self.test_force_preds: Dict[int, torch.Tensor] = {}
-        self.test_force_targets: Dict[int, torch.Tensor] = {}
+        self.train_preds: Dict[str, Dict[int, torch.Tensor]] = {
+            "energy": {},
+            "force": {},
+        }
+        self.train_targets: Dict[str, Dict[int, torch.Tensor]] = {
+            "energy": {},
+            "force": {},
+        }
+        self.val_preds: Dict[str, Dict[int, torch.Tensor]] = {
+            "energy": {},
+            "force": {},
+        }
+        self.val_targets: Dict[str, Dict[int, torch.Tensor]] = {
+            "energy": {},
+            "force": {},
+        }
+        self.test_preds: Dict[str, Dict[int, torch.Tensor]] = {
+            "energy": {},
+            "force": {},
+        }
+        self.test_targets: Dict[str, Dict[int, torch.Tensor]] = {
+            "energy": {},
+            "force": {},
+        }
 
         self.val_indices: Dict[int, torch.Tensor] = {}
         self.test_indices: Dict[int, torch.Tensor] = {}
         self.train_indices: Dict[int, torch.Tensor] = {}
-        # Initialize variables for tracking fixed top k outliers
+        # Initialize variables for tracking variable top k outliers for
+        # validation ant training phase
         self.outlier_errors_over_epochs = {}
         self.number_of_training_batches = nr_of_training_batches
 
@@ -660,8 +672,8 @@ class TrainingAdapter(pL.LightningModule):
     def _update_predictions(
         self,
         predict_target: Dict[str, torch.Tensor],
-        preds: Dict[int, torch.Tensor],
-        targets: Dict[int, torch.Tensor],
+        preds: Dict[str, Dict[int, torch.Tensor]],
+        targets: Dict[str, Dict[int, torch.Tensor]],
         indices: Dict[int, torch.Tensor],
         batch_idx: int,
         batch: BatchData,
@@ -676,10 +688,10 @@ class TrainingAdapter(pL.LightningModule):
         targets : Dict[int, torch.Tensor]
             Dictionary of targets.
         """
-        preds.update(
+        preds["energy"].update(
             {batch_idx: predict_target["per_system_energy_predict"].detach().cpu()}
         )
-        targets.update(
+        targets["energy"].update(
             {batch_idx: predict_target["per_system_energy_true"].detach().cpu()}
         )
         # Save dataset indices
@@ -690,10 +702,10 @@ class TrainingAdapter(pL.LightningModule):
         )
         # Save force predictions and targets if forces are included
         if "per_atom_force_predict" in predict_target:
-            preds.update(
+            preds["force"].update(
                 {batch_idx: predict_target["per_atom_force_predict"].detach().cpu()}
             )
-            targets.update(
+            targets["force"].update(
                 {batch_idx: predict_target["per_atom_force_true"].detach().cpu()}
             )
 
@@ -702,7 +714,7 @@ class TrainingAdapter(pL.LightningModule):
         preds: Dict[int, torch.Tensor],
         targets: Dict[int, torch.Tensor],
         indices: Dict[int, torch.Tensor],
-    ) -> Tuple[torch.Tensor, torch.Tensor, int, int]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, int, int]:
         """
         Gathers and pads prediction and target tensors across processes.
 
@@ -789,28 +801,20 @@ class TrainingAdapter(pL.LightningModule):
 
         return gathered_preds, gathered_targets, max_length, pad_size
 
-    def _log_force_errors(self, phase: str):
-        if phase == "train":
-            preds = self.train_force_preds
-            targets = self.train_force_targets
-            self.train_force_preds = {}
-            self.train_force_targets = {}
-        elif phase == "val":
-            preds = self.val_force_preds
-            targets = self.val_force_targets
-            self.val_force_preds = {}
-            self.val_force_targets = {}
-        elif phase == "test":
-            preds = self.test_force_preds
-            targets = self.test_force_targets
-            self.test_force_preds = {}
-            self.test_force_targets = {}
-        else:
-            return
+    def _log_force_errors(
+        self,
+        preds: Dict[str, Dict[int, torch.Tensor]],
+        targets: Dict[str, Dict[int, torch.Tensor]],
+        indices: Dict[int, torch.Tensor],
+        phase: str,
+    ):
 
         # Gather tensors
         gathered_preds, gathered_targets, max_length, pad_size = (
-            self._get_force_tensors(preds, targets)
+            self._get_force_tensors(
+                preds["force"],
+                targets["force"],
+            )
         )
 
         if self.global_rank == 0:
@@ -989,23 +993,19 @@ class TrainingAdapter(pL.LightningModule):
 
     def _log_figures_for_each_phase(
         self,
-        preds: torch.Tensor,
-        targets: torch.Tensor,
+        preds: Dict[str, Dict[int, torch.Tensor]],
+        targets: Dict[str, Dict[int, torch.Tensor]],
         indices: Dict[int, torch.Tensor],
         phase: Literal["train", "val", "test"],
     ):
         # Gather across processes
         gathered_preds, gathered_targets, gathered_indices, max_length, pad_size = (
             self._get_energy_tensors(
-                preds,
-                targets,
+                preds["energy"],
+                targets["energy"],
                 indices,
             )
         )
-        # Clear the dictionaries
-        preds.clear()
-        targets.clear()
-        indices.clear()
 
         # Proceed only on main process
         if self.global_rank == 0:
@@ -1069,6 +1069,12 @@ class TrainingAdapter(pL.LightningModule):
             self.outlier_errors_over_epochs[key] += 1
             log.info(f"{phase} : Outlier error {error} at index {idx}.")
 
+    def _clear_error_tracking(self, preds, targets, incides):
+        for d in [preds, targets]:
+            d["energy"].clear()
+            d["force"].clear()
+        incides.clear()
+
     def on_test_epoch_end(self):
         """Logs metrics at the end of the test epoch."""
         self._log_metrics(self.test_metrics, "test")
@@ -1077,6 +1083,12 @@ class TrainingAdapter(pL.LightningModule):
             self.test_targets,
             self.test_indices,
             "test",
+        )
+        # Clear the dictionaries # NOTE: these are mutable objects
+        self._clear_error_tracking(
+            self.test_preds,
+            self.test_targets,
+            self.test_indices,
         )
 
     def on_validation_epoch_end(self):
@@ -1087,6 +1099,12 @@ class TrainingAdapter(pL.LightningModule):
             self.val_targets,
             self.val_indices,
             "val",
+        )
+        # Clear the dictionaries # NOTE: these are mutable objects
+        self._clear_error_tracking(
+            self.val_preds,
+            self.val_targets,
+            self.val_indices,
         )
 
     def on_train_epoch_end(self):
@@ -1101,7 +1119,19 @@ class TrainingAdapter(pL.LightningModule):
             "train",
         )
         if self.include_force:
-            self._log_force_errors("train")
+            self._log_force_errors(
+                self.train_preds,
+                self.train_targets,
+                self.train_indices,
+                "train",
+            )
+        # Clear the dictionaries # NOTE: these are mutable objects
+        # Clear the dictionaries # NOTE: these are mutable objects
+        self._clear_error_tracking(
+            self.train_preds,
+            self.train_targets,
+            self.train_indices,
+        )
 
         # log the weights of the different loss components
         for key, weight in self.loss.weights_scheduling.items():

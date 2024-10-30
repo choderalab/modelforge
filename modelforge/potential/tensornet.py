@@ -366,7 +366,7 @@ class TensorNetCore(torch.nn.Module):
         atomic_embedding = results["per_atom_scalar_representation"]
         # Compute all specified outputs
         for output_name, output_layer in self.output_layers.items():
-            results[output_name] = output_layer(atomic_embedding).squeeze(-1)
+            results[output_name] = output_layer(atomic_embedding).unsqueeze(1)
 
         return results
 

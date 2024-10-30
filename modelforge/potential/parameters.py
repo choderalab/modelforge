@@ -94,7 +94,6 @@ class CoreParameterBase(ParametersBase):
         return self
 
 
-
 class ActivationFunctionConfig(ParametersBase):
 
     activation_function_name: ActivationFunctionName

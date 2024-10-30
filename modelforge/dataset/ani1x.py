@@ -69,13 +69,24 @@ class ANI1xDataset(HDF5Dataset):
         F="wb97x_dz.forces",
     )
 
+    # for simplicifty, commenting out those properties that are cannot be used in our current implementation
     _available_properties = [
         "geometry",
         "atomic_numbers",
         "wb97x_dz.energy",
         "wb97x_dz.forces",
-        "wb97x_dz.cm5_charges",
+        # "wb97x_dz.cm5_charges",
     ]  # All properties within the datafile, aside from SMILES/inchi.
+
+    # Mapping of available properties to the associated PropertyNames
+    _available_properties_association = {
+        "geometry": "positions",
+        "atomic_numbers": "atomic_numbers",
+        "wb97x_dz.energy": "E",
+        "wb97x_dz.forces": "F",
+    }  # note cm5_charges are not actually total charge, as they as per-atom charges, but unit is the same
+    # we need to discuss if we want to allow per_atom_charges at all and if we want to preprocess
+    # per atom charges into dipole moment
 
     def __init__(
         self,

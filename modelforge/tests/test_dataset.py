@@ -43,14 +43,12 @@ def test_dataset_basic_operations():
         ),
         "atomic_subsystem_counts": atomic_subsystem_counts,
         "n_confs": n_confs,
-        "charges": torch.randint(-1, 2, torch.Size([total_confs, 1])).numpy(),
     }
 
     property_names = PropertyNames(
         atomic_numbers="atomic_numbers",
         positions="geometry",
         E="internal_energy_at_0K",
-        total_charge="charges",
     )
     dataset = TorchDataset(input_data, property_names)
     assert len(dataset) == total_confs
@@ -122,7 +120,6 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
             "geometry",
             "atomic_numbers",
             "internal_energy_at_0K",
-            "charges",
             "dipole_moment",
         ]
         # spot check the processing of the yaml file
@@ -175,7 +172,7 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
             "atomic_numbers",
             "dft_total_energy",
             "dft_total_force",
-            "mbis_charges",
+            "total_charge",
             "scf_dipole",
         ]
 
@@ -183,13 +180,13 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
             "dft_total_energy",
             "geometry",
             "atomic_numbers",
-            "mbis_charges",
+            "total_charge",
         ]
         assert data.properties_of_interest == [
             "dft_total_energy",
             "geometry",
             "atomic_numbers",
-            "mbis_charges",
+            "total_charge",
         ]
     elif dataset_name == "PhAlkEthOH":
         assert data.properties_of_interest == [
@@ -356,7 +353,6 @@ def test_metadata_validation(prep_temp_dir):
             "atomic_numbers",
             "internal_energy_at_0K",
             "geometry",
-            "charges",
             "dipole_moment",
         ],
         "hdf5_checksum": "305a0602860f181fafa75f7c7e3e6de4",
@@ -647,9 +643,9 @@ def test_dataset_generation(dataset_name, datamodule_factory, prep_temp_dir):
         # this isn't set when dataset is in 'fit' mode
         pass
 
-    # the dataloader automatically splits and batches the dataset
-    # for the training set it batches the 800 training datapoints (of 1000 total) in 13 batches
-    # all with 64 points until the last which has 32
+    # the dataloader automatically splits and batches the dataset for the
+    # training set it batches the 800 training datapoints (of 1000 total) in 13
+    # batches all with 64 points until the last which has 32
 
     assert len(train_dataloader) == 13  # nr of batches
     batch_data = [v_ for v_ in train_dataloader]
@@ -1110,3 +1106,144 @@ def test_shifting_center_of_mass_to_origin(prep_temp_dir):
 
         com = torch.Tensor([x, y, z])
         assert torch.allclose(com, torch.Tensor([0.0, 0.0, 0.0]), atol=1e-4)
+
+
+def test_shifting_center_of_mass_to_origin(prep_temp_dir):
+    local_cache_dir = str(prep_temp_dir)
+
+    from modelforge.dataset.dataset import initialize_datamodule
+    from openff.units.elements import MASSES
+
+    import torch
+
+    # first check a molecule not centered at the origin
+    dm = initialize_datamodule(
+        "QM9",
+        version_select="nc_1000_v0",
+        shift_center_of_mass_to_origin=False,
+        local_cache_dir=local_cache_dir,
+    )
+    start_idx = dm.torch_dataset.single_atom_start_idxs_by_conf[0]
+    end_idx = dm.torch_dataset.single_atom_end_idxs_by_conf[0]
+
+    from openff.units.elements import MASSES
+
+    pos = dm.torch_dataset.properties_of_interest["positions"][start_idx:end_idx]
+
+    atomic_masses = torch.Tensor(
+        [
+            MASSES[atomic_number].m
+            for atomic_number in dm.torch_dataset.properties_of_interest[
+                "atomic_numbers"
+            ][start_idx:end_idx].tolist()
+        ]
+    )
+    molecule_mass = torch.sum(atomic_masses)
+
+    # I'm using einsum, so let us check it manually
+
+    x = 0
+    y = 0
+    z = 0
+    for i in range(0, pos.shape[0]):
+        x += atomic_masses[i] * pos[i][0]
+        y += atomic_masses[i] * pos[i][1]
+        z += atomic_masses[i] * pos[i][2]
+
+    x = x / molecule_mass
+    y = y / molecule_mass
+    z = z / molecule_mass
+
+    com = torch.Tensor([x, y, z])
+
+    assert torch.allclose(com, torch.Tensor([-0.0013, 0.1086, 0.0008]), atol=1e-4)
+
+    # make sure that we do shift to the origin; we can do the whole dataset
+
+    dm = initialize_datamodule(
+        "PhAlkEthOH",
+        version_select="latest_test",
+        shift_center_of_mass_to_origin=True,
+        local_cache_dir=local_cache_dir,
+    )
+    dm_no_shift = initialize_datamodule(
+        "PhAlkEthOH",
+        version_select="latest_test",
+        shift_center_of_mass_to_origin=False,
+        local_cache_dir=local_cache_dir,
+    )
+    for conf_id in range(0, len(dm.torch_dataset)):
+        start_idx_mol = dm.torch_dataset.series_atom_start_idxs_by_conf[conf_id]
+        end_idx_mol = dm.torch_dataset.series_atom_start_idxs_by_conf[conf_id + 1]
+
+        start_idx = dm.torch_dataset.single_atom_start_idxs_by_conf[conf_id]
+        end_idx = dm.torch_dataset.single_atom_end_idxs_by_conf[conf_id]
+
+        # grab the positions that should be shifted
+        pos = dm.torch_dataset.properties_of_interest["positions"][
+            start_idx_mol:end_idx_mol
+        ]
+
+        pos_original = dm_no_shift.torch_dataset.properties_of_interest["positions"][
+            start_idx_mol:end_idx_mol
+        ]
+        atomic_masses = torch.Tensor(
+            [
+                MASSES[atomic_number].m
+                for atomic_number in dm.torch_dataset.properties_of_interest[
+                    "atomic_numbers"
+                ][start_idx:end_idx].tolist()
+            ]
+        )
+        molecule_mass = torch.sum(atomic_masses)
+
+        x = 0
+        y = 0
+        z = 0
+
+        x_ns = 0
+        y_ns = 0
+        z_ns = 0
+        for i in range(0, pos.shape[0]):
+            x += atomic_masses[i] * pos[i][0]
+            y += atomic_masses[i] * pos[i][1]
+            z += atomic_masses[i] * pos[i][2]
+
+            x_ns += atomic_masses[i] * pos_original[i][0]
+            y_ns += atomic_masses[i] * pos_original[i][1]
+            z_ns += atomic_masses[i] * pos_original[i][2]
+
+        x = x / molecule_mass
+        y = y / molecule_mass
+        z = z / molecule_mass
+
+        x_ns = x_ns / molecule_mass
+        y_ns = y_ns / molecule_mass
+        z_ns = z_ns / molecule_mass
+
+        com = torch.Tensor([x, y, z])
+        com_ns = torch.Tensor([x_ns, y_ns, z_ns])
+
+        pos_ns = pos.clone()
+        for i in range(0, pos_ns.shape[0]):
+            pos_ns[i] = pos_original[i] - com_ns
+
+        assert torch.allclose(com, torch.Tensor([0.0, 0.0, 0.0]), atol=1e-4)
+
+        # I don't expect to be exactly the same because use of einsum in the main code
+        # but still should be pretty close
+        assert torch.allclose(pos, pos_original - com_ns, atol=1e-3)
+        assert torch.allclose(pos, pos_ns, atol=1e-3)
+
+        from modelforge.potential.neighbors import NeighborListForTraining
+
+        nnp_input = dm.torch_dataset[conf_id].nnp_input
+        nnp_input_ns = dm_no_shift.torch_dataset[conf_id].nnp_input
+
+        nlist = NeighborListForTraining(cutoff=0.5)
+
+        pairs = nlist(nnp_input)
+        pairs_ns = nlist(nnp_input_ns)
+
+        assert torch.allclose(pairs.r_ij, pairs_ns.r_ij, atol=1e-4)
+        assert torch.allclose(pairs.d_ij, pairs_ns.d_ij, atol=1e-4)

@@ -90,7 +90,7 @@ class EmbeddingBlock(nn.Module):
 
         # Transform radial basis functions
         # rbf: (nr_of_pairs, num_radial) -> (nr_of_pairs, emb_size)
-        rbf = self.activation(self.dense_rbf(f_ij))
+        rbf = self.dense_rbf(f_ij)
 
         # Gather atomic numbers for neighbor pairs
         # Z_i and Z_j have shape (nr_of_pairs)
@@ -118,35 +118,38 @@ class Envelope(nn.Module):
     Envelope function that ensures a smooth cutoff.
     """
 
-    def __init__(self, exponent: int):
+    def __init__(self, exponent: int, radial_cutoff:float):
         super().__init__()
         self.exponent = exponent
 
         # Precompute constants
-        p = torch.tensor(exponent + 1, dtype=torch.int32)
+        p = torch.tensor(exponent, dtype=torch.int32)
         self.register_buffer("p", p)
         self.register_buffer("a", -((p + 1) * (p + 2)) / 2)
         self.register_buffer("b", p * (p + 2))
         self.register_buffer("c", -p * (p + 1) / 2)
+        self.register_buffer('cutoff', torch.tensor([1/radial_cutoff]))
 
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+    def forward(self, d_ij: torch.Tensor) -> torch.Tensor:
         # Compute powers efficiently
-        inputs_p_minus1 = torch.pow(inputs, self.p - 1)
-        inputs_p = inputs_p_minus1 * inputs  # inputs ** self.p
-        inputs_p_plus1 = inputs_p * inputs  # inputs ** (self.p + 1)
+        normalize_d_ij = self.cutoff * d_ij 
+        d_ij_power_p = torch.pow(normalize_d_ij, self.p)
+        d_ij_power_p_plus1 = d_ij_power_p * normalize_d_ij  # inputs ** self.p
+        d_ij_power_p_plus2 = d_ij_power_p_plus1 * normalize_d_ij  # inputs ** (self.p + 1)
 
         # Envelope function divided by r
-        env_val = (
-            (1.0 / inputs)
-            + self.a * inputs_p_minus1
-            + self.b * inputs_p
-            + self.c * inputs_p_plus1
+        env_val = (1.0
+            + self.a * d_ij_power_p
+            + self.b * d_ij_power_p_plus1
+            + self.c * d_ij_power_p_plus2
         )
 
-        # Apply cutoff
-        env_val = torch.where(inputs < 1.0, env_val, torch.zeros_like(env_val))
-
-        return env_val
+        # set all negative entries to zero, because d_ij is outside cutoff
+        env_val1 = torch.nn.functional.relu(env_val) 
+        env_val2 = torch.where(normalize_d_ij < 1.0, env_val, torch.zeros_like(env_val))
+        assert torch.allclose(env_val1, env_val2) # FIXME: can be removed
+        
+        return env_val1
 
 
 class BesselBasisLayer(nn.Module):
@@ -158,36 +161,36 @@ class BesselBasisLayer(nn.Module):
         self,
         number_of_radial_bessel_functions: int,
         radial_cutoff: float,
-        envelope_exponent: int = 5,
+        envelope_exponent: int = 6,
     ):
         super().__init__()
         self.number_of_radial_bessel_functions = number_of_radial_bessel_functions
         self.register_buffer(
             "inv_cutoff", torch.tensor(1.0 / radial_cutoff, dtype=torch.float32)
         )
-        self.envelope = Envelope(envelope_exponent)
 
         # Initialize frequencies at canonical positions
         frequencies = torch.pi * torch.arange(
             1, number_of_radial_bessel_functions + 1, dtype=torch.float32
         )
-        self.frequencies = nn.Parameter(frequencies)  # Trainable parameter
+        self.frequencies = self.register_buffer(frequencies)
+        
+        pre_factor = torch.sqrt(2/radial_cutoff)
+        self.prefactor = self.register_buffer(pre_factor)
 
     def forward(self, d_ij: torch.Tensor) -> torch.Tensor:
         # d_ij: Pairwise distances between atoms. Shape: (nr_pairs, 1)
 
         # Scale distances
-        d_scaled = d_ij * self.inv_cutoff  # Shape: (nr_pairs, 1)
-
-        # Apply envelope
-        d_cutoff = self.envelope(d_scaled)  # Shape: (nr_pairs, 1)
+        #d_scaled = d_ij * self.inv_cutoff  # Shape: (nr_pairs, 1)
 
         # Compute Bessel basis
         # NOTE: the result in basis below is alread multiplied with the envelope function
-        basis = d_cutoff * torch.sin(
-            self.frequencies * d_scaled
+        basis = torch.sin(
+            self.frequencies * d_ij * self.inv_cutoff
         )  # Shape: nr_pairs, num_radial)
-        return basis
+        
+        return self.prefactor * basis / d_ij
 
 
 class DimeNetCore(torch.nn.Module):
@@ -317,6 +320,7 @@ class Representation(nn.Module):
         from torch.nn import Identity
 
         self.angular_bessel_function = Identity()
+        self.envelope = Envelope(envelope_exponent, radial_cutoff)
 
         self.embedding = EmbeddingBlock(
             embedding_size=embedding_size,
@@ -346,6 +350,9 @@ class Representation(nn.Module):
 
         # Convert distances to radial bessel functions
         radial_bessel = self.radial_bessel_function(pairlist_output.d_ij)
+        # Apply envelope
+        d_cutoff = self.envelope(pairlist_output.d_ij/self.r)  # Shape: (nr_pairs, 1)        
+        radial_bessel = radial_bessel * d_cutoff
 
         # convert distances to angular bessel functions
         angular_bessel = self.angular_bessel_function()

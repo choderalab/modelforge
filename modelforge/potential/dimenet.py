@@ -118,7 +118,7 @@ class Envelope(nn.Module):
     Envelope function that ensures a smooth cutoff.
     """
 
-    def __init__(self, exponent: int, radial_cutoff:float):
+    def __init__(self, exponent: int, radial_cutoff: float):
         super().__init__()
         self.exponent = exponent
 
@@ -128,27 +128,30 @@ class Envelope(nn.Module):
         self.register_buffer("a", -((p + 1) * (p + 2)) / 2)
         self.register_buffer("b", p * (p + 2))
         self.register_buffer("c", -p * (p + 1) / 2)
-        self.register_buffer('cutoff', torch.tensor([1/radial_cutoff]))
+        self.register_buffer("cutoff", torch.tensor([1 / radial_cutoff]))
 
     def forward(self, d_ij: torch.Tensor) -> torch.Tensor:
         # Compute powers efficiently
-        normalize_d_ij = self.cutoff * d_ij 
+        normalize_d_ij = self.cutoff * d_ij
         d_ij_power_p = torch.pow(normalize_d_ij, self.p)
         d_ij_power_p_plus1 = d_ij_power_p * normalize_d_ij  # inputs ** self.p
-        d_ij_power_p_plus2 = d_ij_power_p_plus1 * normalize_d_ij  # inputs ** (self.p + 1)
+        d_ij_power_p_plus2 = (
+            d_ij_power_p_plus1 * normalize_d_ij
+        )  # inputs ** (self.p + 1)
 
         # Envelope function divided by r
-        env_val = (1.0
+        env_val = (
+            1.0
             + self.a * d_ij_power_p
             + self.b * d_ij_power_p_plus1
             + self.c * d_ij_power_p_plus2
         )
 
         # set all negative entries to zero, because d_ij is outside cutoff
-        env_val1 = torch.nn.functional.relu(env_val) 
+        env_val1 = torch.nn.functional.relu(env_val)
         env_val2 = torch.where(normalize_d_ij < 1.0, env_val, torch.zeros_like(env_val))
-        assert torch.allclose(env_val1, env_val2) # FIXME: can be removed
-        
+        assert torch.allclose(env_val1, env_val2)  # FIXME: can be removed
+
         return env_val1
 
 
@@ -174,22 +177,22 @@ class BesselBasisLayer(nn.Module):
             1, number_of_radial_bessel_functions + 1, dtype=torch.float32
         )
         self.frequencies = self.register_buffer(frequencies)
-        
-        pre_factor = torch.sqrt(2/radial_cutoff)
+
+        pre_factor = torch.sqrt(2 / radial_cutoff)
         self.prefactor = self.register_buffer(pre_factor)
 
     def forward(self, d_ij: torch.Tensor) -> torch.Tensor:
         # d_ij: Pairwise distances between atoms. Shape: (nr_pairs, 1)
 
         # Scale distances
-        #d_scaled = d_ij * self.inv_cutoff  # Shape: (nr_pairs, 1)
+        # d_scaled = d_ij * self.inv_cutoff  # Shape: (nr_pairs, 1)
 
         # Compute Bessel basis
         # NOTE: the result in basis below is alread multiplied with the envelope function
         basis = torch.sin(
             self.frequencies * d_ij * self.inv_cutoff
         )  # Shape: nr_pairs, num_radial)
-        
+
         return self.prefactor * basis / d_ij
 
 
@@ -307,10 +310,8 @@ class Representation(nn.Module):
         super().__init__()
 
         # The representation part of DimeNet++ includes
-        # - radial bessel basis (invariant representation/featurization of
-        #   distances)
-        # - angular bessel basis (equivariant representation/featurization of
-        #   pairwise direction (distance vector))
+        # - radial bessel basis (featurization of distances)
+        # - angular bessel basis (featurization of angles)
         # - embedding of pairwise distances
         self.radial_bessel_function = BesselBasisLayer(
             number_of_radial_bessel_functions=number_of_radial_bessel_functions,
@@ -327,6 +328,8 @@ class Representation(nn.Module):
             number_of_radial_bessel_functions=number_of_radial_bessel_functions,
             activation_function=activation_function,
         )
+
+        # to embed the messages 
 
     def forward(
         self, data: NNPInput, pairlist_output: PairlistData
@@ -351,7 +354,7 @@ class Representation(nn.Module):
         # Convert distances to radial bessel functions
         radial_bessel = self.radial_bessel_function(pairlist_output.d_ij)
         # Apply envelope
-        d_cutoff = self.envelope(pairlist_output.d_ij/self.r)  # Shape: (nr_pairs, 1)        
+        d_cutoff = self.envelope(pairlist_output.d_ij / self.r)  # Shape: (nr_pairs, 1)
         radial_bessel = radial_bessel * d_cutoff
 
         # convert distances to angular bessel functions

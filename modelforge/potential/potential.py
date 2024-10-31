@@ -323,6 +323,43 @@ class Potential(torch.nn.Module):
         self.neighborlist.half_skin = skin * 0.5
         self.neighborlist.cutoff_plus_skin = self.neighborlist.cutoff + skin
 
+    @torch.jit.export
+    def forward_for_jit_inference(
+        self,
+        atomic_numbers: torch.Tensor,
+        positions: torch.Tensor,
+        atomic_subsystem_indices: torch.Tensor,
+        per_system_total_charge: torch.Tensor,
+        pair_list: torch.Tensor,
+        per_atom_partial_charge: torch.Tensor,
+        box_vectors: torch.Tensor,
+        is_periodic: torch.Tensor,
+    ) -> Dict[str, torch.Tensor]:
+        # Step 1: Compute pair list and distances using Neighborlist
+        input_data = NNPInput(
+            atomic_numbers=atomic_numbers,
+            positions=positions,
+            atomic_subsystem_indices=atomic_subsystem_indices,
+            per_system_total_charge=per_system_total_charge,
+            pair_list=pair_list,
+            per_atom_partial_charge=per_atom_partial_charge,
+            box_vectors=box_vectors,
+            is_periodic=is_periodic,
+        )
+
+        pairlist_output = self.neighborlist.forward(input_data)
+
+        # Step 2: Compute the core network output
+        core_output = self.core_network.forward(input_data, pairlist_output)
+
+        # Step 3: Apply postprocessing using PostProcessing
+        core_output = self._add_total_charge(core_output, input_data)
+        core_output = self._add_pairlist(core_output, pairlist_output)
+
+        processed_output = self.postprocessing.forward(core_output)
+        processed_output = self._remove_pairlist(processed_output)
+        return processed_output
+
     def forward(self, input_data: NNPInput) -> Dict[str, torch.Tensor]:
         """
         Forward pass for the potential model, computing energy and forces.

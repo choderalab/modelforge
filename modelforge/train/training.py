@@ -907,6 +907,10 @@ class TrainingAdapter(pL.LightningModule):
             ]
             errors = gathered_targets - gathered_preds
             errors_magnitude = errors.norm(dim=1)  # Compute magnitude of force errors
+            # make sure that errors are finite
+            assert torch.all(
+                torch.isfinite(errors_magnitude)
+            ), "Force errors contain NaN or Inf values."
 
             # Create histogram
             histogram_fig = self._create_error_histogram(

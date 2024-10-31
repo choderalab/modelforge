@@ -120,14 +120,21 @@ class AimNet2Core(torch.nn.Module):
             indices.
         """
 
-        representation = self.representation_module(data, pairlist)
+        rep = self.representation_module(data, pairlist)
 
-        f_ij_cutoff = torch.mul(representation["f_ij"], representation["f_cutoff"])
+        f_ij_cutoff = rep["f_ij"] * rep["f_cutoff"]
         # Atomic embedding "a" Eqn. (3)
-        atomic_embedding = representation["atomic_embedding"]
+        atomic_embedding = rep["atomic_embedding"]
         partial_charges = torch.zeros(
             (atomic_embedding.shape[0], 1), device=atomic_embedding.device
         )
+
+        # Calculate the unit vector u_ij
+        r_ij_norm = torch.norm(
+            pairlist.r_ij, dim=1, keepdim=True
+        )  # Shape: (num_atom_pairs, 1)
+        # any norm below 0.1
+        u_ij = pairlist.r_ij / (r_ij_norm + 1e-7)  # Shape: (num_atom_pairs, 3)
 
         # Perform message passing using interaction modules
         for interaction in self.interaction_modules:
@@ -136,7 +143,7 @@ class AimNet2Core(torch.nn.Module):
                 atomic_embedding,
                 pairlist.pair_indices,
                 f_ij_cutoff,
-                pairlist.r_ij,
+                u_ij,
                 partial_charges,
             )
 
@@ -192,7 +199,9 @@ class AimNet2Core(torch.nn.Module):
 
         # Compute all specified outputs
         for output_name, output_layer in self.output_layers.items():
-            results[output_name] = output_layer(atomic_embedding)
+            output = output_layer(atomic_embedding)
+            results[output_name] = output
+
         return results
 
 
@@ -215,8 +224,6 @@ class MessageModule(torch.nn.Module):
         super().__init__()
         self.number_of_per_atom_features = number_of_per_atom_features
         self.is_first_module = is_first_module
-
-        # Separate linear layers for embeddings and charges
         self.linear_transform_embeddings = nn.Linear(
             number_of_per_atom_features, number_of_per_atom_features
         )
@@ -229,7 +236,7 @@ class MessageModule(torch.nn.Module):
         per_atom_feature_tensor: torch.Tensor,
         pair_indices: torch.Tensor,
         f_ij_cutoff: torch.Tensor,
-        r_ij: torch.Tensor,
+        u_ij: torch.Tensor,
         use_charge_layer: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -257,12 +264,8 @@ class MessageModule(torch.nn.Module):
 
         idx_j = pair_indices[1]
 
-        # Calculate the unit vector u_ij
-        r_ij_norm = torch.norm(r_ij, dim=1, keepdim=True)  # Shape: (num_atom_pairs, 1)
-        u_ij = r_ij / r_ij_norm  # Shape: (num_atom_pairs, 3)
-
         # Step 1: Radial Contributions Calculation (Equation 4)
-        proto_v_r_a = (
+        proto = (
             f_ij_cutoff * per_atom_feature_tensor[idx_j]
         )  # Shape: (num_atom_pairs, nr_of_features)
 
@@ -274,10 +277,10 @@ class MessageModule(torch.nn.Module):
         )  # Shape: (num_of_atoms, nr_of_features)
 
         # Accumulate the radial contributions using index_add_
-        radial_contributions.index_add_(0, idx_j, proto_v_r_a)
+        radial_contributions.index_add_(0, idx_j, proto)
 
-        # Step 2: Vector Contributions Calculation (Equation 5)
-        # First, calculate the directional component by multiplying g_ij with u_ij
+        # Step 2: Vector Contributions Calculation (Equation 5) First, calculate
+        # the directional component by multiplying g_ij with u_ij
         vector_prot_step1 = u_ij.unsqueeze(-1) * f_ij_cutoff.unsqueeze(
             -2
         )  # Shape: (num_atom_pairs, 3, nr_of_features)
@@ -291,9 +294,9 @@ class MessageModule(torch.nn.Module):
 
         # Optionally apply charge layer transformation
         if use_charge_layer:
-            proto_v_r_a = self.linear_transform_charges(proto_v_r_a)
+            proto = self.linear_transform_charges(proto)
         else:
-            proto_v_r_a = self.linear_transform_embeddings(proto_v_r_a)
+            proto = self.linear_transform_embeddings(proto)
 
         # Sum over the last dimension (nr_of_features) to reduce it
         vector_prot_step2 = vector_prot_step2.sum(dim=-1)  # Shape: (num_atom_pairs, 3)
@@ -477,6 +480,7 @@ class AIMNet2Interaction(nn.Module):
         Tuple[torch.Tensor, torch.Tensor]
             Updated atomic embeddings and partial charges.
         """
+
         combined_message = self.message_module(
             atomic_embedding,
             partial_charges,

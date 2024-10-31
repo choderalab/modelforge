@@ -400,18 +400,7 @@ class TrainingAdapter(pL.LightningModule):
         self.learning_rate = training_parameter.lr
         self.lr_scheduler = training_parameter.lr_scheduler
 
-        # verbose output, only True if requested
-        if training_parameter.verbose:
-            self.log_histograms = True
-            self.log_on_training_step = True
-        else:
-            self.log_histograms = False
-            self.log_on_training_step = False
-
-        # Initialize the loss function generate the weights of the loss
-        # components based on the loss components and the loss weights , the
-        # target_weight, and the step size
-
+        # Initialize the loss function with scheduled weights
         weights_scheduling = self._setup_weights_scheduling(
             training_parameter=training_parameter,
         )
@@ -573,11 +562,12 @@ class TrainingAdapter(pL.LightningModule):
                     continue
 
                 grad_norm = compute_grad_norm(metric.mean(), self)
-                self.log(f"grad_norm/{key}", grad_norm)
+                log.info(f"grad_norm/{key}: {grad_norm}")
+
+                # self.log(f"grad_norm/{key}", grad_norm)
 
         # Compute the mean loss for optimization
         total_loss = loss_dict["total_loss"].mean()
-
         return total_loss
 
     def on_after_backward(self):
@@ -664,18 +654,6 @@ class TrainingAdapter(pL.LightningModule):
                     prog_bar=True,
                     sync_dist=True,
                 )
-
-    def _log_histograms(self):
-        if self.log_histograms:
-            for name, params in self.named_parameters():
-                if params is not None:
-                    self.logger.experiment.add_histogram(
-                        name, params, self.current_epoch
-                    )
-                if params.grad is not None:
-                    self.logger.experiment.add_histogram(
-                        f"{name}.grad", params.grad, self.current_epoch
-                    )
 
     def configure_optimizers(self):
         """Configures the optimizers and learning rate schedulers."""
@@ -1080,8 +1058,8 @@ class PotentialTrainer:
             callbacks=self.callbacks,
             benchmark=True,
             inference_mode=False,
-            num_sanity_val_steps=2,
-            gradient_clip_val=1.0,  # FIXME: hardcoded for now
+            num_sanity_val_steps=0,
+            gradient_clip_val=20.0,  # FIXME: hardcoded for now
             log_every_n_steps=self.runtime_parameter.log_every_n_steps,
             enable_model_summary=True,
             enable_progress_bar=self.runtime_parameter.verbose,  # if true will show progress bar

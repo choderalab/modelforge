@@ -3,7 +3,6 @@ import torch
 # This is directly copied from modelforge.utils.prop.NNPInput so we do not need a dependency on modelforge
 
 
-# @torch.jit.script
 class NNPInput:
     __slots__ = (
         "atomic_numbers",

@@ -27,7 +27,7 @@ ani2x_potential = Potential(
     modelforge_potential_path=potential_file_path,
     atomic_numbers=atomic_numbers,
     is_periodic=False,
-    neighborlist_strategy="brute_nsq",
+    neighborlist_strategy="verlet_nsq",
     energy_contributions=["per_system_energy"],
 )
 
@@ -37,3 +37,46 @@ ani2x_jit_potential = torch.jit.script(ani2x_potential)
 
 print(ani2x_potential(torch.tensor(positions)))
 print(ani2x_jit_potential(torch.tensor(positions)))
+
+# Now we can use the potential with OpenMM TorchForce
+
+import openmm
+
+system = openmm.System()
+for atom in water.atoms():
+    system.addParticle(atom.element.mass)
+
+from openmmtorch import TorchForce
+
+force = TorchForce(ani2x_jit_potential)
+
+system.addForce(force)
+
+import sys
+from openmm import LangevinMiddleIntegrator
+from openmm.app import Simulation, StateDataReporter
+from openmm.unit import kelvin, picosecond, femtosecond
+
+# Create an integrator with a time step of 1 fs
+temperature = 298.15 * kelvin
+frictionCoeff = 1 / picosecond
+timeStep = 1 * femtosecond
+integrator = LangevinMiddleIntegrator(temperature, frictionCoeff, timeStep)
+
+# Create a simulation and set the initial positions and velocities
+simulation = Simulation(water, system, integrator)
+simulation.context.setPositions(positions)
+
+# Configure a reporter to print to the console every 0.1 ps (100 steps)
+reporter = StateDataReporter(
+    file=sys.stdout,
+    reportInterval=1,
+    step=True,
+    time=True,
+    potentialEnergy=True,
+    temperature=True,
+)
+simulation.reporters.append(reporter)
+
+# Run the simulation
+simulation.step(10)

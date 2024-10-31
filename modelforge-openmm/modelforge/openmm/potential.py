@@ -71,8 +71,9 @@ class Potential(torch.nn.Module):
                 dtype=self.precision,
             )
         # if the system isn't periodic, we won't do anything with the box vectors, but we still need to pass them
-        self.nnp_input.positions = positions.to(self.precision)
-        self.nnp_input.box_vectors = box_vectors.to(self.precision)
+        self.nnp_input.positions = positions.to(dtype=self.precision)
+        self.nnp_input.box_vectors = box_vectors.to(dtype=self.precision)
+        self.nnp_input.to_device(positions.device)
 
         output = self.modelforge_potential.forward_for_jit_inference(
             atomic_numbers=self.nnp_input.atomic_numbers,
@@ -85,7 +86,7 @@ class Potential(torch.nn.Module):
             is_periodic=self.nnp_input.is_periodic,
         )
 
-        energy = torch.zeros(1, dtype=self.precision)
+        energy = torch.zeros(1, dtype=self.precision, device=positions.device)
         for key in self.energy_contributions:
             energy = energy.add(output[key])
 

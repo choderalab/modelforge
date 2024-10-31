@@ -532,6 +532,12 @@ class NeighborlistForInference(torch.nn.Module):
 
         n = atomic_subsystem_indices.size(0)
 
+        if self.i_pairs.device != positions.device:
+            self.i_pairs = self.i_pairs.to(positions.device)
+            self.j_pairs = self.j_pairs.to(positions.device)
+        if self.indices.device != positions.device:
+            self.indices = self.indices.to(positions.device)
+
         # avoid reinitializing indices if they are already set and haven't changed
         if self.indices.shape[0] != n:
             # Generate a range of indices from 0 to n-1
@@ -620,6 +626,19 @@ class NeighborlistForInference(torch.nn.Module):
         # because the box vectors have changed
         if self.builds == 0:
             self.box_vectors = data.box_vectors
+
+        if self.box_vectors.device != positions.device:
+            self.box_vectors = self.box_vectors.to(positions.device)
+        if self.indices.device != positions.device:
+            self.indices = self.indices.to(positions.device)
+        if self.positions_old.device != positions.device:
+            self.positions_old = self.positions_old.to(positions.device)
+        if self.nlist_i_pairs.device != positions.device:
+            self.nlist_i_pairs = self.nlist_i_pairs.to(positions.device)
+            self.nlist_j_pairs = self.nlist_j_pairs.to(positions.device)
+        if self.i_pairs.device != positions.device:
+            self.i_pairs = self.i_pairs.to(positions.device)
+            self.j_pairs = self.j_pairs.to(positions.device)
 
         box_changed = torch.any(self.box_vectors != data.box_vectors)
 

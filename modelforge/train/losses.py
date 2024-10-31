@@ -399,6 +399,10 @@ class Loss(nn.Module):
                 predict_target[f"{prop_}_true"],
                 batch,
             )
+            # check that none of the tensors are NaN
+            if torch.isnan(prop_loss).any():
+                raise ValueError(f"NaN values detected in {prop} loss.")
+
             # Accumulate weighted per-sample losses
             weighted_loss = self.weights_scheduling[prop][epoch_idx] * prop_loss
 

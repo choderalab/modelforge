@@ -156,6 +156,12 @@ class AimNet2Core(torch.nn.Module):
                 }
             )["per_atom_charge"]
 
+        # check that none of the tensors are NaN
+        if torch.isnan(atomic_embedding).any():
+            raise ValueError("NaN values detected in atomic embeddings.")
+        if torch.isnan(partial_charges).any():
+            raise ValueError("NaN values detected in partial charges.")
+
         return {
             "per_atom_scalar_representation": atomic_embedding,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,

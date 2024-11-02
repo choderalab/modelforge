@@ -66,10 +66,7 @@ class AimNet2Core(torch.nn.Module):
         # Define interaction modules for message passing
         self.interaction_modules = torch.nn.ModuleList(
             [
-                AIMNet2Interaction(
-                    MessageModule(
-                        number_of_per_atom_features, is_first_module=(i == 0)
-                    ),
+                AIMNet2InteractionModule(
                     number_of_input_features=(
                         2 * (number_of_per_atom_features + 1)
                         if i > 0
@@ -77,6 +74,7 @@ class AimNet2Core(torch.nn.Module):
                     ),
                     number_of_per_atom_features=number_of_per_atom_features,
                     activation_function=self.activation_function,
+                    is_first_module=(i == 0),
                 )
                 for i in range(number_of_interaction_modules)
             ]
@@ -121,20 +119,24 @@ class AimNet2Core(torch.nn.Module):
         """
 
         rep = self.representation_module(data, pairlist)
+        r_ij, d_ij, f_ij, f_cutoff = (
+            rep["r_ij"],
+            rep["d_ij"],
+            rep["f_ij"],
+            rep["f_cutoff"],
+        )
+        # Scalar Gaussian expansion for radial terms
+        f_ij_cutoff = f_ij * f_cutoff
+        # Unit direction vectors u_ij = r_ij / d_ij (transpose for correct broadcasting)
+        u_ij = r_ij.transpose(-1, -2).contiguous() / d_ij.unsqueeze(-2)
+        gv = f_ij_cutoff.unsqueeze(-2) * u_ij.unsqueeze(
+            -3
+        )  # Single basis vector interaction
 
-        f_ij_cutoff = rep["f_ij"] * rep["f_cutoff"]
         # Atomic embedding "a" Eqn. (3)
-        atomic_embedding = rep["atomic_embedding"]
         partial_charges = torch.zeros(
             (atomic_embedding.shape[0], 1), device=atomic_embedding.device
         )
-
-        # Calculate the unit vector u_ij
-        r_ij_norm = torch.norm(
-            pairlist.r_ij, dim=1, keepdim=True
-        )  # Shape: (num_atom_pairs, 1)
-        # any norm below 0.1
-        u_ij = pairlist.r_ij / (r_ij_norm + 1e-7)  # Shape: (num_atom_pairs, 3)
 
         # Perform message passing using interaction modules
         for interaction in self.interaction_modules:
@@ -205,215 +207,17 @@ class AimNet2Core(torch.nn.Module):
         return results
 
 
-class MessageModule(torch.nn.Module):
+
+class AIMNet2InteractionModule(nn.Module):
     def __init__(
         self,
-        number_of_per_atom_features: int,
-        is_first_module: bool = False,
-    ):
-        """
-        Initialize the MessageModule which can behave like either the first or subsequent module.
-
-        Parameters
-        ----------
-        number_of_per_atom_features : int
-            The number of features per atom.
-        is_first_module : bool, optional
-            Whether this is the first message module or a subsequent one.
-        """
-        super().__init__()
-        self.number_of_per_atom_features = number_of_per_atom_features
-        self.is_first_module = is_first_module
-        self.linear_transform_embeddings = nn.Linear(
-            number_of_per_atom_features, number_of_per_atom_features
-        )
-        self.linear_transform_charges = nn.Linear(
-            number_of_per_atom_features, number_of_per_atom_features
-        )  # For partial charges
-
-    def calculate_contributions(
-        self,
-        per_atom_feature_tensor: torch.Tensor,
-        pair_indices: torch.Tensor,
-        f_ij_cutoff: torch.Tensor,
-        u_ij: torch.Tensor,
-        use_charge_layer: bool = False,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Calculate the radial and vector contributions for the given features.
-
-        Parameters
-        ----------
-        per_atom_feature_tensor : torch.Tensor
-            Feature tensor (either atomic embeddings or repeated partial charges).
-        pair_indices : torch.Tensor
-            List of atom pairs.
-        f_ij_cutoff : torch.Tensor
-            Cutoff function applied to the radial symmetry functions.
-        r_ij : torch.Tensor
-            Displacement vectors between atom pairs.
-        use_charge_layer : bool, optional
-            Whether to apply the linear charge transformation.
-
-
-        Returns
-        -------
-        Tuple[torch.Tensor, torch.Tensor]
-            Radial and vector contributions.
-        """
-
-        idx_j = pair_indices[1]
-
-        # Step 1: Radial Contributions Calculation (Equation 4)
-        proto = (
-            f_ij_cutoff * per_atom_feature_tensor[idx_j]
-        )  # Shape: (num_atom_pairs, nr_of_features)
-
-        # Initialize tensor to accumulate radial contributions for each atom
-        radial_contributions = torch.zeros(
-            (per_atom_feature_tensor.shape[0], self.number_of_per_atom_features),
-            device=per_atom_feature_tensor.device,
-            dtype=per_atom_feature_tensor.dtype,
-        )  # Shape: (num_of_atoms, nr_of_features)
-
-        # Accumulate the radial contributions using index_add_
-        radial_contributions.index_add_(0, idx_j, proto)
-
-        # Step 2: Vector Contributions Calculation (Equation 5) First, calculate
-        # the directional component by multiplying g_ij with u_ij
-        vector_prot_step1 = u_ij.unsqueeze(-1) * f_ij_cutoff.unsqueeze(
-            -2
-        )  # Shape: (num_atom_pairs, 3, nr_of_features)
-
-        # Next, multiply this result by the input of atom j
-        vector_prot_step2 = vector_prot_step1 * per_atom_feature_tensor[
-            idx_j
-        ].unsqueeze(
-            1
-        )  # Shape: (num_atom_pairs, 3, nr_of_features)
-
-        # Optionally apply charge layer transformation
-        if use_charge_layer:
-            proto = self.linear_transform_charges(proto)
-        else:
-            proto = self.linear_transform_embeddings(proto)
-
-        # Sum over the last dimension (nr_of_features) to reduce it
-        vector_prot_step2 = vector_prot_step2.sum(dim=-1)  # Shape: (num_atom_pairs, 3)
-
-        # Initialize tensor to accumulate vector contributions for each atom
-        vector_contributions = torch.zeros(
-            per_atom_feature_tensor.shape[0],
-            3,
-            device=per_atom_feature_tensor.device,
-            dtype=vector_prot_step2.dtype,
-        )  # Shape: (num_of_atoms, 3)
-
-        # Accumulate the vector contributions using index_add_
-        vector_contributions.index_add_(0, idx_j, vector_prot_step2)
-
-        # Step 3: Compute the Euclidean Norm for each atom
-        vector_norms = torch.norm(
-            vector_contributions, p=2, dim=1
-        )  # Shape: (num_of_atoms,)
-
-        return radial_contributions, vector_norms
-
-    def forward(
-        self,
-        atomic_embedding: torch.Tensor,
-        partial_charges: torch.Tensor,
-        pair_indices: torch.Tensor,
-        f_ij_cutoff: torch.Tensor,
-        r_ij: torch.Tensor,
-    ) -> torch.Tensor:
-        """
-        Forward pass of the message module.
-
-        Parameters
-        ----------
-        atomic_embedding : torch.Tensor
-            The embedding of each atom.
-        partial_charges : torch.Tensor
-            The partial charges of each atom.
-        pair_indices : torch.Tensor
-            The list of atom pairs.
-        f_ij_cutoff : torch.Tensor
-            The cutoff function applied to the radial symmetry functions.
-        r_ij : torch.Tensor
-            The displacement vectors between atom pairs.
-
-        Returns
-        -------
-        torch.Tensor
-            Updated atomic embeddings and partial charges.
-        """
-
-        # Step 1: Calculate radial and vector contributions for atomic embeddings (Equation 4 and 5)
-        radial_contributions_emb, vector_contributions_emb = (
-            self.calculate_contributions(
-                atomic_embedding,
-                pair_indices,
-                f_ij_cutoff,
-                r_ij,
-                use_charge_layer=False,
-            )
-        )
-
-        if not self.is_first_module:
-            # For subsequent message modules, calculate contributions for charges too
-            radial_contributions_charge, vector_contributions_charge = (
-                self.calculate_contributions(
-                    partial_charges,
-                    pair_indices,
-                    f_ij_cutoff,
-                    r_ij,
-                    use_charge_layer=True,
-                )
-            )
-
-            # Combine contributions
-            feature_vector_emb = torch.cat(
-                [radial_contributions_emb, vector_contributions_emb.unsqueeze(1)], dim=1
-            )
-            feature_vector_charge = torch.cat(
-                [radial_contributions_charge, vector_contributions_charge.unsqueeze(1)],
-                dim=1,
-            )
-
-            return torch.cat([feature_vector_emb, feature_vector_charge], dim=1)
-
-        # For the first message module, only return the atomic embedding contributions
-        feature_vector = torch.cat(
-            [radial_contributions_emb, vector_contributions_emb.unsqueeze(1)], dim=1
-        )
-        return feature_vector
-
-
-class AIMNet2Interaction(nn.Module):
-    def __init__(
-        self,
-        message_module: torch.nn.Module,
         number_of_input_features: int,
         number_of_per_atom_features: int,
-        activation_function: torch.nn.Module,
+        activation_function: nn.Module,
+        is_first_module: bool = False,
     ):
-        """
-        Initialize the AIMNet2Interaction module.
-
-        Parameters
-        ----------
-        message_module : nn.Module
-            The message passing module to be used.
-        number_of_input_features : int
-            The number of input features for the interaction.
-        number_of_per_atom_features : int
-            The number of features per atom.
-        activation_function : nn.Module
-            The activation function to be used in the interaction module.
-        """
         super().__init__()
-        self.message_module = message_module
+        self.is_first_module = is_first_module
         self.shared_layers = nn.Sequential(
             Dense(
                 in_features=number_of_input_features,
@@ -429,69 +233,100 @@ class AIMNet2Interaction(nn.Module):
         self.delta_a_mlp = nn.Sequential(
             self.shared_layers,
             Dense(
-                in_features=64,
-                out_features=32,
-                activation_function=activation_function,
+                in_features=64, out_features=32, activation_function=activation_function
             ),
-            Dense(
-                in_features=32,
-                out_features=number_of_per_atom_features,
-            ),
+            Dense(in_features=32, out_features=number_of_per_atom_features),
         )
         self.delta_q_mlp = nn.Sequential(
             self.shared_layers,
             Dense(
-                in_features=64,
-                out_features=32,
-                activation_function=activation_function,
+                in_features=64, out_features=32, activation_function=activation_function
             ),
-            Dense(
-                in_features=32,
-                out_features=1,
-            ),
+            Dense(in_features=32, out_features=1),
         )
+
+    def calculate_contributions(
+        self,
+        per_atom_feature_tensor,
+        pair_indices,
+        f_ij_cutoff,
+        u_ij,
+        use_charge_layer=False,
+    ):
+        idx_j = pair_indices[1]
+        proto = f_ij_cutoff * per_atom_feature_tensor[idx_j]
+        radial_contributions = torch.zeros(
+            (per_atom_feature_tensor.shape[0], proto.shape[-1]),
+            device=per_atom_feature_tensor.device,
+            dtype=per_atom_feature_tensor.dtype,
+        )
+        radial_contributions.index_add_(0, idx_j, proto)
+        vector_prot_step1 = u_ij.unsqueeze(-1) * f_ij_cutoff.unsqueeze(-2)
+        vector_prot_step2 = vector_prot_step1 * per_atom_feature_tensor[
+            idx_j
+        ].unsqueeze(1)
+        vector_prot_step2 = vector_prot_step2.sum(dim=-1)
+        vector_contributions = torch.zeros(
+            per_atom_feature_tensor.shape[0],
+            3,
+            device=per_atom_feature_tensor.device,
+            dtype=vector_prot_step2.dtype,
+        )
+        vector_contributions.index_add_(0, idx_j, vector_prot_step2)
+        return radial_contributions, torch.norm(vector_contributions, p=2, dim=1)
 
     def forward(
         self,
         atomic_embedding: torch.Tensor,
+        partial_charges: torch.Tensor,
         pair_indices: torch.Tensor,
         f_ij_cutoff: torch.Tensor,
         r_ij: torch.Tensor,
-        partial_charges: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Forward pass of the AIMNet2Interaction module.
-
-        Parameters
-        ----------
-        atomic_embedding : torch.Tensor
-            The embedding of each atom.
-        pairlist : torch.Tensor
-            The list of atom pairs.
-        f_ij_cutoff : torch.Tensor
-            The cutoff function applied to the radial symmetry functions.
-        r_ij : torch.Tensor
-            The displacement vectors between atom pairs.
-        partial_charges : Optional[torch.Tensor], optional
-            The partial point charges for atoms, by default None.
-
-        Returns
-        -------
-        Tuple[torch.Tensor, torch.Tensor]
-            Updated atomic embeddings and partial charges.
-        """
-
-        combined_message = self.message_module(
-            atomic_embedding,
-            partial_charges,
-            pair_indices,
-            f_ij_cutoff,
-            r_ij,
+        radial_contributions_emb, vector_contributions_emb = (
+            self.calculate_contributions(
+                atomic_embedding,
+                pair_indices,
+                f_ij_cutoff,
+                r_ij,
+                use_charge_layer=False,
+            )
         )
-
+        if not self.is_first_module:
+            radial_contributions_charge, vector_contributions_charge = (
+                self.calculate_contributions(
+                    partial_charges,
+                    pair_indices,
+                    f_ij_cutoff,
+                    r_ij,
+                    use_charge_layer=True,
+                )
+            )
+            combined_message = torch.cat(
+                [
+                    torch.cat(
+                        [
+                            radial_contributions_emb,
+                            vector_contributions_emb.unsqueeze(1),
+                        ],
+                        dim=1,
+                    ),
+                    torch.cat(
+                        [
+                            radial_contributions_charge,
+                            vector_contributions_charge.unsqueeze(1),
+                        ],
+                        dim=1,
+                    ),
+                ],
+                dim=1,
+            )
+        else:
+            combined_message = torch.cat(
+                [radial_contributions_emb, vector_contributions_emb.unsqueeze(1)], dim=1
+            )
         delta_a = self.delta_a_mlp(combined_message)
         delta_q = self.delta_q_mlp(combined_message)
-
         return delta_a, delta_q
 
 

@@ -423,6 +423,7 @@ def scatter_softmax(
 ACTIVATION_FUNCTIONS = {
     "ReLU": nn.ReLU,
     "CeLU": nn.CELU,
+    "GeLU": nn.GELU,
     "Sigmoid": nn.Sigmoid,
     "Softmax": nn.Softmax,
     "ShiftedSoftplus": ShiftedSoftplus,

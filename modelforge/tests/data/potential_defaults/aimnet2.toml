@@ -9,7 +9,7 @@ predicted_properties = ["per_atom_energy"]
 predicted_dim = [1]
 
 [potential.core_parameter.activation_function_parameter]
-activation_function_name = "ShiftedSoftplus"
+activation_function_name = "GeLU"
 
 [potential.core_parameter.featurization]
 properties_to_featurize = ['atomic_number']

@@ -61,6 +61,7 @@ class Featurization(BaseModel):
 class ActivationFunctionName(CaseInsensitiveEnum):
     ReLU = "ReLU"
     CeLU = "CeLU"
+    GeLU = "GeLU"
     Sigmoid = "Sigmoid"
     Softmax = "Softmax"
     ShiftedSoftplus = "ShiftedSoftplus"
@@ -74,6 +75,7 @@ class ActivationFunctionName(CaseInsensitiveEnum):
 class ActivationFunctionParamsEnum(CaseInsensitiveEnum):
     ReLU = "None"
     CeLU = ActivationFunctionParamsAlpha
+    GeLU = "None"
     Sigmoid = "None"
     Softmax = "None"
     ShiftedSoftplus = "None"

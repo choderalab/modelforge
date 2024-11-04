@@ -49,6 +49,7 @@ logger_name = "tensorboard"
 save_dir = "logs"
 
 [training.lr_scheduler]
+scheduler_name = "ReduceLROnPlateau"
 frequency = 1
 mode = "min"
 factor = 0.1

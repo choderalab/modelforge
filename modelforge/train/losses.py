@@ -297,7 +297,11 @@ class Loss(nn.Module):
         "per_system_dipole_moment",
     ]
 
-    def __init__(self, loss_components: List[str], weights: Dict[str, float]):
+    def __init__(
+        self,
+        loss_components: List[str],
+        weights_scheduling: Dict[str, torch.Tensor],
+    ):
         """
         Calculates the combined loss for energy and force predictions.
 
@@ -317,46 +321,44 @@ class Loss(nn.Module):
         from torch.nn import ModuleDict
 
         self.loss_components = loss_components
-        self.weights = weights
+        self.weights_scheduling = weights_scheduling
         self.loss_functions = ModuleDict()
 
         for prop in loss_components:
             if prop not in self._SUPPORTED_PROPERTIES:
                 raise NotImplementedError(f"Loss type {prop} not implemented.")
+
             log.info(f"Using loss function for {prop}")
+            log.info(
+                f"With loss component schedule from weight: {weights_scheduling[prop][0]} to {weights_scheduling[prop][-1]}"
+            )
+
             if prop == "per_atom_force":
-                log.info(f"Creating per atom force loss with weight: {weights[prop]}")
                 self.loss_functions[prop] = ForceSquaredError(
                     scale_by_number_of_atoms=True
                 )
             elif prop == "per_atom_energy":
-                log.info(f"Creating per atom energy loss with weight: {weights[prop]}")
-
                 self.loss_functions[prop] = EnergySquaredError(
                     scale_by_number_of_atoms=True
                 )
             elif prop == "per_system_energy":
-                log.info(
-                    f"Creating per system energy loss with weight: {weights[prop]}"
-                )
                 self.loss_functions[prop] = EnergySquaredError(
                     scale_by_number_of_atoms=False
                 )
             elif prop == "per_system_total_charge":
-                log.info(f"Creating total charge loss with weight: {weights[prop]}")
                 self.loss_functions[prop] = TotalChargeError()
             elif prop == "per_system_dipole_moment":
-                log.info(f"Creating dipole moment loss with weight: {weights[prop]}")
                 self.loss_functions[prop] = DipoleMomentError()
             else:
                 raise NotImplementedError(f"Loss type {prop} not implemented.")
 
-            self.register_buffer(prop, torch.tensor(self.weights[prop]))
+            self.register_buffer(prop, self.weights_scheduling[prop])
 
     def forward(
         self,
         predict_target: Dict[str, torch.Tensor],
         batch: NNPInput,
+        epoch_idx: int,
     ) -> Dict[str, torch.Tensor]:
         """
         Calculates the combined loss for the specified properties.
@@ -397,8 +399,12 @@ class Loss(nn.Module):
                 predict_target[f"{prop_}_true"],
                 batch,
             )
+            # check that none of the tensors are NaN
+            if torch.isnan(prop_loss).any():
+                raise ValueError(f"NaN values detected in {prop} loss.")
+
             # Accumulate weighted per-sample losses
-            weighted_loss = self.weights[prop] * prop_loss
+            weighted_loss = self.weights_scheduling[prop][epoch_idx] * prop_loss
 
             total_loss += weighted_loss  # Note: total_loss is still per-sample
             loss_dict[prop] = prop_loss  # Store per-sample loss
@@ -415,7 +421,13 @@ class LossFactory:
     """
 
     @staticmethod
-    def create_loss(loss_components: List[str], weight: Dict[str, float]) -> Loss:
+    def create_loss(
+        loss_components: List[str],
+        weights_scheduling: Dict[
+            str,
+            torch.Tensor,
+        ],
+    ) -> Loss:
         """
         Creates an instance of the specified loss type.
 
@@ -423,7 +435,7 @@ class LossFactory:
         ----------
         loss_components : List[str]
             List of properties to include in the loss calculation.
-        weight : Dict[str, float]
+        weights_scheduling : Dict[str, torch.Tensor]
             Dictionary containing the weights for each property in the loss calculation.
 
         Returns
@@ -431,7 +443,10 @@ class LossFactory:
         Loss
             An instance of the specified loss function.
         """
-        return Loss(loss_components, weight)
+        return Loss(
+            loss_components,
+            weights_scheduling,
+        )
 
 
 from torch.nn import ModuleDict

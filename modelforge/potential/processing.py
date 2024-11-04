@@ -102,7 +102,8 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
         Parameters
         ----------
         data : Dict[str, torch.Tensor]
-            The input data dictionary containing the per-atom property and index.
+            The input data dictionary containing the per-atom property and
+            index.
 
         Returns
         -------
@@ -111,16 +112,18 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
         """
 
         # Perform scatter add operation for atoms belonging to the same molecule
-        nr_of_molecules = torch.unique(indices)
-        nr_of_molecules = nr_of_molecules.size(0)
-        per_system_property = torch.zeros(
+        nr_of_molecules = torch.unique(indices).unsqueeze(1)
+        per_system_property = torch.zeros_like(
             nr_of_molecules,
             dtype=per_atom_property.dtype,
             device=per_atom_property.device,
         )
 
         return per_system_property.scatter_reduce(
-            0, indices.long(), per_atom_property, reduce=self.reduction_mode
+            0,
+            indices.long().unsqueeze(1),
+            per_atom_property,
+            reduce=self.reduction_mode,
         )
 
 
@@ -283,11 +286,13 @@ def default_charge_conservation(
         Tensor of corrected partial charges.
     """
     # Calculate the sum of partial charges for each molecule
-    predicted_per_system_total_charge = torch.zeros(
-        per_system_total_charge.shape[0],
-        dtype=per_atom_charge.dtype,
-        device=per_atom_charge.device,
-    ).scatter_add_(0, mol_indices.long(), per_atom_charge)
+    predicted_per_system_total_charge = torch.zeros_like(
+        per_system_total_charge, dtype=per_atom_charge.dtype
+    ).scatter_add_(
+        0,
+        mol_indices.long().unsqueeze(1),
+        per_atom_charge,
+    )
 
     # Calculate the number of atoms in each molecule
     num_atoms_per_system = mol_indices.bincount(
@@ -296,8 +301,8 @@ def default_charge_conservation(
 
     # Calculate the correction factor for each molecule
     correction_factors = (
-        per_system_total_charge.squeeze() - predicted_per_system_total_charge
-    ) / num_atoms_per_system
+        per_system_total_charge - predicted_per_system_total_charge
+    ) / num_atoms_per_system.unsqueeze(1)
 
     # Apply the correction to each atom's charge
     per_atom_charge_corrected = per_atom_charge + correction_factors[mol_indices]
@@ -367,8 +372,19 @@ class ChargeConservation(torch.nn.Module):
 class PerAtomEnergy(torch.nn.Module):
 
     def __init__(
-        self, per_atom_energy: Dict[str, bool], dataset_statistics: Dict[str, float]
+        self,
+        per_atom_energy: Dict[str, bool],
+        dataset_statistics: Dict[str, float],
     ):
+        """
+        Process per atom energies. Depending on what has been requested in the per_atom_energy dictionary, the per atom energies are normalized and/or reduced to per system energies.
+        Parameters
+        ----------
+        per_atom_energy : Dict[str, bool]
+            A dictionary containing the per atom energy processing options.
+        dataset_statistics : Dict[str, float]
+
+        """
         super().__init__()
 
         if per_atom_energy.get("normalize"):
@@ -548,14 +564,12 @@ class CoulombPotential(torch.nn.Module):
         ) * (1 / pairwise_distances)
 
         # Compute the Coulomb interaction term
-        coulomb_interactions = (
-            per_atom_charge[idx_i] * per_atom_charge[idx_j]
-        ) * chi_r.squeeze(-1)
+        coulomb_interactions = (per_atom_charge[idx_i] * per_atom_charge[idx_j]) * chi_r
 
         # Sum over all interactions for each molecule
         data["electrostatic_energy"] = (
             electrostatic_energy.scatter_add_(
-                0, mol_indices.long(), coulomb_interactions
+                0, mol_indices.long().unsqueeze(1), coulomb_interactions
             )
             * 138.96
         )  # in kj/mol nm

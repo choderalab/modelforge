@@ -1,0 +1,44 @@
+name: test
+channels:
+  - pyg
+  - conda-forge
+  - pytorch
+dependencies:
+  # Base depends
+  - python
+  - pip
+  - h5py
+  - tqdm
+  - qcportal>=0.50
+  - qcelemental
+  - pytorch>=2.1
+  - loguru
+  - lightning>=2.0.8
+  - tensorboard
+  - torchvision
+  - openff-units
+  - pint
+  - rdkit
+  - retry
+  - sqlitedict
+  - jax
+  - flax
+  - pydantic>=2.0
+  - graphviz
+  - openmm
+  - openmm-torch
+
+  # Testing
+  - pytest>=2.1
+  - pytest-cov
+  - codecov
+  - requests
+  - versioneer
+
+  # pip installs
+  - pip:
+      - pytorch2jax
+      - git+https://github.com/ArnNag/sake.git@nanometer
+      - jax
+      - flax
+      - pytest-xdist

@@ -1,0 +1,45 @@
+name: test_modelfroge_openmm
+channels:
+  - conda-forge
+  - pytorch
+dependencies:
+  # Base depends
+  - python
+  - pip
+  - h5py
+  - tqdm
+  - toml
+  - qcportal>=0.50
+  - qcelemental
+  - pytorch>=2.1
+  - loguru
+  - lightning>=2.0.8
+  - tensorboard
+  - torchvision
+  - openff-units
+  - torchmetrics>=1.4
+  - pint=0.23
+  - rdkit
+  - retry
+  - sqlitedict
+  - pydantic>=2
+  - ray-all
+  - graphviz
+  - openmm
+  - openmm-torch
+
+  # Testing
+  - pytest>=2.1
+  - pytest-cov
+  - codecov
+  - requests
+  - versioneer
+
+  - pip:
+      - jax
+      - flax
+      - pytorch2jax
+      - git+https://github.com/ArnNag/sake.git@nanometer
+      - flax
+      - torch
+      - pytest-xdist

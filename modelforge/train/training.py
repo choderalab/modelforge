@@ -664,9 +664,11 @@ class TrainingAdapter(pL.LightningModule):
                     continue  # Skip total loss for gradient norm logging
 
                 grad_norm = compute_grad_norm(metric.mean(), self)
-                log.info(f"grad_norm/{key}: {grad_norm}")
+                if torch.isnan(grad_norm) or torch.isinf(grad_norm):
+                    raise RuntimeError(f"Gradient norm is inf/NaN for {key}")
 
-                # self.log(f"grad_norm/{key}", grad_norm)
+                log.info(f"grad_norm/{key}: {grad_norm}")
+                self.log(f"grad_norm/{key}", grad_norm)
 
         # Save energy predictions and targets
         self._update_predictions(

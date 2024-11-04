@@ -479,6 +479,7 @@ class NeighborlistForInference(torch.nn.Module):
 
         return pairs_full, d_ij_full, r_ij_full
 
+    @torch.jit.export
     def _set_strategy(self, strategy: str, skin: float = 0.1):
         """
         Set the strategy for rebuilding the neighbor list.
@@ -762,6 +763,22 @@ class NeighborListForTraining(torch.nn.Module):
             2, -1, 3
         )
         return selected_positions[1] - selected_positions[0]
+
+    @torch.jit.export
+    def _set_strategy(self, strategy: str = "brute_nsq", skin: float = 0.1):
+        """
+        For the Training neighbor lists, this does nothing, as a brute N^2 scheme is always used.
+
+        This is included only for creating a consistent API with the Inference neighborlists.
+
+        Parameters
+        ----------
+        strategy : str
+            The strategy to use for rebuilding the neighbor list.  This is ignored for training.
+        skin : float, optional
+            The skin distance for the Verlet list, by default 0.1. This is ignored for training.
+        """
+        pass
 
     def calculate_d_ij(self, r_ij: torch.Tensor) -> torch.Tensor:
         """

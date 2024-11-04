@@ -305,7 +305,8 @@ class Potential(torch.nn.Module):
         del processed_output["r_ij"]
         return processed_output
 
-    def set_neighborlist_strategy(self, strategy: str, skin: 0.1):
+    @torch.jit.export
+    def set_neighborlist_strategy(self, strategy: str, skin: float = 0.1):
         """
         Set the neighborlist strategy and skin for the neighborlist module.
         Note this cannot be called from a JIT-compiled model.
@@ -317,11 +318,12 @@ class Potential(torch.nn.Module):
         skin : Optional[float], optional
             The skin for the Verlet neighborlist (default is None).
         """
-        self.neighborlist.strategy = strategy
-        self.neighborlist.skin = skin
-        self.neighborlist.skin = skin
-        self.neighborlist.half_skin = skin * 0.5
-        self.neighborlist.cutoff_plus_skin = self.neighborlist.cutoff + skin
+        self.neighborlist._set_strategy(strategy, skin=skin)
+        # self.neighborlist.strategy = strategy
+        # self.neighborlist.skin = skin
+        # self.neighborlist.skin = skin
+        # self.neighborlist.half_skin = skin * 0.5
+        # self.neighborlist.cutoff_plus_skin = self.neighborlist.cutoff + skin
 
     @torch.jit.export
     def forward_for_jit_inference(

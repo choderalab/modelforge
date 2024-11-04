@@ -88,16 +88,3 @@ class NNPInput:
         self.positions = self.positions.to(dtype)
         self.box_vectors = self.box_vectors.to(dtype)
         return self
-
-    # def convert_to_named_tuple(self):
-    #     NNPInputTuple = namedtuple("NNPInputTuple", self.__slots__)
-    #     return NNPInputTuple(
-    #         atomic_numbers=self.atomic_numbers,
-    #         positions=self.positions,
-    #         atomic_subsystem_indices=self.atomic_subsystem_indices,
-    #         per_system_total_charge=self.per_system_total_charge,
-    #         pair_list=self.pair_list,
-    #         per_atom_partial_charge=self.per_atom_partial_charge,
-    #         box_vectors=self.box_vectors,
-    #         is_periodic=self.is_periodic,
-    #     )

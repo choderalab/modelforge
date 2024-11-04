@@ -56,23 +56,13 @@ class Potential(torch.nn.Module):
         self.modelforge_potential.set_neighborlist_strategy(
             neighborlist_strategy, neighborlist_verlet_skin
         )
-        #
-        # self.modelforge_potential.neighborlist.strategy = neighborlist_strategy
-        # if neighborlist_strategy == "verlet_nsq":
-        #     self.modelforge_potential.neighborlist.skin = neighborlist_verlet_skin
-        #     self.modelforge_potential.neighborlist.half_skin = (
-        #         neighborlist_verlet_skin * 0.5
-        #     )
-        #     self.modelforge_potential.neighborlist.cutoff_plus_skin = (
-        #         self.modelforge_potential.neighborlist.cutoff + neighborlist_verlet_skin
-        #     )
 
     def forward(
         self, positions: torch.Tensor, box_vectors: Optional[torch.Tensor] = None
     ):
         if box_vectors is None:
             box_vectors = torch.tensor(
-                [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+                [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
                 dtype=self.precision,
             )
         # if the system isn't periodic, we won't do anything with the box vectors, but we still need to pass them

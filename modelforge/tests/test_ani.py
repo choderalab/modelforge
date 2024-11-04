@@ -72,6 +72,16 @@ def setup_two_methanes():
         requires_grad=True,
         device=device,
     )
+    # Specify the translation vector
+    translation_vector = torch.tensor([1.0, 1.0, 1.0], device=device)
+    # Translate the second "molecule" without in-place modification
+    translated_coordinates = (
+        coordinates.clone()
+    )  # Clone the tensor to avoid in-place modification
+    translated_coordinates[1] = translated_coordinates[1] + translation_vector
+
+    print(translated_coordinates)
+
     # In periodic table, C = 6 and H = 1
     mf_species = torch.tensor([6, 1, 1, 1, 1, 6, 1, 1, 1, 1], device=device)
     ani_species = torch.tensor([[1, 0, 0, 0, 0], [1, 0, 0, 0, 0]], device=device)
@@ -84,11 +94,14 @@ def setup_two_methanes():
 
     nnp_input = NNPInput(
         atomic_numbers=atomic_numbers,
-        positions=torch.cat((coordinates[0], coordinates[1]), dim=0) / 10,
+        positions=torch.cat(
+            (translated_coordinates[0], translated_coordinates[1]), dim=0
+        )
+        / 10,
         atomic_subsystem_indices=atomic_subsystem_indices,
         per_system_total_charge=torch.tensor([0.0, 0.0]),
     )
-    return ani_species, coordinates, device, nnp_input
+    return ani_species, translated_coordinates, device, nnp_input
 
 
 @pytest.mark.xfail
@@ -110,11 +123,11 @@ def test_ani():
     # calculate energy for methane
     energy = model((species, coordinates)).energies
     # get per atom energy
-    w, ref_atomic_energies = model.atomic_energies((species, coordinates))
+    w, torchani_atomic_energies = model.atomic_energies((species, coordinates))
 
     # compare to reference energy
     assert torch.allclose(
-        ref_atomic_energies,
+        torchani_atomic_energies,
         torch.tensor(
             [
                 [-38.0841, -0.5797, -0.5898, -0.6034, -0.6027],
@@ -129,15 +142,23 @@ def test_ani():
     # NOTE: this is in Hartree
     reference_ase = torch.tensor(
         [
-            [0.0052, 0.0181, 0.0080, -0.0055, -0.0048],
-            [0.0052, 0.0181, 0.0080, -0.0055, -0.0048],
+            [
+                -38.08933878049795,
+                0.5978583943827134,
+                0.5978583943827134,
+                0.5978583943827134,
+                0.5978583943827134,
+            ],
+            [
+                -38.08933878049795,
+                0.5978583943827134,
+                0.5978583943827134,
+                0.5978583943827134,
+                0.5978583943827134,
+            ],
         ],
-    ) - torch.tensor(
-        [
-            [-38.0841, -0.5797, -0.5898, -0.6034, -0.6027],
-            [-38.0841, -0.5797, -0.5898, -0.6034, -0.6027],
-        ]
     )
+
     # ------------------------------------------ #
     # setup modelforge potential
     potential = setup_potential_for_test(
@@ -151,11 +172,63 @@ def test_ani():
     potential.load_state_dict(torch.load(file_path))
     # compare to original ani2x dataset
     atomic_energies = potential(mf_input)["per_atom_energy"]
+    modelforge_atomic_energies = (
+        atomic_energies.flatten() + reference_ase.squeeze(0).flatten()
+    )
+
+    print(atomic_energies.flatten())
+    print(torchani_atomic_energies.flatten() - reference_ase.flatten())
+
+    print(modelforge_atomic_energies)
+    print(torchani_atomic_energies.flatten())
+
     assert torch.allclose(
-        atomic_energies.flatten() - reference_ase.flatten(),
-        ref_atomic_energies.flatten(),
+        modelforge_atomic_energies,
+        torchani_atomic_energies.flatten(),
         rtol=1e-3,
     )
+
+
+def test_ani_against_torchani_reference():
+    import torch
+
+    # get input
+    species, coordinates, device, mf_input = setup_two_methanes()
+
+    # ------------------------------------------ #
+    # setup modelforge potential
+    potential = setup_potential_for_test(
+        use="training",
+        potential_seed=42,
+        potential_name="ani2x",
+        jit=False,
+        local_cache_dir=str(prep_temp_dir),
+    )
+    # load the original ani2x parameter set
+    potential.load_state_dict(torch.load(file_path))
+    # compare to original ani2x dataset
+    atomic_energies = potential(mf_input)["per_atom_energy"]
+
+    assert torch.allclose(
+        atomic_energies,
+        torch.tensor(
+            [
+                [0.0052],
+                [0.0181],
+                [0.0080],
+                [-0.0055],
+                [-0.0048],
+                [0.0052],
+                [0.0181],
+                [0.0080],
+                [-0.0055],
+                [-0.0048],
+            ]
+        ),
+        rtol=1e-2,
+    )  # that's the atomic energies for the two methane molecules obtained with torchani
+
+    a = 7
 
 
 @pytest.mark.parametrize("mode", ["inference", "training"])

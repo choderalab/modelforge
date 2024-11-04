@@ -2,7 +2,6 @@
 
 import argparse
 from modelforge.train.training import read_config_and_train
-from typing import Union, List
 from modelforge.utils.io import parse_devices
 
 parse = argparse.ArgumentParser(description="Perform Training Using Modelforge")

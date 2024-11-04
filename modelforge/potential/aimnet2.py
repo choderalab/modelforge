@@ -156,6 +156,12 @@ class AimNet2Core(torch.nn.Module):
                 }
             )["per_atom_charge"]
 
+        # check that none of the tensors are NaN
+        if torch.isnan(atomic_embedding).any():
+            raise ValueError("NaN values detected in atomic embeddings.")
+        if torch.isnan(partial_charges).any():
+            raise ValueError("NaN values detected in partial charges.")
+
         return {
             "per_atom_scalar_representation": atomic_embedding,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
@@ -308,6 +314,8 @@ class MessageModule(torch.nn.Module):
 
         # Accumulate the vector contributions using index_add_
         vector_contributions.index_add_(0, idx_j, vector_prot_step2)
+        if torch.isnan(vector_contributions).any():
+            raise ValueError("NaN values detected in vector_contributions.")
 
         # Step 3: Compute the Euclidean Norm for each atom
         vector_norms = torch.norm(

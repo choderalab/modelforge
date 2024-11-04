@@ -179,6 +179,7 @@ class AimNet2Parameters(ParametersBase):
         featurization: Featurization
         predicted_properties: List[str]
         predicted_dim: List[int]
+        number_of_vector_features: int
         converted_units = field_validator("maximum_interaction_radius", mode="before")(
             _convert_str_or_unit_to_unit_length
         )

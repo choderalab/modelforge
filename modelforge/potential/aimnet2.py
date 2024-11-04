@@ -223,6 +223,7 @@ class AimNet2Core(torch.nn.Module):
         # Compute all specified outputs
         for output_name, output_layer in self.output_layers.items():
             output = output_layer(atomic_embedding)
+            print(output)
             results[output_name] = output
 
         return results
@@ -342,8 +343,7 @@ class AIMNet2InteractionModule(nn.Module):
         a_j : Tensor
             Atomic features for each pair with shape (number_of_pairs, F_atom).
         idx_j : Tensor
-            Indices mapping each pair to an atom, with shape
-            (number_of_pairs,).
+            Indices mapping each pair to an atom, with shape (number_of_pairs,).
         agh : Tensor
             Transformation tensor with shape (F_atom, G, H).
         number_of_atoms : int
@@ -356,21 +356,22 @@ class AIMNet2InteractionModule(nn.Module):
         Tensor
             Vector contributions aggregated per atom, with shape (number_of_atoms, H).
         """
-        # Compute vector contributions using adjusted Einstein summation
-        avf_v = torch.einsum("pa, pdg, agh -> phd", a_j, gv, agh)
-        # avf_v: Shape (number_of_pairs, H, 3)
-
-        # Compute squared sum over vector components (d)
-        avf_v_squared = torch.sum(avf_v.pow(2), dim=-1)  # Shape: (number_of_pairs, H)
-
-        # Initialize the output tensor and aggregate per atom
-        vector_contributions = torch.zeros(
-            (number_of_atoms, avf_v_squared.shape[-1]),
+        # Compute per-pair vector contributions
+        # avf_v: (number_of_pairs, H, 3)
+        avf_v = torch.einsum('pa, pgd, agh -> pgh', a_j, gv, agh)
+        
+        # Initialize tensor to accumulate vector contributions per atom
+        avf_v_sum = torch.zeros(
+            (number_of_atoms, avf_v.shape[1], avf_v.shape[2]),
             device=device,
-            dtype=avf_v_squared.dtype,
+            dtype=avf_v.dtype,
         )
-        vector_contributions.index_add_(0, idx_j, avf_v_squared)
-
+        # Aggregate per atom by summing the vectors
+        avf_v_sum.index_add_(0, idx_j, avf_v)  # Shape: (number_of_atoms, H, 3)
+        
+        # Compute the norm over the last dimension (vector components)
+        vector_contributions = torch.norm(avf_v_sum, dim=-1)  # Shape: (number_of_atoms, H)
+        
         return vector_contributions
 
     def calculate_contributions(

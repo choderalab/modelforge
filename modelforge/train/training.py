@@ -1154,10 +1154,10 @@ class TrainingAdapter(pL.LightningModule):
                 title=f"{phase.capitalize()} Error Histogram - Epoch {self.current_epoch}",
             )
             self._log_plots(phase, regression_fig, histogram_fig)
-            self._identify__and_log_top_k_errors(errors, gathered_indices, phase)
 
             # Log outlier error counts for non-training phases
             if phase != "train":
+                self._identify__and_log_top_k_errors(errors, gathered_indices, phase)
                 self.log_dict(self.outlier_errors_over_epochs, on_epoch=True)
 
     def _identify__and_log_top_k_errors(
@@ -1253,7 +1253,7 @@ class TrainingAdapter(pL.LightningModule):
 
     def on_train_start(self):
         """Log the GPU name to Weights & Biases at the start of training."""
-        if isinstance(self.logger, pL.loggers.WandbLogger):
+        if isinstance(self.logger, pL.loggers.WandbLogger) and self.global_rank == 0:
             if torch.cuda.is_available():
                 gpu_name = torch.cuda.get_device_name(0)
             else:
@@ -1281,10 +1281,16 @@ class TrainingAdapter(pL.LightningModule):
 
     def on_train_epoch_end(self):
         """Logs metrics, learning rate, histograms, and figures at the end of the training epoch."""
-        self._log_metrics(self.loss_metrics, "loss")
-        self._log_learning_rate()
-        self._log_time()
-        self._log_histograms()
+        if self.global_rank == 0:
+            self._log_metrics(self.loss_metrics, "loss")
+            self._log_learning_rate()
+            self._log_time()
+            self._log_histograms()
+            # log the weights of the different loss components
+            for key, weight in self.loss.weights_scheduling.items():
+                self.log(f"loss/{key}/weight", weight[self.current_epoch])
+
+        # this performs gather operations and logs only at rank == 0
         self._log_figures_for_each_phase(
             self.train_preds,
             self.train_targets,
@@ -1304,10 +1310,6 @@ class TrainingAdapter(pL.LightningModule):
             self.train_targets,
             self.train_indices,
         )
-
-        # log the weights of the different loss components
-        for key, weight in self.loss.weights_scheduling.items():
-            self.log(f"loss/{key}/weight", weight[self.current_epoch])
 
     def _log_learning_rate(self):
         """Logs the current learning rate."""

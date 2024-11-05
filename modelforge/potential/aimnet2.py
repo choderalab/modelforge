@@ -382,6 +382,7 @@ class AIMNet2InteractionModule(nn.Module):
         gs: Tensor,
         gv: Tensor,
         agh: Tensor,
+        calculate_vector_contributions: bool,
     ) -> Tuple[Tensor, Tensor]:
         idx_j = pair_indices[1]
         a_j = atomic_embedding[idx_j]  # Shape: (number_of_pairs, F_atom)
@@ -393,7 +394,7 @@ class AIMNet2InteractionModule(nn.Module):
             idx_j,
         )
 
-        if agh is not None:
+        if calculate_vector_contributions:
             vector_contributions = self.calculate_vector_contributions(
                 gv,
                 a_j,
@@ -429,6 +430,7 @@ class AIMNet2InteractionModule(nn.Module):
                 gs,
                 gv,
                 agh,
+                calculate_vector_contributions=True,
             )
         )
 
@@ -440,7 +442,8 @@ class AIMNet2InteractionModule(nn.Module):
                     pair_indices,
                     gs,
                     gv,
-                    agh=None,  # No `agh` for charges
+                    agh,
+                    calculate_vector_contributions=False,
                 )
             )
             # Combine messages

@@ -1251,19 +1251,6 @@ class TrainingAdapter(pL.LightningModule):
             self.val_indices,
         )
 
-    def on_train_start(self):
-        """Log the GPU name to Weights & Biases at the start of training."""
-        if isinstance(self.logger, pL.loggers.WandbLogger) and self.global_rank == 0:
-            if torch.cuda.is_available():
-                gpu_name = torch.cuda.get_device_name(0)
-            else:
-                gpu_name = "CPU"
-            # Log GPU name to W&B
-            self.logger.experiment.config.update({"GPU": gpu_name})
-            self.logger.experiment.log({"GPU Name": gpu_name})
-        else:
-            log.warning("Weights & Biases logger not found; GPU name not logged.")
-
     def on_train_epoch_start(self):
         """Start the epoch timer."""
         self.epoch_start_time = time.time()
@@ -1281,7 +1268,9 @@ class TrainingAdapter(pL.LightningModule):
 
     def on_train_epoch_end(self):
         """Logs metrics, learning rate, histograms, and figures at the end of the training epoch."""
-        if self.global_rank == 0:
+        print(self.global_rank)
+        if self.trainer.is_global_zero:
+
             self._log_metrics(self.loss_metrics, "loss")
             self._log_learning_rate()
             self._log_time()

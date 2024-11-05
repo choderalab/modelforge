@@ -358,7 +358,7 @@ class AIMNet2InteractionModule(nn.Module):
         # Compute per-pair vector contributions
         # avf_v: (number_of_pairs, H, 3)
         avf_v = torch.einsum("pa, pdg, agh -> phd", a_j, gv, agh)
-        
+
         # Initialize tensor to accumulate vector contributions per atom
         avf_v_sum = torch.zeros(
             (number_of_atoms, avf_v.shape[1], avf_v.shape[2]),
@@ -367,10 +367,12 @@ class AIMNet2InteractionModule(nn.Module):
         )
         # Aggregate per atom by summing the vectors
         avf_v_sum.index_add_(0, idx_j, avf_v)  # Shape: (number_of_atoms, H, 3)
-        
+
         # Compute the norm over the last dimension (vector components)
-        vector_contributions = torch.norm(avf_v_sum, dim=-1)  # Shape: (number_of_atoms, H)
-        
+        vector_contributions = torch.norm(
+            avf_v_sum, dim=-1
+        )  # Shape: (number_of_atoms, H)
+
         return vector_contributions
 
     def calculate_contributions(

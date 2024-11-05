@@ -219,7 +219,7 @@ def test_forward(single_batch_with_batchsize, prep_temp_dir):
         ],
     )
 
-    assert torch.allclose(y_hat['per_system_energy'], ref_per_system_energy, atol=1e-3)
+    assert torch.allclose(y_hat["per_system_energy"], ref_per_system_energy, atol=1e-3)
 
 
 @pytest.mark.xfail(raises=NotImplementedError)

@@ -1,4 +1,4 @@
-name: test_modelfroge_openmm
+name: test_modelforge_openmm
 channels:
   - conda-forge
   - pytorch

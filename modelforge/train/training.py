@@ -3,7 +3,7 @@ This module contains classes and functions for training neural network potential
 """
 
 from typing import Any, Dict, List, Optional, Type, TypeVar, Tuple, Literal
-
+import time
 import lightning.pytorch as pL
 import torch
 from lightning import Trainer
@@ -415,6 +415,8 @@ class TrainingAdapter(pL.LightningModule):
             Seed for initializing the model (default is None).
         """
         from modelforge.potential.potential import setup_potential
+
+        self.epoch_start_time = None
 
         super().__init__()
         self.save_hyperparameters()
@@ -1153,10 +1155,10 @@ class TrainingAdapter(pL.LightningModule):
                 title=f"{phase.capitalize()} Error Histogram - Epoch {self.current_epoch}",
             )
             self._log_plots(phase, regression_fig, histogram_fig)
-            self._identify__and_log_top_k_errors(errors, gathered_indices, phase)
 
             # Log outlier error counts for non-training phases
             if phase != "train":
+                self._identify__and_log_top_k_errors(errors, gathered_indices, phase)
                 self.log_dict(self.outlier_errors_over_epochs, on_epoch=True)
 
     def _identify__and_log_top_k_errors(
@@ -1250,11 +1252,46 @@ class TrainingAdapter(pL.LightningModule):
             self.val_indices,
         )
 
+    def on_train_start(self):
+        """Log the GPU name to Weights & Biases at the start of training."""
+        if isinstance(self.logger, pL.loggers.WandbLogger) and self.global_rank == 0:
+            if torch.cuda.is_available():
+                gpu_name = torch.cuda.get_device_name(0)
+            else:
+                gpu_name = "CPU"
+            # Log GPU name to W&B
+            self.logger.experiment.config.update({"GPU": gpu_name})
+            self.logger.experiment.log({"GPU Name": gpu_name})
+        else:
+            log.warning("Weights & Biases logger not found; GPU name not logged.")
+
+    def on_train_epoch_start(self):
+        """Start the epoch timer."""
+        self.epoch_start_time = time.time()
+
+    def _log_time(self):
+        """Log the time taken per epoch to W&B."""
+        epoch_time = time.time() - self.epoch_start_time
+        if isinstance(self.logger, pL.loggers.WandbLogger):
+            # Log epoch duration to W&B
+            self.logger.experiment.log(
+                {"epoch_time": epoch_time, "epoch": self.current_epoch}
+            )
+        else:
+            log.warning("Weights & Biases logger not found; epoch time not logged.")
+
     def on_train_epoch_end(self):
         """Logs metrics, learning rate, histograms, and figures at the end of the training epoch."""
-        self._log_metrics(self.loss_metrics, "loss")
-        self._log_learning_rate()
-        self._log_histograms()
+        if self.global_rank == 0:
+            self._log_metrics(self.loss_metrics, "loss")
+            self._log_learning_rate()
+            self._log_time()
+            self._log_histograms()
+            # log the weights of the different loss components
+            for key, weight in self.loss.weights_scheduling.items():
+                self.log(f"loss/{key}/weight", weight[self.current_epoch])
+
+        # this performs gather operations and logs only at rank == 0
         self._log_figures_for_each_phase(
             self.train_preds,
             self.train_targets,
@@ -1274,10 +1311,6 @@ class TrainingAdapter(pL.LightningModule):
             self.train_targets,
             self.train_indices,
         )
-
-        # log the weights of the different loss components
-        for key, weight in self.loss.weights_scheduling.items():
-            self.log(f"loss/{key}/weight", weight[self.current_epoch])
 
     def _log_learning_rate(self):
         """Logs the current learning rate."""

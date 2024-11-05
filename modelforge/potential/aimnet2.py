@@ -223,7 +223,6 @@ class AimNet2Core(torch.nn.Module):
         # Compute all specified outputs
         for output_name, output_layer in self.output_layers.items():
             output = output_layer(atomic_embedding)
-            print(output)
             results[output_name] = output
 
         return results
@@ -358,7 +357,7 @@ class AIMNet2InteractionModule(nn.Module):
         """
         # Compute per-pair vector contributions
         # avf_v: (number_of_pairs, H, 3)
-        avf_v = torch.einsum('pa, pgd, agh -> pgh', a_j, gv, agh)
+        avf_v = torch.einsum("pa, pdg, agh -> phd", a_j, gv, agh)
         
         # Initialize tensor to accumulate vector contributions per atom
         avf_v_sum = torch.zeros(

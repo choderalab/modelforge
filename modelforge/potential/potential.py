@@ -2,7 +2,20 @@
 This module contains the base classes for the neural network potentials.
 """
 
-from typing import Any, Dict, List, Mapping, NamedTuple, Optional, Tuple, TypeVar, Union
+from typing import (
+    Any,
+    Dict,
+    Callable,
+    Literal,
+    TYPE_CHECKING,
+    List,
+    Mapping,
+    NamedTuple,
+    Optional,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 import lightning as pl
 import torch
@@ -35,8 +48,6 @@ T_NNP_Parameters = TypeVar(
     AimNet2Parameters,
 )
 
-
-from typing import Callable, Literal, Optional, Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from modelforge.train.training import PotentialTrainer
@@ -640,6 +651,7 @@ class NeuralNetworkPotentialFactory:
         artifact_dir = artifact.download(root=local_cache_dir)
         checkpoint_file = f"{artifact_dir}/model.ckpt"
         potential = load_inference_model_from_checkpoint(checkpoint_file)
+
         return potential
 
     @staticmethod
@@ -824,7 +836,6 @@ def load_inference_model_from_checkpoint(
     checkpoint_path : str
         The path to the checkpoint file.
     """
-    import torch
 
     # Load the checkpoint
     checkpoint = torch.load(checkpoint_path, map_location=torch.device("cpu"))

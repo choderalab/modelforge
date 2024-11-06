@@ -169,15 +169,13 @@ class PostProcessing(torch.nn.Module):
                 ]
                 == "coulomb"
             ):
-                # note, need to put an ignore statement because otherwise black 24.10.0 incorrectly
-                # formats the line, making it a tuple getting stored in the list
-                self.registered_chained_operations[
-                    "electrostatic_potential"
-                ] = CoulombPotential(
-                    postprocessing_parameter["electrostatic_potential"][
-                        "maximum_interaction_radius"
-                    ],
-                )  # type: ignore
+                self.registered_chained_operations["electrostatic_potential"] = (
+                    CoulombPotential(
+                        postprocessing_parameter["electrostatic_potential"][
+                            "maximum_interaction_radius"
+                        ],
+                    )
+                )
 
                 self._registered_properties.append("electrostatic_potential")
                 assert all(

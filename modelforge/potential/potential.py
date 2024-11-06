@@ -98,7 +98,6 @@ from modelforge.potential.processing import (
 
 
 class PostProcessing(torch.nn.Module):
-
     _SUPPORTED_PROPERTIES = [
         "per_atom_energy",
         "per_atom_charge",
@@ -159,13 +158,12 @@ class PostProcessing(torch.nn.Module):
                 ]
                 == "coulomb"
             ):
-
-                self.registered_chained_operations["electrostatic_potential"] = (
-                    CoulombPotential(
-                        postprocessing_parameter["electrostatic_potential"][
-                            "maximum_interaction_radius"
-                        ],
-                    )
+                self.registered_chained_operations[
+                    "electrostatic_potential"
+                ] = CoulombPotential(
+                    postprocessing_parameter["electrostatic_potential"][
+                        "maximum_interaction_radius"
+                    ],
                 )
                 self._registered_properties.append("electrostatic_potential")
                 assert all(
@@ -194,7 +192,6 @@ class PostProcessing(torch.nn.Module):
         processed_data: Dict[str, torch.Tensor] = {}
         # Iterate over items in ModuleDict
         for name, module in self.registered_chained_operations.items():
-
             module_output = module.forward(data)
             processed_data.update(module_output)
 
@@ -521,7 +518,6 @@ from openff.units import unit
 
 
 class NeuralNetworkPotentialFactory:
-
     @staticmethod
     def generate_potential(
         *,
@@ -614,6 +610,37 @@ class NeuralNetworkPotentialFactory:
             return PyTorch2JAXConverter().convert_to_jax_model(potential)
         else:
             return potential
+
+    @staticmethod
+    def load_from_wandb(
+        *, run_path: str, version: str, local_cache_dir: str = "./"
+    ) -> Union[Potential, JAXModel]:
+        """
+        Load a neural network potential from a Weights & Biases run.
+
+        Parameters
+        ----------
+        run_path : str
+            The path to the Weights & Biases run.
+        version : str
+            The version of the run to load.
+        local_cache_dir : str, optional
+            The local cache directory for downloading the model (default is "./").
+
+        Returns
+        -------
+        Union[Potential, JAXModel]
+            An instantiated neural network potential for training or inference.
+        """
+        import wandb
+
+        run = wandb.init()
+        artifact_path = f"{run_path}:{version}"
+        artifact = run.use_artifact(artifact_path)
+        artifact_dir = artifact.download(root=local_cache_dir)
+        checkpoint_file = f"{artifact_dir}/model.ckpt"
+        potential = load_inference_model_from_checkpoint(checkpoint_file)
+        return potential
 
     @staticmethod
     def generate_trainer(

@@ -1269,6 +1269,7 @@ class TrainingAdapter(pL.LightningModule):
     def on_train_epoch_end(self):
         """Logs metrics, learning rate, histograms, and figures at the end of the training epoch."""
         print(self.global_rank)
+        print(self.trainer.is_global_zero)
         if self.trainer.is_global_zero:
 
             self._log_metrics(self.loss_metrics, "loss")

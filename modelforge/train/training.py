@@ -664,9 +664,8 @@ class TrainingAdapter(pL.LightningModule):
             if self.training_parameter.log_norm:
                 if key == "total_loss":
                     continue  # Skip total loss for gradient norm logging
-
                 grad_norm = compute_grad_norm(metric.mean(), self)
-                self.log(f"grad_norm/{key}", grad_norm)
+                self.log(f"grad_norm/{key}", grad_norm, sync_dist=True)
 
         # Save energy predictions and targets
         self._update_predictions(
@@ -1158,7 +1157,10 @@ class TrainingAdapter(pL.LightningModule):
             # Log outlier error counts for non-training phases
             if phase != "train":
                 self._identify__and_log_top_k_errors(errors, gathered_indices, phase)
-                self.log_dict(self.outlier_errors_over_epochs, on_epoch=True)
+                self.log_dict(
+                    self.outlier_errors_over_epochs,
+                    on_epoch=True,
+                )
 
     def _identify__and_log_top_k_errors(
         self,
@@ -1268,18 +1270,7 @@ class TrainingAdapter(pL.LightningModule):
 
     def on_train_epoch_end(self):
         """Logs metrics, learning rate, histograms, and figures at the end of the training epoch."""
-        print(self.global_rank)
-        print(self.trainer.is_global_zero)
-        if self.trainer.is_global_zero:
-
-            self._log_metrics(self.loss_metrics, "loss")
-            self._log_learning_rate()
-            self._log_time()
-            self._log_histograms()
-            # log the weights of the different loss components
-            for key, weight in self.loss.weights_scheduling.items():
-                self.log(f"loss/{key}/weight", weight[self.current_epoch])
-
+        self._log_metrics(self.loss_metrics, "loss")
         # this performs gather operations and logs only at rank == 0
         self._log_figures_for_each_phase(
             self.train_preds,
@@ -1301,12 +1292,27 @@ class TrainingAdapter(pL.LightningModule):
             self.train_indices,
         )
 
+        self._log_learning_rate()
+        self._log_time()
+        self._log_histograms()
+        # log the weights of the different loss components
+        for key, weight in self.loss.weights_scheduling.items():
+            self.log(
+                f"loss/{key}/weight",
+                weight[self.current_epoch],
+                rank_zero_only=True,
+            )
+
     def _log_learning_rate(self):
         """Logs the current learning rate."""
         sch = self.lr_schedulers()
         try:
             self.log(
-                "lr", sch.get_last_lr()[0], on_epoch=True, prog_bar=True, sync_dist=True
+                "lr",
+                sch.get_last_lr()[0],
+                on_epoch=True,
+                prog_bar=True,
+                rank_zero_only=True,
             )
         except AttributeError:
             pass

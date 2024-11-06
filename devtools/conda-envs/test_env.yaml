@@ -26,6 +26,7 @@ dependencies:
   - ray-all
   - graphviz
   - wandb
+  - torch
 
   # Testing
   - pytest>=2.1
@@ -40,6 +41,6 @@ dependencies:
       - pytorch2jax
       - git+https://github.com/ArnNag/sake.git@nanometer
       - flax
-      - torch
+#      - torch
       - pytest-xdist
 

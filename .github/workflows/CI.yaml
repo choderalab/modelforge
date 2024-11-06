@@ -76,7 +76,6 @@ jobs:
           micromamba list
 
       - name: Loging W&B
-        shell: bash
         env:
           WANDB_API: ${{ secrets.WANDB_KEY }}
         run: wandb login "$WANDB_API"

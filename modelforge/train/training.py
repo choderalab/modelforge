@@ -1158,8 +1158,7 @@ class TrainingAdapter(pL.LightningModule):
             if phase != "train":
                 self._identify__and_log_top_k_errors(errors, gathered_indices, phase)
                 self.log_dict(
-                    self.outlier_errors_over_epochs,
-                    on_epoch=True,
+                    self.outlier_errors_over_epochs, on_epoch=True, sync_dist=True
                 )
 
     def _identify__and_log_top_k_errors(
@@ -1300,7 +1299,7 @@ class TrainingAdapter(pL.LightningModule):
             self.log(
                 f"loss/{key}/weight",
                 weight[self.current_epoch],
-                rank_zero_only=True,
+                sync_dist=True,
             )
 
     def _log_learning_rate(self):
@@ -1312,7 +1311,7 @@ class TrainingAdapter(pL.LightningModule):
                 sch.get_last_lr()[0],
                 on_epoch=True,
                 prog_bar=True,
-                rank_zero_only=True,
+                sync_dist=True,
             )
         except AttributeError:
             pass

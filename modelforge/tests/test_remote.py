@@ -5,6 +5,8 @@ import os
 
 from modelforge.utils.remote import *
 
+IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
+
 
 @pytest.fixture(scope="session")
 def prep_temp_dir(tmp_path_factory):
@@ -115,6 +117,10 @@ def test_md5_calculation(prep_temp_dir):
         )
 
 
+@pytest.maker.skipif(
+    IN_GITHUB_ACTIONS,
+    reason="Skipping; requires authentication which cannot be done via PR from fork ",
+)
 def test_load_from_wandb(prep_temp_dir):
     from modelforge.potential.potential import NeuralNetworkPotentialFactory
 

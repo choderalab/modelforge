@@ -1387,7 +1387,12 @@ class TrainingAdapter(pL.LightningModule):
         bias_params = []
 
         for name, param in self.potential.named_parameters():
-            if "weight" in name or "atomic_shift" in name or "gate" in name:
+            if (
+                "weight" in name
+                or "atomic_shift" in name
+                or "gate" in name
+                or "agh" in name
+            ):
                 weight_params.append(param)
             elif "bias" in name or "atomic_scale" in name:
                 bias_params.append(param)

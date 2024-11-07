@@ -216,9 +216,10 @@ class FeaturizeInput(nn.Module):
         torch.Tensor
             The featurized input data.
         """
-
         atomic_numbers = data.atomic_numbers
         categorial_embedding = self.atomic_number_embedding(atomic_numbers)
+        if torch.isnan(categorial_embedding).any():
+            raise ValueError("NaN values detected in categorial_embedding.")
 
         for additional_embedding in self.embeddings:
             categorial_embedding = additional_embedding(categorial_embedding, data)

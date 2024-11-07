@@ -110,7 +110,6 @@ class WandbConfig(ParametersBase):
     notes: Optional[str]
 
 
-# Move SchedulerConfig classes outside of TrainingParameters
 class SchedulerConfigBase(ParametersBase):
     """
     Base class for scheduler configurations

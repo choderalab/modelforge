@@ -75,10 +75,10 @@ jobs:
           python -m pip install . --no-deps
           micromamba list
 
-      - name: Loging W&B
+      - name: Log into W&B
         env:
           WANDB_API: ${{ secrets.WANDB_KEY }}
-        run: wandb login "$WANDB_API"
+        run: wandb login ${{ secrets.WANDB_KEY }}
 
       - name: Run tests
         # conda setup requires this special shell

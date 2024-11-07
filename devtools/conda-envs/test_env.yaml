@@ -25,7 +25,7 @@ dependencies:
   - pydantic>=2
   - ray-all
   - graphviz
-  - wandb
+  - wandb>=0.18.5
   - pytorch
 
   # Testing

@@ -159,6 +159,17 @@ def extract_tarred_file(
     tar.close()
 
 
+def ungzip_file(input_path_dir: str, file_name: str, output_path_dir: str) -> None:
+    import gzip
+    import shutil
+
+    assert file_name.endswith(".gz")
+    outpufile_name = file_name.split(".gz")[0]
+    with gzip.open(f"{input_path_dir}/{file_name}", "rb") as f_in:
+        with open(f"{output_path_dir}/{outpufile_name}", "wb") as f_out:
+            shutil.copyfileobj(f_in, f_out)
+
+
 def lock_file(file_handle):
     """
     Locks the file stream for exclusive access using fcntl.

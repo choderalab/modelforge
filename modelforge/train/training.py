@@ -1263,9 +1263,7 @@ class TrainingAdapter(pL.LightningModule):
         epoch_time = time.time() - self.epoch_start_time
         if isinstance(self.logger, pL.loggers.WandbLogger):
             # Log epoch duration to W&B
-            self.logger.experiment.log(
-                {"epoch_time": epoch_time, "epoch": self.current_epoch}
-            )
+            self.log("train/epoch_time", epoch_time)
         else:
             log.warning("Weights & Biases logger not found; epoch time not logged.")
 

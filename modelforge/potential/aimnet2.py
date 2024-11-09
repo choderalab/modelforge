@@ -256,7 +256,7 @@ class AIMNet2InteractionModule(nn.Module):
             self.number_of_input_features = (
                 number_of_per_atom_features  # radial_contributions_emb
                 + number_of_vector_features  # vector_contributions_emb
-                + number_of_per_atom_features  # radial_contributions_charge 
+                + number_of_per_atom_features  # radial_contributions_charge
                 + number_of_vector_features  # vector_contributions_charge
             )
         else:

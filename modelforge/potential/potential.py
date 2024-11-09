@@ -664,6 +664,8 @@ class NeuralNetworkPotentialFactory:
             seed_random_number(potential_seed)
 
         log.debug(f"{training_parameter=}")
+        log.debug(f"{potential_parameter=}")
+        log.debug(f"{runtime_parameter=}")
         log.debug(f"{dataset_parameter=}")
 
         trainer = PotentialTrainer(

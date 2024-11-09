@@ -2,8 +2,8 @@
 potential_name = "AimNet2"
 
 [potential.core_parameter]
-number_of_radial_basis_functions = 32
-number_of_vector_features = 5
+number_of_radial_basis_functions = 64
+number_of_vector_features = 8
 maximum_interaction_radius = "5.0 angstrom"
 number_of_interaction_modules = 3
 predicted_properties = ["per_atom_energy"]
@@ -16,13 +16,11 @@ activation_function_name = "GeLU"
 properties_to_featurize = ['atomic_number']
 [potential.core_parameter.featurization.atomic_number]
 maximum_atomic_number = 101
-number_of_per_atom_features = 32
+number_of_per_atom_features = 64
 
 [potential.postprocessing_parameter]
 properties_to_process = ['per_atom_energy']
 [potential.postprocessing_parameter.per_atom_energy]
-normalize = true
+normalize = false
 from_atom_to_system_reduction = true
 keep_per_atom_property = true
-[potential.postprocessing_parameter.general_postprocessing_operation]
-calculate_molecular_self_energy = true

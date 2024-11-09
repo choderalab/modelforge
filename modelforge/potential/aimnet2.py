@@ -307,20 +307,16 @@ class AIMNet2InteractionModule(nn.Module):
             Radial contributions aggregated per atom, with shape
             (number_of_atoms, F_atom).
         """
-        # Compute radial contributions
-        avf_s = gs.unsqueeze(-1) * a_j.unsqueeze(1)  # (number_of_pairs, G, F_atom)
-
-        # Sum over G (if necessary)
-        avf_s = avf_s.sum(dim=1)  # Adjust if needed
-
-        # Initialize tensor to accumulate radial contributions
+        # Compute radial contributions more efficiently
         radial_contributions = torch.zeros(
-            (number_of_atoms, avf_s.shape[-1]),
-            device=avf_s.device,
-            dtype=avf_s.dtype,
+            (number_of_atoms, a_j.shape[1]),
+            device=gs.device,
+            dtype=gs.dtype
         )
-        radial_contributions.index_add_(0, idx_j, avf_s)
-
+        # Perform element-wise multiplication and sum over G
+        for g in range(gs.shape[1]):
+            avf_s = gs[:, g].unsqueeze(1) * a_j
+            radial_contributions.index_add_(0, idx_j, avf_s)
         return radial_contributions
 
     def calculate_vector_contributions(

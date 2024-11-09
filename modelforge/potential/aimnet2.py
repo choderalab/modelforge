@@ -78,6 +78,7 @@ class AimNet2Core(torch.nn.Module):
             [
                 AIMNet2InteractionModule(
                     number_of_per_atom_features=number_of_per_atom_features,
+                    number_of_radial_basis_functions=number_of_radial_basis_functions,
                     number_of_vector_features=number_of_vector_features,
                     activation_function=self.activation_function,
                     is_first_module=(i == 0),
@@ -238,6 +239,7 @@ class AIMNet2InteractionModule(nn.Module):
     def __init__(
         self,
         number_of_per_atom_features: int,
+        number_of_radial_basis_functions: int,
         number_of_vector_features: int,
         activation_function: nn.Module,
         is_first_module: bool = False,
@@ -246,12 +248,15 @@ class AIMNet2InteractionModule(nn.Module):
         self.is_first_module = is_first_module
         self.number_of_per_atom_features = number_of_per_atom_features
         self.number_of_vector_features = number_of_vector_features
+        self.gs_to_fatom = Dense(
+            number_of_radial_basis_functions, number_of_per_atom_features, bias=False
+        )
 
         if not self.is_first_module:
             self.number_of_input_features = (
                 number_of_per_atom_features  # radial_contributions_emb
                 + number_of_vector_features  # vector_contributions_emb
-                + 1  # radial_contributions_charge (from charges)
+                + number_of_per_atom_features  # radial_contributions_charge 
                 + number_of_vector_features  # vector_contributions_charge
             )
         else:
@@ -293,25 +298,22 @@ class AIMNet2InteractionModule(nn.Module):
         gs : Tensor
             Radial symmetry functions with shape (number_of_pairs, G).
         a_j : Tensor
-            Atomic features for each pair with shape (number_of_pairs,
-            F_atom).
+            Atomic features for each pair with shape (number_of_pairs, F_atom) or (number_of_pairs, 1).
         number_of_atoms : int
             Total number of atoms in the system.
         idx_j : Tensor
-            Indices mapping each pair to an atom, with shape
-            (number_of_pairs,).
+            Indices mapping each pair to an atom, with shape (number_of_pairs,).
 
         Returns
         -------
         Tensor
-            Radial contributions aggregated per atom, with shape
-            (number_of_atoms, F_atom).
+            Radial contributions aggregated per atom, with shape (number_of_atoms, F_atom).
         """
-        # Compute radial contributions
-        avf_s = gs.unsqueeze(-1) * a_j.unsqueeze(1)  # (number_of_pairs, G, F_atom)
+        # Map gs to shape (number_of_pairs, F_atom)
+        mapped_gs = self.gs_to_fatom(gs)  # Shape: (number_of_pairs, F_atom)
 
-        # Sum over G (if necessary)
-        avf_s = avf_s.sum(dim=1)  # Adjust if needed
+        # Compute avf_s using element-wise multiplication
+        avf_s = a_j * mapped_gs  # Shape: (number_of_pairs, F_atom)
 
         # Initialize tensor to accumulate radial contributions
         radial_contributions = torch.zeros(
@@ -319,6 +321,7 @@ class AIMNet2InteractionModule(nn.Module):
             device=avf_s.device,
             dtype=avf_s.dtype,
         )
+        # Aggregate per atom
         radial_contributions.index_add_(0, idx_j, avf_s)
 
         return radial_contributions

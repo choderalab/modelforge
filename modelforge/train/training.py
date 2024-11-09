@@ -1810,8 +1810,11 @@ class PotentialTrainer:
             callbacks=self.callbacks,
             benchmark=True,
             inference_mode=False,
-            num_sanity_val_steps=0,
-            gradient_clip_val=10.0,  # FIXME: hardcoded for now
+            limit_train_batches=self.training_parameter.limit_train_batches,
+            limit_val_batches=self.training_parameter.limit_val_batches,
+            limit_test_batches=self.training_parameter.limit_test_batches,
+            num_sanity_val_steps=1,
+            gradient_clip_val=5.0,  # FIXME: hardcoded for now
             log_every_n_steps=self.runtime_parameter.log_every_n_steps,
             enable_model_summary=True,
             enable_progress_bar=self.runtime_parameter.verbose,  # if true will show progress bar

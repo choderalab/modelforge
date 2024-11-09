@@ -386,6 +386,9 @@ class TrainingParameters(ParametersBase):
     experiment_logger: ExperimentLogger
     verbose: bool = False
     log_norm: bool = False
+    limit_train_batches: Union[float, int, None] = None
+    limit_val_batches: Union[float, int, None] = None
+    limit_test_batches: Union[float, int, None] = None
     optimizer: Type[torch.optim.Optimizer] = torch.optim.AdamW
     min_number_of_epochs: Union[int, None] = None
 

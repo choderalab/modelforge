@@ -1,0 +1,43 @@
+name: test
+channels:
+  - conda-forge
+  - pytorch
+dependencies:
+  # Base depends
+  - python
+  - pip
+  - h5py
+  - tqdm
+  - qcelemental
+  - qcportal>=0.50
+  - pytorch>=2.1
+  - loguru
+  - lightning>=2.0.8
+  - tensorboard
+  - torchvision
+  - openff-units
+  - torchmetrics>=1.4
+  - pint
+  - rdkit
+  - retry
+  - sqlitedict
+  - pydantic>=2
+  - ray-all
+
+  # Testing
+  - pytest>=2.1
+  - pytest-cov
+  - codecov
+  - requests
+  - versioneer
+
+  # Docs
+  - sphinx_rtd_theme
+
+  - pip:
+      - jax
+      - flax
+      - pytorch2jax
+      #- "ray[data,train,tune,serve]"
+      - git+https://github.com/ArnNag/sake.git@nanometer
+      - torchviz2

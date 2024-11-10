@@ -68,7 +68,7 @@ def spice114_wrapper(
     """
     from modelforge.curation.spice_1_curation import SPICE1Curation
 
-    spice_114 = SPICE114Curation(
+    spice_114 = SPICE1Curation(
         hdf5_file_name=hdf5_file_name,
         output_file_dir=output_file_dir,
         local_cache_dir=local_cache_dir,
@@ -95,9 +95,9 @@ def main():
 
     # We'll want to provide some simple means of versioning
     # if we make updates to either the underlying dataset, curation modules, or parameters given to the code
-    version = "0"
+    version = "1"
     # version of the dataset to curate
-    version_select = f"v_{version}"
+    version_select = f"v_0"
 
     # version v_0 corresponds to SPICE 1.1.4 release
     # curate ANI1x test dataset with 1000 total conformers, max of 10 conformers per record

@@ -1,4 +1,5 @@
-# defines the interaction with public datasets
+""" Module that contains classes and function for loading and processing of datasets. """
+
 from .qm9 import QM9Dataset
 from .ani1x import ANI1xDataset
 from .ani2x import ANI2xDataset

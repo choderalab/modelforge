@@ -69,6 +69,9 @@ class ANI2xCuration(DatasetCuration):
         self.dataset_md5_checksum = data_inputs[self.version_select][
             "dataset_md5_checksum"
         ]
+        self.dataset_filename = data_inputs[self.version_select]["dataset_filename"]
+        self.dataset_length = data_inputs[self.version_select]["dataset_length"]
+
         logger.debug(
             f"Dataset: {self.version_select} version: {data_inputs[self.version_select]['version']}"
         )
@@ -291,20 +294,19 @@ class ANI2xCuration(DatasetCuration):
                 "max_records and total_conformers cannot be set at the same time."
             )
 
-        from modelforge.utils.remote import download_from_zenodo
+        from modelforge.utils.remote import download_from_url
 
         url = self.dataset_download_url
 
         # download the dataset
-        self.name = download_from_zenodo(
+        download_from_url(
             url=url,
             md5_checksum=self.dataset_md5_checksum,
             output_path=self.local_cache_dir,
+            output_filename=self.dataset_filename,
+            length=self.dataset_length,
             force_download=force_download,
         )
-
-        if self.name is None:
-            raise Exception("Failed to retrieve name of file from Zenodo.")
 
         # clear any data that might be present so we don't append to it
         self._clear_data()
@@ -314,13 +316,13 @@ class ANI2xCuration(DatasetCuration):
 
         extract_tarred_file(
             input_path_dir=self.local_cache_dir,
-            file_name=self.name,
+            file_name=self.dataset_filename,
             output_path_dir=self.local_cache_dir,
             mode="r:gz",
         )
 
         # the untarred file will be in a directory named 'final_h5' within the local_cache_dir,
-        hdf5_filename = f"{self.name.replace('.tar.gz', '')}.h5"
+        hdf5_filename = f"{self.dataset_filename.replace('.tar.gz', '')}.h5"
 
         # process the rest of the dataset
         self._process_downloaded(

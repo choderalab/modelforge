@@ -1,9 +1,10 @@
-import torch
-import pytest
-from modelforge.dataset import DataModule
-
-from typing import Optional, Dict
 from dataclasses import dataclass
+from typing import Dict, Optional
+
+import pytest
+import torch
+
+from modelforge.dataset import DataModule
 
 
 # let us setup a few pytest options
@@ -37,39 +38,6 @@ def datamodule_factory():
     return create_datamodule
 
 
-from modelforge.dataset.utils import (
-    FirstComeFirstServeSplittingStrategy,
-    SplittingStrategy,
-)
-
-
-def initialize_datamodule(
-    dataset_name: str,
-    version_select: str = "nc_1000_v0",
-    batch_size: int = 64,
-    splitting_strategy: SplittingStrategy = FirstComeFirstServeSplittingStrategy(),
-    remove_self_energies: bool = True,
-    regression_ase: bool = False,
-    regenerate_dataset_statistic: bool = False,
-) -> DataModule:
-    """
-    Initialize a dataset for a given mode.
-    """
-
-    data_module = DataModule(
-        dataset_name,
-        splitting_strategy=splitting_strategy,
-        batch_size=batch_size,
-        version_select=version_select,
-        remove_self_energies=remove_self_energies,
-        regression_ase=regression_ase,
-        regenerate_dataset_statistic=regenerate_dataset_statistic,
-    )
-    data_module.prepare_data()
-    data_module.setup()
-    return data_module
-
-
 # dataset fixture
 @pytest.fixture
 def dataset_factory():
@@ -79,83 +47,37 @@ def dataset_factory():
     return create_dataset
 
 
-from modelforge.dataset.dataset import DatasetFactory, TorchDataset
-from modelforge.dataset import _ImplementedDatasets
-
-
-def single_batch(batch_size: int = 64, dataset_name="QM9"):
-    """
-    Utility function to create a single batch of data for testing.
-    """
-    data_module = initialize_datamodule(
-        dataset_name=dataset_name,
-        batch_size=batch_size,
-        version_select="nc_1000_v0",
-    )
-    return next(iter(data_module.train_dataloader(shuffle=False)))
+from modelforge.dataset.dataset import (
+    initialize_datamodule,
+    initialize_dataset,
+    single_batch,
+)
 
 
 @pytest.fixture(scope="session")
-def single_batch_with_batchsize_64():
+def single_batch_with_batchsize():
     """
     Utility fixture to create a single batch of data for testing.
     """
-    return single_batch(batch_size=64)
+
+    def _create_single_batch(batch_size: int, dataset_name: str, local_cache_dir: str):
+        return single_batch(
+            batch_size=batch_size,
+            dataset_name=dataset_name,
+            local_cache_dir=local_cache_dir,
+        )
+
+    return _create_single_batch
 
 
-@pytest.fixture(scope="session")
-def single_batch_with_batchsize_1():
-    """
-    Utility fixture to create a single batch of data for testing.
-    """
-    return single_batch(batch_size=1)
-
-
-@pytest.fixture(scope="session")
-def single_batch_with_batchsize_2_with_force():
-    """
-    Utility fixture to create a single batch of data for testing.
-    """
-    return single_batch(batch_size=2, dataset_name="PHALKETHOH")
-
-
-@pytest.fixture(scope="session")
-def single_batch_with_batchsize_16_with_force():
-    """
-    Utility fixture to create a single batch of data for testing.
-    """
-    return single_batch(batch_size=16, dataset_name="PHALKETHOH")
-
-
-def initialize_dataset(
-    dataset_name: str,
-    local_cache_dir: str,
-    versions_select: str = "nc_1000_v0",
-    force_download: bool = False,
-) -> DataModule:
-    """
-    Initialize a dataset for a given mode.
-    """
-
-    factory = DatasetFactory()
-    data = _ImplementedDatasets.get_dataset_class(dataset_name)(
-        local_cache_dir=local_cache_dir,
-        version_select=versions_select,
-        force_download=force_download,
-    )
-    dataset = factory.create_dataset(data)
-
-    return dataset
-
-
-@pytest.fixture(scope="session")
-def prep_temp_dir(tmp_path_factory):
-    import uuid
-
-    filename = str(uuid.uuid4())
-
-    tmp_path_factory.mktemp(f"dataset_test/")
-    return f"dataset_test"
+# @pytest.fixture(scope="session")
+# def prep_temp_dir(tmp_path_factory):
+#     import uuid
+#
+#     filename = str(uuid.uuid4())
+#
+#     tmp_path_factory.mktemp(f"dataset_test/")
+#     return f"dataset_test"
 
 
 @dataclass
@@ -169,7 +91,6 @@ class DataSetContainer:
 from typing import Dict
 
 from modelforge.dataset import _ImplementedDatasets
-
 
 dataset_container: Dict[str, DataSetContainer] = {
     "QM9": DataSetContainer(
@@ -276,7 +197,7 @@ def equivariance_utils():
 # helper functions
 # ----------------------------------------------------------- #
 
-from modelforge.dataset.dataset import BatchData
+from modelforge.utils.prop import BatchData, NNPInput
 
 
 @pytest.fixture
@@ -288,7 +209,7 @@ def methane() -> BatchData:
     -------
     BatchData
     """
-    from modelforge.potential.utils import Metadata, NNPInput, BatchData
+    from modelforge.potential.utils import BatchData, Metadata
 
     atomic_numbers = torch.tensor([6, 1, 1, 1, 1], dtype=torch.int64)
     positions = (
@@ -311,7 +232,7 @@ def methane() -> BatchData:
             atomic_numbers=atomic_numbers,
             positions=positions,
             atomic_subsystem_indices=atomic_subsystem_indices,
-            total_charge=torch.tensor([0.0]),
+            per_system_total_charge=torch.tensor([0.0]),
         ),
         Metadata(
             E=E,
@@ -322,8 +243,9 @@ def methane() -> BatchData:
     )
 
 
-import torch
 import math
+
+import torch
 
 
 def generate_uniform_quaternion(u=None):
@@ -366,7 +288,7 @@ def generate_uniform_quaternion(u=None):
 def rotation_matrix_from_quaternion(quaternion):
     """Compute a 3x3 rotation matrix from a given quaternion (4-vector).
 
-    Adapted from the numpy implementation in openmm-tools
+    Adapted from the numpy implementation in modelforgeopenmm-tools
 
     https://github.com/choderalab/openmmtools/blob/main/openmmtools/mcmc.py
 
@@ -438,11 +360,12 @@ def apply_rotation_matrix(coordinates, rotation_matrix, use_center_of_mass=True)
     if use_center_of_mass:
         coordinates_com = torch.mean(coordinates, 0)
     else:
-        coordinates_com = torch.zeros(3)
+        coordinates_com = torch.zeros(3).to(coordinates.device, coordinates.dtype)
 
     coordinates_proposed = (
         torch.matmul(
-            rotation_matrix, (coordinates - coordinates_com).transpose(0, -1)
+            rotation_matrix.to(coordinates.device, coordinates.dtype),
+            (coordinates - coordinates_com).transpose(0, -1),
         ).transpose(0, -1)
     ) + coordinates_com
 
@@ -474,13 +397,13 @@ def equivariance_test_utils():
     x_translation = torch.randn(
         size=(1, 3),
     )
-    translation = lambda x: x + x_translation
+    translation = lambda x: x + x_translation.to(x.device, x.dtype)
 
     # generate random quaternion and rotation matrix
     q = generate_uniform_quaternion()
     rotation_matrix = rotation_matrix_from_quaternion(q)
 
-    rotation = lambda x: apply_rotation_matrix(x, rotation_matrix)
+    rotation = lambda x: apply_rotation_matrix(x, rotation_matrix.to(x.device, x.dtype))
 
     # Define reflection function
     alpha = torch.distributions.Uniform(-math.pi, math.pi).sample()
@@ -491,6 +414,6 @@ def equivariance_test_utils():
 
     p = torch.eye(3) - 2 * v.T @ v
 
-    reflection = lambda x: x @ p
+    reflection = lambda x: x @ p.to(x.device, x.dtype)
 
     return translation, rotation, reflection

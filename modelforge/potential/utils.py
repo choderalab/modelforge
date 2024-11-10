@@ -1,30 +1,16 @@
-import math
-from dataclasses import dataclass, field
-from typing import Any, Callable, Optional, Tuple, NamedTuple, Type
+"""
+Utility functions for neural network potentials.
+"""
 
-import numpy as np
+import math
+from dataclasses import dataclass
+from typing import Callable, Optional
+
 import torch
 import torch.nn as nn
-from loguru import logger as log
 from openff.units import unit
-from pint import Quantity
-from typing import Union
-from modelforge.dataset.dataset import NNPInput
 
-
-@dataclass
-class NeuralNetworkData:
-    pair_indices: torch.Tensor
-    d_ij: torch.Tensor
-    r_ij: torch.Tensor
-    atomic_numbers: torch.Tensor
-    number_of_atoms: int
-    positions: torch.Tensor
-    atomic_subsystem_indices: torch.Tensor
-    total_charge: torch.Tensor
-
-
-import torch
+from modelforge.utils.prop import NNPInput
 
 
 @dataclass(frozen=False)
@@ -75,10 +61,8 @@ class BatchData:
 
 
 def shared_config_prior():
-    from modelforge.utils.io import import_
 
-    tune = import_("ray").tune
-    # from ray import tune
+    from ray import tune
 
     return {
         "lr": tune.loguniform(1e-5, 1e-1),
@@ -87,123 +71,66 @@ def shared_config_prior():
     }
 
 
-def triple_by_molecule(
-    atom_pairs: torch.Tensor,
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Input: indices for pairs of atoms that are close to each other.
-    each pair only appear once, i.e. only one of the pairs (1, 2) and
-    (2, 1) exists.
-
-    NOTE: this function is taken from https://github.com/aiqm/torchani/blob/17204c6dccf6210753bc8c0ca4c92278b60719c9/torchani/aev.py
-            with little modifications.
-    """
-
-    def cumsum_from_zero(input_: torch.Tensor) -> torch.Tensor:
-        cumsum = torch.zeros_like(input_)
-        torch.cumsum(input_[:-1], dim=0, out=cumsum[1:])
-        return cumsum
-
-    # convert representation from pair to central-others
-    ai1 = atom_pairs.view(-1)
-
-    # Note, torch.sort doesn't guarantee stable sort by default.
-    # This means that the order of rev_indices is not guaranteed when there are "ties"
-    # (i.e., identical values in the input tensor).
-    # Stable sort is more expensive and ultimately unnecessary, so we will not use it here,
-    # but it does mean that vector-wise comparison of the outputs of this function may be
-    # inconsistent for the same input, and thus tests must be designed accordingly.
-
-    sorted_ai1, rev_indices = ai1.sort()
-
-    # sort and compute unique key
-    uniqued_central_atom_index, counts = torch.unique_consecutive(
-        sorted_ai1, return_inverse=False, return_counts=True
-    )
-
-    # compute central_atom_index
-    pair_sizes = torch.div(counts * (counts - 1), 2, rounding_mode="trunc")
-    pair_indices = torch.repeat_interleave(pair_sizes)
-    central_atom_index = uniqued_central_atom_index.index_select(0, pair_indices)
-
-    # do local combinations within unique key, assuming sorted
-    m = counts.max().item() if counts.numel() > 0 else 0
-    n = pair_sizes.shape[0]
-    intra_pair_indices = (
-        torch.tril_indices(m, m, -1, device=ai1.device).unsqueeze(1).expand(-1, n, -1)
-    )
-    mask = (
-        torch.arange(intra_pair_indices.shape[2], device=ai1.device)
-        < pair_sizes.unsqueeze(1)
-    ).flatten()
-    sorted_local_index12 = intra_pair_indices.flatten(1, 2)[:, mask]
-    sorted_local_index12 += cumsum_from_zero(counts).index_select(0, pair_indices)
-
-    # unsort result from last part
-    local_index12 = rev_indices[sorted_local_index12]
-
-    # compute mapping between representation of central-other to pair
-    n = atom_pairs.shape[1]
-    sign12 = ((local_index12 < n).to(torch.int8) * 2) - 1
-    return central_atom_index, local_index12 % n, sign12
-
-
-class Embedding(nn.Module):
-    def __init__(self, num_embeddings: int, embedding_dim: int):
-        """
-        Initialize the embedding module.
-
-        Parameters
-        ----------
-        num_embeddings: int
-        embedding_dim : int
-            Dimensionality of the embedding.
-        """
-        super().__init__()
-        self.embedding = nn.Embedding(num_embeddings, embedding_dim)
-
-    @property
-    def data(self):
-        return self.embedding.weight.data
-
-    @data.setter
-    def data(self, data):
-        self.embedding.weight.data = data
-
-    @property
-    def embedding_dim(self):
-        """
-        Get the dimensionality of the embedding.
-
-        Returns
-        -------
-        int
-            The dimensionality of the embedding.
-        """
-        return self.embedding.embedding_dim
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Embeddes the pr3ovided 1D tensor using the embedding layer.
-
-        Parameters
-        ----------
-        x : torch.Tensor
-            1D tensor to be embedded.
-
-        Returns
-        -------
-        torch.Tensor
-            with shape (num_embeddings, embedding_dim)
-        """
-
-        return self.embedding(x)
-
-
 import torch.nn.functional as F
 from torch.nn.init import xavier_uniform_, zeros_
 
 
 class Dense(nn.Linear):
+    """
+    Fully connected linear layer with activation function.
+
+    forward(input)
+        Forward pass of the layer.
+
+    """
+
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        bias: bool = True,
+        activation_function: nn.Module = nn.Identity(),
+    ):
+        """
+        A linear or non-linear transformation
+
+        Parameters
+        ----------
+        in_features : int
+            Number of input features.
+        out_features : int
+            Number of output features.
+        bias : bool, optional
+            If set to False, the layer will not learn an additive bias. Default is True.
+        activation_function : Type[torch.nn.Module] , optional
+            Activation function to be applied. Default is nn.Identity(), which applies the identity function
+            and makes this a linear transformation.
+        """
+
+        super().__init__(in_features, out_features, bias)
+
+        self.activation_function = activation_function
+
+    def forward(self, input: torch.Tensor):
+        """
+        Forward pass of the layer.
+
+        Parameters
+        ----------
+        input : torch.Tensor
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Output tensor after applying the linear transformation and activation function.
+
+        """
+        y = F.linear(input, self.weight, self.bias)
+        return self.activation_function(y)
+
+
+class DenseWithCustomDist(nn.Linear):
     """
     Fully connected linear layer with activation function.
 
@@ -228,15 +155,12 @@ class Dense(nn.Linear):
         in_features: int,
         out_features: int,
         bias: bool = True,
-        activation: Optional[
-            Union[nn.Module, Callable[[torch.Tensor], torch.Tensor]]
-        ] = None,
+        activation_function: nn.Module = nn.Identity(),
         weight_init: Callable = xavier_uniform_,
         bias_init: Callable = zeros_,
     ):
         """
-        __init__ _summary_
-
+        A linear or non-linear transformation
 
         Parameters
         ----------
@@ -246,22 +170,23 @@ class Dense(nn.Linear):
             Number of output features.
         bias : bool, optional
             If set to False, the layer will not learn an additive bias. Default is True.
-        activation : nn.Module or Callable[[torch.Tensor], torch.Tensor], optional
-            Activation function to be applied. Default is None, which applies the identity function and makes this a linear transformation.
+        activation_function : nn.Module , optional
+            Activation function to be applied. Default is nn.Identity(), which applies the identity function
+            and makes this a linear ransformation.
         weight_init : Callable, optional
             Callable to initialize the weights. Default is xavier_uniform_.
         bias_init : Callable, optional
             Function to initialize the bias. Default is zeros_.
         """
-        # NOTE: these two variables need to come before the initi
+        # NOTE: these two variables need to come before the init
         self.weight_init_distribution = weight_init
         self.bias_init_distribution = bias_init
 
         super().__init__(
             in_features, out_features, bias
-        )  # NOTE: the `reseet_paramters` method is called in the super class
+        )  # NOTE: the `reset_paramters` method is called in the super class
 
-        self.activation = activation or nn.Identity()
+        self.activation_function = activation_function
 
     def reset_parameters(self):
         """
@@ -287,232 +212,43 @@ class Dense(nn.Linear):
 
         """
         y = F.linear(input, self.weight, self.bias)
-        return self.activation(y)
-
-
-from openff.units import unit
-
-
-class CosineCutoff(nn.Module):
-    def __init__(self, cutoff: unit.Quantity):
-        """
-        Behler-style cosine cutoff module.
-        NOTE: The cutoff is converted to nanometer and the input MUST be in nanomter too.
-
-        Parameters:
-        ----------
-        cutoff: unit.Quantity
-            The cutoff distance.
-
-        """
-        super().__init__()
-        cutoff = cutoff.to(unit.nanometer).m
-        self.register_buffer("cutoff", torch.tensor([cutoff]))
-
-    def forward(self, d_ij: torch.Tensor):
-        """
-        Compute the cosine cutoff for a distance tensor.
-        NOTE: the cutoff function doesn't care about units as long as they are consisten,
-
-        Parameters
-        ----------
-        d_ij : Tensor
-            Pairwise distance tensor in nanometer. Shape: [n_pairs, 1]
-
-        Returns
-        -------
-        Tensor
-            Cosine cutoff tensor. Shape: [n_pairs, 1]
-        """
-        # Compute values of cutoff function
-        input_cut = 0.5 * (
-            torch.cos(d_ij * np.pi / self.cutoff) + 1.0
-        )  # NOTE: ANI adds 0.5 instead of 1.
-        # Remove contributions beyond the cutoff radius
-        input_cut *= (d_ij < self.cutoff).float()
-        return input_cut
+        return self.activation_function(y)
 
 
 from typing import Dict
+
+from openff.units import unit
 
 
 class ShiftedSoftplus(nn.Module):
     def __init__(self):
         super().__init__()
-        import math
 
         self.log_2 = math.log(2.0)
 
     def forward(self, x: torch.Tensor):
-        """Compute shifted soft-plus activation function.
+        """
+        Compute shifted soft-plus activation function.
 
-        y = \ln\left(1 + e^{-x}\right) - \ln(2)
+        The shifted soft-plus activation function is defined as:
+        y = ln(1 + exp(-x)) - ln(2)
 
         Parameters:
         -----------
-        x:torch.Tensor
-            input tensor
+        x : torch.Tensor
+            Input tensor.
 
         Returns:
         -----------
-        torch.Tensor: shifted soft-plus of input.
 
-        """
-        from torch.nn import functional
-
-        return functional.softplus(x) - self.log_2
-
-
-class AngularSymmetryFunction(nn.Module):
-    """
-    Initialize AngularSymmetryFunction module.
-
-    """
-
-    def __init__(
-        self,
-        max_distance: unit.Quantity,
-        min_distance: unit.Quantity,
-        number_of_gaussians_for_asf: int = 8,
-        angle_sections: int = 4,
-        trainable: bool = False,
-        dtype: Optional[torch.dtype] = None,
-    ) -> None:
-        """
-        Parameters
-        ----
-        number_of_gaussian: Number of gaussian functions to use for angular symmetry function.
-        angular_cutoff: Cutoff distance for angular symmetry function.
-        angular_start: Starting distance for angular symmetry function.
-        ani_style: Whether to use ANI symmetry function style.
+        torch.Tensor
+            Shifted soft-plus of the input.
         """
 
-        super().__init__()
-        from loguru import logger as log
-
-        self.number_of_gaussians_asf = number_of_gaussians_for_asf
-        self.angular_cutoff = max_distance
-        self.cosine_cutoff = CosineCutoff(self.angular_cutoff)
-        _unitless_angular_cutoff = max_distance.to(unit.nanometer).m
-        self.angular_start = min_distance
-        _unitless_angular_start = min_distance.to(unit.nanometer).m
-
-        # save constants
-        EtaA = angular_eta = 12.5 * 100  # FIXME hardcoded eta
-        Zeta = 14.1000  # FIXME hardcoded zeta
-
-        if trainable:
-            self.EtaA = torch.tensor([EtaA], dtype=dtype)
-            self.Zeta = torch.tensor([Zeta], dtype=dtype)
-            self.Rca = torch.tensor([_unitless_angular_cutoff], dtype=dtype)
-
-        else:
-            self.register_buffer("EtaA", torch.tensor([EtaA], dtype=dtype))
-            self.register_buffer("Zeta", torch.tensor([Zeta], dtype=dtype))
-            self.register_buffer(
-                "Rca", torch.tensor([_unitless_angular_cutoff], dtype=dtype)
-            )
-
-        # ===============
-        # # calculate shifts
-        # ===============
-        import math
-
-        # ShfZ
-        angle_start = math.pi / (2 * angle_sections)
-        ShfZ = (torch.linspace(0, math.pi, angle_sections + 1) + angle_start)[:-1]
-        # ShfA
-        ShfA = torch.linspace(
-            _unitless_angular_start,
-            _unitless_angular_cutoff,
-            number_of_gaussians_for_asf + 1,
-        )[:-1]
-        # register shifts
-        if trainable:
-            self.ShfZ = ShfZ
-            self.ShfA = ShfA
-        else:
-            self.register_buffer("ShfZ", ShfZ)
-            self.register_buffer("ShfA", ShfA)
-
-        # The length of angular subaev of a single species
-        self.angular_sublength = self.ShfA.numel() * self.ShfZ.numel()
-
-    def forward(self, r_ij: torch.Tensor) -> torch.Tensor:
-        # calculate the angular sub aev
-        sub_aev = self.compute_angular_sub_aev(r_ij)
-        return sub_aev
-
-    def compute_angular_sub_aev(self, vectors12: torch.Tensor) -> torch.Tensor:
-        """Compute the angular subAEV terms of the center atom given neighbor pairs.
-
-        This correspond to equation (4) in the ANI paper. This function just
-        compute the terms. The sum in the equation is not computed.
-        The input tensor have shape (conformations, atoms, N), where N
-        is the number of neighbor atom pairs within the cutoff radius and
-        output tensor should have shape
-        (conformations, atoms, ``self.angular_sublength()``)
-
-        """
-        vectors12 = vectors12.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
-        distances12 = vectors12.norm(2, dim=-5)
-
-        # 0.95 is multiplied to the cos values to prevent acos from
-        # returning NaN.
-        cos_angles = 0.95 * torch.nn.functional.cosine_similarity(
-            vectors12[0], vectors12[1], dim=-5
-        )
-        angles = torch.acos(cos_angles)
-        fcj12 = self.cosine_cutoff(distances12)
-        factor1 = ((1 + torch.cos(angles - self.ShfZ)) / 2) ** self.Zeta
-        factor2 = torch.exp(
-            -self.EtaA * (distances12.sum(0) / 2 - self.ShfA) ** 2
-        ).unsqueeze(-1)
-        factor2 = factor2.squeeze(4).squeeze(3)
-        ret = 2 * factor1 * factor2 * fcj12.prod(0)
-        # At this point, ret now have shape
-        # (conformations, atoms, N, ?, ?, ?, ?) where ? depend on constants.
-        # We then should flat the last 4 dimensions to view the subAEV as one
-        # dimension vector
-        return ret.flatten(start_dim=-4)
+        return F.softplus(x) - self.log_2
 
 
-from abc import ABC, abstractmethod
-
-
-class RadialBasisFunctionCore(nn.Module, ABC):
-
-    def __init__(self, number_of_radial_basis_functions):
-        super().__init__()
-        self.number_of_radial_basis_functions = number_of_radial_basis_functions
-
-    @abstractmethod
-    def forward(self, nondimensionalized_distances: torch.Tensor) -> torch.Tensor:
-        """
-        Parameters
-        ---------
-        nondimensionalized_distances: torch.Tensor, shape [number_of_pairs, number_of_radial_basis_functions]
-            Nondimensional quantities that depend on pairwise distances.
-
-        Returns
-        ---------
-        torch.Tensor, shape [number_of_pairs, number_of_radial_basis_functions]
-        """
-        pass
-
-
-class GaussianRadialBasisFunctionCore(RadialBasisFunctionCore):
-
-    def forward(self, nondimensionalized_distances: torch.Tensor) -> torch.Tensor:
-        assert nondimensionalized_distances.ndim == 2
-        assert (
-            nondimensionalized_distances.shape[1]
-            == self.number_of_radial_basis_functions
-        )
-
-        return torch.exp(-(nondimensionalized_distances**2))
-
-
+      
 class ExponentialBernsteinPolynomialsCore(RadialBasisFunctionCore):
     """
     Taken from SpookyNet.
@@ -575,421 +311,7 @@ class ExponentialBernsteinPolynomialsCore(RadialBasisFunctionCore):
         )
 
         return torch.exp(x)
-
-
-class RadialBasisFunction(nn.Module, ABC):
-
-    def __init__(
-        self,
-        radial_basis_function: RadialBasisFunctionCore,
-        dtype: torch.dtype,
-        prefactor: float = 1.0,
-        trainable_prefactor: bool = False,
-    ):
-        super().__init__()
-        if trainable_prefactor:
-            self.prefactor = nn.Parameter(torch.tensor([prefactor], dtype=dtype))
-        else:
-            self.register_buffer("prefactor", torch.tensor([prefactor], dtype=dtype))
-        self.radial_basis_function = radial_basis_function
-
-    @abstractmethod
-    def nondimensionalize_distances(self, distances: torch.Tensor) -> torch.Tensor:
-        """
-        Parameters
-        ---------
-        distances: torch.Tensor, shape [number_of_pairs, 1]
-            Distances between atoms in each pair in nanometers.
-
-        Returns
-        ---------
-        torch.Tensor, shape [number_of_pairs, number_of_radial_basis_functions]
-            Nondimensional quantities computed from the distances.
-        """
-        pass
-
-    def forward(self, distances: torch.Tensor) -> torch.Tensor:
-        """
-        The input distances have implicit units of nanometers by the convention of modelforge. This function applies
-        nondimensionalization transformations on the distances and passes the dimensionless result to
-        RadialBasisFunctionCore. There can be several nondimsionalization transformations, corresponding to each element
-        along the number_of_radial_basis_functions axis in the output.
-
-        Parameters
-        ---------
-        distances: torch.Tensor, shape [number_of_pairs, 1]
-            Distances between atoms in each pair in nanometers.
-
-        Returns
-        ---------
-        torch.Tensor, shape [number_of_pairs, number_of_radial_basis_functions]
-            Output of radial basis functions.
-        """
-        nondimensionalized_distances = self.nondimensionalize_distances(distances)
-        return self.prefactor * self.radial_basis_function(nondimensionalized_distances)
-
-
-class GaussianRadialBasisFunctionWithScaling(RadialBasisFunction):
-    """
-    Shifts inputs by a set of centers and scales by a set of scale factors before passing into the standard Gaussian.
-    """
-
-    def __init__(
-        self,
-        number_of_radial_basis_functions: int,
-        max_distance: unit.Quantity,
-        min_distance: unit.Quantity = 0.0 * unit.nanometer,
-        dtype: Optional[torch.dtype] = None,
-        prefactor: float = 1.0,
-        trainable_prefactor: bool = False,
-        trainable_centers_and_scale_factors: bool = False,
-    ):
-        """
-        Parameters
-        ---------
-        number_of_radial_basis_functions: int
-            Number of radial basis functions to use.
-        max_distance: unit.Quantity
-            Maximum distance to consider for symmetry functions.
-        min_distance: unit.Quantity
-            Minimum distance to consider.
-        dtype: torch.dtype, default None
-            Data type for computations.
-        prefactor: float
-            Scalar factor by which to multiply output of radial basis functions.
-        trainable_prefactor: bool, default False
-            Whether prefactor is trainable
-        trainable_centers_and_scale_factors: bool, default False
-            Whether centers and scale factors are trainable.
-        """
-
-        super().__init__(
-            GaussianRadialBasisFunctionCore(number_of_radial_basis_functions),
-            dtype,
-            prefactor,
-            trainable_prefactor,
-        )
-        self.number_of_radial_basis_functions = number_of_radial_basis_functions
-        self.dtype = dtype
-        self.trainable_centers_and_scale_factors = trainable_centers_and_scale_factors
-        # convert to nanometer
-        _max_distance_in_nanometer = max_distance.to(unit.nanometer).m
-        _min_distance_in_nanometer = min_distance.to(unit.nanometer).m
-
-        # calculate radial basis centers
-        radial_basis_centers = self.calculate_radial_basis_centers(
-            self.number_of_radial_basis_functions,
-            _max_distance_in_nanometer,
-            _min_distance_in_nanometer,
-            self.dtype,
-        )
-        # calculate scale factors
-        radial_scale_factor = self.calculate_radial_scale_factor(
-            self.number_of_radial_basis_functions,
-            _max_distance_in_nanometer,
-            _min_distance_in_nanometer,
-            self.dtype,
-        )
-
-        # either add as parameters or register buffers
-        if self.trainable_centers_and_scale_factors:
-            self.radial_basis_centers = radial_basis_centers
-            self.radial_scale_factor = radial_scale_factor
-        else:
-            self.register_buffer("radial_basis_centers", radial_basis_centers)
-            self.register_buffer("radial_scale_factor", radial_scale_factor)
-
-    @staticmethod
-    @abstractmethod
-    def calculate_radial_basis_centers(
-        number_of_radial_basis_functions,
-        _max_distance_in_nanometer,
-        _min_distance_in_nanometer,
-        dtype,
-    ):
-        """
-        NOTE: centers have units of nanometers
-        """
-        pass
-
-    @staticmethod
-    @abstractmethod
-    def calculate_radial_scale_factor(
-        number_of_radial_basis_functions,
-        _max_distance_in_nanometer,
-        _min_distance_in_nanometer,
-        dtype,
-    ):
-        """
-        NOTE: radial scale factors have units of nanometers
-        """
-        pass
-
-    def nondimensionalize_distances(self, distances: torch.Tensor) -> torch.Tensor:
-        # Here, self.radial_scale_factor is interpreted as sqrt(2) times the standard deviation of the Gaussian.
-        diff = distances - self.radial_basis_centers
-        return diff / self.radial_scale_factor
-
-
-class SchnetRadialBasisFunction(GaussianRadialBasisFunctionWithScaling):
-    """
-    Implementation of the radial basis function as used by the SchNet neural network
-    """
-
-    def __init__(
-        self,
-        number_of_radial_basis_functions: int,
-        max_distance: unit.Quantity,
-        min_distance: unit.Quantity = 0.0 * unit.nanometer,
-        dtype: Optional[torch.dtype] = None,
-        trainable_centers_and_scale_factors: bool = False,
-    ):
-        """
-        Parameters
-        ---------
-        number_of_radial_basis_functions: int
-            Number of radial basis functions to use.
-        max_distance: unit.Quantity
-            Maximum distance to consider for symmetry functions.
-        min_distance: unit.Quantity
-            Minimum distance to consider.
-        dtype: torch.dtype, default None
-            Data type for computations.
-        trainable_centers_and_scale_factors: bool, default False
-            Whether centers and scale factors are trainable.
-        """
-        super().__init__(
-            number_of_radial_basis_functions,
-            max_distance,
-            min_distance,
-            dtype,
-            trainable_prefactor=False,
-            trainable_centers_and_scale_factors=trainable_centers_and_scale_factors,
-        )
-
-    @staticmethod
-    def calculate_radial_basis_centers(
-        number_of_radial_basis_functions,
-        _max_distance_in_nanometer,
-        _min_distance_in_nanometer,
-        dtype,
-    ):
-        return torch.linspace(
-            _min_distance_in_nanometer,
-            _max_distance_in_nanometer,
-            number_of_radial_basis_functions,
-            dtype=dtype,
-        )
-
-    @staticmethod
-    def calculate_radial_scale_factor(
-        number_of_radial_basis_functions,
-        _max_distance_in_nanometer,
-        _min_distance_in_nanometer,
-        dtype,
-    ):
-        scale_factors = torch.linspace(
-            _min_distance_in_nanometer,
-            _max_distance_in_nanometer,
-            number_of_radial_basis_functions,
-            dtype=dtype,
-        )
-
-        widths = torch.abs(scale_factors[1] - scale_factors[0]) * torch.ones_like(
-            scale_factors
-        )
-
-        scale_factors = math.sqrt(2) * widths
-        return scale_factors
-
-
-class AniRadialBasisFunction(GaussianRadialBasisFunctionWithScaling):
-    """
-    Implementation of the radial basis function as used by the ANI neural network
-    """
-
-    def __init__(
-        self,
-        number_of_radial_basis_functions,
-        max_distance: unit.Quantity,
-        min_distance: unit.Quantity = 0.0 * unit.nanometer,
-        dtype: torch.dtype = torch.float32,
-        trainable_centers_and_scale_factors: bool = False,
-    ):
-        """
-        Parameters
-        ---------
-        number_of_radial_basis_functions: int
-            Number of radial basis functions to use.
-        max_distance: unit.Quantity
-            Maximum distance to consider for symmetry functions.
-        min_distance: unit.Quantity
-            Minimum distance to consider.
-        dtype: torch.dtype, default torch.float32
-            Data type for computations.
-        trainable_centers_and_scale_factors: bool, default False
-            Whether centers and scale factors are trainable.
-        """
-        super().__init__(
-            number_of_radial_basis_functions,
-            max_distance,
-            min_distance,
-            dtype,
-            prefactor=0.25,
-            trainable_prefactor=False,
-            trainable_centers_and_scale_factors=trainable_centers_and_scale_factors,
-        )
-
-    @staticmethod
-    def calculate_radial_basis_centers(
-        number_of_radial_basis_functions,
-        _max_distance_in_nanometer,
-        _min_distance_in_nanometer,
-        dtype,
-    ):
-        centers = torch.linspace(
-            _min_distance_in_nanometer,
-            _max_distance_in_nanometer,
-            number_of_radial_basis_functions + 1,
-            dtype=dtype,
-        )[:-1]
-        return centers
-
-    @staticmethod
-    def calculate_radial_scale_factor(
-        number_of_radial_basis_functions,
-        _max_distance_in_nanometer,
-        _min_distance_in_nanometer,
-        dtype,
-    ):
-        # ANI uses a predefined scaling factor
-        scale_factors = torch.full(
-            (number_of_radial_basis_functions,), (19.7 * 100) ** -0.5
-        )
-        return scale_factors
-
-
-class PhysNetRadialBasisFunction(RadialBasisFunction):
-    """
-    Implementation of the radial basis function as used by the PysNet neural network
-    """
-
-    def __init__(
-        self,
-        number_of_radial_basis_functions: int,
-        max_distance: unit.Quantity,
-        min_distance: unit.Quantity = 0.0 * unit.nanometer,
-        alpha: unit.Quantity = 1.0 * unit.angstrom,
-        dtype: torch.dtype = torch.float32,
-        trainable_centers_and_scale_factors: bool = False,
-    ):
-        """
-        Parameters
-        ----------
-        number_of_radial_basis_functions : int
-            Number of radial basis functions to use.
-        max_distance : unit.Quantity
-            Maximum distance to consider for symmetry functions.
-        min_distance : unit.Quantity
-            Minimum distance to consider, by default 0.0 * unit.nanometer.
-        alpha: unit.Quantity
-            Scale factor used to nondimensionalize the input to all exp calls. The PhysNet paper implicitly divides by 1
-            Angstrom within exponentials. Note that this is distinct from the unitless scale factors used outside the
-            exp but within the Gaussian.
-        dtype : torch.dtype, optional
-            Data type for computations, by default torch.float32.
-        trainable_centers_and_scale_factors : bool, optional
-            Whether centers and scale factors are trainable, by default False.
-        """
-
-        super().__init__(
-            GaussianRadialBasisFunctionCore(number_of_radial_basis_functions),
-            trainable_prefactor=False,
-            dtype=dtype,
-        )
-        self._min_distance_in_nanometer = min_distance.to(unit.nanometer).m
-        self._alpha_in_nanometer = alpha.to(unit.nanometer).m
-        radial_basis_centers = self.calculate_radial_basis_centers(
-            number_of_radial_basis_functions,
-            max_distance,
-            min_distance,
-            alpha,
-            dtype,
-        )
-        # calculate scale factors
-        radial_scale_factor = self.calculate_radial_scale_factor(
-            number_of_radial_basis_functions,
-            max_distance,
-            min_distance,
-            alpha,
-            dtype,
-        )
-
-        if trainable_centers_and_scale_factors:
-            self.radial_basis_centers = radial_basis_centers
-            self.radial_scale_factor = radial_scale_factor
-        else:
-            self.register_buffer("radial_basis_centers", radial_basis_centers)
-            self.register_buffer("radial_scale_factor", radial_scale_factor)
-
-    @staticmethod
-    def calculate_radial_basis_centers(
-        number_of_radial_basis_functions,
-        max_distance,
-        min_distance,
-        alpha,
-        dtype,
-    ):
-        # initialize centers according to the default values in PhysNet
-        # (see mu_k in Figure 2 caption of https://pubs.acs.org/doi/10.1021/acs.jctc.9b00181)
-        # NOTE: Unlike GaussianRadialBasisFunctionWithScaling, the centers are unitless.
-
-        start_value = torch.exp(
-            torch.scalar_tensor(
-                ((-max_distance + min_distance) / alpha).to("").m,
-                dtype=dtype,
-            )
-        )
-        centers = torch.linspace(
-            start_value, 1, number_of_radial_basis_functions, dtype=dtype
-        )
-        return centers
-
-    @staticmethod
-    def calculate_radial_scale_factor(
-        number_of_radial_basis_functions,
-        max_distance,
-        min_distance,
-        alpha,
-        dtype,
-    ):
-        # initialize according to the default values in PhysNet (see beta_k in Figure 2 caption)
-        # NOTES:
-        # - Unlike GaussianRadialBasisFunctionWithScaling, the scale factors are unitless.
-        # - Each element of radial_square_factor here is the reciprocal of the square root of beta_k in the
-        # Eq. 7 of the PhysNet paper. This way, it is consistent with the sqrt(2) * standard deviation interpretation
-        # of radial_scale_factor in GaussianRadialBasisFunctionWithScaling
-        return torch.full(
-            (number_of_radial_basis_functions,),
-            (2 * (1 - math.exp(((-max_distance + min_distance) / alpha).to("").m)))
-            / number_of_radial_basis_functions,
-            dtype=dtype,
-        )
-
-    def nondimensionalize_distances(self, distances: torch.Tensor) -> torch.Tensor:
-        # Transformation within the outer exp of PhysNet Eq. 7
-        # NOTE: the PhysNet paper implicitly multiplies by 1/Angstrom within the inner exp but distances are in
-        # nanometers, so we multiply by 10/nanometer
-
-        return (
-            torch.exp(
-                (-distances + self._min_distance_in_nanometer)
-                / self._alpha_in_nanometer
-            )
-            - self.radial_basis_centers
-        ) / self.radial_scale_factor
-
-
+      
 class ExponentialBernsteinRadialBasisFunction(RadialBasisFunction):
 
     def __init__(self,
@@ -1073,36 +395,89 @@ def pair_list(
     return pair_indices.to(device)
 
 
+from openff.units import unit
+
+
+def convert_str_to_unit_in_dataset_statistics(
+    dataset_statistic: Dict[str, Dict[str, str]]
+) -> Dict[str, Dict[str, unit.Quantity]]:
+    for key, value in dataset_statistic.items():
+        for sub_key, sub_value in value.items():
+            dataset_statistic[key][sub_key] = unit.Quantity(sub_value)
+    return dataset_statistic
+
+
+def remove_units_from_dataset_statistics(
+    dataset_statistic: Dict[str, Dict[str, unit.Quantity]]
+) -> Dict[str, Dict[str, float]]:
+    from openff.units import unit
+
+    from modelforge.utils.units import chem_context
+
+    dataset_statistic_without_units = {}
+    for key, value in dataset_statistic.items():
+        dataset_statistic_without_units[key] = {}
+        for sub_key, sub_value in value.items():
+            dataset_statistic_without_units[key][sub_key] = (
+                unit.Quantity(sub_value).to(unit.kilojoule_per_mole, "chem").m
+            )
+    return dataset_statistic_without_units
+
+
+def read_dataset_statistics(
+    dataset_statistic_filename: str, remove_units: bool = False
+):
+    import toml
+
+    # read file
+    dataset_statistic = toml.load(dataset_statistic_filename)
+    # convert to float (to kJ/mol and then strip the units)
+    # dataset statistic is a Dict[str, Dict[str, unit.Quantity]], we need to strip the units
+    if remove_units:
+        return remove_units_from_dataset_statistics(dataset_statistic=dataset_statistic)
+    else:
+        return dataset_statistic
+
+
 def scatter_softmax(
     src: torch.Tensor,
     index: torch.Tensor,
     dim: int,
-    dim_size: Optional[int] = None,
-    device: Optional[torch.device] = None,
+    dim_size: int,
 ) -> torch.Tensor:
     """
-    Softmax operation over all values in :attr:`src` tensor that share indices
-    specified in the :attr:`index` tensor along a given axis :attr:`dim`.
+    Computes the softmax operation over values in the `src` tensor that share indices specified in the `index` tensor
+    along a given axis `dim`.
 
-    For one-dimensional tensors, the operation computes
+    For one-dimensional tensors, the operation computes:
 
     .. math::
-        \mathrm{out}_i = {\textrm{softmax}(\mathrm{src})}_i =
-        \frac{\exp(\mathrm{src}_i)}{\sum_j \exp(\mathrm{src}_j)}
+        \text{out}_i = \text{softmax}(\text{src})_i =
+        \frac{\exp(\text{src}_i)}{\sum_j \exp(\text{src}_j)}
 
-    where :math:`\sum_j` is over :math:`j` such that
-    :math:`\mathrm{index}_j = i`.
+    where the summation :math:`\sum_j` is over all :math:`j` such that :math:`\text{index}_j = i`.
 
-    Args:
-        src (Tensor): The source tensor.
-        index (LongTensor): The indices of elements to scatter.
-        dim (int, optional): The axis along which to index.
-            (default: :obj:`-1`)
-        dim_size: The number of classes, i.e. the number of unique indices in `index`.
+    Parameters
+    ----------
+    src : Tensor
+        The source tensor containing the values to which the softmax operation will be applied.
+    index : LongTensor
+        The indices of elements to scatter, determining which elements in `src` are grouped together for the
+        softmax calculation.
+    dim : int
+        The axis along which to index. Default is `-1`.
+    dim_size : int
+        The number of classes, i.e., the number of unique indices in `index`.
 
-    :rtype: :class:`Tensor`
+    Returns
+    -------
+    Tensor
+        A tensor where the softmax operation has been applied along the specified dimension.
 
-    Adapted from: https://github.com/rusty1s/pytorch_scatter/blob/c31915e1c4ceb27b2e7248d21576f685dc45dd01/torch_scatter/composite/softmax.py
+    Notes
+    -----
+    This implementation is adapted from the following source:
+    `pytorch_scatter <https://github.com/rusty1s/pytorch_scatter/blob/c31915e1c4ceb27b2e7248d21576f685dc45dd01/torch_scatter/composite/softmax.py>`_.
     """
     if not torch.is_floating_point(src):
         raise ValueError(
@@ -1120,7 +495,7 @@ def scatter_softmax(
         for (other_dim, other_dim_size) in enumerate(src.shape)
     ]
     index = index.to(torch.int64)
-    zeros = torch.zeros(out_shape, dtype=src.dtype, device=device)
+    zeros = torch.zeros(out_shape, dtype=src.dtype, device=src.device)
     max_value_per_index = zeros.scatter_reduce(
         dim, index, src, "amax", include_self=False
     )
@@ -1129,9 +504,24 @@ def scatter_softmax(
     recentered_scores = src - max_per_src_element
     recentered_scores_exp = recentered_scores.exp()
 
-    sum_per_index = torch.zeros(out_shape, dtype=src.dtype, device=device).scatter_add(
-        dim, index, recentered_scores_exp
-    )
+    sum_per_index = torch.zeros(
+        out_shape, dtype=src.dtype, device=src.device
+    ).scatter_add(dim, index, recentered_scores_exp)
     normalizing_constants = sum_per_index.gather(dim, index)
 
     return recentered_scores_exp.div(normalizing_constants)
+
+
+ACTIVATION_FUNCTIONS = {
+    "ReLU": nn.ReLU,
+    "CeLU": nn.CELU,
+    "GeLU": nn.GELU,
+    "Sigmoid": nn.Sigmoid,
+    "Softmax": nn.Softmax,
+    "ShiftedSoftplus": ShiftedSoftplus,
+    "SiLU": nn.SiLU,
+    "Tanh": nn.Tanh,
+    "LeakyReLU": nn.LeakyReLU,
+    "ELU": nn.ELU,
+    # Add more activation functions as needed
+}

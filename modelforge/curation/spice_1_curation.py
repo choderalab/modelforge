@@ -2,6 +2,7 @@ from modelforge.curation.curation_baseclass import DatasetCuration
 from typing import Optional
 from loguru import logger
 from openff.units import unit
+import numpy as np
 
 
 class SPICE1Curation(DatasetCuration):
@@ -68,6 +69,9 @@ class SPICE1Curation(DatasetCuration):
         self.dataset_md5_checksum = data_inputs[self.version_select][
             "dataset_md5_checksum"
         ]
+        self.dataset_filename = data_inputs[self.version_select]["dataset_filename"]
+        self.dataset_length = data_inputs[self.version_select]["dataset_length"]
+
         logger.debug(
             f"Dataset: {self.version_select} version: {data_inputs[self.version_select]['version']}"
         )
@@ -160,7 +164,7 @@ class SPICE1Curation(DatasetCuration):
             "n_configs": "single_rec",
             "smiles": "single_rec",
             "subset": "single_rec",
-            "total_charge": "single_rec",
+            "total_charge": "series_mol",
             "geometry": "series_atom",
             "dft_total_energy": "series_mol",
             "dft_total_gradient": "series_atom",
@@ -196,7 +200,7 @@ class SPICE1Curation(DatasetCuration):
 
         rdmol = Chem.MolFromSmiles(smiles, sanitize=False)
         total_charge = sum(atom.GetFormalCharge() for atom in rdmol.GetAtoms())
-        return int(total_charge) * unit.elementary_charge
+        return np.array([int(total_charge)]) * unit.elementary_charge
 
     def _process_downloaded(
         self,
@@ -304,9 +308,17 @@ class SPICE1Curation(DatasetCuration):
                             ds_temp[param_out] = temp * param_unit
                         else:
                             ds_temp[param_out] = temp
-                ds_temp["total_charge"] = self._calculate_reference_charge(
-                    ds_temp["smiles"]
+                total_charge = self._calculate_reference_charge(ds_temp["smiles"])
+
+                total_charge_reshaped = (
+                    np.repeat(total_charge.m, conformers_per_record).reshape(
+                        conformers_per_record, -1
+                    )
+                    * total_charge.u
                 )
+
+                ds_temp["total_charge"] = total_charge_reshaped
+
                 ds_temp["dft_total_force"] = -ds_temp["dft_total_gradient"]
 
                 # check if the record contains only the elements we are interested in
@@ -369,15 +381,17 @@ class SPICE1Curation(DatasetCuration):
             raise Exception(
                 "max_records and total_conformers cannot be set at the same time."
             )
-        from modelforge.utils.remote import download_from_zenodo
+        from modelforge.utils.remote import download_from_url
 
         url = self.dataset_download_url
 
         # download the dataset
-        self.name = download_from_zenodo(
+        download_from_url(
             url=url,
             md5_checksum=self.dataset_md5_checksum,
             output_path=self.local_cache_dir,
+            output_filename=self.dataset_filename,
+            length=self.dataset_length,
             force_download=force_download,
         )
 
@@ -394,11 +408,10 @@ class SPICE1Curation(DatasetCuration):
             self.atomic_numbers_to_limit = None
 
         # process the rest of the dataset
-        if self.name is None:
-            raise Exception("Failed to retrieve name of file from zenodo.")
+
         self._process_downloaded(
             self.local_cache_dir,
-            self.name,
+            self.dataset_filename,
             max_records,
             max_conformers_per_record,
             total_conformers,

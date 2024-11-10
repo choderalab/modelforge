@@ -1,3 +1,7 @@
+"""
+Utility functions for dataset handling.
+"""
+
 from __future__ import annotations
 
 import warnings
@@ -117,7 +121,7 @@ def calculate_mean_and_variance(
     log.info("Calculating mean and variance of atomic energies")
     for batch_data in tqdm.tqdm(dataloader):
         E_scaled = (
-            batch_data.metadata.E
+            batch_data.metadata.per_system_energy
             / batch_data.metadata.atomic_subsystem_counts.view(-1, 1)
         )
         online_estimator.update(E_scaled)
@@ -143,9 +147,9 @@ def _calculate_self_energies(torch_dataset, collate_fn) -> Dict[str, unit.Quanti
     # Determine the size of the counts tensor
     num_molecules = torch_dataset.number_of_records
     # Determine up to which Z we detect elements
-    max_atomic_number = 100
+    maximum_atomic_number = 100
     # Initialize the counts tensor
-    counts = torch.zeros(num_molecules, max_atomic_number + 1, dtype=torch.int16)
+    counts = torch.zeros(num_molecules, maximum_atomic_number + 1, dtype=torch.int16)
     # save energies in list
     energy_array = torch.zeros(torch_dataset.number_of_records, dtype=torch.float64)
     # for filling in the element count matrix
@@ -158,9 +162,8 @@ def _calculate_self_energies(torch_dataset, collate_fn) -> Dict[str, unit.Quanti
     for batch in DataLoader(
         torch_dataset, batch_size=batch_size, collate_fn=collate_fn
     ):
-        a = 7
         energies, atomic_numbers, molecules_id = (
-            batch.metadata.E.squeeze(),
+            batch.metadata.per_system_energy.squeeze(),
             batch.nnp_input.atomic_numbers.squeeze(-1).to(torch.int64),
             batch.nnp_input.atomic_subsystem_indices.to(torch.int16),
         )
@@ -324,6 +327,7 @@ class RandomRecordSplittingStrategy(SplittingStrategy):
     Strategy to split a dataset randomly, keeping all conformers in a record in the same split.
 
     """
+
     def __init__(self, seed: int = 42, split: List[float] = [0.8, 0.1, 0.1]):
         """
         This strategy splits a dataset randomly based on provided ratios for training, validation,
@@ -505,7 +509,6 @@ class FirstComeFirstServeSplittingStrategy(SplittingStrategy):
         )
 
         return (train_d, val_d, test_d)
-
 
 
 REGISTERED_SPLITTING_STRATEGIES = {

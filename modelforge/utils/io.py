@@ -1,4 +1,4 @@
-""" Module for handling importing of external libraries.
+""" Module for handling importing external libraries that are optional dependencies.
 
 The general approach here is to wrap an import in a try/except structure, where failure
 to import a module results in a descriptive message being printed to the console, e.g.,
@@ -148,6 +148,18 @@ SqliteDict can be installed via conda:
     
 """
 
+MESSAGES[
+    "wandb"
+] = """
+
+Weights and Biases is a tool for tracking and visualizing machine learning experiments.
+
+Weights and Biases can be installed via conda:
+
+    conda install conda-forge::wandb
+    
+"""
+
 
 def import_(module: str):
     """Import a module or print a descriptive message and raise an ImportError
@@ -225,10 +237,39 @@ def check_import(module: str):
         and an ImportError is raised.
     Examples
     --------
-    >>> from modelforge.utils.package_import import check_import
+    >>> from modelforge.utils.io import check_import
     >>> check_import(module="ray")
     >>> from ray import tune
     """
 
     imported_module = import_(module)
     del imported_module
+
+
+from typing import Union, List
+
+
+def parse_devices(value: str) -> Union[int, List[int]]:
+    """
+    Parse the devices argument which can be either a single integer or a list of
+    integers.
+
+    Parameters
+    ----------
+    value : str
+        The input string representing either a single integer or a list of
+        integers.
+
+    Returns
+    -------
+    Union[int, List[int]]
+        Either a single integer or a list of integers.
+    """
+    import ast
+
+    # if multiple comma delimited values are passed, split them into a list
+    if value.startswith("[") and value.endswith("]"):
+        # Safely evaluate the string as a Python literal (list of ints)
+        return list(ast.literal_eval(value))
+    else:
+        return int(value)

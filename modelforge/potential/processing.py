@@ -1,6 +1,14 @@
+"""
+This module contains utility functions and classes for processing the output of the potential model.
+"""
+
+from dataclasses import dataclass, field
+from typing import Dict, Iterator, Union
+
 import torch
-from typing import Dict
 from openff.units import unit
+
+from modelforge.dataset.utils import _ATOMIC_NUMBER_TO_ELEMENT
 
 
 def load_atomic_self_energies(path: str) -> Dict[str, unit.Quantity]:
@@ -64,11 +72,7 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
 
     def __init__(
         self,
-        per_atom_property_name: str,
-        index_name: str,
-        output_name: str,
         reduction_mode: str = "sum",
-        keep_per_atom_property: bool = False,
     ):
         """
         Initializes the per-atom property readout_operation module.
@@ -88,49 +92,39 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
         """
         super().__init__()
         self.reduction_mode = reduction_mode
-        self.per_atom_property_name = per_atom_property_name
-        self.output_name = output_name
-        self.index_name = index_name
-        self.keep_per_atom_property = keep_per_atom_property
 
-    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    def forward(
+        self, indices: torch.Tensor, per_atom_property: torch.Tensor
+    ) -> torch.Tensor:
         """
         Forward pass of the module.
 
         Parameters
         ----------
         data : Dict[str, torch.Tensor]
-            The input data dictionary containing the per-atom property and index.
+            The input data dictionary containing the per-atom property and
+            index.
 
         Returns
         -------
         Dict[str, torch.Tensor]
             The output data dictionary containing the per-molecule property.
         """
-        indices = data[self.index_name].to(torch.int64)
-        per_atom_property = data[self.per_atom_property_name]
+
         # Perform scatter add operation for atoms belonging to the same molecule
-        property_per_molecule_zeros = torch.zeros(
-            len(indices.unique()),
+        nr_of_molecules = torch.unique(indices).unsqueeze(1)
+        per_system_property = torch.zeros_like(
+            nr_of_molecules,
             dtype=per_atom_property.dtype,
             device=per_atom_property.device,
         )
 
-        property_per_molecule = property_per_molecule_zeros.scatter_reduce(
-            0, indices, per_atom_property, reduce=self.reduction_mode
+        return per_system_property.scatter_reduce(
+            0,
+            indices.long().unsqueeze(1),
+            per_atom_property,
+            reduce=self.reduction_mode,
         )
-        data[self.output_name] = property_per_molecule
-        if self.keep_per_atom_property is False:
-            del data[self.per_atom_property_name]
-
-        return data
-
-
-from dataclasses import dataclass, field
-from typing import Dict, Iterator
-
-from openff.units import unit
-from modelforge.dataset.utils import _ATOMIC_NUMBER_TO_ELEMENT
 
 
 @dataclass
@@ -226,7 +220,9 @@ class ScaleValues(torch.nn.Module):
     """
 
     def __init__(
-        self, mean: float, stddev: float, property: str, output_name: str
+        self,
+        mean: float,
+        stddev: float,
     ) -> None:
         """
         Rescales values using the provided mean and standard deviation.
@@ -246,10 +242,8 @@ class ScaleValues(torch.nn.Module):
         super().__init__()
         self.register_buffer("mean", torch.tensor([mean]))
         self.register_buffer("stddev", torch.tensor([stddev]))
-        self.property = property
-        self.output_name = output_name
 
-    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    def forward(self, data: torch.Tensor) -> torch.Tensor:
         """
         Rescales values using the provided mean and standard deviation.
 
@@ -263,11 +257,178 @@ class ScaleValues(torch.nn.Module):
         Dict[str, torch.Tensor]
             The output data dictionary containing the rescaled values.
         """
-        data[self.output_name] = data[self.property] * self.stddev + self.mean
+        return data * self.stddev + self.mean
+
+
+def default_charge_conservation(
+    per_atom_charge: torch.Tensor,
+    per_system_total_charge: torch.Tensor,
+    mol_indices: torch.Tensor,
+) -> torch.Tensor:
+    """
+    Adjusts partial atomic charges so that the sum of charges in each molecule
+    matches the desired total charge.
+
+    This method is based on equation 14 from the PhysNet paper.
+
+    Parameters
+    ----------
+    partial_charges : torch.Tensor
+        Tensor of partial charges for all atoms in all molecules.
+    per_system_total_charge : torch.Tensor
+        Tensor of desired total charges for each molecule.
+    mol_indices : torch.Tensor
+        Tensor of integers indicating which molecule each atom belongs to.
+
+    Returns
+    -------
+    torch.Tensor
+        Tensor of corrected partial charges.
+    """
+    # Calculate the sum of partial charges for each molecule
+    predicted_per_system_total_charge = torch.zeros_like(
+        per_system_total_charge, dtype=per_atom_charge.dtype
+    ).scatter_add_(
+        0,
+        mol_indices.long().unsqueeze(1),
+        per_atom_charge,
+    )
+
+    # Calculate the number of atoms in each molecule
+    num_atoms_per_system = mol_indices.bincount(
+        minlength=per_system_total_charge.size(0)
+    )
+
+    # Calculate the correction factor for each molecule
+    correction_factors = (
+        per_system_total_charge - predicted_per_system_total_charge
+    ) / num_atoms_per_system.unsqueeze(1)
+
+    # Apply the correction to each atom's charge
+    per_atom_charge_corrected = per_atom_charge + correction_factors[mol_indices]
+
+    return per_atom_charge_corrected
+
+
+class ChargeConservation(torch.nn.Module):
+    def __init__(self, method="default"):
+        """
+        Module to enforce charge conservation on partial atomic charges.
+
+        Parameters
+        ----------
+        method : str, optional, default='default'
+            The method to use for charge conservation. Currently, only 'default'
+            is supported.
+
+        Methods
+        -------
+        forward(data)
+            Applies charge conservation to the partial charges in the provided
+            data dictionary.
+        """
+
+        super().__init__()
+        self.method = method
+        if self.method == "default":
+            self.correct_partial_charges = default_charge_conservation
+        else:
+            raise ValueError(f"Unknown charge conservation method: {self.method}")
+
+    def forward(
+        self,
+        data: Dict[str, torch.Tensor],
+    ):
+        """
+        Apply charge conservation to partial charges in the data dictionary.
+
+        Parameters
+        ----------
+        data : Dict[str, torch.Tensor]
+            Dictionary containing the following keys:
+            - "per_atom_charge":
+                Tensor of partial charges for all atoms in the batch.
+            -  "per_system_total_charge":
+                Tensor of desired total charges for each
+            molecule.
+            - "atomic_subsystem_indices":
+                Tensor indicating which molecule each atom belongs to.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            Updated data dictionary with the key "per_atom_charge_corrected"
+            added, containing the corrected per-atom charges.
+        """
+        data["per_atom_charge_uncorrected"] = data["per_atom_charge"]
+        data["per_atom_charge"] = self.correct_partial_charges(
+            data["per_atom_charge"],
+            data["per_system_total_charge"],
+            data["atomic_subsystem_indices"],
+        )
         return data
 
 
-from typing import Union
+class PerAtomEnergy(torch.nn.Module):
+
+    def __init__(
+        self,
+        per_atom_energy: Dict[str, bool],
+        dataset_statistics: Dict[str, float],
+    ):
+        """
+        Process per atom energies. Depending on what has been requested in the per_atom_energy dictionary, the per atom energies are normalized and/or reduced to per system energies.
+        Parameters
+        ----------
+        per_atom_energy : Dict[str, bool]
+            A dictionary containing the per atom energy processing options.
+        dataset_statistics : Dict[str, float]
+
+        """
+        super().__init__()
+
+        if per_atom_energy.get("normalize"):
+            scale = ScaleValues(
+                dataset_statistics["per_atom_energy_mean"],
+                dataset_statistics["per_atom_energy_stddev"],
+            )
+        else:
+            scale = ScaleValues(0.0, 1.0)
+
+        self.scale = scale
+
+        if per_atom_energy.get("from_atom_to_system_reduction"):
+            reduction = FromAtomToMoleculeReduction()
+
+        self.reduction = reduction
+
+    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        per_atom_property, indices = (
+            data["per_atom_energy"],
+            data["atomic_subsystem_indices"],
+        )
+        scaled_values = self.scale(per_atom_property)
+        per_system_energy = self.reduction(indices, scaled_values)
+
+        data["per_system_energy"] = per_system_energy
+        data["per_atom_energy"] = data["per_atom_energy"].detach()
+
+        return data
+
+
+class PerAtomCharge(torch.nn.Module):
+
+    def __init__(self, per_atom_charge: Dict[str, bool]):
+        super().__init__()
+        from torch import nn
+
+        if per_atom_charge["conserve"] == True:
+            self.conserve = ChargeConservation(per_atom_charge["conserve_strategy"])
+        else:
+            self.conserve = nn.Identity()
+
+    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        return self.conserve(data)
 
 
 class CalculateAtomicSelfEnergy(torch.nn.Module):
@@ -298,7 +459,7 @@ class CalculateAtomicSelfEnergy(torch.nn.Module):
             }
         self.atomic_self_energies = AtomicSelfEnergies(atomic_self_energies)
 
-    def forward(self, data: Dict[str, torch.Tensor]) -> torch.Tensor:
+    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
         Calculates the molecular self energy.
 
@@ -329,4 +490,88 @@ class CalculateAtomicSelfEnergy(torch.nn.Module):
         ase_tensor = ase_tensor_for_indexing[atomic_numbers]
 
         data["ase_tensor"] = ase_tensor
+        return data
+
+
+class CoulombPotential(torch.nn.Module):
+    def __init__(self, cutoff: float):
+        """
+        Computes the long-range electrostatic energy for a molecular system
+        based on predicted partial charges and pairwise distances between atoms.
+
+        The implementation follows the methodology described in the PhysNet
+        paper, using a cutoff function to handle long-range interactions.
+
+        Parameters
+        ----------
+        cutoff : float
+            The cutoff distance beyond which the interactions are not
+            considered in nanometer.
+
+        Attributes
+        ----------
+        strategy : str
+            The strategy for computing long-range interactions.
+        cutoff_function : nn.Module
+            The cutoff function applied to the pairwise distances.
+        """
+        super().__init__()
+        from .representation import PhysNetAttenuationFunction
+
+        self.cutoff_function = PhysNetAttenuationFunction(cutoff)
+
+    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        """
+        Forward pass to compute the long-range electrostatic energy.
+
+        This function calculates the long-range electrostatic energy by considering
+        pairwise Coulomb interactions between atoms, applying a cutoff function to
+        handle long-range interactions.
+
+        Parameters
+        ----------
+        data : Dict[str, torch.Tensor]
+            Input data containing the following keys:
+            - 'per_atom_charge': Tensor of shape (N,) with partial charges for each atom.
+            - 'atomic_subsystem_indices': Tensor indicating the molecule each atom belongs to.
+            - 'pairwise_properties': Object containing pairwise distances and indices.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            The input data dictionary with an additional key 'long_range_electrostatic_energy'
+            containing the computed long-range electrostatic energy.
+        """
+        mol_indices = data["atomic_subsystem_indices"]
+        idx_i, idx_j = data["pair_indices"]
+
+        # only unique paris
+        unique_pairs_mask = idx_i < idx_j
+        idx_i = idx_i[unique_pairs_mask]
+        idx_j = idx_j[unique_pairs_mask]
+
+        # mask pairwise properties
+        pairwise_distances = data["d_ij"][unique_pairs_mask]
+        per_atom_charge = data["per_atom_charge"]
+
+        # Initialize the long-range electrostatic energy
+        electrostatic_energy = torch.zeros_like(data["per_system_energy"])
+
+        # Apply the cutoff function to pairwise distances
+        phi_2r = self.cutoff_function(2 * pairwise_distances)
+        chi_r = phi_2r * (1 / torch.sqrt(pairwise_distances**2 + 1)) + (
+            1 - phi_2r
+        ) * (1 / pairwise_distances)
+
+        # Compute the Coulomb interaction term
+        coulomb_interactions = (per_atom_charge[idx_i] * per_atom_charge[idx_j]) * chi_r
+
+        # Sum over all interactions for each molecule
+        data["electrostatic_energy"] = (
+            electrostatic_energy.scatter_add_(
+                0, mol_indices.long().unsqueeze(1), coulomb_interactions
+            )
+            * 138.96
+        )  # in kj/mol nm
+
         return data

@@ -1,24 +1,153 @@
 import numpy as np
 import torch
 import pytest
+import platform
+import os
 
+ON_MACOS = platform.system() == "Darwin"
+IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 
 
 @pytest.fixture(scope="session")
 def prep_temp_dir(tmp_path_factory):
-    fn = tmp_path_factory.mktemp("utils_test")
+    fn = tmp_path_factory.mktemp("test_utils_temp")
     return fn
 
 
+@pytest.mark.parametrize(
+    "partial_point_charges, atomic_subsystem_indices, total_charge",
+    [
+        (
+            torch.zeros(6, 1),
+            torch.tensor([0, 0, 1, 1, 1, 1], dtype=torch.int64),
+            torch.tensor([0.0, 1.0]).unsqueeze(1),
+        ),
+        (
+            torch.zeros(6, 1),
+            torch.tensor([0, 0, 1, 1, 1, 1], dtype=torch.int64),
+            torch.tensor([-1.0, 2.0]).unsqueeze(1),
+        ),
+        (
+            torch.rand(6, 1),
+            torch.tensor([0, 0, 1, 1, 1, 1], dtype=torch.int64),
+            torch.tensor([-1.0, 2.0]).unsqueeze(1),
+        ),
+    ],
+)
+def test_default_charge_conservation(
+    partial_point_charges: torch.Tensor,
+    atomic_subsystem_indices: torch.Tensor,
+    total_charge: torch.Tensor,
+):
+    """
+    Test the default_charge_conservation function with various test cases.
+    """
+    from modelforge.potential.processing import default_charge_conservation
+
+    # test charge equilibration
+    # ------------------------- #
+    charges = default_charge_conservation(
+        partial_point_charges,
+        total_charge,
+        atomic_subsystem_indices,
+    )
+
+    # Calculate the total charge per molecule after correction
+    predicted_total_charge = torch.zeros_like(total_charge).scatter_add_(
+        0, atomic_subsystem_indices.unsqueeze(1), charges
+    )
+
+    # Assert that the predicted total charges match the desired total charges
+    assert torch.allclose(predicted_total_charge, total_charge, atol=1e-6)
+
+
+@pytest.mark.skipif(
+    ON_MACOS,
+    reason="Skipt Test on MacOS CI runners as it relies on spawning multiple threads. ",
+)
+def test_method_locking(tmp_path):
+    """
+    Test the lock_with_attribute decorator to ensure that it correctly serializes access
+    to a critical section across multiple processes.
+    """
+    import multiprocessing
+    from modelforge.utils.misc import lock_with_attribute
+    import time
+
+    # Define a class with a method decorated by lock_with_attribute
+    class TestClass:
+        def __init__(self, lock_file):
+            self.method_lock = lock_file
+
+        @lock_with_attribute("method_lock")
+        def critical_section(self, shared_list):
+            process_name = multiprocessing.current_process().name
+            # Record entry into the critical section
+            shared_list.append(f"{process_name} entered")
+            # Simulate work
+            time.sleep(1)
+            # Record exit from the critical section
+            shared_list.append(f"{process_name} exited")
+
+    # Worker function to be executed by each process
+    def worker(lock_file, shared_list):
+        test_obj = TestClass(lock_file)
+        test_obj.critical_section(shared_list)
+
+    # Create a Manager to handle shared state across processes
+    manager = multiprocessing.Manager()
+    shared_list = manager.list()
+
+    # Path to the lock file within the pytest-provided temporary directory
+    lock_file_path = tmp_path / "test.lock"
+
+    # List to hold process objects
+    processes = []
+
+    # Create and start multiple processes
+    processes = []
+    for i in range(4):
+        p = multiprocessing.Process(
+            target=worker,
+            args=(str(lock_file_path), shared_list),
+            name=f"Process-{i+1}",
+        )
+        p.start()
+        processes.append(p)
+
+    # Wait for all processes to complete
+    for p in processes:
+        p.join()
+
+    # Verify that only one process was in the critical section at any given time
+    entered = set()
+    for entry in shared_list:
+        if "entered" in entry:
+            process = entry.split()[0]
+            # Ensure no other process is in the critical section
+            assert (
+                len(entered) == 0
+            ), f"{process} entered while {entered} was in the critical section"
+            entered.add(process)
+        elif "exited" in entry:
+            process = entry.split()[0]
+            # Ensure the process that exits was the one that entered
+            assert process in entered, f"{process} exited without entering"
+            entered.remove(process)
+
+    # Ensure all processes have exited the critical section
+    assert len(entered) == 0, f"Processes left in critical section: {entered}"
+
+
 def test_dense_layer():
-    from modelforge.potential.utils import Dense
+    from modelforge.potential.utils import DenseWithCustomDist
     import torch
 
     # random 2x3 torch.Tensor
     x = torch.randn(2, 3)
 
     # create a Dense layer with 3 input features and 2 output features
-    dense_layer = Dense(in_features=3, out_features=2)
+    dense_layer = DenseWithCustomDist(in_features=3, out_features=2)
     out = dense_layer(x)
 
     # create a Dense layer with 3 input features and 2 output features
@@ -27,7 +156,7 @@ def test_dense_layer():
         [torch.nn.init.zeros_, torch.nn.init.ones_],
     ):
         # test the weight initialization and correct weight multiplication
-        dense_layer = Dense(
+        dense_layer = DenseWithCustomDist(
             in_features=3, out_features=2, bias=False, weight_init=weight_init_fn
         )
 
@@ -36,7 +165,7 @@ def test_dense_layer():
         manuel_out = dense_layer.weight @ x.T
         assert torch.allclose(out, manuel_out.T)
         # test bias
-        dense_layer = Dense(
+        dense_layer = DenseWithCustomDist(
             in_features=3,
             out_features=2,
             bias=True,
@@ -78,36 +207,52 @@ def test_cosine_cutoff():
     """
     Test the cosine cutoff implementation.
     """
-    from modelforge.potential.utils import CosineCutoff
+    from modelforge.potential import CosineAttenuationFunction
+
     # Define inputs
     x = torch.Tensor([1, 2, 3])
     y = torch.Tensor([4, 5, 6])
     from openff.units import unit
 
-    cutoff = 6
-
     # Calculate expected output
+    cutoff = 6
     d_ij = torch.linalg.norm(x - y)
     expected_output = 0.5 * (torch.cos(d_ij * np.pi / cutoff) + 1.0)
-    cutoff = 0.6 * unit.nanometer
 
     # Calculate actual output
-    cutoff_module = CosineCutoff(cutoff)
+    cutoff = 0.6
+    cutoff_module = CosineAttenuationFunction(cutoff)
     actual_output = cutoff_module(d_ij / 10)
 
-    # Check if the results are equal
-    # NOTE: Cutoff function doesn't care about the units as long as they are the same
+    # Check if the results are equal NOTE: Cutoff function doesn't care about
+    # the units as long as they are the same
     assert np.isclose(actual_output, expected_output)
 
-    # input in angstrom
-    cutoff = 2.0 * unit.angstrom
-    expected_output = torch.tensor([0.5, 0.0, 0.0])
-    cosine_cutoff_module = CosineCutoff(cutoff)
 
 def test_cosine_cutoff_module():
-    # Test CosineCutoff module
-    from modelforge.potential.utils import CosineCutoff
+    # Test CosineAttenuationFunction module
+    from modelforge.potential import CosineAttenuationFunction
     from openff.units import unit
+
+    # test the cutoff on this distance vector
+    d_ij_angstrom = torch.tensor([1.0, 2.0, 3.0]).unsqueeze(1)
+    # the expected outcome is that entry 1 and 2 become zero
+    # and entry 0 becomes 0.5 (since the cutoff is 2.0 angstrom)
+    # input in angstrom
+    cutoff = 2.0
+
+    expected_output = torch.tensor([0.5, 0.0, 0.0]).unsqueeze(1)
+    cosine_cutoff_module = CosineAttenuationFunction(cutoff / 10)
+
+    output = cosine_cutoff_module(d_ij_angstrom / 10)  # input is in nanometer
+
+    assert torch.allclose(output, expected_output, rtol=1e-3)
+
+
+def test_PhysNetAttenuationFunction():
+    from modelforge.potential.representation import PhysNetAttenuationFunction
+    from openff.units import unit
+    import torch
 
     # test the cutoff on this distance vector (NOTE: it is in angstrom)
     d_ij_angstrom = torch.tensor([1.0, 2.0, 3.0]).unsqueeze(1)
@@ -116,304 +261,12 @@ def test_cosine_cutoff_module():
     # input in angstrom
     cutoff = 2.0 * unit.angstrom
 
-
     expected_output = torch.tensor([0.5, 0.0, 0.0]).unsqueeze(1)
-    cosine_cutoff_module = CosineCutoff(cutoff)
+    physnet_cutoff_module = PhysNetAttenuationFunction(cutoff.to(unit.nanometer).m)
 
-    output = cosine_cutoff_module(d_ij_angstrom / 10)  # input is in nanometer
+    output = physnet_cutoff_module(d_ij_angstrom / 10)  # input is in nanometer
 
     assert torch.allclose(output, expected_output, rtol=1e-3)
-
-
-def test_radial_symmetry_function_implementation():
-    """
-    Test the Radial Symmetry function implementation.
-    """
-    import torch
-    from openff.units import unit
-    import numpy as np
-    from modelforge.potential.utils import CosineCutoff, GaussianRadialBasisFunctionWithScaling
-
-    cutoff_module = CosineCutoff(cutoff=unit.Quantity(5.0, unit.angstrom))
-
-    class RadialSymmetryFunctionTest(GaussianRadialBasisFunctionWithScaling):
-        @staticmethod
-        def calculate_radial_basis_centers(
-                number_of_radial_basis_functions,
-                _max_distance_in_nanometer,
-                _min_distance_in_nanometer,
-                dtype,
-        ):
-            centers = torch.linspace(
-                _min_distance_in_nanometer,
-                _max_distance_in_nanometer,
-                number_of_radial_basis_functions,
-                dtype=dtype,
-            )
-            return centers
-
-        @staticmethod
-        def calculate_radial_scale_factor(
-                number_of_radial_basis_functions,
-                _max_distance_in_nanometer,
-                _min_distance_in_nanometer,
-                dtype
-        ):
-            scale_factors = torch.full(
-                (number_of_radial_basis_functions,),
-                (_min_distance_in_nanometer - _max_distance_in_nanometer)
-                / number_of_radial_basis_functions,
-            )
-            scale_factors = (scale_factors * -15_000) ** -0.5
-            return scale_factors
-
-
-    RSF = RadialSymmetryFunctionTest(
-        number_of_radial_basis_functions=18,
-        max_distance=unit.Quantity(5.0, unit.angstrom),
-    )
-    print(f"{RSF.radial_basis_centers=}")
-    print(f"{RSF.radial_scale_factor=}")
-    # test a single distance
-    d_ij = torch.tensor([[0.2]])
-    radial_expension = RSF(d_ij)
-
-    expected_output = np.array(
-        [
-            5.7777413e-08,
-            5.4214674e-06,
-            2.4740110e-04,
-            5.4905377e-03,
-            5.9259072e-02,
-            3.1104434e-01,
-            7.9399312e-01,
-            9.8568588e-01,
-            5.9509689e-01,
-            1.7472850e-01,
-            2.4949821e-02,
-            1.7326004e-03,
-            5.8513560e-05,
-            9.6104134e-07,
-            7.6763511e-09,
-            2.9819147e-11,
-            5.6333109e-14,
-            5.1755549e-17,
-        ],
-        dtype=np.float32,
-    )
-
-    assert np.allclose(radial_expension.numpy().flatten(), expected_output, rtol=1e-3)
-
-    # test multiple distances with cutoff
-    d_ij = torch.tensor([[r] for r in np.linspace(0, 0.5, 10)])
-    radial_expension = RSF(d_ij) * cutoff_module(d_ij)
-
-    expected_output = np.array(
-        [
-            [
-                1.00000000e00,
-                6.97370611e-01,
-                2.36512753e-01,
-                3.90097089e-02,
-                3.12909145e-03,
-                1.22064879e-04,
-                2.31574554e-06,
-                2.13657562e-08,
-                9.58678574e-11,
-                2.09196141e-13,
-                2.22005077e-16,
-                1.14577532e-19,
-                2.87583090e-23,
-                3.51038337e-27,
-                2.08388175e-31,
-                6.01615362e-36,
-                8.44679753e-41,
-                5.76756600e-46,
-            ],
-            [
-                2.68038176e-01,
-                7.29490887e-01,
-                9.65540222e-01,
-                6.21510012e-01,
-                1.94559846e-01,
-                2.96200218e-02,
-                2.19303227e-03,
-                7.89645189e-05,
-                1.38275834e-06,
-                1.17757010e-08,
-                4.87703136e-11,
-                9.82316969e-14,
-                9.62221521e-17,
-                4.58380155e-20,
-                1.06194951e-23,
-                1.19649050e-27,
-                6.55604552e-32,
-                1.74703654e-36,
-            ],
-            [
-                5.15165267e-03,
-                5.47178933e-02,
-                2.82643788e-01,
-                7.10030194e-01,
-                8.67443988e-01,
-                5.15386799e-01,
-                1.48919812e-01,
-                2.09266151e-02,
-                1.43012111e-03,
-                4.75305832e-05,
-                7.68248035e-07,
-                6.03888967e-09,
-                2.30855409e-11,
-                4.29190731e-14,
-                3.88050222e-17,
-                1.70629005e-20,
-                3.64875837e-24,
-                3.79458837e-28,
-            ],
-            [
-                7.05512776e-06,
-                2.92447055e-04,
-                5.89544925e-03,
-                5.77981439e-02,
-                2.75573882e-01,
-                6.38983424e-01,
-                7.20556963e-01,
-                3.95161266e-01,
-                1.05392022e-01,
-                1.36699807e-02,
-                8.62294776e-04,
-                2.64527563e-05,
-                3.94651201e-07,
-                2.86340809e-09,
-                1.01036987e-11,
-                1.73382336e-14,
-                1.44696036e-17,
-                5.87267193e-21,
-            ],
-            [
-                6.79841545e-10,
-                1.09978970e-07,
-                8.65244557e-06,
-                3.31051436e-04,
-                6.15997825e-03,
-                5.57430086e-02,
-                2.45317579e-01,
-                5.25042257e-01,
-                5.46496226e-01,
-                2.76635027e-01,
-                6.81011682e-02,
-                8.15322217e-03,
-                4.74713206e-04,
-                1.34419004e-05,
-                1.85104660e-07,
-                1.23965647e-09,
-                4.03750130e-12,
-                6.39515861e-15,
-            ],
-            [
-                4.50275565e-15,
-                2.84275808e-12,
-                8.72828077e-10,
-                1.30330158e-07,
-                9.46429271e-06,
-                3.34240505e-04,
-                5.74059467e-03,
-                4.79492711e-02,
-                1.94775558e-01,
-                3.84781601e-01,
-                3.69675978e-01,
-                1.72725113e-01,
-                3.92479574e-02,
-                4.33716512e-03,
-                2.33089213e-04,
-                6.09208166e-06,
-                7.74348707e-08,
-                4.78668403e-10,
-            ],
-            [
-                1.95755731e-21,
-                4.82320349e-18,
-                5.77941614e-15,
-                3.36790471e-12,
-                9.54470642e-10,
-                1.31550705e-07,
-                8.81760261e-06,
-                2.87432047e-04,
-                4.55666577e-03,
-                3.51307040e-02,
-                1.31720486e-01,
-                2.40185684e-01,
-                2.12994423e-01,
-                9.18579329e-02,
-                1.92660386e-02,
-                1.96514909e-03,
-                9.74823310e-05,
-                2.35170925e-06,
-            ],
-            [
-                5.02685557e-29,
-                4.83367095e-25,
-                2.26039866e-21,
-                5.14067897e-18,
-                5.68568509e-15,
-                3.05825078e-12,
-                7.99999982e-10,
-                1.01773376e-07,
-                6.29659424e-06,
-                1.89454631e-04,
-                2.77224261e-03,
-                1.97280685e-02,
-                6.82755520e-02,
-                1.14914067e-01,
-                9.40607618e-02,
-                3.74430407e-02,
-                7.24871542e-03,
-                6.82461743e-04,
-            ],
-            [
-                5.43174696e-38,
-                2.03835481e-33,
-                3.72003749e-29,
-                3.30173621e-25,
-                1.42516199e-21,
-                2.99167362e-18,
-                3.05415190e-15,
-                1.51633227e-12,
-                3.66121676e-10,
-                4.29917177e-08,
-                2.45510656e-06,
-                6.81841165e-05,
-                9.20923191e-04,
-                6.04910223e-03,
-                1.93234986e-02,
-                3.00198084e-02,
-                2.26807491e-02,
-                8.33362963e-03,
-            ],
-            [
-                0.00000000e00,
-                0.00000000e00,
-                0.00000000e00,
-                0.00000000e00,
-                0.00000000e00,
-                0.00000000e00,
-                0.00000000e00,
-                0.00000000e00,
-                0.00000000e00,
-                0.00000000e00,
-                0.00000000e00,
-                0.00000000e00,
-                0.00000000e00,
-                0.00000000e00,
-                0.00000000e00,
-                0.00000000e00,
-                0.00000000e00,
-                0.00000000e00,
-            ],
-        ]
-    )
-
-    assert np.allclose(radial_expension.numpy(), expected_output, rtol=1e-3)
 
 
 def test_scatter_add():
@@ -448,55 +301,28 @@ def test_scatter_softmax():
     assert torch.allclose(util_out, correct_out)
 
 
-def test_embedding():
-    """
-    Test the Embedding module.
-    """
-    from modelforge.potential.utils import Embedding
-
-    max_Z = 100
-    embedding_dim = 7
-
-    # Create Embedding instance
-    embedding = Embedding(max_Z, embedding_dim)
-
-    # Test embedding_dim property
-    assert embedding.embedding_dim == embedding_dim
-
-    # Test forward pass
-    input_tensor = torch.randint(0, 99, (5,))
-
-    output = embedding(input_tensor)
-    assert output.shape == (5, embedding_dim)
-
-
 def test_energy_readout():
     from modelforge.potential.processing import FromAtomToMoleculeReduction
     import torch
 
-    # the EnergyReadout module performs a linear pass to reduce the nr_of_atom_basis to 1
-    # and then performs a scatter add operation to return a tensor with size [nr_of_molecules,]
+    # the EnergyReadout module performs a linear pass to reduce the
+    # nr_of_atom_basis to 1 and then performs a scatter add operation to return
+    # a tensor with size [nr_of_molecules,]
 
     # the input for the EnergyReadout module is vector (E_i) that will be scatter_added, and
     # a second tensor supplying the indixes for the summation
 
     r = {
-        "per_atom_energy": torch.tensor([3, 3, 1, 1, 1, 1, 1, 1], dtype=torch.float32),
+        "per_atom_energy": torch.tensor(
+            [3, 3, 1, 1, 1, 1, 1, 1], dtype=torch.float32
+        ).unsqueeze(1),
         "atomic_subsystem_index": torch.tensor([0, 0, 1, 1, 1, 1, 1, 1]),
     }
-    energy_readout = FromAtomToMoleculeReduction(
-        per_atom_property_name="per_atom_energy",
-        index_name="atomic_subsystem_index",
-        output_name="per_molecule_energy",
-    )
-    E = energy_readout(r)["per_molecule_energy"]
+    energy_readout = FromAtomToMoleculeReduction()
+    E = energy_readout(r["atomic_subsystem_index"], r["per_atom_energy"])
 
     # check that output has length of total number of molecules in batch
-    assert E.size() == torch.Size(
-        [
-            2,
-        ]
-    )
+    assert E.size() == torch.Size([2, 1])
     # check that the correct values were summed
     assert torch.isclose(E[0], torch.tensor([6.0], dtype=torch.float32))
     assert torch.isclose(E[1], torch.tensor([6.0], dtype=torch.float32))
@@ -526,6 +352,10 @@ def test_welford():
         assert np.isclose(online_estimator.stddev / target_stddev, 1.0, rtol=1e-1)
 
 
+@pytest.mark.skipif(
+    ON_MACOS and IN_GITHUB_ACTIONS,
+    reason="Test is flaky on the MacOS CI runners as it relies on spawning multiple threads. ",
+)
 def test_filelocking(prep_temp_dir):
     from modelforge.utils.misc import lock_file, unlock_file, check_file_lock
 
@@ -548,7 +378,7 @@ def test_filelocking(prep_temp_dir):
                 if not check_file_lock(f):
                     lock_file(f)
                     self.did_I_lock_it = True
-                    time.sleep(2)
+                    time.sleep(3)
                     unlock_file(f)
 
                 else:
@@ -557,7 +387,8 @@ def test_filelocking(prep_temp_dir):
     # the first thread should lock the file and set "did_I_lock_it" to True
     thread1 = thread("lock_file_here", "Thread-1", filepath)
     # the second thread should check if locked, and set "did_I_lock_it" to False
-    # the second thread should also set "status" to True, because it waits for the first thread to unlock the file
+    # the second thread should also set "status" to True, because it waits
+    # for the first thread to unlock the file
     thread2 = thread("encounter_locked_file", "Thread-2", filepath)
 
     thread1.start()

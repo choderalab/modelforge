@@ -4,4 +4,6 @@ v_0:
   version: 0
   dataset_download_url: https://zenodo.org/records/10108942/files/ANI-2x-wB97X-631Gd.tar.gz
   dataset_md5_checksum: cb1d9effb3d07fc1cc6ced7cd0b1e1f2
+  dataset_length: 3705675413
+  dataset_filename: ANI-2x-wB97X-631Gd.tar.gz
 

@@ -1,3 +1,7 @@
+"""
+Data class for handling ANI2x data.
+"""
+
 from typing import List
 
 from .dataset import HDF5Dataset
@@ -44,7 +48,10 @@ class ANI2xDataset(HDF5Dataset):
     from modelforge.utils import PropertyNames
 
     _property_names = PropertyNames(
-        atomic_numbers="atomic_numbers", positions="geometry", E="energies", F="forces"
+        atomic_numbers="atomic_numbers",
+        positions="geometry",
+        E="energies",
+        F="forces",
     )
 
     _available_properties = [
@@ -53,6 +60,14 @@ class ANI2xDataset(HDF5Dataset):
         "energies",
         "forces",
     ]  # All properties within the datafile, aside from SMILES/inchi.
+
+    # Mapping of available properties to the associated PropertyNames
+    _available_properties_association = {
+        "geometry": "positions",
+        "atomic_numbers": "atomic_numbers",
+        "energies": "E",
+        "forces": "F",
+    }
 
     def __init__(
         self,

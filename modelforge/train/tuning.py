@@ -1,13 +1,14 @@
+"""
+This module contains functions and classes for hyperparameter tuning and distributed training using Ray Tune.
+"""
+
 import torch
 
-from modelforge.utils.io import import_
+from ray import air, tune
 
-air = import_("ray").air
-tune = import_("ray").tune
-# from ray import air, tune
 
-ASHAScheduler = import_("ray").tune.scheduleres.ASHAScheduler
-# from ray.tune.schedulers import ASHAScheduler
+from typing import Type
+from ray.tune.schedulers import ASHAScheduler
 
 
 def tune_model(
@@ -68,7 +69,16 @@ def tune_model(
 
 
 class RayTuner:
-    def __init__(self, model) -> None:
+
+    def __init__(self, model: Type[torch.nn.Module]) -> None:
+        """
+        Initializes the RayTuner with the given model.
+
+        Parameters
+        ----------
+        model : torch.nn.Module
+            The model to be tuned and trained using Ray.
+        """
         self.model = model
 
     def train_func(self):
@@ -90,6 +100,7 @@ class RayTuner:
         )
         import lightning as pl
 
+        # Configure PyTorch Lightning trainer with Ray DDP strategy
         trainer = pl.Trainer(
             devices="auto",
             accelerator="auto",
@@ -99,6 +110,7 @@ class RayTuner:
             enable_progress_bar=False,
         )
         trainer = prepare_trainer(trainer)
+        # Fit the model using the trainer
         trainer.fit(self.model, self.train_dataloader, self.val_dataloader)
 
     def get_ray_trainer(self, number_of_workers: int = 2, use_gpu: bool = False):
@@ -117,18 +129,21 @@ class RayTuner:
 
         Returns
         -------
-        Ray Trainer
+        TorchTrainer
             The configured Ray Trainer for distributed training.
         """
 
         from ray.train import CheckpointConfig, RunConfig, ScalingConfig
+        from ray.train.torch import TorchTrainer
 
+        # Configure scaling for Ray Trainer
         scaling_config = ScalingConfig(
             num_workers=number_of_workers,
             use_gpu=use_gpu,
             resources_per_worker={"CPU": 1, "GPU": 1} if use_gpu else {"CPU": 1},
         )
 
+        # Configure run settings for Ray Trainer
         run_config = RunConfig(
             checkpoint_config=CheckpointConfig(
                 num_to_keep=2,
@@ -136,9 +151,7 @@ class RayTuner:
                 checkpoint_score_order="min",
             ),
         )
-        from ray.train.torch import TorchTrainer
-
-        # Define a TorchTrainer without hyper-parameters for Tuner
+        # Define and return the TorchTrainer
         ray_trainer = TorchTrainer(
             self.train_func,
             scaling_config=scaling_config,
@@ -155,6 +168,7 @@ class RayTuner:
         number_of_samples: int = 10,
         number_of_ray_workers: int = 2,
         train_on_gpu: bool = False,
+        metric: str = "val/per_system_energy/rmse",
     ):
         """
         Performs hyperparameter tuning using Ray Tune.
@@ -174,39 +188,43 @@ class RayTuner:
             The number of samples (trial runs) to perform, by default 10.
         number_of_ray_workers : int, optional
             The number of Ray workers to use for distributed training, by default 2.
-        use_gpu : bool, optional
+        train_on_gpu : bool, optional
             Whether to use GPUs for training, by default False.
+        metric : str, optional
+            The metric to use for evaluation and early stopping, by default "val/per_system_energy/rmse
 
         Returns
         -------
-        Tune experiment analysis object
-            The result of the hyperparameter tuning session, containing performance metrics and the best hyperparameters found.
+        ExperimentAnalysis
+            The result of the hyperparameter tuning session, containing performance metrics
+            and the best hyperparameters found.
         """
-        from modelforge.utils.io import import_
 
-        tune = import_("ray").tune
-        # from ray import tune
+        from ray import tune
 
-        ASHAScheduler = import_("ray").tune.schedulers.ASHAScheduler
-        # from ray.tune.schedulers import ASHAScheduler
+        from ray.tune.schedulers import ASHAScheduler
 
         self.train_dataloader = train_dataloader
         self.val_dataloader = val_dataloader
 
+        # Initialize Ray Trainer
         ray_trainer = self.get_ray_trainer(
             number_of_workers=number_of_ray_workers, use_gpu=train_on_gpu
         )
+        # Configure ASHA scheduler for early stopping
         scheduler = ASHAScheduler(
             max_t=number_of_epochs, grace_period=1, reduction_factor=2
         )
 
+        # Define tuning configuration
         tune_config = tune.TuneConfig(
-            metric="val/energy/rmse",
+            metric=metric,
             mode="min",
             scheduler=scheduler,
             num_samples=number_of_samples,
         )
 
+        # Initialize and run the tuner
         tuner = tune.Tuner(
             ray_trainer,
             param_space={"train_loop_config": self.model.config_prior()},

@@ -127,6 +127,15 @@ def test_dict_to_hdf5(prep_temp_dir):
             id_key="name",
         )
 
+    # test.hdf5 was generated in test_dict_to_hdf5
+    files = list_files(str(prep_temp_dir), ".hdf5")
+
+    # check to see if test.hdf5 is in the files
+    assert "test.hdf5" in files
+
+    with pytest.raises(Exception):
+        list_files("/path/that/should/not/exist/", ".hdf5")
+
 
 def test_series_dict_to_hdf5(prep_temp_dir):
     # generate an hdf5 file from simple test data
@@ -213,17 +222,6 @@ def test_series_dict_to_hdf5(prep_temp_dir):
                     assert record_m == test_data_m
             else:
                 assert records[i][key] == test_data[i][key]
-
-
-def test_list_files(prep_temp_dir):
-    # test.hdf5 was generated in test_dict_to_hdf5
-    files = list_files(str(prep_temp_dir), ".hdf5")
-
-    # check to see if test.hdf5 is in the files
-    assert "test.hdf5" in files
-
-    with pytest.raises(Exception):
-        list_files("/path/that/should/not/exist/", ".hdf5")
 
 
 def test_str_to_float(prep_temp_dir):
@@ -347,9 +345,7 @@ def test_qm9_curation_parse_xyz(prep_temp_dir):
     assert data_dict_temp["energy_of_homo"] == [[-0.3877]] * unit.hartree
     assert data_dict_temp["energy_of_lumo"] == [[0.1171]] * unit.hartree
     assert data_dict_temp["lumo-homo_gap"] == [[0.5048]] * unit.hartree
-    assert (
-        data_dict_temp["electronic_spatial_extent"] == [[35.3641]] * unit.angstrom**2
-    )
+    assert data_dict_temp["electronic_spatial_extent"] == [[35.3641]] * unit.angstrom**2
     assert (
         data_dict_temp["zero_point_vibrational_energy"] == [[0.044749]] * unit.hartree
     )

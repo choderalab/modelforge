@@ -1,17 +1,27 @@
 [potential]
-model_name = "PhysNet"
+potential_name = "PhysNet"
 
 [potential.core_parameter]
 
-max_Z = 101
-number_of_atom_features = 64
 number_of_radial_basis_functions = 16
-cutoff = "5.0 angstrom"
+maximum_interaction_radius = "5.0 angstrom"
 number_of_interaction_residual = 3
 number_of_modules = 5
+predicted_properties = ["per_atom_energy"]
+predicted_dim = [1]
+
+[potential.core_parameter.activation_function_parameter]
+activation_function_name = "ShiftedSoftplus"
+
+[potential.core_parameter.featurization]
+properties_to_featurize = ['atomic_number']
+[potential.core_parameter.featurization.atomic_number]
+maximum_atomic_number = 101
+number_of_per_atom_features = 32
 
 [potential.postprocessing_parameter]
+properties_to_process = ['per_atom_energy']
 [potential.postprocessing_parameter.per_atom_energy]
 normalize = true
-from_atom_to_molecule_reduction = true
+from_atom_to_system_reduction = true
 keep_per_atom_property = true

@@ -1,28 +1,9 @@
-from typing import Literal
+"""
+Module of miscellaneous utilities.
+"""
 
 import torch
 from loguru import logger
-from modelforge.dataset.dataset import DataModule
-
-
-def visualize_model(
-    dm: DataModule, model_name: Literal["ANI2x", "PhysNet", "SchNet", "PaiNN", "SAKE"]
-):
-    # visualize the compute graph
-    from modelforge.utils.io import import_
-
-    torchviz = import_("torchviz")
-    from modelforge.potential import NeuralNetworkPotentialFactory
-
-    inference_model = NeuralNetworkPotentialFactory.generate_model(
-        "inference", model_name
-    )
-
-    nnp_input = next(iter(dm.train_dataloader())).nnp_input
-    yhat = inference_model(nnp_input)
-    torchviz.make_dot(
-        yhat, params=dict(list(inference_model.named_parameters()))
-    ).render(f"compute_graph_{inference_model.__class__.__name__}", format="png")
 
 
 class Welford:
@@ -292,20 +273,129 @@ class OpenWithLock:
                 f"{self._file_path} in locked by another process; waiting until lock is released."
             )
 
-        # try to lock the file; if the file is already locked, this will wait until the file is released
-        # I added helper function definitions that call fcntl, as we might not always want to use a context manager
-        # and to test the function in isolation
+        # try to lock the file; if the file is already locked, this will wait
+        # until the file is released. I added helper function definitions that
+        # call fcntl, as we might not always want to use a context manager and
+        # to test the function in isolation
 
         lock_file(self._file_handle)
-        # import fcntl
-        # fcntl.flock(self._file_handle.fileno(), fcntl.LOCK_EX)
 
         # return the opened file stream
         return self._file_handle
 
     def __exit__(self, *args):
         # unlock the file and close the file stream
-        # import fcntl
-        # fcntl.flock(self._file_handle.fileno(), fcntl.LOCK_UN)
         unlock_file(self._file_handle)
         self._file_handle.close()
+
+
+import os
+from functools import wraps
+
+
+def lock_with_attribute(attribute_name):
+    """
+    Decorator for locking a method using a lock file path stored in an instance
+    attribute. The attribute is accessed on the instance (`self`) at runtime.
+
+    Parameters
+    ----------
+    attribute_name : str
+        The name of the instance attribute that contains the lock file path.
+
+    Examples
+    --------
+    >>> from modelforge.utils.misc import lock_with_attribute
+    >>>
+    >>> class MyClass:
+    >>>     def __init__(self, lock_file):
+    >>>         self.method_lock = lock_file
+    >>>
+    >>>     @lock_with_attribute('method_lock')
+    >>>     def critical_section(self):
+    >>>         print("Executing critical section")
+    """
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Retrieve the instance (`self`)
+            instance = args[0]
+            # Get the lock file path from the specified attribute
+            lock_file_path = getattr(instance, attribute_name)
+
+            with OpenWithLock(lock_file_path, "w+") as lock_file_handle:
+                return func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
+def seed_random_number(seed: int):
+    """
+    Seed the random number generator for reproducibility.
+
+    Parameters
+    ----------
+    seed : int
+        The seed for the random number generator.
+    """
+    import random
+
+    random.seed(seed)
+
+    import numpy as np
+
+    np.random.seed(seed)
+    import torch
+
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+
+def load_configs_into_pydantic_models(potential_name: str, dataset_name: str):
+    from modelforge.tests.data import (
+        potential_defaults,
+        training_defaults,
+        dataset_defaults,
+        runtime_defaults,
+    )
+    from importlib import resources
+    import toml
+
+    potential_path = (
+        resources.files(potential_defaults) / f"{potential_name.lower()}.toml"
+    )
+    dataset_path = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
+    training_path = resources.files(training_defaults) / "default.toml"
+    runtime_path = resources.files(runtime_defaults) / "runtime.toml"
+
+    training_config_dict = toml.load(training_path)
+    dataset_config_dict = toml.load(dataset_path)
+    potential_config_dict = toml.load(potential_path)
+    runtime_config_dict = toml.load(runtime_path)
+
+    potential_name = potential_config_dict["potential"]["potential_name"]
+
+    from modelforge.potential import _Implemented_NNP_Parameters
+
+    PotentialParameters = (
+        _Implemented_NNP_Parameters.get_neural_network_parameter_class(potential_name)
+    )
+    potential_parameters = PotentialParameters(**potential_config_dict["potential"])
+
+    from modelforge.dataset.dataset import DatasetParameters
+    from modelforge.train.parameters import TrainingParameters, RuntimeParameters
+
+    dataset_parameters = DatasetParameters(**dataset_config_dict["dataset"])
+    training_parameters = TrainingParameters(**training_config_dict["training"])
+    runtime_parameters = RuntimeParameters(**runtime_config_dict["runtime"])
+
+    return {
+        "potential": potential_parameters,
+        "dataset": dataset_parameters,
+        "training": training_parameters,
+        "runtime": runtime_parameters,
+    }

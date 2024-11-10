@@ -1,3 +1,7 @@
+"""
+SPICE1Dataset class for handling the SPICE 1 dataset.
+"""
+
 from typing import List
 
 from .dataset import HDF5Dataset
@@ -50,23 +54,37 @@ class SPICE1Dataset(HDF5Dataset):
         positions="geometry",
         E="dft_total_energy",
         F="dft_total_force",
-        total_charge="mbis_charges",
+        total_charge="total_charge",
+        dipole_moment="scf_dipole",
     )
 
+    # note for simplicifty, commenting out those properties that cannot be used in the current implementation
     _available_properties = [
         "geometry",
         "atomic_numbers",
         "dft_total_energy",
         "dft_total_force",
-        "mbis_charges",
-        "mbis_multipoles",
-        "mbis_octopoles",
+        # "mbis_charges",
+        # "mbis_multipoles",
+        # "mbis_octopoles",
         "formation_energy",
         "scf_dipole",
-        "scf_quadrupole",
+        # "scf_quadrupole",
         "total_charge",
         "reference_energy",
     ]  # All properties within the datafile, aside from SMILES/inchi.
+
+    # Mapping of available properties to the associated PropertyNames
+    _available_properties_association = {
+        "geometry": "positions",
+        "atomic_numbers": "atomic_numbers",
+        "dft_total_energy": "E",
+        "dft_total_force": "F",
+        "formation_energy": "E",
+        "scf_dipole": "dipole_moment",
+        "total_charge": "total_charge",
+        "reference_energy": "E",
+    }
 
     def __init__(
         self,
@@ -105,7 +123,8 @@ class SPICE1Dataset(HDF5Dataset):
             "atomic_numbers",
             "dft_total_energy",
             "dft_total_force",
-            "mbis_charges",
+            "total_charge",
+            "scf_dipole",
         ]  # NOTE: Default values
 
         self._properties_of_interest = _default_properties_of_interest

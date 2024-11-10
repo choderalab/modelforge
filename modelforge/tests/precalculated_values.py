@@ -106,13 +106,13 @@ def setup_single_methane_input():
     )
     E = torch.tensor([0.0], requires_grad=True)
     atomic_subsystem_indices = torch.tensor([0, 0, 0, 0, 0], dtype=torch.int32)
-    from modelforge.dataset.dataset import NNPInput
+    from modelforge.utils.prop import NNPInput
 
     modelforge_methane = NNPInput(
         atomic_numbers=atomic_numbers,
         positions=positions,
         atomic_subsystem_indices=atomic_subsystem_indices,
-        total_charge=torch.tensor([0], dtype=torch.int32),
+        per_system_total_charge=torch.tensor([0], dtype=torch.int32),
     )
     # ------------------------------------ #
 
@@ -613,7 +613,7 @@ def provide_reference_values_for_test_ani_test_compare_rsf():
 def provide_reference_values_for_test_ani_test_compute_rsf_with_diagonal_batching():
     def calculate_reference():
         from torchani.aev import neighbor_pairs_nopbc
-        from modelforge.potential.models import Pairlist
+        from modelforge.potential.potential import Pairlist
         from modelforge.tests.test_ani import setup_two_methanes
 
         # ------------ general setup -------------#
@@ -1070,7 +1070,7 @@ def provide_input_for_test_test_compare_angular_symmetry_features():
         ShfZ = (torch.linspace(0, math.pi, angle_sections + 1) + angle_start)[:-1]
         # set up relevant system properties
         from modelforge.tests.test_ani import setup_methane
-        from modelforge.potential.models import Pairlist
+        from modelforge.potential.potential import Pairlist
         from modelforge.potential.utils import triple_by_molecule
 
         device = torch.device("cpu")
@@ -2279,3 +2279,127 @@ def provide_reference_for_test_physnet_test_rbf():
         dtype=np.float32,
     )
     return rbf
+
+
+def prepare_values_for_test_tensornet_compare_radial_symmetry_features(
+    d_ij, min_distance, max_distance, number_of_radial_basis_functions, trainable, seed
+):
+    from torchmdnet.models.utils import ExpNormalSmearing
+
+    torch.manual_seed(seed)
+    rsf_tn = ExpNormalSmearing(
+        cutoff_lower=min_distance,
+        cutoff_upper=max_distance,
+        num_rbf=number_of_radial_basis_functions,
+        trainable=trainable,
+    )
+    tn_r = rsf_tn(d_ij)
+    torch.save(tn_r, "modelforge/tests/data/tensornet_radial_symmetry_features.pt")
+
+    return tn_r
+
+
+def prepare_values_for_test_tensornet_input(mf_input, seed):
+    from torchmdnet.models.utils import OptimizedDistance
+
+    pos, batch = (mf_input.positions, mf_input.atomic_subsystem_indices)
+
+    torch.manual_seed(seed)
+    distance_module = OptimizedDistance(
+        cutoff_lower=0.0,
+        cutoff_upper=5.0,
+        max_num_pairs=153,
+        return_vecs=True,
+        loop=False,
+        check_errors=False,
+        resize_to_fit=False,  # not self.static_shapes
+        box=None,
+        long_edge_index=False,
+    )
+
+    edge_index, edge_weight, edge_vec = distance_module(pos, batch, None)
+    torch.save(
+        (edge_index, edge_weight, edge_vec), "modelforge/tests/data/tensornet_input.pt"
+    )
+
+    return edge_index, edge_weight, edge_vec
+
+
+def prepare_values_for_test_tensornet_representation(
+    nnp_input,
+    hidden_channels,
+    number_of_radial_basis_functions,
+    activation_function,
+    min_distance,
+    max_distance,
+    trainable_rbf,
+    max_atomic_number,
+    seed,
+):
+    from torchmdnet.models.tensornet import TensorEmbedding
+    from torchmdnet.models.utils import ExpNormalSmearing
+
+    torch.manual_seed(seed)
+    # TensorNet embedding modules setup
+    tensor_embedding = TensorEmbedding(
+        hidden_channels,
+        number_of_radial_basis_functions,
+        activation_function,
+        min_distance,
+        max_distance,
+        trainable_rbf,
+        max_atomic_number,
+    )
+
+    distance_expansion = ExpNormalSmearing(
+        min_distance, max_distance, number_of_radial_basis_functions, trainable_rbf
+    )
+
+    # calculate embedding
+    edge_attr = distance_expansion(nnp_input.d_ij.squeeze(-1) * 10)  # Note: in angstrom
+
+    tn_X = tensor_embedding(
+        nnp_input.atomic_numbers,
+        nnp_input.pair_indices,
+        nnp_input.d_ij.squeeze(-1) * 10,  # Note: in angstrom
+        nnp_input.r_ij / nnp_input.d_ij,  # edge_vec_norm in angstrom
+        edge_attr,
+    )
+    torch.save(tn_X, "modelforge/tests/data/tensornet_representation.pt")
+
+    return tn_X
+
+
+def prepare_values_for_test_tensornet_interaction(
+    X,
+    nnp_input,
+    radial_feature_vector,
+    atomic_charges,
+    hidden_channels,
+    number_of_radial_basis_functions,
+    activation_function,
+    min_distance,
+    max_distance,
+    seed,
+):
+    from torchmdnet.models.tensornet import Interaction
+
+    torch.manual_seed(seed)
+    tn_interaction = Interaction(
+        number_of_radial_basis_functions,
+        hidden_channels,
+        activation_function,
+        min_distance,
+        max_distance,
+        "O(3)",
+    )
+    tn_X = tn_interaction(
+        X,
+        nnp_input.pair_indices,
+        nnp_input.d_ij.squeeze(-1) * 10,
+        radial_feature_vector.squeeze(1),
+        atomic_charges,
+    )
+    torch.save(tn_X, "modelforge/tests/data/tensornet_interaction.pt")
+
+    return tn_X

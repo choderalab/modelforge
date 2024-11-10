@@ -1,17 +1,26 @@
 [potential]
-model_name = "ANI2x"
+potential_name = "ANI2x"
 
 [potential.core_parameter]
 angle_sections = 4
-radial_max_distance = "5.1 angstrom"
-radial_min_distance = "0.8 angstrom"
+maximum_interaction_radius = "5.1 angstrom"
+minimum_interaction_radius = "0.8 angstrom"
 number_of_radial_basis_functions = 16
-angular_max_distance = "3.5 angstrom"
-angular_min_distance = "0.8 angstrom"
+maximum_interaction_radius_for_angular_features = "3.5 angstrom"
+minimum_interaction_radius_for_angular_features = "0.8 angstrom"
 angular_dist_divisions = 8
+predicted_properties = ["per_atom_energy"]
+predicted_dim = [1]
+
+[potential.core_parameter.activation_function_parameter]
+activation_function_name = "CeLU"
+
+[potential.core_parameter.activation_function_parameter.activation_function_arguments]
+alpha = 0.1
 
 [potential.postprocessing_parameter]
+properties_to_process = ['per_atom_energy']
 [potential.postprocessing_parameter.per_atom_energy]
 normalize = true
-from_atom_to_molecule_reduction = true
+from_atom_to_system_reduction = true
 keep_per_atom_property = true

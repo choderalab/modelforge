@@ -8,8 +8,9 @@ dependencies:
   - pip
   - h5py
   - tqdm
-  - qcelemental=0.25.1
+  - toml
   - qcportal>=0.50
+  - qcelemental
   - pytorch>=2.1
   - loguru
   - lightning>=2.0.8
@@ -17,10 +18,13 @@ dependencies:
   - torchvision
   - openff-units
   - torchmetrics>=1.4
-  - pint
+  - pint=0.23
   - rdkit
   - retry
   - sqlitedict
+  - pydantic>=2
+  - ray-all
+  - graphviz
 
   # Testing
   - pytest>=2.1
@@ -29,11 +33,12 @@ dependencies:
   - requests
   - versioneer
 
-  # Docs
-  - sphinx_rtd_theme
-
   - pip:
+      - jax
+      - flax
       - pytorch2jax
       - git+https://github.com/ArnNag/sake.git@nanometer
-      - "ray[data,train,tune,serve]"
       - flax
+      - torch
+      - pytest-xdist
+

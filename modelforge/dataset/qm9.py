@@ -1,3 +1,7 @@
+"""
+Data class for handling QM9 data.
+"""
+
 from typing import List
 
 from .dataset import HDF5Dataset
@@ -37,9 +41,10 @@ class QM9Dataset(HDF5Dataset):
     _property_names = PropertyNames(
         atomic_numbers="atomic_numbers",
         positions="geometry",
-        E="internal_energy_at_0K",  # Q="charges"
+        E="internal_energy_at_0K",
     )
 
+    # for simplicity, commenting out those properties that are cannot be used in our current implementation
     _available_properties = [
         "geometry",
         "atomic_numbers",
@@ -47,19 +52,33 @@ class QM9Dataset(HDF5Dataset):
         "internal_energy_at_298.15K",
         "enthalpy_at_298.15K",
         "free_energy_at_298.15K",
-        "heat_capacity_at_298.15K",
+        # "heat_capacity_at_298.15K",
         "zero_point_vibrational_energy",
-        "electronic_spatial_extent",
+        # "electronic_spatial_extent",
         "lumo-homo_gap",
         "energy_of_homo",
         "energy_of_lumo",
-        "rotational_constant_A",
-        "rotational_constant_B",
-        "rotational_constant_C",
+        # "rotational_constant_A",
+        # "rotational_constant_B",
+        # "rotational_constant_C",
         "dipole_moment",
-        "isotropic_polarizability",
-        "charges",
+        # "isotropic_polarizability",
+        # "charges",
     ]  # All properties within the datafile, aside from SMILES/inchi.
+
+    _available_properties_association = {
+        "geometry": "positions",
+        "atomic_numbers": "atomic_numbers",
+        "internal_energy_at_0K": "E",
+        "internal_energy_at_298.15K": "E",
+        "enthalpy_at_298.15K": "E",
+        "free_energy_at_298.15K": "E",
+        "zero_point_vibrational_energy": "E",
+        "lumo-homo_gap": "E",
+        "energy_of_homo": "E",
+        "energy_of_lumo": "E",
+        "dipole_moment": "dipole_moment",
+    }
 
     def __init__(
         self,
@@ -97,7 +116,7 @@ class QM9Dataset(HDF5Dataset):
             "geometry",
             "atomic_numbers",
             "internal_energy_at_0K",
-            "charges",
+            "dipole_moment",
         ]  # NOTE: Default values
 
         self._properties_of_interest = _default_properties_of_interest
@@ -241,7 +260,3 @@ class QM9Dataset(HDF5Dataset):
             length=self.gz_data_file["length"],
             force_download=self.force_download,
         )
-        # from modelforge.dataset.utils import _download_from_url
-        #
-        # url = self.test_url if self.for_unit_testing else self.full_url
-        # _download_from_url(url, self.raw_data_file)

@@ -1022,7 +1022,9 @@ class DataModule(pl.LightningDataModule):
                 raise FileNotFoundError(
                     f"Dataset statistics file {self.dataset_statistic_filename} not found. Please regenerate the cache."
                 )
-            log.info('Processed dataset already exists. Skipping "prepare_data" step.')
+            log.info(
+                f'Processed dataset already exists: {self.cache_processed_dataset_filename}. Skipping "prepare_data" step.'
+            )
             return None
 
         # if the dataset is not already processed, process it

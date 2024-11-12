@@ -61,6 +61,7 @@ class Featurization(BaseModel):
 class ActivationFunctionName(CaseInsensitiveEnum):
     ReLU = "ReLU"
     CeLU = "CeLU"
+    GeLU = "GeLU"
     Sigmoid = "Sigmoid"
     Softmax = "Softmax"
     ShiftedSoftplus = "ShiftedSoftplus"
@@ -74,6 +75,7 @@ class ActivationFunctionName(CaseInsensitiveEnum):
 class ActivationFunctionParamsEnum(CaseInsensitiveEnum):
     ReLU = "None"
     CeLU = ActivationFunctionParamsAlpha
+    GeLU = "None"
     Sigmoid = "None"
     Softmax = "None"
     ShiftedSoftplus = "None"
@@ -177,6 +179,7 @@ class AimNet2Parameters(ParametersBase):
         featurization: Featurization
         predicted_properties: List[str]
         predicted_dim: List[int]
+        number_of_vector_features: int
         converted_units = field_validator("maximum_interaction_radius", mode="before")(
             _convert_str_or_unit_to_unit_length
         )

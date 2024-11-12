@@ -19,6 +19,19 @@ class Potential(torch.nn.Module):
     """
     Class that wraps a modelforge potential, making it compatible with OpenMM TorchForce
 
+    Examples
+    --------
+    >>> import torch
+    >>> from modelforge.openmm.potential import Potential
+    >>>
+    >>> # Create a Potential object, loading in a modelforge potential saved as a pt file
+    >>> openmm_potential = Potential("path/to/modelforge_potential.pt", atomic_numbers=[1, 1], is_periodic=False)
+    >>> openmm_potential_jit = torch.jit.script(openmm_potential)
+    >>>
+    >>> # Create a TorchForce object using the jitted Potential object
+    >>> from openmmtorch import TorchForce
+    >>> force = TorchForce(openmm_potential_jit)
+
     """
 
     def __init__(

@@ -117,7 +117,7 @@ def test_md5_calculation(prep_temp_dir):
         )
 
 
-@pytest.marker.skipif(
+@pytest.mark.skipif(
     IN_GITHUB_ACTIONS,
     reason="Skipping; requires authentication which cannot be done via PR from fork ",
 )

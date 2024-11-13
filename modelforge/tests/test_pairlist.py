@@ -445,8 +445,7 @@ def test_displacement_function():
 def test_inference_neighborlist_building():
     """Test that NeighborlistBruteNsq and NeighborlistVerletNsq behave identically when building the neighborlist"""
     from modelforge.potential.neighbors import (
-        NeighborlistBruteNsq,
-        NeighborlistVerletNsq,
+        NeighborlistForInference,
         OrthogonalDisplacementFunction,
     )
     import torch
@@ -469,20 +468,21 @@ def test_inference_neighborlist_building():
         ),
         is_periodic=True,
     )
-    # test to
-    nlist = NeighborlistBruteNsq(
+    # test brute force neighborlist
+    nlist = NeighborlistForInference(
         cutoff=5.0, displacement_function=displacement_function, only_unique_pairs=False
     )
+    nlist._set_strategy("brute_nsq")
     pairs, d_ij, r_ij = nlist(data)
 
     assert pairs.shape[1] == 12
 
-    nlist_verlet = NeighborlistVerletNsq(
+    nlist_verlet = NeighborlistForInference(
         cutoff=5.0,
         displacement_function=displacement_function,
-        skin=0.5,
         only_unique_pairs=False,
     )
+    nlist_verlet._set_strategy("verlet_nsq", skin=0.5)
 
     pairs_v, d_ij_v, r_ij_v = nlist_verlet(data)
     assert pairs_v.shape[1] == pairs.shape[1]
@@ -490,31 +490,31 @@ def test_inference_neighborlist_building():
     assert torch.allclose(d_ij_v, d_ij)
     assert torch.allclose(r_ij_v, r_ij)
 
-    nlist = NeighborlistBruteNsq(
+    nlist = NeighborlistForInference(
         cutoff=5.0, displacement_function=displacement_function, only_unique_pairs=True
     )
 
+    nlist._set_strategy("brute_nsq")
     pairs, d_ij, r_ij = nlist(data)
 
     assert pairs.shape[1] == 6
 
-    nlist_verlet = NeighborlistVerletNsq(
+    nlist_verlet = NeighborlistForInference(
         cutoff=5.0,
         displacement_function=displacement_function,
-        skin=0.5,
         only_unique_pairs=True,
     )
-
+    nlist_verlet._set_strategy("verlet_nsq", skin=0.5)
     pairs_v, d_ij_v, r_ij_v = nlist_verlet(data)
     assert pairs_v.shape[1] == pairs.shape[1]
     assert torch.all(pairs_v == pairs)
     assert torch.allclose(d_ij_v, d_ij)
     assert torch.allclose(r_ij_v, r_ij)
 
-    nlist = NeighborlistBruteNsq(
+    nlist = NeighborlistForInference(
         cutoff=3.5, displacement_function=displacement_function, only_unique_pairs=False
     )
-
+    nlist._set_strategy("brute_nsq")
     pairs, d_ij, r_ij = nlist(data)
 
     assert pairs.shape[1] == 10
@@ -553,13 +553,13 @@ def test_inference_neighborlist_building():
         ),
     )
 
-    nlist_verlet = NeighborlistVerletNsq(
+    nlist_verlet = NeighborlistForInference(
         cutoff=3.5,
         displacement_function=displacement_function,
-        skin=0.5,
         only_unique_pairs=False,
     )
 
+    nlist_verlet._set_strategy("verlet_nsq", skin=0.5)
     pairs_v, d_ij_v, r_ij_v = nlist_verlet(data)
     assert pairs_v.shape[1] == pairs.shape[1]
     assert torch.all(pairs_v == pairs)
@@ -568,10 +568,10 @@ def test_inference_neighborlist_building():
 
     displacement_function = OrthogonalDisplacementFunction()
 
-    nlist = NeighborlistBruteNsq(
+    nlist = NeighborlistForInference(
         cutoff=5.0, displacement_function=displacement_function, only_unique_pairs=False
     )
-
+    nlist._set_strategy("brute_nsq")
     data.is_periodic = False
 
     pairs, d_ij, r_ij = nlist(data)
@@ -579,12 +579,12 @@ def test_inference_neighborlist_building():
     assert pairs.shape[1] == 8
     assert torch.all(d_ij <= 5.0)
 
-    nlist_verlet = NeighborlistVerletNsq(
+    nlist_verlet = NeighborlistForInference(
         cutoff=5.0,
         displacement_function=displacement_function,
-        skin=0.5,
         only_unique_pairs=False,
     )
+    nlist_verlet._set_strategy("verlet_nsq", skin=0.5)
 
     pairs_v, d_ij_v, r_ij_v = nlist_verlet(data)
     assert pairs_v.shape[1] == pairs.shape[1]
@@ -602,8 +602,7 @@ def test_inference_neighborlist_building():
 def test_verlet_inference():
     """Test to ensure that the verlet neighborlist properly updates by comparing to brute force neighborlist"""
     from modelforge.potential.neighbors import (
-        NeighborlistBruteNsq,
-        NeighborlistVerletNsq,
+        NeighborlistForInference,
         OrthogonalDisplacementFunction,
     )
     import torch
@@ -629,20 +628,20 @@ def test_verlet_inference():
     data = return_data(positions)
 
     displacement_function = OrthogonalDisplacementFunction()
-    nlist_verlet = NeighborlistVerletNsq(
-        cutoff=1.5,
-        displacement_function=displacement_function,
-        skin=0.5,
-        only_unique_pairs=True,
-    )
-
-    nlist_brute = NeighborlistBruteNsq(
+    nlist_verlet = NeighborlistForInference(
         cutoff=1.5,
         displacement_function=displacement_function,
         only_unique_pairs=True,
     )
+    nlist_verlet._set_strategy("verlet_nsq", skin=0.5)
 
-    print("first check")
+    nlist_brute = NeighborlistForInference(
+        cutoff=1.5,
+        displacement_function=displacement_function,
+        only_unique_pairs=True,
+    )
+    nlist_brute._set_strategy("brute_nsq")
+
     pairs, d_ij, r_ij = nlist_brute(data)
 
     pairs_v, d_ij_v, r_ij_v = nlist_verlet(data)

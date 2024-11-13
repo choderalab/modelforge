@@ -141,12 +141,85 @@ def test_radial_symmetry_function_regression():
 def test_forward(single_batch_with_batchsize, prep_temp_dir):
     """Test initialization of the AIMNet2 model."""
     # read default parameters
-    aimnet = setup_potential_for_test("aimnet2", "training")
+    aimnet = setup_potential_for_test("aimnet2", "training", potential_seed=42)
 
     assert aimnet is not None, "Aimnet model should be initialized."
     batch = single_batch_with_batchsize(64, "QM9", str(prep_temp_dir))
 
     y_hat = aimnet(batch.nnp_input)
+
+    assert y_hat is not None, "Aimnet model should be able to make predictions."
+
+    ref_per_system_energy = torch.tensor(
+        [
+            [0.2630],
+            [-0.5150],
+            [-0.2999],
+            [-0.0297],
+            [-0.4382],
+            [-0.1805],
+            [0.5974],
+            [0.1769],
+            [0.0842],
+            [-0.2955],
+            [0.1295],
+            [-0.4067],
+            [0.4135],
+            [0.3202],
+            [0.2481],
+            [0.6696],
+            [0.0380],
+            [0.0834],
+            [-0.2613],
+            [-0.8373],
+            [0.2033],
+            [0.1554],
+            [0.0624],
+            [-0.3643],
+            [-0.7861],
+            [-0.0398],
+            [-0.4675],
+            [-0.1000],
+            [0.3265],
+            [0.2546],
+            [-0.1597],
+            [-0.9611],
+            [0.0653],
+            [-0.4411],
+            [0.2587],
+            [-0.1082],
+            [0.0461],
+            [0.0407],
+            [0.6725],
+            [0.3874],
+            [0.3393],
+            [0.1747],
+            [0.4048],
+            [0.1001],
+            [0.1496],
+            [0.2432],
+            [0.3578],
+            [0.2792],
+            [-0.3365],
+            [-0.3329],
+            [-0.8465],
+            [0.0463],
+            [-0.4385],
+            [0.1224],
+            [-0.0442],
+            [0.1029],
+            [-0.4559],
+            [-1.1701],
+            [-0.2714],
+            [0.0318],
+            [-0.8579],
+            [-0.3836],
+            [0.2487],
+            [-0.2728],
+        ],
+    )
+
+    assert torch.allclose(y_hat["per_system_energy"], ref_per_system_energy, atol=1e-3)
 
 
 @pytest.mark.xfail(raises=NotImplementedError)

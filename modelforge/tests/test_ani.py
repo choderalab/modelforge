@@ -3,7 +3,7 @@ from modelforge.tests.helper_functions import setup_potential_for_test
 from importlib import resources
 from modelforge.tests import data
 
-file_path = resources.files(data) / f"torchani_parameters.state"
+file_path = resources.files(data) / f"torchani_parameters2.state"
 
 
 @pytest.fixture(scope="session")
@@ -105,7 +105,7 @@ def setup_two_methanes():
 
 
 @pytest.mark.xfail
-def test_ani():
+def test_ani(prep_temp_dir):
     import torch
     import torchani
 
@@ -189,7 +189,7 @@ def test_ani():
     )
 
 
-def test_ani_against_torchani_reference():
+def test_ani_against_torchani_reference(prep_temp_dir):
     import torch
 
     # get input

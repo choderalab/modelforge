@@ -464,7 +464,8 @@ class Potential(torch.nn.Module):
         assign : bool, optional
             Whether to assign the state dictionary to the model directly
             (default is False).
-
+        legacy : bool, optional
+            Earlier version of the potential model did not include only_unique_pairs in the
         Notes
         -----
         This function can remove a specific prefix from the keys in the state
@@ -892,6 +893,7 @@ class PyTorch2JAXConverter:
 
 def load_inference_model_from_checkpoint(
     checkpoint_path: str,
+    only_unique_pairs: Optional[bool] = None,
 ) -> Union[Potential, JAXModel]:
     """
     Creates an inference model from a checkpoint file.
@@ -901,6 +903,10 @@ def load_inference_model_from_checkpoint(
     ----------
     checkpoint_path : str
         The path to the checkpoint file.
+    only_unique_pairs : Optional[bool], optional
+        If defined, this will set the only_unique_pairs key in the neighborlist module. This is only needed
+        for models trained prior to PR #299 in modelforge. (default is None).
+        In the case of ANI models, this should be set to True. Typically False for other mdoels
     """
 
     # Load the checkpoint
@@ -918,6 +924,10 @@ def load_inference_model_from_checkpoint(
         dataset_statistic=dataset_statistic,
         potential_seed=potential_seed,
     )
+    if only_unique_pairs is not None:
+        checkpoint["state_dict"]["neighborlist.only_unique_pairs"] = torch.Tensor(
+            [only_unique_pairs]
+        )
 
     # Load the state dict into the model
     potential.load_state_dict(checkpoint["state_dict"])

@@ -5,9 +5,9 @@ Inference mode is a mode allows us to use the trained model to make predictions.
 
 Neighborlists
 ------------------------------------------
-Currently, there are two neighborlist strategies implemented within modelforge for inference, the brute force neighbolist (:class:`~modelforge.potential.neighbors.NeighborlistBruteNsq`) and Verlet neighborlist (:class:`~modelforge.potential.NeighborlistVerletNsq`).    Both neighborlists support both periodic and not periodic orthogonal boxes.
+Currently, there are two neighborlist strategies implemented within modelforge for inference, the brute force neighbolist and Verlet neighborlist (implemented within a single class :class:`~modelforge.potential.NeighborlistForInference`).    Both neighborlists support both periodic and not periodic orthogonal boxes.
 
-The neighborlist strategy can be toggled during potential setup via the `inference_neighborlist_strategy` parameter passed to the :class:`~modelforge.potential.models.NeuralNetworkPotentialFactory`.  The default is the Verlet neighborlist ("verlet"); brute can be set via "brute".
+The neighborlist strategy can be toggled during potential setup via the `inference_neighborlist_strategy` parameter passed to the :class:`~modelforge.potential.models.NeuralNetworkPotentialFactory`.  The default is the Verlet neighborlist ("verlet_nsq"); brute can be set via "brute_nsq".  This can also be set via set at run time in the potential via Potential.set_neighborlist_strategy(strategy, skin).
 
 Brute force neighborlist
 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -44,3 +44,107 @@ To use the trained model for inference, the checkpoint file generated during tra
    :maxdepth: 2
    :caption: Contents:
 
+
+Using a model for inference in OpenMM
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+To use the trained model for inference in OpenMM, we can save the Potential model to a .pt file the use the wrapping class to put this in a form that will work with the OpenMM TorchForce. The `save` method of the Potential class can be used to save the model to a .pt file.  The follow code snippet demonstrates loading a configuration file, generating a potential, converting it to a torchscript model, and saving it to a .pt file.
+
+.. code-block:: python
+
+    from modelforge.utils.misc import load_configs_into_pydantic_models
+
+    config = load_configs_into_pydantic_models("ani2x", "phalkethoh")
+
+    # generate the ani2x potential using the NeuralNetworkPotentialFactory
+    # note this is not a trained potential
+
+    from modelforge.potential.potential import NeuralNetworkPotentialFactory
+
+    potential = NeuralNetworkPotentialFactory.generate_potential(
+        potential_parameter=config["potential"],
+        potential_seed=42,
+        jit=False,
+    )
+
+    import torch
+
+    # convert the potential to a torchscript model and save it
+    jit_potential = torch.jit.script(potential)
+    jit_potential.save("data/ani2x_test.pt")
+
+With the .pt file saved, we can load up the wrapper that will allow us to set TorchForce in OpenMM to use the model for inference.  The following code snippet demonstrates how to load the .pt file and use the Potential wrapper class in `modelforge.openmm.potential`.  Note, to use this function, you'll need to install the modelforce.openmm subpackage from within the root of the modelforge repository (e.g., `pip install modelforge_openmm .`).
+
+.. code-block:: python
+
+    from modelforge.openmm.examples.openmm_water_topology import openmm_water_topology
+
+    # set up the water topology using a helper function we created
+    water, positions = openmm_water_topology()
+    atomic_numbers = [atom.element.atomic_number for atom in water.atoms()]
+
+    # We next need to read in the modelforge potential torchscript file
+    from importlib import resources
+
+    potential_file_path = resources.files("modelforge.openmm.examples.data").joinpath(
+        "ani2x_test.pt"
+    )
+
+    # set up the potential to be used with the system
+    from modelforge.openmm.potential import Potential
+    import torch
+
+    ani2x_potential = Potential(
+        modelforge_potential_path=potential_file_path,
+        atomic_numbers=atomic_numbers,
+        is_periodic=False,
+        neighborlist_strategy="verlet_nsq",
+        energy_contributions=["per_system_energy"],
+    )
+
+    ani2x_jit_potential = torch.jit.script(ani2x_potential)
+
+
+We can then use this to set the TorchForce and set up a simple simulation.
+
+.. code-block:: python
+
+    import openmm
+
+    system = openmm.System()
+    for atom in water.atoms():
+        system.addParticle(atom.element.mass)
+
+    from openmmtorch import TorchForce
+
+    force = TorchForce(ani2x_jit_potential)
+    system.addForce(force)
+
+    import sys
+    from openmm import LangevinMiddleIntegrator
+    from openmm.app import Simulation, StateDataReporter
+    from openmm.unit import kelvin, picosecond, femtosecond
+
+    # Create an integrator with a time step of 1 fs
+    temperature = 298.15 * kelvin
+    frictionCoeff = 1 / picosecond
+    timeStep = 1 * femtosecond
+    integrator = LangevinMiddleIntegrator(temperature, frictionCoeff, timeStep)
+
+    # Create a simulation and set the initial positions and velocities
+    simulation = Simulation(water, system, integrator)
+    simulation.context.setPositions(positions)
+
+    # Configure a reporter to print to the console every 0.1 ps (100 steps)
+    reporter = StateDataReporter(
+        file=sys.stdout,
+        reportInterval=1,
+        step=True,
+        time=True,
+        potentialEnergy=True,
+        temperature=True,
+    )
+    simulation.reporters.append(reporter)
+
+    # Run the simulation
+    simulation.step(10)

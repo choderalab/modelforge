@@ -336,12 +336,13 @@ class OrthogonalDisplacementFunction(torch.nn.Module):
         return r_ij, d_ij
 
 
-class NeighborlistBruteNsq(torch.nn.Module):
+class NeighborlistForInference(torch.nn.Module):
     """
-    Brute force N^2 neighbor list calculation for inference implemented fully in PyTorch.
+    Neighbor list calculation for inference implemented fully in PyTorch, allowing brute and Verlet nsq methods.
 
-    This is compatible with TorchScript.
-
+    By default the brute_nsq method will be used if set_strategy is not called.  ][
+    Rebuilding of the neighborlist uses an N^2 approach.  Rebuilding occurs when
+    the maximum displacement of any particle exceeds half the skin distance for Verlet lists.
 
     """
 
@@ -354,6 +355,7 @@ class NeighborlistBruteNsq(torch.nn.Module):
         """
         Compute neighbor lists for inference, filtering pairs based on a cutoff distance.
 
+
         Parameters
         ----------
         cutoff : float
@@ -362,19 +364,85 @@ class NeighborlistBruteNsq(torch.nn.Module):
             The function to calculate displacement vectors and distances between atom pairs, taking into account
             the specified boundary conditions.
         only_unique_pairs : bool, optional
-            Whether to only use unique pairs in the pair list calculation, by default False.
+            Whether to only use unique pairs in the pair list calculation, by
+            default True. This should be set to True for all message passing
+            networks.
         """
 
         super().__init__()
 
         self.register_buffer("cutoff", torch.tensor(cutoff))
         self.register_buffer("only_unique_pairs", torch.tensor(only_unique_pairs))
+
+        self.strategy = "brute_nsq"
+
+        # set a default value; we can update this when we set the strategy
+        self.skin = 0.1
+
+        self.half_skin = self.skin * 0.5
+        self.cutoff_plus_skin = self.cutoff + self.skin
+        # self.only_unique_pairs = only_unique_pairs
+
         self.displacement_function = displacement_function
+        self.indices = torch.tensor([])
+        self.i_pairs = torch.tensor([])
+        self.j_pairs = torch.tensor([])
 
         self.indices = torch.tensor([])
-        self.i_final_pairs = torch.tensor([])
-        self.j_final_pairs = torch.tensor([])
-        log.info("Initializing Brute Force N^2 Neighborlist")
+
+        self.positions_old = torch.tensor([])
+        self.nlist_i_pairs = torch.tensor([])
+        self.nlist_j_pairs = torch.tensor([])
+        self.builds = 0
+        self.box_vectors = torch.zeros([3, 3])
+
+        log.info("NeighborlistForInference initialized")
+
+    def _check_verlet_nlist(
+        self, positions: torch.Tensor, box_vectors: torch.Tensor, is_periodic
+    ):
+        r_ij, d_ij = self.displacement_function(
+            self.positions_old, positions, box_vectors, is_periodic
+        )
+
+        if torch.any(d_ij > self.half_skin):
+            return True
+        else:
+            return False
+
+    def _init_verlet_pairs(self, n_particles: int, device: torch.device):
+        self.indices = torch.arange(n_particles, device=device)
+
+        i_pairs, j_pairs = torch.meshgrid(
+            self.indices,
+            self.indices,
+            indexing="ij",
+        )
+
+        mask = i_pairs < j_pairs
+        # self.i_pairs = i_pairs[mask]
+        # self.j_pairs = j_pairs[mask]
+
+        return i_pairs[mask], j_pairs[mask]
+
+    def _build_verlet_nlist(
+        self, positions: torch.Tensor, box_vectors: torch.Tensor, is_periodic
+    ):
+        r_ij, d_ij = self.displacement_function(
+            positions[self.i_pairs], positions[self.j_pairs], box_vectors, is_periodic
+        )
+
+        in_cutoff = (d_ij < self.cutoff_plus_skin).squeeze()
+        # self.nlist_i_pairs = self.i_pairs[in_cutoff]
+        # self.nlist_j_pairs = self.j_pairs[in_cutoff]
+
+        self.builds += 1
+        return (
+            self.i_pairs[in_cutoff],
+            self.j_pairs[in_cutoff],
+            r_ij[in_cutoff],
+            d_ij[in_cutoff],
+        )
 
     def _copy_to_nonunique(
         self,
@@ -384,6 +452,7 @@ class NeighborlistBruteNsq(torch.nn.Module):
         r_ij: torch.Tensor,
         total_unique_pairs: int,
     ):
+        # this will allow us to copy the data for unique pairs to create the non-unique pairs data
         r_ij_full = torch.zeros(
             total_unique_pairs * 2, 3, dtype=r_ij.dtype, device=r_ij.device
         )
@@ -392,6 +461,8 @@ class NeighborlistBruteNsq(torch.nn.Module):
         )
 
         r_ij_full[0:total_unique_pairs] = r_ij
+
+        # since we are swapping the order of the pairs, the sign changes
         r_ij_full[total_unique_pairs : 2 * total_unique_pairs] = -r_ij
 
         d_ij_full[0:total_unique_pairs] = d_ij
@@ -408,7 +479,35 @@ class NeighborlistBruteNsq(torch.nn.Module):
 
         return pairs_full, d_ij_full, r_ij_full
 
+    @torch.jit.export
+    def _set_strategy(self, strategy: str, skin: float = 0.1):
+        """
+        Set the strategy for rebuilding the neighbor list.
+
+
+        Parameters
+        ----------
+        strategy : str
+            The strategy to use for rebuilding the neighbor list. Options are "verlet_nsq" or "brute_nsq".
+        skin : float, optional
+            The skin distance for the Verlet list, by default 0.1.
+        """
+        self.skin = skin
+        self.half_skin = self.skin * 0.5
+        self.cutoff_plus_skin = self.cutoff + self.skin
+
+        self.strategy = strategy
+
     def forward(self, data: NNPInput):
+        if self.strategy == "verlet_nsq":
+            return self._forward_verlet(data)
+        elif self.strategy == "brute_nsq":
+            return self._forward_brute(data)
+
+        else:
+            raise ValueError(f"Unknown strategy {self.strategy}")
+
+    def _forward_brute(self, data: NNPInput):
         """
         Prepares the input tensors for passing to the model.
 
@@ -434,26 +533,32 @@ class NeighborlistBruteNsq(torch.nn.Module):
 
         n = atomic_subsystem_indices.size(0)
 
+        if self.i_pairs.device != positions.device:
+            self.i_pairs = self.i_pairs.to(positions.device)
+            self.j_pairs = self.j_pairs.to(positions.device)
+        if self.indices.device != positions.device:
+            self.indices = self.indices.to(positions.device)
+
         # avoid reinitializing indices if they are already set and haven't changed
         if self.indices.shape[0] != n:
             # Generate a range of indices from 0 to n-1
             self.indices = torch.arange(n, device=atomic_subsystem_indices.device)
 
             # Create a meshgrid of indices
-            self.i_final_pairs, self.j_final_pairs = torch.meshgrid(
+            self.i_pairs, self.j_pairs = torch.meshgrid(
                 self.indices, self.indices, indexing="ij"
             )
             # We will only consider unique pairs; for non-unique pairs we can just appropriately copy
             # the data as it will be faster than extra computations.
-            mask = self.i_final_pairs < self.j_final_pairs
+            mask = self.i_pairs < self.j_pairs
 
-            self.i_final_pairs = self.i_final_pairs[mask]
-            self.j_final_pairs = self.j_final_pairs[mask]
+            self.i_pairs = self.i_pairs[mask]
+            self.j_pairs = self.j_pairs[mask]
 
         # calculate r_ij and d_ij
         r_ij, d_ij = self.displacement_function(
-            positions[self.i_final_pairs],
-            positions[self.j_final_pairs],
+            positions[self.i_pairs],
+            positions[self.j_pairs],
             data.box_vectors,
             data.is_periodic,
         )
@@ -469,8 +574,8 @@ class NeighborlistBruteNsq(torch.nn.Module):
                 2, total_pairs, dtype=torch.int64, device=positions.device
             )
 
-            pairs[0] = self.i_final_pairs[in_cutoff]
-            pairs[1] = self.j_final_pairs[in_cutoff]
+            pairs[0] = self.i_pairs[in_cutoff]
+            pairs[1] = self.j_pairs[in_cutoff]
 
             return PairlistData(
                 pair_indices=pairs,
@@ -480,8 +585,8 @@ class NeighborlistBruteNsq(torch.nn.Module):
 
         else:
             pairs_full, d_ij_full, r_ij_full = self._copy_to_nonunique(
-                self.i_final_pairs[in_cutoff],
-                self.j_final_pairs[in_cutoff],
+                self.i_pairs[in_cutoff],
+                self.j_pairs[in_cutoff],
                 d_ij[in_cutoff],
                 r_ij[in_cutoff],
                 total_pairs,
@@ -492,135 +597,7 @@ class NeighborlistBruteNsq(torch.nn.Module):
                 r_ij=r_ij_full,
             )
 
-
-class NeighborlistVerletNsq(torch.nn.Module):
-    """
-    Verlet neighbor list calculation for inference implemented fully in PyTorch.
-
-    Rebuilding of the neighborlist uses an N^2 approach.  Rebuilding occurs when
-    the maximum displacement of any particle exceeds half the skin distance.
-
-    """
-
-    def __init__(
-        self,
-        cutoff: float,
-        skin: float,
-        displacement_function: OrthogonalDisplacementFunction,
-        only_unique_pairs: bool = False,
-    ):
-        """
-        Compute neighbor lists for inference, filtering pairs based on a cutoff distance.
-
-        Parameters
-        ----------
-        cutoff : float
-            The cutoff distance for neighbor list calculations.
-        skin : float
-            The skin distance for neighbor list calculations.
-        displacement_function : OrthogonalDisplacementFunction
-            The function to calculate displacement vectors and distances between atom pairs, taking into account
-            the specified boundary conditions.
-        only_unique_pairs : bool, optional
-            Whether to only use unique pairs in the pair list calculation, by
-            default True. This should be set to True for all message passing
-            networks.
-        """
-
-        super().__init__()
-
-        self.register_buffer("cutoff", torch.tensor(cutoff))
-        self.skin = skin
-        self.half_skin = skin * 0.5
-        self.cutoff_plus_skin = cutoff + skin
-        self.only_unique_pairs = only_unique_pairs
-
-        self.displacement_function = displacement_function
-        self.indices = torch.tensor([])
-        self.i_pairs = torch.tensor([])
-        self.j_pairs = torch.tensor([])
-
-        self.positions_old = torch.tensor([])
-        self.nlist_pairs = torch.tensor([])
-        self.builds = 0
-        self.box_vectors = torch.zeros([3, 3])
-
-        log.info("Initializing Verlet Neighborlist with N^2 building routine.")
-
-    def _check_nlist(
-        self, positions: torch.Tensor, box_vectors: torch.Tensor, is_periodic
-    ):
-        r_ij, d_ij = self.displacement_function(
-            self.positions_old, positions, box_vectors, is_periodic
-        )
-
-        if torch.any(d_ij > self.half_skin):
-            return True
-        else:
-            return False
-
-    def _init_pairs(self, n_particles: int, device: torch.device):
-        self.indices = torch.arange(n_particles, device=device)
-
-        i_pairs, j_pairs = torch.meshgrid(
-            self.indices,
-            self.indices,
-            indexing="ij",
-        )
-
-        mask = i_pairs < j_pairs
-        self.i_pairs = i_pairs[mask]
-        self.j_pairs = j_pairs[mask]
-
-    def _build_nlist(
-        self, positions: torch.Tensor, box_vectors: torch.Tensor, is_periodic
-    ):
-        r_ij, d_ij = self.displacement_function(
-            positions[self.i_pairs], positions[self.j_pairs], box_vectors, is_periodic
-        )
-
-        in_cutoff = (d_ij < self.cutoff_plus_skin).squeeze()
-        self.nlist_pairs = torch.stack(
-            [self.i_pairs[in_cutoff], self.j_pairs[in_cutoff]]
-        )
-        self.builds += 1
-        return r_ij[in_cutoff], d_ij[in_cutoff]
-
-    def _copy_to_nonunique(
-        self,
-        pairs: torch.Tensor,
-        d_ij: torch.Tensor,
-        r_ij: torch.Tensor,
-        total_unique_pairs: int,
-    ):
-        # this will allow us to copy the data for unique pairs to create the non-unique pairs data
-        r_ij_full = torch.zeros(
-            total_unique_pairs * 2, 3, dtype=r_ij.dtype, device=r_ij.device
-        )
-        d_ij_full = torch.zeros(
-            total_unique_pairs * 2, 1, dtype=d_ij.dtype, device=d_ij.device
-        )
-
-        r_ij_full[0:total_unique_pairs] = r_ij
-
-        # since we are swapping the order of the pairs, the sign changes
-        r_ij_full[total_unique_pairs : 2 * total_unique_pairs] = -r_ij
-
-        d_ij_full[0:total_unique_pairs] = d_ij
-        d_ij_full[total_unique_pairs : 2 * total_unique_pairs] = d_ij
-
-        pairs_full = torch.zeros(
-            2, total_unique_pairs * 2, dtype=torch.int64, device=pairs.device
-        )
-
-        pairs_full[0][0:total_unique_pairs] = pairs[0]
-        pairs_full[1][0:total_unique_pairs] = pairs[1]
-        pairs_full[0][total_unique_pairs : 2 * total_unique_pairs] = pairs[1]
-        pairs_full[1][total_unique_pairs : 2 * total_unique_pairs] = pairs[0]
-
-        return pairs_full, d_ij_full, r_ij_full
-
-    def forward(self, data: NNPInput):
+    def _forward_verlet(self, data: NNPInput):
         """
         Prepares the input tensors for passing to the model.
 
@@ -651,50 +628,76 @@ class NeighborlistVerletNsq(torch.nn.Module):
         if self.builds == 0:
             self.box_vectors = data.box_vectors
 
+        if self.box_vectors.device != positions.device:
+            self.box_vectors = self.box_vectors.to(positions.device)
+        if self.indices.device != positions.device:
+            self.indices = self.indices.to(positions.device)
+        if self.positions_old.device != positions.device:
+            self.positions_old = self.positions_old.to(positions.device)
+        if self.nlist_i_pairs.device != positions.device:
+            self.nlist_i_pairs = self.nlist_i_pairs.to(positions.device)
+            self.nlist_j_pairs = self.nlist_j_pairs.to(positions.device)
+        if self.i_pairs.device != positions.device:
+            self.i_pairs = self.i_pairs.to(positions.device)
+            self.j_pairs = self.j_pairs.to(positions.device)
+
         box_changed = torch.any(self.box_vectors != data.box_vectors)
 
         # avoid reinitializing indices if they are already set and haven't changed
         if self.indices.shape[0] != n:
             self.box_vectors = data.box_vectors
             self.positions_old = positions
-            self._init_pairs(n, positions.device)
-            r_ij, d_ij = self._build_nlist(
-                positions, data.box_vectors, data.is_periodic
+
+            # self.i_pairs and self.j_pairs are all possible unique pairs in the system
+            # and will need to be regenerated if the number of particles change
+            self.i_pairs, self.j_pairs = self._init_verlet_pairs(n, positions.device)
+
+            #  self.nlist_i_pairs, self.nlist_j_pairs are the pairs within the cutoff+skin
+            self.nlist_i_pairs, self.nlist_j_pairs, r_ij, d_ij = (
+                self._build_verlet_nlist(positions, data.box_vectors, data.is_periodic)
             )
         elif box_changed:
             # if the box vectors have changed, we need to rebuild the nlist
-            # but do not need to regenerate the pairs
+            # but do not need to regenerate all possible pairs (i_pairs, j_pairs)
             self.box_vectors = data.box_vectors
             self.positions_old = positions
-            r_ij, d_ij = self._build_nlist(
-                positions, data.box_vectors, data.is_periodic
+
+            self.nlist_i_pairs, self.nlist_j_pairs, r_ij, d_ij = (
+                self._build_verlet_nlist(positions, data.box_vectors, data.is_periodic)
             )
-        elif self._check_nlist(positions, data.box_vectors, data.is_periodic):
+        elif self._check_verlet_nlist(positions, data.box_vectors, data.is_periodic):
+            # if the maximum displacement exceeds half the skin distance, rebuild the nlist
+            # but do not need to regenerate all possible pairs (i_pairs, j_pairs)
             self.positions_old = positions
-            r_ij, d_ij = self._build_nlist(
-                positions, data.box_vectors, data.is_periodic
+            self.nlist_i_pairs, self.nlist_j_pairs, r_ij, d_ij = (
+                self._build_verlet_nlist(positions, data.box_vectors, data.is_periodic)
             )
         else:
+            # if the nlist does not need to be rebuilt, and nothing else has changed
+            # we can just calculate the displacement vectors and distances
             r_ij, d_ij = self.displacement_function(
-                positions[self.nlist_pairs[0]],
-                positions[self.nlist_pairs[1]],
+                positions[self.nlist_i_pairs],
+                positions[self.nlist_j_pairs],
                 data.box_vectors,
                 data.is_periodic,
             )
 
+        # identify which pairs in the neighbor list are within the cutoff
         in_cutoff = (d_ij <= self.cutoff).squeeze()
         total_pairs = in_cutoff.sum()
 
+        # we can take advantage of the pairwise nature to just copy the unique pairs to non-unique pairs
+        # copying is generally faster than the extra computations associated with considering non-unique pairs
         if self.only_unique_pairs:
-            # using this instead of torch.stack to ensure that if we only have a single pair
+            # using this approach instead of torch.stack to ensure that if we only have a single pair
             # we don't run into an issue with shapes.
 
             pairs = torch.zeros(
                 2, total_pairs, dtype=torch.int64, device=positions.device
             )
 
-            pairs[0] = self.nlist_pairs[0][in_cutoff]
-            pairs[1] = self.nlist_pairs[1][in_cutoff]
+            pairs[0] = self.nlist_i_pairs[in_cutoff]
+            pairs[1] = self.nlist_j_pairs[in_cutoff]
 
             return PairlistData(
                 pair_indices=pairs,
@@ -704,7 +707,8 @@ class NeighborlistVerletNsq(torch.nn.Module):
 
         else:
             pairs_full, d_ij_full, r_ij_full = self._copy_to_nonunique(
-                self.nlist_pairs[:, in_cutoff],
+                self.nlist_i_pairs[in_cutoff],
+                self.nlist_j_pairs[in_cutoff],
                 d_ij[in_cutoff],
                 r_ij[in_cutoff],
                 total_pairs,
@@ -732,9 +736,10 @@ class NeighborListForTraining(torch.nn.Module):
 
         super().__init__()
 
-        self.only_unique_pairs = only_unique_pairs
+        # self.only_unique_pairs = only_unique_pairs
         self.pairlist = Pairlist(only_unique_pairs)
         self.register_buffer("cutoff", torch.tensor(cutoff))
+        self.register_buffer("only_unique_pairs", torch.tensor(only_unique_pairs))
 
     def calculate_r_ij(
         self, pair_indices: torch.Tensor, positions: torch.Tensor
@@ -758,6 +763,22 @@ class NeighborListForTraining(torch.nn.Module):
             2, -1, 3
         )
         return selected_positions[1] - selected_positions[0]
+
+    @torch.jit.export
+    def _set_strategy(self, strategy: str = "brute_nsq", skin: float = 0.1):
+        """
+        For the Training neighbor lists, this does nothing, as a brute N^2 scheme is always used.
+
+        This is included only for creating a consistent API with the Inference neighborlists.
+
+        Parameters
+        ----------
+        strategy : str
+            The strategy to use for rebuilding the neighbor list.  This is ignored for training.
+        skin : float, optional
+            The skin distance for the Verlet list, by default 0.1. This is ignored for training.
+        """
+        pass
 
     def calculate_d_ij(self, r_ij: torch.Tensor) -> torch.Tensor:
         """

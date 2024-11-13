@@ -8,7 +8,8 @@ description = "Infrastructure to implement and train NNPs"
 dynamic = ["version"]
 readme = "README.md"
 authors = [
-    { name = "Marcus Wieder", email = "marcus.wieder@choderalab.org" }
+    { name = "Marcus Wieder", email = "marcus.wieder@choderalab.org" },
+    { name = "Christopher Iacovella", email = "chris.iacovella@choderalab.org" },
 ]
 license = { text = "MIT" }
 # See https://pypi.org/classifiers/

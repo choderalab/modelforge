@@ -236,6 +236,24 @@ class Potential(torch.nn.Module):
             (default: False).
         jit_neighborlist : bool, optional
             Whether to JIT compile the neighborlist (default: True).
+
+        Methods
+        -------
+        forward(input_data: NNPInput) -> Dict[str, torch.Tensor]
+            Forward pass for the potential model, computing energy and forces.
+        compute_core_network_output(input_data: NNPInput) -> Dict[str, torch.Tensor]
+            Compute the core network output, including energy predictions.
+        load_state_dict(state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False)
+            Load the state dictionary into the infenerence or training model.
+        set_neighborlist_strategy(strategy: str, skin: float = 0.1)
+            Set the neighborlist strategy and skin for the neighborlist module.
+        forward_for_jit_inference(atomic_numbers: torch.Tensor, positions: torch.Tensor, atomic_subsystem_indices: torch.Tensor, per_system_total_charge: torch.Tensor, pair_list: torch.Tensor, per_atom_partial_charge: torch.Tensor, box_vectors: torch.Tensor, is_periodic: torch.Tensor) -> Dict[str, torch.Tensor]
+            Forward pass for the potential model, computing energy and forces that accepts individual tensors rather than NNPInput class, necessary for JIT compiled model.
+        forward(input_data: NNPInput) -> Dict[str, torch.Tensor]
+            Forward pass for the potential model, computing energy and forces.
+
+
+
         """
 
         super().__init__()
@@ -312,6 +330,61 @@ class Potential(torch.nn.Module):
         del processed_output["pair_indices"]
         del processed_output["d_ij"]
         del processed_output["r_ij"]
+        return processed_output
+
+    @torch.jit.export
+    def set_neighborlist_strategy(self, strategy: str, skin: float = 0.1):
+        """
+        Set the neighborlist strategy and skin for the neighborlist module.
+        Note this cannot be called from a JIT-compiled model.
+
+        Parameters
+        ----------
+        strategy : str
+            The neighborlist strategy to use.
+        skin : Optional[float], optional
+            The skin for the Verlet neighborlist (default is None).
+        """
+        self.neighborlist._set_strategy(strategy, skin=skin)
+
+    # This function accepts the NNPInput data as individual tensors
+    # as opposed to a single NNPInput object.
+    # This is necessary when using a JIT compiled version of the model
+    @torch.jit.export
+    def forward_for_jit_inference(
+        self,
+        atomic_numbers: torch.Tensor,
+        positions: torch.Tensor,
+        atomic_subsystem_indices: torch.Tensor,
+        per_system_total_charge: torch.Tensor,
+        pair_list: torch.Tensor,
+        per_atom_partial_charge: torch.Tensor,
+        box_vectors: torch.Tensor,
+        is_periodic: torch.Tensor,
+    ) -> Dict[str, torch.Tensor]:
+        # Step 1: Compute pair list and distances using Neighborlist
+        input_data = NNPInput(
+            atomic_numbers=atomic_numbers,
+            positions=positions,
+            atomic_subsystem_indices=atomic_subsystem_indices,
+            per_system_total_charge=per_system_total_charge,
+            pair_list=pair_list,
+            per_atom_partial_charge=per_atom_partial_charge,
+            box_vectors=box_vectors,
+            is_periodic=is_periodic,
+        )
+
+        pairlist_output = self.neighborlist.forward(input_data)
+
+        # Step 2: Compute the core network output
+        core_output = self.core_network.forward(input_data, pairlist_output)
+
+        # Step 3: Apply postprocessing using PostProcessing
+        core_output = self._add_total_charge(core_output, input_data)
+        core_output = self._add_pairlist(core_output, pairlist_output)
+
+        processed_output = self.postprocessing.forward(core_output)
+        processed_output = self._remove_pairlist(processed_output)
         return processed_output
 
     def forward(self, input_data: NNPInput) -> Dict[str, torch.Tensor]:
@@ -493,27 +566,17 @@ def setup_potential(
 
         displacement_function = OrthogonalDisplacementFunction()
 
-        if neighborlist_strategy == "verlet":
-            from modelforge.potential.neighbors import NeighborlistVerletNsq
+        from modelforge.potential.neighbors import NeighborlistForInference
 
-            neighborlist = NeighborlistVerletNsq(
-                cutoff=potential_parameter.core_parameter.maximum_interaction_radius,
-                displacement_function=displacement_function,
-                only_unique_pairs=only_unique_pairs,
-                skin=verlet_neighborlist_skin,
-            )
-        elif neighborlist_strategy == "brute":
-            from modelforge.potential.neighbors import NeighborlistBruteNsq
-
-            neighborlist = NeighborlistBruteNsq(
-                cutoff=potential_parameter.core_parameter.maximum_interaction_radius,
-                displacement_function=displacement_function,
-                only_unique_pairs=only_unique_pairs,
-            )
-        else:
-            raise ValueError(
-                f"Unsupported neighborlist strategy: {neighborlist_strategy}"
-            )
+        neighborlist = NeighborlistForInference(
+            cutoff=potential_parameter.core_parameter.maximum_interaction_radius,
+            displacement_function=displacement_function,
+            only_unique_pairs=only_unique_pairs,
+        )
+        # we can set the strategy here before passing this to the Potential
+        # this can still be modified later using Potential.set_neighborlist_strategy before it has bit JITTED
+        # after that, we can access variables directly at init level in the TorchForce wrapper
+        neighborlist._set_strategy(neighborlist_strategy, skin=verlet_neighborlist_skin)
 
     potential = Potential(
         core_network,
@@ -546,7 +609,7 @@ class NeuralNetworkPotentialFactory:
         use_training_mode_neighborlist: bool = False,
         simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
         jit: bool = True,
-        inference_neighborlist_strategy: str = "verlet",
+        inference_neighborlist_strategy: str = "verlet_nsq",
         verlet_neighborlist_skin: Optional[float] = 0.1,
     ) -> Union[Potential, JAXModel, pl.LightningModule]:
         """
@@ -572,7 +635,7 @@ class NeuralNetworkPotentialFactory:
         jit : bool, optional
             Whether to use JIT compilation (default is True).
         inference_neighborlist_strategy : Optional[str], optional
-            Neighborlist strategy for inference (default is "verlet"). other option is "brute".
+            Neighborlist strategy for inference (default is "verlet_nsq"). other option is "brute_nsq".
         verlet_neighborlist_skin : Optional[float], optional
             Skin for the Verlet neighborlist (default is 0.1, units nanometers).
         Returns
@@ -704,6 +767,8 @@ class NeuralNetworkPotentialFactory:
             seed_random_number(potential_seed)
 
         log.debug(f"{training_parameter=}")
+        log.debug(f"{potential_parameter=}")
+        log.debug(f"{runtime_parameter=}")
         log.debug(f"{dataset_parameter=}")
 
         trainer = PotentialTrainer(

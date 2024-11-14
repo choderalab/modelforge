@@ -2032,3 +2032,21 @@ def test_spice_2_process_datasets(prep_temp_dir):
         ]
     )
     assert np.allclose(spice_2_data.data[0]["dft_total_energy"].m, known_energies)
+
+
+def test_tmqm_parse_properties_line(prep_temp_dir):
+    from modelforge.curation.tmqm_curation import tmQMCuration
+
+    tmqm_data = tmQMCuration(
+        "tmqm_dataset.hdf5", str(prep_temp_dir), str(prep_temp_dir)
+    )
+
+    line = "CSD_code = WELROW | q = 0 | S = 0 | Stoichiometry = C40H36LaN2P3Se6 | MND = 8 | 2020-2024 CSD"
+
+    properties = tmqm_data._parse_properties(line)
+
+    assert properties["CSD_code"] == "WELROW"
+    assert properties["q"] == 0
+    assert properties["S"] == 0
+    assert properties["Stoichiometry"] == "C40H36LaN2P3Se6"
+    assert properties["MND"] == 8

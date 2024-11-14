@@ -441,7 +441,6 @@ class tmQMCuration(DatasetCuration):
         for name in snapshots_temp_dict.keys():
             data_temp.append(snapshots_temp_dict[name])
 
-        print(max_records, total_conformers)
         n_max = len(data_temp)
         if max_records is not None:
             n_max = max_records
@@ -528,18 +527,20 @@ class tmQMCuration(DatasetCuration):
         )
         from modelforge.utils.misc import list_files, ungzip_file
 
-        # list the files in the directory to examine
-        files = list_files(
+        # list the files in the directory that are gzipped
+        gzip_files = list_files(
             directory=f"{self.local_cache_dir}/tmqm_files/{self.extracted_filepath}",
             extension=".gz",
         )
-        for file in files:
+        # ungzip the files
+        for file in gzip_files:
             ungzip_file(
                 input_path_dir=f"{self.local_cache_dir}/tmqm_files/{self.extracted_filepath}",
                 file_name=file,
                 output_path_dir=f"{self.local_cache_dir}/tmqm_files/{self.extracted_filepath}",
             )
 
+        # list the files in the directory by type
         xyz_files = list_files(
             directory=f"{self.local_cache_dir}/tmqm_files/{self.extracted_filepath}",
             extension=".xyz",

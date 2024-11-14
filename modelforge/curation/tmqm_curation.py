@@ -11,7 +11,7 @@ class tmQMCuration(DatasetCuration):
     """
     Routines to fetch and process the transition metal quantum mechanics (tmQM) dataset into a curated hdf5 file.
 
-    tmQM  contains the geometries and properties of 86,665 mononuclear complexes extracted from the
+    The tmQM dataset contains the geometries and properties of 86,665 mononuclear complexes extracted from the
     Cambridge Structural Database, including Werner, bioinorganic, and organometallic complexes based on a large
     variety of organic ligands and 30 transition metals (the 3d, 4d, and 5d from groups 3 to 12).
     All complexes are closed-shell, with a formal charge in the range {+1, 0, −1}e
@@ -172,6 +172,9 @@ class tmQMCuration(DatasetCuration):
             "metal_center_charge": "series_mol",
             "total_charge": "series_mol",
             "polarizability": "series_mol",
+            "spin_multiplicity": "series_mol",
+            "stoichiometry": "single_rec",
+            "metal_n_ligands": "single_mol",
         }
 
     def _parse_properties(self, line: str) -> dict:
@@ -438,12 +441,14 @@ class tmQMCuration(DatasetCuration):
         for name in snapshots_temp_dict.keys():
             data_temp.append(snapshots_temp_dict[name])
 
-        n_max = len(self.data)
+        print(max_records, total_conformers)
+        n_max = len(data_temp)
         if max_records is not None:
             n_max = max_records
         elif total_conformers is not None:
-            n_max = max_records
+            n_max = total_conformers
 
+        print(len(data_temp), n_max)
         self.data = data_temp[0:n_max]
 
         # if unit outputs were defined perform conversion

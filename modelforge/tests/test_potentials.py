@@ -348,9 +348,9 @@ def test_state_dict_saving_and_loading(potential_name, prep_temp_dir):
     potential.load_state_dict(torch.load(file_path))
 
 
-@pytest.mark.xfail(
-    reason="checkpoint file needs to be updated now that non_unique_pairs is registered in nlist"
-)
+# @pytest.mark.xfail(
+#     reason="checkpoint file needs to be updated now that non_unique_pairs is registered in nlist"
+# )
 def test_loading_from_checkpoint_file():
     from importlib import resources
     from modelforge.tests import data
@@ -361,7 +361,8 @@ def test_loading_from_checkpoint_file():
 
     from modelforge.potential.potential import load_inference_model_from_checkpoint
 
-    potential = load_inference_model_from_checkpoint(ckpt_file)
+    # note this is a legacy file, and thus we need to manually define only_unique_pairs
+    potential = load_inference_model_from_checkpoint(ckpt_file, only_unique_pairs=False)
     assert potential is not None
 
 

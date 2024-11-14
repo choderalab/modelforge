@@ -128,6 +128,7 @@ def test_load_from_wandb(prep_temp_dir):
         run_path="modelforge_nnps/test_ANI2x_on_dataset/model-qloqn6gk",
         version="v0",
         local_cache_dir=f"{prep_temp_dir}/test_wandb",
+        only_unique_pairs=True,
     )
 
     assert os.path.isfile(f"{prep_temp_dir}/test_wandb/model.ckpt")

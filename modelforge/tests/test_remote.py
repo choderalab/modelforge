@@ -5,6 +5,8 @@ import os
 
 from modelforge.utils.remote import *
 
+IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
+
 
 @pytest.fixture(scope="session")
 def prep_temp_dir(tmp_path_factory):
@@ -113,3 +115,22 @@ def test_md5_calculation(prep_temp_dir):
             output_filename=name,
             force_download=True,
         )
+
+
+@pytest.mark.skipif(
+    IN_GITHUB_ACTIONS,
+    reason="Skipping; requires authentication which cannot be done via PR from fork ",
+)
+def test_load_from_wandb(prep_temp_dir):
+    from modelforge.potential.potential import NeuralNetworkPotentialFactory
+
+    nn_potential = NeuralNetworkPotentialFactory().load_from_wandb(
+        run_path="modelforge_nnps/test_ANI2x_on_dataset/model-qloqn6gk",
+        version="v0",
+        local_cache_dir=f"{prep_temp_dir}/test_wandb",
+        only_unique_pairs=True,
+    )
+
+    assert os.path.isfile(f"{prep_temp_dir}/test_wandb/model.ckpt")
+
+    assert nn_potential is not None

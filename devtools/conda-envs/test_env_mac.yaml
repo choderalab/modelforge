@@ -25,7 +25,7 @@ dependencies:
   - flax
   - pydantic>=2.0
   - graphviz
-  -
+  - wandb>=0.18.5
 
   # Testing
   - pytest>=2.1

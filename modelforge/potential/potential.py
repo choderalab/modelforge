@@ -2,7 +2,20 @@
 This module contains the base classes for the neural network potentials.
 """
 
-from typing import Any, Dict, List, Mapping, NamedTuple, Optional, Tuple, TypeVar, Union
+from typing import (
+    Any,
+    Dict,
+    Callable,
+    Literal,
+    TYPE_CHECKING,
+    List,
+    Mapping,
+    NamedTuple,
+    Optional,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 import lightning as pl
 import torch
@@ -35,8 +48,6 @@ T_NNP_Parameters = TypeVar(
     AimNet2Parameters,
 )
 
-
-from typing import Callable, Literal, Optional, Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from modelforge.train.training import PotentialTrainer
@@ -98,7 +109,6 @@ from modelforge.potential.processing import (
 
 
 class PostProcessing(torch.nn.Module):
-
     _SUPPORTED_PROPERTIES = [
         "per_atom_energy",
         "per_atom_charge",
@@ -159,7 +169,6 @@ class PostProcessing(torch.nn.Module):
                 ]
                 == "coulomb"
             ):
-
                 self.registered_chained_operations["electrostatic_potential"] = (
                     CoulombPotential(
                         postprocessing_parameter["electrostatic_potential"][
@@ -167,6 +176,7 @@ class PostProcessing(torch.nn.Module):
                         ],
                     )
                 )
+
                 self._registered_properties.append("electrostatic_potential")
                 assert all(
                     prop in PostProcessing._SUPPORTED_PROPERTIES
@@ -194,7 +204,6 @@ class PostProcessing(torch.nn.Module):
         processed_data: Dict[str, torch.Tensor] = {}
         # Iterate over items in ModuleDict
         for name, module in self.registered_chained_operations.items():
-
             module_output = module.forward(data)
             processed_data.update(module_output)
 
@@ -455,7 +464,8 @@ class Potential(torch.nn.Module):
         assign : bool, optional
             Whether to assign the state dictionary to the model directly
             (default is False).
-
+        legacy : bool, optional
+            Earlier version of the potential model did not include only_unique_pairs in the
         Notes
         -----
         This function can remove a specific prefix from the keys in the state
@@ -584,7 +594,6 @@ from openff.units import unit
 
 
 class NeuralNetworkPotentialFactory:
-
     @staticmethod
     def generate_potential(
         *,
@@ -677,6 +686,47 @@ class NeuralNetworkPotentialFactory:
             return PyTorch2JAXConverter().convert_to_jax_model(potential)
         else:
             return potential
+
+    @staticmethod
+    def load_from_wandb(
+        *,
+        run_path: str,
+        version: str,
+        local_cache_dir: str = "./",
+        only_unique_pairs: Optional[bool] = None,
+    ) -> Union[Potential, JAXModel]:
+        """
+        Load a neural network potential from a Weights & Biases run.
+
+        Parameters
+        ----------
+        run_path : str
+            The path to the Weights & Biases run.
+        version : str
+            The version of the run to load.
+        local_cache_dir : str, optional
+            The local cache directory for downloading the model (default is "./"),
+        only_unique_pairs : Optional[bool], optional
+            For models trained prior to PR #299 in modelforge, this parameter is required to be able to read the model.
+            This value should be True for the ANI models, False for most other models.
+
+        Returns
+        -------
+        Union[Potential, JAXModel]
+            An instantiated neural network potential for training or inference.
+        """
+        import wandb
+
+        run = wandb.init()
+        artifact_path = f"{run_path}:{version}"
+        artifact = run.use_artifact(artifact_path)
+        artifact_dir = artifact.download(root=local_cache_dir)
+        checkpoint_file = f"{artifact_dir}/model.ckpt"
+        potential = load_inference_model_from_checkpoint(
+            checkpoint_file, only_unique_pairs
+        )
+
+        return potential
 
     @staticmethod
     def generate_trainer(
@@ -852,6 +902,7 @@ class PyTorch2JAXConverter:
 
 def load_inference_model_from_checkpoint(
     checkpoint_path: str,
+    only_unique_pairs: Optional[bool] = None,
 ) -> Union[Potential, JAXModel]:
     """
     Creates an inference model from a checkpoint file.
@@ -861,8 +912,11 @@ def load_inference_model_from_checkpoint(
     ----------
     checkpoint_path : str
         The path to the checkpoint file.
+    only_unique_pairs : Optional[bool], optional
+        If defined, this will set the only_unique_pairs key in the neighborlist module. This is only needed
+        for models trained prior to PR #299 in modelforge. (default is None).
+        In the case of ANI models, this should be set to True. Typically False for other mdoels
     """
-    import torch
 
     # Load the checkpoint
     checkpoint = torch.load(checkpoint_path, map_location=torch.device("cpu"))
@@ -879,6 +933,10 @@ def load_inference_model_from_checkpoint(
         dataset_statistic=dataset_statistic,
         potential_seed=potential_seed,
     )
+    if only_unique_pairs is not None:
+        checkpoint["state_dict"]["neighborlist.only_unique_pairs"] = torch.Tensor(
+            [only_unique_pairs]
+        )
 
     # Load the state dict into the model
     potential.load_state_dict(checkpoint["state_dict"])

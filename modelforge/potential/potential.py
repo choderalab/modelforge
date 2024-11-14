@@ -689,7 +689,11 @@ class NeuralNetworkPotentialFactory:
 
     @staticmethod
     def load_from_wandb(
-        *, run_path: str, version: str, local_cache_dir: str = "./"
+        *,
+        run_path: str,
+        version: str,
+        local_cache_dir: str = "./",
+        only_unique_pairs: Optional[bool] = None,
     ) -> Union[Potential, JAXModel]:
         """
         Load a neural network potential from a Weights & Biases run.
@@ -701,7 +705,10 @@ class NeuralNetworkPotentialFactory:
         version : str
             The version of the run to load.
         local_cache_dir : str, optional
-            The local cache directory for downloading the model (default is "./").
+            The local cache directory for downloading the model (default is "./"),
+        only_unique_pairs : Optional[bool], optional
+            For models trained prior to PR #299 in modelforge, this parameter is required to be able to read the model.
+            This value should be True for the ANI models, False for most other models.
 
         Returns
         -------
@@ -715,7 +722,9 @@ class NeuralNetworkPotentialFactory:
         artifact = run.use_artifact(artifact_path)
         artifact_dir = artifact.download(root=local_cache_dir)
         checkpoint_file = f"{artifact_dir}/model.ckpt"
-        potential = load_inference_model_from_checkpoint(checkpoint_file)
+        potential = load_inference_model_from_checkpoint(
+            checkpoint_file, only_unique_pairs
+        )
 
         return potential
 

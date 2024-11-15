@@ -124,7 +124,7 @@ class tmQMCuration(DatasetCuration):
                 "u_in": unit.hartree,
                 "u_out": unit.kilojoule_per_mole,
             },
-            "dipole_moment": {
+            "dipole_moment_magnitude": {
                 "u_in": unit.debye,
                 "u_out": unit.elementary_charge * unit.nanometer,
             },
@@ -169,7 +169,7 @@ class tmQMCuration(DatasetCuration):
             "electronic_energy": "series_mol",
             "dispersion_energy": "series_mol",
             "total_energy": "series_mol",
-            "dipole_moment": "series_mol",
+            "dipole_moment_magnitude": "series_mol",
             "energy_of_homo": "series_mol",
             "energy_of_lumo": "series_mol",
             "homo_lumo_gap": "series_mol",
@@ -443,9 +443,9 @@ class tmQMCuration(DatasetCuration):
                         np.array(total_energy).reshape(1, 1)
                         * self.qm_parameters["total_energy"]["u_in"]
                     )
-                    snapshots_temp_dict[name]["dipole_moment"] = (
+                    snapshots_temp_dict[name]["dipole_moment_magnitude"] = (
                         np.array(float(temp_dict["Dipole_M"])).reshape(1, 1)
-                        * self.qm_parameters["dipole_moment"]["u_in"]
+                        * self.qm_parameters["dipole_moment_magnitude"]["u_in"]
                     )
                     snapshots_temp_dict[name]["metal_center_charge"] = (
                         np.array(float(temp_dict["Metal_q"])).reshape(1, 1)

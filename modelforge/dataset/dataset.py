@@ -48,6 +48,7 @@ class DataSetName(CaseInsensitiveEnum):
     SPICE2 = "SPICE2"
     SPICE1_OPENFF = "SPICE1_OPENFF"
     PHALKETHOH = "PhAlkEthOH"
+    TMQM = "tmQM"
 
 
 class DatasetParameters(BaseModel):

@@ -52,55 +52,52 @@ class tmQMDataset(HDF5Dataset):
     _property_names = PropertyNames(
         atomic_numbers="atomic_numbers",
         positions="geometry",
-        E="internal_energy_at_0K",
+        E="total_energy",
+        dipole_moment="dipole_moment_computed",
+        total_charge="total_charge",
     )
 
     # for simplicity, commenting out those properties that are cannot be used in our current implementation
     _available_properties = [
         "geometry",
         "atomic_numbers",
-        "internal_energy_at_0K",
-        "internal_energy_at_298.15K",
-        "enthalpy_at_298.15K",
-        "free_energy_at_298.15K",
-        # "heat_capacity_at_298.15K",
-        "zero_point_vibrational_energy",
-        # "electronic_spatial_extent",
-        "lumo-homo_gap",
+        "total_charge",
+        # "partial_charges",
+        # "metal_center_charge",
+        "dipole_moment_computed",
+        "total_energy",
+        "electronic_energy",
+        "dispersion_energy",
         "energy_of_homo",
         "energy_of_lumo",
-        # "rotational_constant_A",
-        # "rotational_constant_B",
-        # "rotational_constant_C",
-        "dipole_moment",
-        # "isotropic_polarizability",
-        # "charges",
+        "homo_lumo_gap",
+        # "dipole_moment_magnitude",
+        # "polarizability",
     ]  # All properties within the datafile, aside from SMILES/inchi.
 
     _available_properties_association = {
         "geometry": "positions",
         "atomic_numbers": "atomic_numbers",
-        "internal_energy_at_0K": "E",
-        "internal_energy_at_298.15K": "E",
-        "enthalpy_at_298.15K": "E",
-        "free_energy_at_298.15K": "E",
-        "zero_point_vibrational_energy": "E",
-        "lumo-homo_gap": "E",
+        "total_charge": "total_charge",
+        "dipole_moment_computed": "dipole_moment",
+        "total_energy": "E",
+        "electronic_energy": "E",
+        "dispersion_energy": "E",
         "energy_of_homo": "E",
         "energy_of_lumo": "E",
-        "dipole_moment": "dipole_moment",
+        "homo_lumo_gap": "E",
     }
 
     def __init__(
         self,
-        dataset_name: str = "QM9",
+        dataset_name: str = "tmQM",
         version_select: str = "latest",
         local_cache_dir: str = ".",
         force_download: bool = False,
         regenerate_cache=False,
     ) -> None:
         """
-        Initialize the QM9Data class.
+        Initialize the tmQMData class.
 
         Parameters
         ----------
@@ -126,8 +123,9 @@ class tmQMDataset(HDF5Dataset):
         _default_properties_of_interest = [
             "geometry",
             "atomic_numbers",
-            "internal_energy_at_0K",
-            "dipole_moment",
+            "total_energy",
+            "dipole_moment_computed",
+            "total_charge",
         ]  # NOTE: Default values
 
         self._properties_of_interest = _default_properties_of_interest
@@ -136,27 +134,19 @@ class tmQMDataset(HDF5Dataset):
         self.version_select = version_select
         from openff.units import unit
 
-        # atomic self energies
-        self._ase = {
-            "H": -1313.4668615546 * unit.kilojoule_per_mole,
-            "C": -99366.70745535441 * unit.kilojoule_per_mole,
-            "N": -143309.9379722722 * unit.kilojoule_per_mole,
-            "O": -197082.0671774158 * unit.kilojoule_per_mole,
-            "F": -261811.54555874597 * unit.kilojoule_per_mole,
-        }
         from loguru import logger
 
         from importlib import resources
         from modelforge.dataset import yaml_files
         import yaml
 
-        yaml_file = resources.files(yaml_files) / "qm9.yaml"
+        yaml_file = resources.files(yaml_files) / "tmqm.yaml"
         logger.debug(f"Loading config data from {yaml_file}")
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)
 
         # make sure we have the correct yaml file
-        assert data_inputs["dataset"] == "qm9"
+        assert data_inputs["dataset"] == "tmqm"
 
         if self.version_select == "latest":
             # in the yaml file, the entry latest will define the name of the version to use
@@ -220,7 +210,7 @@ class tmQMDataset(HDF5Dataset):
 
         Examples
         --------
-        >>> data = QM9Dataset()
+        >>> data = tmQMDataset()
         >>> data.available_properties
         ['geometry', 'atomic_numbers', 'return_energy']
         """
@@ -240,8 +230,8 @@ class tmQMDataset(HDF5Dataset):
 
         Examples
         --------
-        >>> data = QM9Dataset()
-        >>> data.properties_of_interest = ["geometry", "atomic_numbers", "return_energy"]
+        >>> data = tmQMDataset()
+        >>> data.properties_of_interest = ["geometry", "atomic_numbers", "total_energy"]
         """
         if not set(properties_of_interest).issubset(self._available_properties):
             raise ValueError(
@@ -255,7 +245,7 @@ class tmQMDataset(HDF5Dataset):
 
         Examples
         --------
-        >>> data = QM9Dataset()
+        >>> data = tmQMDataset()
         >>> data.download()  # Downloads the dataset
 
         """

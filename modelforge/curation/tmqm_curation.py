@@ -128,6 +128,10 @@ class tmQMCuration(DatasetCuration):
                 "u_in": unit.debye,
                 "u_out": unit.elementary_charge * unit.nanometer,
             },
+            "dipole_moment_computed": {
+                "u_in": unit.elementary_charge * unit.angstrom,
+                "u_out": unit.elementary_charge * unit.nanometer,
+            },
             "polarizability": {
                 "u_in": unit.bohr * unit.bohr * unit.bohr,
                 "u_out": unit.nanometer * unit.nanometer * unit.nanometer,
@@ -175,6 +179,7 @@ class tmQMCuration(DatasetCuration):
             "spin_multiplicity": "series_mol",
             "stoichiometry": "single_rec",
             "metal_n_ligands": "single_mol",
+            "dipole_moment_computed": "single_mol",
         }
 
     def _parse_properties(self, line: str) -> dict:
@@ -302,6 +307,29 @@ class tmQMCuration(DatasetCuration):
                 data_all_temp[name]["partial_charges"].shape[1]
                 == data_all_temp[name]["geometry"].shape[1]
             )
+            # calculate the dipole moment
+            # first we need to ensure center of mass is the origin
+            from openff.units.elements import MASSES
+
+            atomic_masses = np.array(
+                [
+                    MASSES[atomic_number].m
+                    for atomic_number in data_all_temp[name]["atomic_numbers"]
+                    .reshape(-1)
+                    .tolist()
+                ]
+            )
+            center_of_mass = np.einsum(
+                "i,ij->j", atomic_masses, data_all_temp[name]["geometry"][0].m
+            ) / np.sum(atomic_masses)
+            pos = data_all_temp[name]["geometry"][0].m - center_of_mass
+
+            data_all_temp[name]["dipole_moment_computed"] = (
+                np.einsum("i,ij->j", np.array(charges).reshape(-1), pos)
+                * self.qm_parameters["dipole_moment_computed"]["u_in"]
+            )
+
+            # calculate the center of mass
 
             # calculate the reference energy at 0K and 298.15K
             # this is done by summing the reference energies of the atoms
@@ -408,6 +436,13 @@ class tmQMCuration(DatasetCuration):
                         np.array(float(temp_dict["Dispersion_E"])).reshape(1, 1)
                         * self.qm_parameters["dispersion_energy"]["u_in"]
                     )
+                    total_energy = float(temp_dict["Electronic_E"]) + float(
+                        temp_dict["Dispersion_E"]
+                    )
+                    snapshots_temp_dict[name]["total_energy"] = (
+                        np.array(total_energy).reshape(1, 1)
+                        * self.qm_parameters["total_energy"]["u_in"]
+                    )
                     snapshots_temp_dict[name]["dipole_moment"] = (
                         np.array(float(temp_dict["Dipole_M"])).reshape(1, 1)
                         * self.qm_parameters["dipole_moment"]["u_in"]
@@ -433,10 +468,8 @@ class tmQMCuration(DatasetCuration):
                         np.array(float(temp_dict["Polarizability"])).reshape(1, 1)
                         * self.qm_parameters["polarizability"]["u_in"]
                     )
-
-                    # csv_temp_dict[temp_dict["CSD_code"]] = temp_dict
-
                     line_count += 1
+
         data_temp = []
         for name in snapshots_temp_dict.keys():
             data_temp.append(snapshots_temp_dict[name])

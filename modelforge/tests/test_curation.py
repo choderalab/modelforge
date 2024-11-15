@@ -2050,3 +2050,87 @@ def test_tmqm_parse_properties_line(prep_temp_dir):
     assert properties["S"] == 0
     assert properties["Stoichiometry"] == "C40H36LaN2P3Se6"
     assert properties["MND"] == 8
+
+
+def test_tmqm_parse_snapshot_data(prep_temp_dir):
+    from modelforge.curation.tmqm_curation import tmQMCuration
+
+    tmqm_data = tmQMCuration(
+        "tmqm_dataset.hdf5", str(prep_temp_dir), str(prep_temp_dir)
+    )
+
+    from importlib import resources
+    from modelforge.tests import data
+
+    snapshots = []
+
+    input_xyz_file = str(resources.files(data).joinpath("tmqm_two_configs.xyz"))
+    input_q_file = str(resources.files(data).joinpath("tmqm_two_configs.q"))
+
+    with open(input_xyz_file, "r") as f:
+        lines = f.readlines()
+        temp = []
+        for line in lines:
+            if line != "\n":
+                temp.append(line.rstrip("\n"))
+            else:
+                snapshots.append(temp)
+                temp = []
+
+    snapshot_charges = []
+    with open(input_q_file, "r") as f:
+        lines = f.readlines()
+        temp = []
+        for line in lines:
+            if line != "\n":
+                temp.append(line.rstrip("\n"))
+            else:
+                snapshot_charges.append(temp)
+                temp = []
+
+    data_temp = tmqm_data._parse_snapshot_data(snapshots, snapshot_charges)
+
+    assert "WELROW" in data_temp.keys()
+    assert "VUCVUN" in data_temp.keys()
+
+    assert data_temp["WELROW"]["geometry"].shape == (1, 88, 3)
+    assert data_temp["WELROW"]["partial_charges"].shape == (1, 88, 1)
+    assert data_temp["WELROW"]["atomic_numbers"].shape == (88, 1)
+
+    print(data_temp)
+
+
+def test_tmqm_process_data(prep_temp_dir):
+    from modelforge.curation.tmqm_curation import tmQMCuration
+
+    tmqm_data = tmQMCuration(
+        "tmqm_dataset.hdf5", str(prep_temp_dir), str(prep_temp_dir)
+    )
+
+    from importlib import resources
+    from modelforge.tests import data
+
+    input_xyz_files = ["tmqm_two_configs.xyz"]
+    input_q_files = ["tmqm_two_configs.q"]
+    input_csv_files = ["tmqm_two_configs.csv"]
+
+    local_data_path = resources.files(data).joinpath("")
+    tmqm_data._process_downloaded(
+        local_data_path,
+        xyz_files=input_xyz_files,
+        q_files=input_q_files,
+        csv_files=input_csv_files,
+        max_records=2,
+    )
+
+    assert len(tmqm_data.data) == 2
+
+    print(tmqm_data.data)
+    tmqm_data._process_downloaded(
+        local_data_path,
+        xyz_files=input_xyz_files,
+        q_files=input_q_files,
+        csv_files=input_csv_files,
+        max_records=1,
+    )
+    assert len(tmqm_data.data) == 1

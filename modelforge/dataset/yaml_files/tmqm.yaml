@@ -1,0 +1,31 @@
+dataset: tmqm
+latest: full_dataset_v0
+latest_test: nc_1000_v0
+full_dataset_v0:
+  version: 0
+  doi:
+  gz_data_file:
+    length:
+    md5:
+    name: tmqm_dataset_v0.hdf5.gz
+  hdf5_data_file:
+    md5: 99b8add060d871e9b319a607fb50f79d
+    name: tmqm_dataset_v0.hdf5
+  processed_data_file:
+    md5: null
+    name: tmqm_dataset_v0_processed.npz
+  url:
+nc_1000_v0:
+  version: 0
+  doi:
+  gz_data_file:
+    length:
+    md5:
+    name: tmqm_dataset_v0_nc_1000.hdf5.gz
+  hdf5_data_file:
+    md5: 91042f14bab1bff409c817e9b3b17322
+    name: tmqm_dataset_v0_nc_1000.hdf5
+  processed_data_file:
+    md5: null
+    name: qm9_dataset_v0_nc_1000_processed.npz
+  url:

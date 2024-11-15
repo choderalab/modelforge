@@ -2102,6 +2102,7 @@ def test_tmqm_parse_snapshot_data(prep_temp_dir):
 
 def test_tmqm_process_data(prep_temp_dir):
     from modelforge.curation.tmqm_curation import tmQMCuration
+    from openff.units import unit
 
     tmqm_data = tmQMCuration(
         "tmqm_dataset.hdf5", str(prep_temp_dir), str(prep_temp_dir)
@@ -2134,3 +2135,37 @@ def test_tmqm_process_data(prep_temp_dir):
         max_records=1,
     )
     assert len(tmqm_data.data) == 1
+
+    assert tmqm_data.data[0]["name"] == "WELROW"
+    assert tmqm_data.data[0]["n_configs"] == 1
+    assert tmqm_data.data[0]["geometry"].shape == (1, 88, 3)
+    assert tmqm_data.data[0]["atomic_numbers"].shape == (88, 1)
+    assert tmqm_data.data[0]["partial_charges"].shape == (1, 88, 1)
+    assert np.allclose(
+        tmqm_data.data[0]["total_charge"],
+        np.array([0.0]) * unit.elementary_charge,
+    )
+    assert np.all(tmqm_data.data[0]["spin_multiplicity"] == np.array([0.0]))
+    assert tmqm_data.data[0]["stoichiometry"] == "C40H36LaN2P3Se6"
+    assert tmqm_data.data[0]["metal_n_ligands"] == 8
+    assert tmqm_data.data[0]["partial_charges"].shape == (1, 88, 1)
+    assert np.allclose(
+        tmqm_data.data[0]["dipole_moment_computed"],
+        np.array([-0.04256132, 0.02465702, -0.01495284])
+        * unit.elementary_charge
+        * unit.nanometer,
+    )
+    assert np.allclose(
+        tmqm_data.data[0]["dipole_moment_computed_scaled"],
+        np.array([[-0.04361713, 0.02526868, -0.01532378]])
+        * unit.elementary_charge
+        * unit.nanometer,
+    )
+    assert np.allclose(
+        tmqm_data.data[0]["dipole_moment_magnitude"],
+        np.array([0.05268566]) * unit.elementary_charge * unit.nanometer,
+    )
+    assert np.allclose(
+        np.linalg.norm(tmqm_data.data[0]["dipole_moment_computed_scaled"].m),
+        tmqm_data.data[0]["dipole_moment_magnitude"].m,
+    )

@@ -132,6 +132,10 @@ class tmQMCuration(DatasetCuration):
                 "u_in": unit.elementary_charge * unit.angstrom,
                 "u_out": unit.elementary_charge * unit.nanometer,
             },
+            "dipole_moment_computed_scaled": {
+                "u_in": unit.elementary_charge * unit.angstrom,
+                "u_out": unit.elementary_charge * unit.nanometer,
+            },
             "polarizability": {
                 "u_in": unit.bohr * unit.bohr * unit.bohr,
                 "u_out": unit.nanometer * unit.nanometer * unit.nanometer,
@@ -180,6 +184,7 @@ class tmQMCuration(DatasetCuration):
             "stoichiometry": "single_rec",
             "metal_n_ligands": "single_mol",
             "dipole_moment_computed": "single_mol",
+            "dipole_moment_computed_scaled": "single_mol",
         }
 
     def _parse_properties(self, line: str) -> dict:
@@ -410,7 +415,6 @@ class tmQMCuration(DatasetCuration):
                         snapshot_charges.append(temp)
                         temp = []
 
-        print(len(snapshot_charges[0]))
         snapshots_temp_dict = self._parse_snapshot_data(snapshots, snapshot_charges)
 
         columns = []
@@ -443,10 +447,28 @@ class tmQMCuration(DatasetCuration):
                         np.array(total_energy).reshape(1, 1)
                         * self.qm_parameters["total_energy"]["u_in"]
                     )
+
                     snapshots_temp_dict[name]["dipole_moment_magnitude"] = (
                         np.array(float(temp_dict["Dipole_M"])).reshape(1, 1)
                         * self.qm_parameters["dipole_moment_magnitude"]["u_in"]
                     )
+
+                    # rescale the computed dipole moment vector to match the magnitude of the reported DFT value
+                    computed_magnitude = (
+                        np.linalg.norm(
+                            snapshots_temp_dict[name]["dipole_moment_computed"].m
+                        )
+                        * snapshots_temp_dict[name]["dipole_moment_computed"].u
+                    )
+
+                    ratio = computed_magnitude.reshape(-1) / snapshots_temp_dict[name][
+                        "dipole_moment_magnitude"
+                    ].reshape(-1)
+
+                    snapshots_temp_dict[name]["dipole_moment_computed_scaled"] = (
+                        snapshots_temp_dict[name]["dipole_moment_computed"] / ratio
+                    )
+
                     snapshots_temp_dict[name]["metal_center_charge"] = (
                         np.array(float(temp_dict["Metal_q"])).reshape(1, 1)
                         * self.qm_parameters["metal_center_charge"]["u_in"]

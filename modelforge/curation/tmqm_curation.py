@@ -182,9 +182,9 @@ class tmQMCuration(DatasetCuration):
             "polarizability": "series_mol",
             "spin_multiplicity": "series_mol",
             "stoichiometry": "single_rec",
-            "metal_n_ligands": "single_mol",
-            "dipole_moment_computed": "single_mol",
-            "dipole_moment_computed_scaled": "single_mol",
+            "metal_n_ligands": "single_rec",
+            "dipole_moment_computed": "series_mol",
+            "dipole_moment_computed_scaled": "series_mol",
         }
 
     def _parse_properties(self, line: str) -> dict:
@@ -324,13 +324,14 @@ class tmQMCuration(DatasetCuration):
                     .tolist()
                 ]
             )
+
             center_of_mass = np.einsum(
                 "i,ij->j", atomic_masses, data_all_temp[name]["geometry"][0].m
             ) / np.sum(atomic_masses)
             pos = data_all_temp[name]["geometry"][0].m - center_of_mass
 
             data_all_temp[name]["dipole_moment_computed"] = (
-                np.einsum("i,ij->j", np.array(charges).reshape(-1), pos)
+                np.einsum("i,ij->j", np.array(charges).reshape(-1), pos).reshape(1, 3)
                 * self.qm_parameters["dipole_moment_computed"]["u_in"]
             )
 
@@ -461,13 +462,22 @@ class tmQMCuration(DatasetCuration):
                         * snapshots_temp_dict[name]["dipole_moment_computed"].u
                     )
 
-                    ratio = computed_magnitude.reshape(-1) / snapshots_temp_dict[name][
-                        "dipole_moment_magnitude"
-                    ].reshape(-1)
+                    if (
+                        snapshots_temp_dict[name]["dipole_moment_magnitude"].reshape(-1)
+                        == 0
+                    ):
+                        snapshots_temp_dict[name]["dipole_moment_computed_scaled"] = (
+                            np.array([0.0, 0.0, 0.0]).reshape(1, 3)
+                            * snapshots_temp_dict[name]["dipole_moment_computed"].u
+                        )
+                    else:
+                        ratio = computed_magnitude.reshape(-1) / snapshots_temp_dict[
+                            name
+                        ]["dipole_moment_magnitude"].reshape(-1)
 
-                    snapshots_temp_dict[name]["dipole_moment_computed_scaled"] = (
-                        snapshots_temp_dict[name]["dipole_moment_computed"] / ratio
-                    )
+                        snapshots_temp_dict[name]["dipole_moment_computed_scaled"] = (
+                            snapshots_temp_dict[name]["dipole_moment_computed"] / ratio
+                        )
 
                     snapshots_temp_dict[name]["metal_center_charge"] = (
                         np.array(float(temp_dict["Metal_q"])).reshape(1, 1)

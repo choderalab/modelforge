@@ -60,11 +60,14 @@ def single_batch_with_batchsize():
     Utility fixture to create a single batch of data for testing.
     """
 
-    def _create_single_batch(batch_size: int, dataset_name: str, local_cache_dir: str):
+    def _create_single_batch(
+        batch_size: int, dataset_name: str, local_cache_dir: str, version_select: str
+    ):
         return single_batch(
             batch_size=batch_size,
             dataset_name=dataset_name,
             local_cache_dir=local_cache_dir,
+            version_select=version_select,
         )
 
     return _create_single_batch

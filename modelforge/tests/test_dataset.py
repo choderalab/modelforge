@@ -102,8 +102,15 @@ def test_dataset_basic_operations():
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 def test_get_properties(dataset_name, single_batch_with_batchsize, prep_temp_dir):
 
+    if dataset_name == "tmqm":
+        version = "nc_1000_v1"
+    else:
+        version = "nc_1000_v0"
     batch = single_batch_with_batchsize(
-        batch_size=16, dataset_name=dataset_name, local_cache_dir=str(prep_temp_dir)
+        batch_size=16,
+        dataset_name=dataset_name,
+        local_cache_dir=str(prep_temp_dir),
+        version_select=version,
     )
     a = 7
 

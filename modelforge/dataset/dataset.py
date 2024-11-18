@@ -1495,14 +1495,19 @@ def initialize_datamodule(
     return data_module
 
 
-def single_batch(batch_size: int = 64, dataset_name="QM9", local_cache_dir="./"):
+def single_batch(
+    batch_size: int = 64,
+    dataset_name="QM9",
+    local_cache_dir="./",
+    version_select="nc_1000_v0",
+):
     """
     Utility function to create a single batch of data for testing.
     """
     data_module = initialize_datamodule(
         dataset_name=dataset_name,
         batch_size=batch_size,
-        version_select="nc_1000_v0",
+        version_select=version_select,
         local_cache_dir=local_cache_dir,
     )
     return next(iter(data_module.train_dataloader(shuffle=False)))

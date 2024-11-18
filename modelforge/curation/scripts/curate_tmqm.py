@@ -88,10 +88,11 @@ def main():
     # We'll want to provide some simple means of versioning
     # if we make updates to either the underlying dataset, curation modules, or parameters given to the code
     version = "0"
+    version_out = "1"
     # version of the dataset to curate
     version_select = f"v_{version}"
     # Curate the test dataset with 1000 total conformers
-    hdf5_file_name = f"tmqm_dataset_v{version}_ntc_1000.hdf5"
+    hdf5_file_name = f"tmqm_dataset_v{version_out}_ntc_1000.hdf5"
 
     tmqm_wrapper(
         hdf5_file_name,
@@ -104,7 +105,7 @@ def main():
     )
 
     # Curates the full dataset
-    hdf5_file_name = f"tmqm_dataset_v{version}.hdf5"
+    hdf5_file_name = f"tmqm_dataset_v{version_out}.hdf5"
 
     tmqm_wrapper(
         hdf5_file_name,

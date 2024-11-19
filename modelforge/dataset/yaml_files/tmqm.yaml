@@ -27,5 +27,5 @@ nc_1000_v0:
     name: tmqm_dataset_v0_nc_1000.hdf5
   processed_data_file:
     md5: null
-    name: qm9_dataset_v0_nc_1000_processed.npz
+    name: tmqm_dataset_v0_nc_1000_processed.npz
   url: https://www.dropbox.com/scl/fi/f154vw0w0tef7frh2w736/tmqm_dataset_v1_ntc_1000.hdf5.gz?rlkey=lyt1uxkolm3eakaa07m3k1bvj&st=ky6tm1s1&dl=1

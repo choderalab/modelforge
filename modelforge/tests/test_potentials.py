@@ -532,10 +532,13 @@ def test_forward_pass_with_all_datasets(
             local_cache_dir=str(prep_temp_dir),
             version_select="nc_1000_v0",
         )
+    if dataset_name.lower() == "tmqm" and potential_name.lower() == "ani2x":
+        pytest.skip("Ani2x cannot be trained with the TMQM dataset")
 
     dataset_statistic = toml.load(dataset.dataset_statistic_filename)
     train_dataloader = dataset.train_dataloader()
     batch = next(iter(train_dataloader))
+
     # -------------------------------#
     # setup model
     config = load_configs_into_pydantic_models(

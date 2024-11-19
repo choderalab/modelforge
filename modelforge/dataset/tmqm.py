@@ -62,9 +62,10 @@ class tmQMDataset(HDF5Dataset):
         "geometry",
         "atomic_numbers",
         "total_charge",
-        # "partial_charges",
+        "partial_charges",
         # "metal_center_charge",
         "dipole_moment_computed",
+        "dipole_moment_computed_scaled",
         "total_energy",
         "electronic_energy",
         "dispersion_energy",
@@ -80,12 +81,14 @@ class tmQMDataset(HDF5Dataset):
         "atomic_numbers": "atomic_numbers",
         "total_charge": "total_charge",
         "dipole_moment_computed": "dipole_moment",
+        "dipole_moment_computed_scaled": "dipole_moment",
         "total_energy": "E",
         "electronic_energy": "E",
         "dispersion_energy": "E",
         "energy_of_homo": "E",
         "energy_of_lumo": "E",
         "homo_lumo_gap": "E",
+        "partial_charges": "total_charge",  # note this isn't interchangeable with partial charge but has the same units
     }
 
     def __init__(

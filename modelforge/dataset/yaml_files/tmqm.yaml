@@ -1,31 +1,31 @@
 dataset: tmqm
-latest: full_dataset_v1
-latest_test: nc_1000_v1
-full_dataset_v1:
-  version: 1
-  doi:  10.5281/zenodo.14177823
+latest: full_dataset_v0
+latest_test: nc_1000_v0
+full_dataset_v0:
+  version: 0
+  doi:
   gz_data_file:
     length: 310855491
-    md5: c584662a02964d78b0d5c6bc28960867
-    name: tmqm_dataset_v1.hdf5.gz
+    md5: 7a4f6031b6ac00fd652d3edff57ea494
+    name: tmqm_dataset_v0.hdf5.gz
   hdf5_data_file:
     md5: 8df27de8c06a12be1683bacbc5fe07f0
-    name: tmqm_dataset_v1.hdf5
+    name: tmqm_dataset_v0.hdf5
   processed_data_file:
     md5: null
-    name: tmqm_dataset_v1_processed.npz
-  url: https://zenodo.org/records/14177823/files/tmqm_dataset_v1.hdf5.gz
-nc_1000_v1:
-  version: 1
-  doi:   10.5281/zenodo.14177759
+    name: tmqm_dataset_v0_processed.npz
+  url: https://www.dropbox.com/scl/fi/mct8jg5r4macmxtsmg4zf/tmqm_dataset_v1.hdf5.gz?rlkey=4lu5d2nl33ycxhrjp0pu8dw1m&st=pke5fxvg&dl=1
+nc_1000_v0:
+  version: 0
+  doi:
   gz_data_file:
     length: 3430947
-    md5: cbd0654b883085e361cf8d0717282de8
-    name: tmqm_dataset_v1_nc_1000.hdf5.gz
+    md5: 69f30f9eeb210231e12b764472d99074
+    name: tmqm_dataset_v0_nc_1000.hdf5.gz
   hdf5_data_file:
     md5: 56e96001199fc65f506d1373f6e13976
-    name: tmqm_dataset_v1_nc_1000.hdf5
+    name: tmqm_dataset_v0_nc_1000.hdf5
   processed_data_file:
     md5: null
-    name: qm9_dataset_v1_nc_1000_processed.npz
-  url: https://zenodo.org/records/14177759/files/tmqm_dataset_v1_ntc_1000.hdf5.gz?download=1
+    name: qm9_dataset_v0_nc_1000_processed.npz
+  url: https://www.dropbox.com/scl/fi/f154vw0w0tef7frh2w736/tmqm_dataset_v1_ntc_1000.hdf5.gz?rlkey=lyt1uxkolm3eakaa07m3k1bvj&st=ky6tm1s1&dl=1

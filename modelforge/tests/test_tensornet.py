@@ -30,7 +30,10 @@ def test_forward_with_inference_model(
 ):
 
     nnp_input = single_batch_with_batchsize(
-        batch_size=32, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+        batch_size=32,
+        dataset_name="QM9",
+        local_cache_dir=str(prep_temp_dir),
+        version_select="nc_1000_v0",
     ).nnp_input
 
     # load default parameters

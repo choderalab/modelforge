@@ -41,7 +41,10 @@ def test_forward(single_batch_with_batchsize, prep_temp_dir):
     """
     # get methane input
     batch = single_batch_with_batchsize(
-        batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+        batch_size=64,
+        dataset_name="QM9",
+        local_cache_dir=str(prep_temp_dir),
+        version_select="nc_1000_v0",
     )
     methane = batch.nnp_input
 
@@ -112,10 +115,16 @@ def test_layer_equivariance(
 
     # get methane input
     nnp_input = single_batch_with_batchsize(
-        batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+        batch_size=64,
+        dataset_name="QM9",
+        local_cache_dir=str(prep_temp_dir),
+        version_select="nc_1000_v0",
     ).nnp_input
     ref_nnp_input = single_batch_with_batchsize(
-        batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+        batch_size=64,
+        dataset_name="QM9",
+        local_cache_dir=str(prep_temp_dir),
+        version_select="nc_1000_v0",
     ).nnp_input
 
     nnp_input.positions = torch.matmul(nnp_input.positions, rotation_matrix)
@@ -423,10 +432,16 @@ def test_model_invariance(single_batch_with_batchsize, prep_temp_dir):
     )
     # get methane input
     methane = single_batch_with_batchsize(
-        batch_size=1, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+        batch_size=1,
+        dataset_name="QM9",
+        local_cache_dir=str(prep_temp_dir),
+        version_select="nc_1000_v0",
     ).nnp_input
     reference_methane = single_batch_with_batchsize(
-        batch_size=1, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+        batch_size=1,
+        dataset_name="QM9",
+        local_cache_dir=str(prep_temp_dir),
+        version_select="nc_1000_v0",
     ).nnp_input
 
     rotation_matrix = torch.tensor([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])

@@ -144,7 +144,9 @@ def test_forward(single_batch_with_batchsize, prep_temp_dir):
     aimnet = setup_potential_for_test("aimnet2", "training", potential_seed=42)
 
     assert aimnet is not None, "Aimnet model should be initialized."
-    batch = single_batch_with_batchsize(64, "QM9", str(prep_temp_dir))
+    batch = single_batch_with_batchsize(
+        64, "QM9", str(prep_temp_dir), version_select="nc_1000_v0"
+    )
 
     y_hat = aimnet(batch.nnp_input)
 

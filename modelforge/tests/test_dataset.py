@@ -102,10 +102,7 @@ def test_dataset_basic_operations():
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 def test_get_properties(dataset_name, single_batch_with_batchsize, prep_temp_dir):
 
-    if dataset_name == "tmqm":
-        version = "nc_1000_v1"
-    else:
-        version = "nc_1000_v0"
+    version = "nc_1000_v0"
     batch = single_batch_with_batchsize(
         batch_size=16,
         dataset_name=dataset_name,
@@ -212,6 +209,22 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
         ]
         assert data.properties_of_interest == [
             "dft_total_energy",
+            "geometry",
+            "atomic_numbers",
+        ]
+    elif dataset_name == "tmqm":
+        assert data.properties_of_interest == [
+            "geometry",
+            "atomic_numbers",
+            "total_energy",
+            "dipole_moment_computed",
+            "total_charge",
+        ]
+
+        data.properties_of_interest = ["total_energy", "geometry", "atomic_numbers"]
+
+        assert data.properties_of_interest == [
+            "total_energy",
             "geometry",
             "atomic_numbers",
         ]
@@ -476,6 +489,7 @@ def test_data_item_format_of_datamodule(
         dataset_name=dataset_name,
         batch_size=512,
         local_cache_dir=local_cache_dir,
+        version_select="nc_1000_v0",
     )
 
     raw_data_item = dm.torch_dataset[0]
@@ -501,9 +515,9 @@ def test_removal_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir)
     # prepare reference value
     dm = datamodule_factory(
         dataset_name=dataset_name,
+        version_select="nc_1000_v0",
         batch_size=512,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-        version_select="nc_1000_v0",
         remove_self_energies=False,
         regenerate_dataset_statistic=True,
         local_cache_dir=str(prep_temp_dir),
@@ -534,7 +548,9 @@ def test_dataset_neighborlist(
 ):
     """Test the neighborlist."""
 
-    batch = single_batch_with_batchsize(64, "QM9", str(prep_temp_dir))
+    batch = single_batch_with_batchsize(
+        64, "QM9", str(prep_temp_dir), version_select="nc_1000_v0"
+    )
     nnp_input = batch.nnp_input
 
     # test that the neighborlist is correctly generated
@@ -639,7 +655,9 @@ def test_dataset_generation(dataset_name, datamodule_factory, prep_temp_dir):
     """Test the splitting of the dataset."""
 
     dataset = datamodule_factory(
-        dataset_name=dataset_name, local_cache_dir=str(prep_temp_dir)
+        dataset_name=dataset_name,
+        local_cache_dir=str(prep_temp_dir),
+        version_select="nc_1000_v0",
     )
     train_dataloader = dataset.train_dataloader()
     val_dataloader = dataset.val_dataloader()
@@ -763,7 +781,8 @@ def test_dataset_downloader(dataset_name, dataset_factory, prep_temp_dir):
     local_cache_dir = str(prep_temp_dir)
 
     dataset = dataset_factory(
-        dataset_name=dataset_name, local_cache_dir=local_cache_dir
+        dataset_name=dataset_name,
+        local_cache_dir=local_cache_dir,
     )
     data = _ImplementedDatasets.get_dataset_class(dataset_name)(
         local_cache_dir=local_cache_dir, version_select="nc_1000_v0"

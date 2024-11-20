@@ -16,7 +16,7 @@ The technical roadmap for the modelforge package is outlined in the wiki.
 
 ### Copyright
 
-Copyright (c) 2023, Choderalab
+Copyright (c) 2024, Chodera Lab
 
 
 #### Acknowledgements

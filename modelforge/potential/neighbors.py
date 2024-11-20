@@ -185,7 +185,7 @@ class Pairlist(torch.nn.Module):
                     np.arange(
                         0,
                         r,
-                        dtype=np.int16,
+                        dtype=np.int32,
                     ),
                     repeats=r,
                 )
@@ -194,7 +194,7 @@ class Pairlist(torch.nn.Module):
         )
         j_indices = np.concatenate(
             [
-                np.concatenate([np.arange(0, 0 + r, dtype=np.int16) for _ in range(r)])
+                np.concatenate([np.arange(0, 0 + r, dtype=np.int32) for _ in range(r)])
                 for r in repeats
             ]
         )

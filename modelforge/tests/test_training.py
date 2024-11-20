@@ -367,7 +367,10 @@ def test_error_calculation(single_batch_with_batchsize, prep_temp_dir):
 
     # generate data
     batch = single_batch_with_batchsize(
-        batch_size=16, dataset_name="PHALKETHOH", local_cache_dir=str(prep_temp_dir)
+        batch_size=16,
+        dataset_name="PHALKETHOH",
+        local_cache_dir=str(prep_temp_dir),
+        version_select="nc_1000_v0",
     )
 
     data = batch
@@ -418,7 +421,10 @@ def test_error_calculation(single_batch_with_batchsize, prep_temp_dir):
 def test_loss_with_dipole_moment(single_batch_with_batchsize, prep_temp_dir):
     # Generate a batch with the specified batch size and dataset
     batch = single_batch_with_batchsize(
-        batch_size=16, dataset_name="SPICE2", local_cache_dir=str(prep_temp_dir)
+        batch_size=16,
+        dataset_name="SPICE2",
+        local_cache_dir=str(prep_temp_dir),
+        version_select="nc_1000_v0",
     )
 
     # Get the trainer object with the specified model and dataset
@@ -507,7 +513,10 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir):
     from modelforge.train.losses import Loss
 
     batch = single_batch_with_batchsize(
-        batch_size=16, dataset_name="PHALKETHOH", local_cache_dir=str(prep_temp_dir)
+        batch_size=16,
+        dataset_name="PHALKETHOH",
+        local_cache_dir=str(prep_temp_dir),
+        version_select="nc_1000_v0",
     )
 
     loss_porperty = ["per_system_energy", "per_atom_force", "per_atom_energy"]

@@ -1,0 +1,31 @@
+dataset: tmqm
+latest: full_dataset_v0
+latest_test: nc_1000_v0
+full_dataset_v0:
+  version: 0
+  doi:  10.5281/zenodo.14188396
+  gz_data_file:
+    length: 312400661
+    md5: 7ab79438493818755889f10be4c01d2d
+    name: tmqm_dataset_v0.hdf5.gz
+  hdf5_data_file:
+    md5: 8df27de8c06a12be1683bacbc5fe07f0
+    name: tmqm_dataset_v0.hdf5
+  processed_data_file:
+    md5: null
+    name: tmqm_dataset_v0_processed.npz
+  url: https://zenodo.org/records/14188396/files/tmqm_dataset_v0.hdf5.gz
+nc_1000_v0:
+  version: 0
+  doi:  10.5281/zenodo.14188628
+  gz_data_file:
+    length: 3444799
+    md5: f39f838c6539e68c86ba2a4b0caa6021
+    name: tmqm_dataset_v0_nc_1000.hdf5.gz
+  hdf5_data_file:
+    md5: 56e96001199fc65f506d1373f6e13976
+    name: tmqm_dataset_v0_nc_1000.hdf5
+  processed_data_file:
+    md5: null
+    name: tmqm_dataset_v0_nc_1000_processed.npz
+  url: https://zenodo.org/records/14188628/files/tmqm_dataset_v0_ntc_1000.hdf5.gz

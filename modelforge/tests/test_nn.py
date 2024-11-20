@@ -16,7 +16,10 @@ def test_embedding(single_batch_with_batchsize, prep_temp_dir):
     import torch  # noqa: F401
 
     batch = single_batch_with_batchsize(
-        batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+        batch_size=64,
+        dataset_name="QM9",
+        local_cache_dir=str(prep_temp_dir),
+        version_select="nc_1000_v0",
     )
 
     nnp_input = batch.nnp_input

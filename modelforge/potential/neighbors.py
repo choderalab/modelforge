@@ -177,7 +177,7 @@ class Pairlist(torch.nn.Module):
         repeats = np.bincount(atomic_subsystem_indices)
 
         # calculate the number of pairs for each molecule, using simple permutation
-        npairs_by_molecule = np.array([r * (r - 1) for r in repeats], dtype=np.int16)
+        npairs_by_molecule = np.array([r * (r - 1) for r in repeats], dtype=np.int32)
 
         i_indices = np.concatenate(
             [
@@ -185,7 +185,7 @@ class Pairlist(torch.nn.Module):
                     np.arange(
                         0,
                         r,
-                        dtype=np.int16,
+                        dtype=np.int32,
                     ),
                     repeats=r,
                 )
@@ -194,7 +194,7 @@ class Pairlist(torch.nn.Module):
         )
         j_indices = np.concatenate(
             [
-                np.concatenate([np.arange(0, 0 + r, dtype=np.int16) for _ in range(r)])
+                np.concatenate([np.arange(0, 0 + r, dtype=np.int32) for _ in range(r)])
                 for r in repeats
             ]
         )
@@ -759,6 +759,9 @@ class NeighborListForTraining(torch.nn.Module):
             Displacement vectors between atom pairs. Shape: [n_pairs, 3].
         """
         # Select the pairs of atom coordinates from the positions
+        print(positions.shape)
+        print(pair_indices.max())
+
         selected_positions = positions.index_select(0, pair_indices.view(-1)).view(
             2, -1, 3
         )

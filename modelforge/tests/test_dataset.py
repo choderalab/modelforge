@@ -102,8 +102,12 @@ def test_dataset_basic_operations():
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 def test_get_properties(dataset_name, single_batch_with_batchsize, prep_temp_dir):
 
+    version = "nc_1000_v0"
     batch = single_batch_with_batchsize(
-        batch_size=16, dataset_name=dataset_name, local_cache_dir=str(prep_temp_dir)
+        batch_size=16,
+        dataset_name=dataset_name,
+        local_cache_dir=str(prep_temp_dir),
+        version_select=version,
     )
     a = 7
 
@@ -205,6 +209,22 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
         ]
         assert data.properties_of_interest == [
             "dft_total_energy",
+            "geometry",
+            "atomic_numbers",
+        ]
+    elif dataset_name == "tmqm":
+        assert data.properties_of_interest == [
+            "geometry",
+            "atomic_numbers",
+            "total_energy",
+            "dipole_moment_computed",
+            "total_charge",
+        ]
+
+        data.properties_of_interest = ["total_energy", "geometry", "atomic_numbers"]
+
+        assert data.properties_of_interest == [
+            "total_energy",
             "geometry",
             "atomic_numbers",
         ]
@@ -469,6 +489,7 @@ def test_data_item_format_of_datamodule(
         dataset_name=dataset_name,
         batch_size=512,
         local_cache_dir=local_cache_dir,
+        version_select="nc_1000_v0",
     )
 
     raw_data_item = dm.torch_dataset[0]
@@ -494,9 +515,9 @@ def test_removal_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir)
     # prepare reference value
     dm = datamodule_factory(
         dataset_name=dataset_name,
+        version_select="nc_1000_v0",
         batch_size=512,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-        version_select="nc_1000_v0",
         remove_self_energies=False,
         regenerate_dataset_statistic=True,
         local_cache_dir=str(prep_temp_dir),
@@ -527,7 +548,9 @@ def test_dataset_neighborlist(
 ):
     """Test the neighborlist."""
 
-    batch = single_batch_with_batchsize(64, "QM9", str(prep_temp_dir))
+    batch = single_batch_with_batchsize(
+        64, "QM9", str(prep_temp_dir), version_select="nc_1000_v0"
+    )
     nnp_input = batch.nnp_input
 
     # test that the neighborlist is correctly generated
@@ -632,7 +655,9 @@ def test_dataset_generation(dataset_name, datamodule_factory, prep_temp_dir):
     """Test the splitting of the dataset."""
 
     dataset = datamodule_factory(
-        dataset_name=dataset_name, local_cache_dir=str(prep_temp_dir)
+        dataset_name=dataset_name,
+        local_cache_dir=str(prep_temp_dir),
+        version_select="nc_1000_v0",
     )
     train_dataloader = dataset.train_dataloader()
     val_dataloader = dataset.val_dataloader()
@@ -756,7 +781,8 @@ def test_dataset_downloader(dataset_name, dataset_factory, prep_temp_dir):
     local_cache_dir = str(prep_temp_dir)
 
     dataset = dataset_factory(
-        dataset_name=dataset_name, local_cache_dir=local_cache_dir
+        dataset_name=dataset_name,
+        local_cache_dir=local_cache_dir,
     )
     data = _ImplementedDatasets.get_dataset_class(dataset_name)(
         local_cache_dir=local_cache_dir, version_select="nc_1000_v0"
@@ -1014,98 +1040,6 @@ def test_function_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir
         )
         # compare this to the energy without postprocessing
         assert np.isclose(methane_energy_reference, methane_energy_offset + methane_ase)
-
-
-def test_shifting_center_of_mass_to_origin(prep_temp_dir):
-    local_cache_dir = str(prep_temp_dir)
-
-    from modelforge.dataset.dataset import initialize_datamodule
-    from openff.units.elements import MASSES
-
-    import torch
-
-    # first check a molecule not centered at the origin
-    dm = initialize_datamodule(
-        "QM9",
-        version_select="latest_test",
-        shift_center_of_mass_to_origin=False,
-        local_cache_dir=local_cache_dir,
-    )
-    start_idx = dm.torch_dataset.single_atom_start_idxs_by_conf[0]
-    end_idx = dm.torch_dataset.single_atom_end_idxs_by_conf[0]
-
-    from openff.units.elements import MASSES
-
-    pos = dm.torch_dataset.properties_of_interest["positions"][start_idx:end_idx]
-
-    atomic_masses = torch.Tensor(
-        [
-            MASSES[atomic_number].m
-            for atomic_number in dm.torch_dataset.properties_of_interest[
-                "atomic_numbers"
-            ][start_idx:end_idx].tolist()
-        ]
-    )
-    molecule_mass = torch.sum(atomic_masses)
-
-    # I'm using einsum, so let us check it manually
-
-    x = 0
-    y = 0
-    z = 0
-    for i in range(0, pos.shape[0]):
-        x += atomic_masses[i] * pos[i][0]
-        y += atomic_masses[i] * pos[i][1]
-        z += atomic_masses[i] * pos[i][2]
-
-    x = x / molecule_mass
-    y = y / molecule_mass
-    z = z / molecule_mass
-
-    com = torch.Tensor([x, y, z])
-
-    assert torch.allclose(com, torch.Tensor([-0.0013, 0.1086, 0.0008]), atol=1e-4)
-
-    # make sure that we do shift to the origin; we can do the whole dataset
-
-    dm = initialize_datamodule(
-        "QM9",
-        version_select="latest_test",
-        shift_center_of_mass_to_origin=True,
-        local_cache_dir=local_cache_dir,
-    )
-
-    for conf_id in range(0, len(dm.torch_dataset)):
-        start_idx = dm.torch_dataset.single_atom_start_idxs_by_conf[conf_id]
-        end_idx = dm.torch_dataset.single_atom_end_idxs_by_conf[conf_id]
-
-        # grab the positions that should be shifted
-        pos = dm.torch_dataset.properties_of_interest["positions"][start_idx:end_idx]
-
-        atomic_masses = torch.Tensor(
-            [
-                MASSES[atomic_number].m
-                for atomic_number in dm.torch_dataset.properties_of_interest[
-                    "atomic_numbers"
-                ][start_idx:end_idx].tolist()
-            ]
-        )
-        molecule_mass = torch.sum(atomic_masses)
-
-        x = 0
-        y = 0
-        z = 0
-        for i in range(0, pos.shape[0]):
-            x += atomic_masses[i] * pos[i][0]
-            y += atomic_masses[i] * pos[i][1]
-            z += atomic_masses[i] * pos[i][2]
-
-        x = x / molecule_mass
-        y = y / molecule_mass
-        z = z / molecule_mass
-
-        com = torch.Tensor([x, y, z])
-        assert torch.allclose(com, torch.Tensor([0.0, 0.0, 0.0]), atol=1e-4)
 
 
 def test_shifting_center_of_mass_to_origin(prep_temp_dir):

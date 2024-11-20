@@ -160,7 +160,10 @@ d_ij = torch.tensor([
 def test_JAX_wrapping(potential_name, single_batch_with_batchsize, prep_temp_dir):
 
     batch = single_batch_with_batchsize(
-        batch_size=1, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+        batch_size=1,
+        dataset_name="QM9",
+        local_cache_dir=str(prep_temp_dir),
+        version_select="nc_1000_v0",
     )
 
     # read default parameters
@@ -247,7 +250,10 @@ def test_energy_scaling_and_offset(
     )
 
     batch = single_batch_with_batchsize(
-        batch_size=1, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+        batch_size=1,
+        dataset_name="QM9",
+        local_cache_dir=str(prep_temp_dir),
+        version_select="nc_1000_v0",
     )
     methane = batch.nnp_input
 
@@ -463,7 +469,10 @@ def test_energy_between_simulation_environments(
     import numpy as np
 
     batch = single_batch_with_batchsize(
-        batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+        batch_size=64,
+        dataset_name="QM9",
+        local_cache_dir=str(prep_temp_dir),
+        version_select="nc_1000_v0",
     )
     nnp_input = batch.nnp_input
     # test the forward pass through each of the models
@@ -519,12 +528,17 @@ def test_forward_pass_with_all_datasets(
         )
     else:
         dataset = datamodule_factory(
-            dataset_name=dataset_name, local_cache_dir=str(prep_temp_dir)
+            dataset_name=dataset_name,
+            local_cache_dir=str(prep_temp_dir),
+            version_select="nc_1000_v0",
         )
+    if dataset_name.lower() == "tmqm" and potential_name.lower() == "ani2x":
+        pytest.skip("Ani2x cannot be trained with the TMQM dataset")
 
     dataset_statistic = toml.load(dataset.dataset_statistic_filename)
     train_dataloader = dataset.train_dataloader()
     batch = next(iter(train_dataloader))
+
     # -------------------------------#
     # setup model
     config = load_configs_into_pydantic_models(
@@ -562,7 +576,10 @@ def test_forward_pass_with_all_datasets(
 def test_jit(potential_name, single_batch_with_batchsize, prep_temp_dir):
     # setup dataset
     batch = single_batch_with_batchsize(
-        batch_size=1, dataset_name="qm9", local_cache_dir=str(prep_temp_dir)
+        batch_size=1,
+        dataset_name="qm9",
+        local_cache_dir=str(prep_temp_dir),
+        version_select="nc_1000_v0",
     )
     nnp_input = batch.nnp_input
 
@@ -587,7 +604,7 @@ def test_chemical_equivalency(
     dataset_name, potential_name, mode, single_batch_with_batchsize, prep_temp_dir
 ):
     nnp_input = single_batch_with_batchsize(
-        32, dataset_name, str(prep_temp_dir)
+        32, dataset_name, str(prep_temp_dir), version_select="nc_1000_v0"
     ).nnp_input
 
     potential = setup_potential_for_test(
@@ -610,7 +627,7 @@ def test_different_neighborlists_for_inference(
 
     # NOTE: the training pairlist only works for a batchsize of 1
     nnp_input = single_batch_with_batchsize(
-        1, dataset_name, str(prep_temp_dir)
+        1, dataset_name, str(prep_temp_dir), version_select="nc_1000_v0"
     ).nnp_input
 
     potential = setup_potential_for_test(
@@ -659,7 +676,7 @@ def test_multiple_output_heads(
     """Test models with multiple output heads."""
     # Get input and set up model
     nnp_input = single_batch_with_batchsize(
-        32, dataset_name, str(prep_temp_dir)
+        32, dataset_name, str(prep_temp_dir), version_select="nc_1000_v0"
     ).nnp_input
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
     config["runtime"].local_cache_dir = str(prep_temp_dir)
@@ -709,7 +726,7 @@ def test_forward_pass(
 
     # get input and set up model
     nnp_input = single_batch_with_batchsize(
-        64, dataset_name, str(prep_temp_dir)
+        64, dataset_name, str(prep_temp_dir), version_select="nc_1000_v0"
     ).nnp_input
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
 
@@ -745,7 +762,10 @@ IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 )
 def test_vis(potential_name, single_batch_with_batchsize, prep_temp_dir):
     batch = single_batch_with_batchsize(
-        batch_size=32, dataset_name="SPICE2", local_cache_dir=str(prep_temp_dir)
+        batch_size=32,
+        dataset_name="SPICE2",
+        local_cache_dir=str(prep_temp_dir),
+        version_select="nc_1000_v0",
     )
     nnp_input = batch.nnp_input
     from modelforge.utils.vis import visualize_model
@@ -765,7 +785,10 @@ def test_calculate_energies_and_forces(
     import torch
 
     batch = single_batch_with_batchsize(
-        batch_size=32, dataset_name="SPICE2", local_cache_dir=str(prep_temp_dir)
+        batch_size=32,
+        dataset_name="SPICE2",
+        local_cache_dir=str(prep_temp_dir),
+        version_select="nc_1000_v0",
     )
     nnp_input = batch.nnp_input
 
@@ -818,7 +841,10 @@ def test_calculate_energies_and_forces(
 
     # reduce batchsize
     batch = single_batch_with_batchsize(
-        batch_size=1, dataset_name="SPICE2", local_cache_dir=str(prep_temp_dir)
+        batch_size=1,
+        dataset_name="SPICE2",
+        local_cache_dir=str(prep_temp_dir),
+        version_select="nc_1000_v0",
     )
     nnp_input = batch.nnp_input
 
@@ -890,7 +916,10 @@ def test_calculate_energies_and_forces_with_jax(
 
     # get input and set up model
     batch = single_batch_with_batchsize(
-        batch_size=1, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+        batch_size=1,
+        dataset_name="QM9",
+        local_cache_dir=str(prep_temp_dir),
+        version_select="nc_1000_v0",
     )
 
     # conver tinput to jax
@@ -933,7 +962,10 @@ def test_casting(potential_name, single_batch_with_batchsize, prep_temp_dir):
     import torch
 
     batch = single_batch_with_batchsize(
-        batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+        batch_size=64,
+        dataset_name="QM9",
+        local_cache_dir=str(prep_temp_dir),
+        version_select="nc_1000_v0",
     )
     batch_ = batch.to_dtype(dtype=torch.float64)
     assert batch_.nnp_input.positions.dtype == torch.float64
@@ -1010,7 +1042,10 @@ def test_equivariant_energies_and_forces(
     # start the test
     # reference values
     nnp_input = single_batch_with_batchsize(
-        batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+        batch_size=64,
+        dataset_name="QM9",
+        local_cache_dir=str(prep_temp_dir),
+        version_select="nc_1000_v0",
     ).nnp_input.to_dtype(dtype=precision)
 
     reference_result = potential(nnp_input)["per_system_energy"]
@@ -1023,7 +1058,10 @@ def test_equivariant_energies_and_forces(
     # translation test
     # set up input
     nnp_input = single_batch_with_batchsize(
-        batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+        batch_size=64,
+        dataset_name="QM9",
+        local_cache_dir=str(prep_temp_dir),
+        version_select="nc_1000_v0",
     ).nnp_input.to_dtype(dtype=precision)
     translation_nnp_input = nnp_input.to_dtype(dtype=precision)
     translation_nnp_input.positions = translation(translation_nnp_input.positions)
@@ -1054,7 +1092,10 @@ def test_equivariant_energies_and_forces(
     # rotation test
     # set up input
     nnp_input = single_batch_with_batchsize(
-        batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+        batch_size=64,
+        dataset_name="QM9",
+        local_cache_dir=str(prep_temp_dir),
+        version_select="nc_1000_v0",
     ).nnp_input.to_dtype(dtype=precision)
     rotation_input_data = nnp_input.to_dtype(dtype=precision)
     rotation_input_data.positions = rotation(rotation_input_data.positions)
@@ -1089,7 +1130,10 @@ def test_equivariant_energies_and_forces(
     # reflection test
     # set up input
     nnp_input = single_batch_with_batchsize(
-        batch_size=64, dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+        batch_size=64,
+        dataset_name="QM9",
+        local_cache_dir=str(prep_temp_dir),
+        version_select="nc_1000_v0",
     ).nnp_input.to_dtype(dtype=precision)
     reflection_input_data = nnp_input.to_dtype(dtype=precision)
     reflection_input_data.positions = reflection(reflection_input_data.positions)

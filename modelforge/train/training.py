@@ -1798,6 +1798,8 @@ class PotentialTrainer:
             strategy = DDPStrategy(find_unused_parameters=True)
         else:
             strategy = "auto"
+        if self.training_parameter.profiler is not None:
+            log.debug(f"Using profiler {self.training_parameter.profiler}")
 
         trainer = Trainer(
             strategy=strategy,

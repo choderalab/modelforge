@@ -43,6 +43,7 @@ class PhAlkEthOHDataset(HDF5Dataset):
         positions="geometry",
         E="dft_total_energy",
         F="dft_total_force",
+        dipole_moment="scf_dipole",
     )
 
     _available_properties = [

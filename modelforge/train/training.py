@@ -1798,6 +1798,8 @@ class PotentialTrainer:
             strategy = DDPStrategy(find_unused_parameters=True)
         else:
             strategy = "auto"
+        if self.training_parameter.profiler is not None:
+            log.debug(f"Using profiler {self.training_parameter.profiler}")
 
         trainer = Trainer(
             strategy=strategy,
@@ -1813,6 +1815,7 @@ class PotentialTrainer:
             limit_train_batches=self.training_parameter.limit_train_batches,
             limit_val_batches=self.training_parameter.limit_val_batches,
             limit_test_batches=self.training_parameter.limit_test_batches,
+            profiler=self.training_parameter.profiler,
             num_sanity_val_steps=1,
             gradient_clip_val=5.0,  # FIXME: hardcoded for now
             log_every_n_steps=self.runtime_parameter.log_every_n_steps,

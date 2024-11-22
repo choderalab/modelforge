@@ -241,6 +241,28 @@ class SchNetParameters(ParametersBase):
     postprocessing_parameter: PostProcessingParameter
     potential_seed: int = -1
 
+class DimeNetParameters(ParametersBase):
+    class CoreParameter(CoreParameterBase):
+        number_of_radial_bessel_functions: int
+        maximum_interaction_radius: float
+        dimension_of_bilinear_layer: int
+        number_of_blocks : int
+        number_of_spherical_harmonics: int
+        envelope_exponent: int
+        activation_function_parameter: ActivationFunctionConfig
+        featurization: Featurization
+        predicted_properties: List[str]
+        predicted_dim: List[int]
+
+        converted_units = field_validator("maximum_interaction_radius", mode="before")(
+            _convert_str_or_unit_to_unit_length
+        )
+
+    potential_name: str = "DimeNet"
+    core_parameter: CoreParameter
+    postprocessing_parameter: PostProcessingParameter
+    potential_seed: int = -1
+
 
 class TensorNetParameters(ParametersBase):
     class CoreParameter(CoreParameterBase):

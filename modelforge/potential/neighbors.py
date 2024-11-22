@@ -759,8 +759,6 @@ class NeighborListForTraining(torch.nn.Module):
             Displacement vectors between atom pairs. Shape: [n_pairs, 3].
         """
         # Select the pairs of atom coordinates from the positions
-        print(positions.shape)
-        print(pair_indices.max())
 
         selected_positions = positions.index_select(0, pair_indices.view(-1)).view(
             2, -1, 3

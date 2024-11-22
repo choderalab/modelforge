@@ -240,11 +240,103 @@ class ShiftedSoftplus(nn.Module):
 
         Returns:
         -----------
+
         torch.Tensor
             Shifted soft-plus of the input.
         """
 
         return F.softplus(x) - self.log_2
+
+
+      
+class ExponentialBernsteinPolynomialsCore(RadialBasisFunctionCore):
+    """
+    Taken from SpookyNet.
+    Radial basis functions based on exponential Bernstein polynomials given by:
+    b_{v,n}(x) = (n over v) * exp(-alpha*x)**v * (1-exp(-alpha*x))**(n-v)
+    (see https://en.wikipedia.org/wiki/Bernstein_polynomial)
+    Here, n = num_basis_functions-1 and v takes values from 0 to n. This
+    implementation operates in log space to prevent multiplication of very large
+    (n over v) and very small numbers (exp(-alpha*x)**v and
+    (1-exp(-alpha*x))**(n-v)) for numerical stability.
+    NOTE: There is a problem for x = 0, as log(-expm1(0)) will be log(0) = -inf.
+    This itself is not an issue, but the buffer v contains an entry 0 and
+    0*(-inf)=nan. The correct behaviour could be recovered by replacing the nan
+    with 0.0, but should not be necessary because issues are only present when
+    r = 0, which will not occur with chemically meaningful inputs.
+
+    Arguments:
+        number_of_radial_basis_functions (int):
+            Number of radial basis functions.
+            x = infinity.
+    """
+
+    def __init__(self, number_of_radial_basis_functions: int):
+        super().__init__(number_of_radial_basis_functions)
+        logfactorial = np.zeros(number_of_radial_basis_functions)
+        for i in range(2, number_of_radial_basis_functions):
+            logfactorial[i] = logfactorial[i - 1] + np.log(i)
+        v = np.arange(0, number_of_radial_basis_functions)
+        n = (number_of_radial_basis_functions - 1) - v
+        logbinomial = logfactorial[-1] - logfactorial[v] - logfactorial[n]
+        # register buffers and parameters
+        dtype = torch.float64  # TODO: make this a parameter
+        self.logc = torch.tensor(logbinomial, dtype=dtype)
+        self.n = torch.tensor(n, dtype=dtype)
+        self.v = torch.tensor(v, dtype=dtype)
+
+    def forward(self, nondimensionalized_distances: torch.Tensor) -> torch.Tensor:
+        """
+        Evaluates radial basis functions given distances
+        N: Number of input values.
+        num_basis_functions: Number of radial basis functions.
+
+        Arguments:
+            nondimensionalized_distances (FloatTensor [N]):
+                Input distances.
+
+        Returns:
+            rbf (FloatTensor [N, num_basis_functions]):
+                Values of the radial basis functions for the distances r.
+        """
+        assert nondimensionalized_distances.ndim == 2
+        assert (
+                nondimensionalized_distances.shape[1]
+                == self.number_of_radial_basis_functions
+        )
+        x = (
+                self.logc
+                + (self.n + 1) * nondimensionalized_distances
+                + self.v * torch.log(-torch.expm1(nondimensionalized_distances))
+        )
+
+        return torch.exp(x)
+      
+class ExponentialBernsteinRadialBasisFunction(RadialBasisFunction):
+
+    def __init__(self,
+                 number_of_radial_basis_functions: int,
+                 ini_alpha: unit.Quantity = 2.0 * unit.bohr,
+                 dtype=torch.int64):
+        """
+        ini_alpha (float):
+            Initial value for scaling parameter alpha (alpha here is the reciprocal of alpha in the paper. The original
+            default is 0.5/bohr, so we use 2 bohr).
+        """
+        super().__init__(
+            ExponentialBernsteinPolynomialsCore(number_of_radial_basis_functions),
+            trainable_prefactor=False,
+            dtype=dtype,
+        )
+        self.register_parameter("alpha", nn.Parameter(torch.tensor(ini_alpha.m_as(unit.nanometer))))
+
+    def nondimensionalize_distances(self, d_ij: torch.Tensor) -> torch.Tensor:
+        return -(
+                d_ij.broadcast_to(
+                    (len(d_ij), self.radial_basis_function.number_of_radial_basis_functions)
+                )
+                / self.alpha
+        )
 
 
 def pair_list(

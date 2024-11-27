@@ -45,6 +45,10 @@ T_NNP_Parameters = TypeVar(
 from modelforge.train.losses import LossFactory, create_error_metrics
 from modelforge.train.parameters import RuntimeParameters, TrainingParameters
 
+import matplotlib
+
+matplotlib.use("Agg")
+
 __all__ = [
     "PotentialTrainer",
 ]

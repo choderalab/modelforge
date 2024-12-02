@@ -22,62 +22,7 @@ from modelforge.utils.prop import Metadata
 if TYPE_CHECKING:
     from modelforge.potential.processing import AtomicSelfEnergies
 
-from enum import Enum
-
-from pydantic import BaseModel, ConfigDict, Field
-
-
-class CaseInsensitiveEnum(str, Enum):
-    """
-    Enum class that allows case-insensitive comparison of its members.
-    """
-
-    @classmethod
-    def _missing_(cls, value):
-        for member in cls:
-            if member.value.lower() == value.lower():
-                return member
-        return super()._missing_(value)
-
-
-class DataSetName(CaseInsensitiveEnum):
-    QM9 = "QM9"
-    ANI1X = "ANI1X"
-    ANI2X = "ANI2X"
-    SPICE1 = "SPICE1"
-    SPICE2 = "SPICE2"
-    SPICE1_OPENFF = "SPICE1_OPENFF"
-    PHALKETHOH = "PhAlkEthOH"
-    TMQM = "tmQM"
-
-
-class DatasetParameters(BaseModel):
-    """
-    Class to hold the dataset parameters.
-
-    Attributes
-    ----------
-    dataset_name : DataSetName
-        The name of the dataset.
-    version_select : str
-        The version of the dataset to use.
-    num_workers : int
-        The number of workers to use for the DataLoader.
-    pin_memory : bool
-        Whether to pin memory for the DataLoader.
-    regenerate_processed_cache : bool
-        Whether to regenerate the processed cache.
-    """
-
-    model_config = ConfigDict(
-        use_enum_values=True, arbitrary_types_allowed=True, validate_assignment=True
-    )
-
-    dataset_name: DataSetName
-    version_select: str
-    num_workers: int = Field(gt=0)
-    pin_memory: bool
-    regenerate_processed_cache: bool = False
+from modelforge.dataset.parameters import DatasetParameters
 
 
 # Define the input class
@@ -922,6 +867,8 @@ class DataModule(pl.LightningDataModule):
         regenerate_cache: bool = False,
         regenerate_dataset_statistic: bool = False,
         regenerate_processed_cache: bool = True,
+        properties_of_interest: Optional[PropertyNames] = None,
+        properties_assignment: Optional[Dict[str, str]] = None,
     ):
         """
         Initializes adData module for PyTorch Lightning handling data preparation and loading object with the specified configuration.
@@ -957,6 +904,14 @@ class DataModule(pl.LightningDataModule):
                 Directory to store the files.
             regenerate_cache : bool, defaults to False
                 Whether to regenerate the cache.
+            regenerate_dataset_statistic : bool, defaults to False
+                Whether to regenerate the dataset statistics.
+            regenerate_processed_cache : bool, defaults to True
+                Whether to regenerate the processed cache.
+            properties_of_interest : Optional[PropertyNames]
+                The properties to include in the dataset.
+            properties_assignment : Optional[Dict[str, str]]
+                The properties of interest from the hdf5 dataset to associate with internal properties with the code.
         """
         from modelforge.potential.neighbors import Pairlist
         import os
@@ -978,6 +933,9 @@ class DataModule(pl.LightningDataModule):
         self.train_dataset: Optional[TorchDataset] = None
         self.val_dataset: Optional[TorchDataset] = None
         self.test_dataset: Optional[TorchDataset] = None
+
+        self.properties_of_interest = properties_of_interest
+        self.properties_assignment = properties_assignment
 
         # make sure we can handle a path with a ~ in it
         self.local_cache_dir = os.path.expanduser(local_cache_dir)
@@ -1038,6 +996,16 @@ class DataModule(pl.LightningDataModule):
             local_cache_dir=self.local_cache_dir,
             regenerate_cache=self.regenerate_cache,
         )
+        if self.properties_of_interest is not None:
+            dataset.properties_of_interest = self.properties_of_interest
+
+        if self.properties_assignment is not None:
+            from modelforge.utils import PropertyNames
+
+            dataset._properties_names = PropertyNames(
+                **self.properties_assignment.model_dump()
+            )
+
         torch_dataset = self._create_torch_dataset(dataset)
         # if dataset statistics is present load it from disk
         if (

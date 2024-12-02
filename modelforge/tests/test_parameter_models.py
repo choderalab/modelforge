@@ -14,6 +14,17 @@ def test_dataset_parameter_model():
         "version_select": "latest",
         "num_workers": 4,
         "pin_memory": True,
+        "properties_of_interest": [
+            "atomic_numbers",
+            "geometry",
+            "internal_energy_at_0K",
+            "dipole_moment",
+        ],
+        "properties_assignment": {
+            "atomic_numbers": "atomic_numbers",
+            "positions": "geometry",
+            "E": "internal_energy_at_0K",
+        },
     }
 
     dataset_parameters = DatasetParameters(**dataset_parameter_dict)
@@ -24,6 +35,17 @@ def test_dataset_parameter_model():
         "version_select": "latest",
         "num_workers": -1,
         "pin_memory": True,
+        "properties_of_interest": [
+            "atomic_numbers",
+            "geometry",
+            "internal_energy_at_0K",
+            "dipole_moment",
+        ],
+        "properties_assignment": {
+            "atomic_numbers": "atomic_numbers",
+            "positions": "geometry",
+            "E": "internal_energy_at_0K",
+        },
     }
 
     with pytest.raises(ValidationError):
@@ -34,6 +56,17 @@ def test_dataset_parameter_model():
         "dataset_name": "QM9",
         "version_select": "latest",
         "num_workers": 4,
+        "properties_of_interest": [
+            "atomic_numbers",
+            "geometry",
+            "internal_energy_at_0K",
+            "dipole_moment",
+        ],
+        "properties_assignment": {
+            "atomic_numbers": "atomic_numbers",
+            "positions": "geometry",
+            "E": "internal_energy_at_0K",
+        },
     }
 
     with pytest.raises(ValidationError):
@@ -45,6 +78,17 @@ def test_dataset_parameter_model():
         "version_select": "latest",
         "num_workers": 4,
         "pin_memory": "totally_true",
+        "properties_of_interest": [
+            "atomic_numbers",
+            "geometry",
+            "internal_energy_at_0K",
+            "dipole_moment",
+        ],
+        "properties_assignment": {
+            "atomic_numbers": "atomic_numbers",
+            "positions": "geometry",
+            "E": "internal_energy_at_0K",
+        },
     }
 
     with pytest.raises(ValidationError):
@@ -57,6 +101,28 @@ def test_dataset_parameter_model():
     # check the validator that asserts number of workers must be greater than 0 during assignment
     with pytest.raises(ValidationError):
         dataset_parameters.num_workers = 0
+
+    # test the validator to  ensure properties_assignment has values in properties_of_interest
+    dataset_parameter_dict = {
+        "dataset_name": "QM9",
+        "version_select": "latest",
+        "num_workers": -1,
+        "pin_memory": True,
+        "properties_of_interest": [
+            "atomic_numbers",
+            "geometry",
+            "internal_energy_at_0K",
+            "dipole_moment",
+        ],
+        "properties_assignment": {
+            "atomic_numbers": "atomic_numbers",
+            "positions": "geometry",
+            "E": "internal_energy_at_300K",
+        },
+    }
+
+    with pytest.raises(ValidationError):
+        dataset_parameters = DatasetParameters(**dataset_parameter_dict)
 
 
 def test_convert_str_to_unit():

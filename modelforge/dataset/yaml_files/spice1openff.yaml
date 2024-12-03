@@ -1,6 +1,62 @@
 dataset: spice1openff
-latest: full_dataset_v1
-latest_test: nc_1000_v1
+latest: full_dataset_v2
+latest_test: nc_1000_v2
+full_dataset_v2:
+  version: 2
+  gz_data_file:
+    doi:  10.5281/zenodo.14264431
+    length: 2545870978
+    md5: 8e172839e8812747cbbf84f117168dc0
+    name: SPICE1_OpenFF_dataset_v2.hdf5.gz
+  hdf5_data_file:
+    md5: 7fbf84cc98af8cd63235be88eed30f51
+    name: SPICE1_OpenFF_dataset_v2.hdf5
+  processed_data_file:
+    md5: null
+    name: SPICE1_OpenFF_dataset_v2_processed.npz
+  url: https://zenodo.org/records/14264431/files/spice_114_openff_dataset_v2.hdf5.gz
+nc_1000_v2:
+  version: 2
+  doi:  10.5281/zenodo.14269264
+  gz_data_file:
+    length: 2534128
+    md5: 9535d75cfee3facc8c1d62f1650fac07
+    name: SPICE1_OpenFF_dataset_v2_nc_1000.hdf5.gz
+  hdf5_data_file:
+    md5: 31e8a613f99d215b2fbfc33c77cdeff2
+    name: SPICE1_OpenFF_dataset_v2_nc_1000.hdf5
+  processed_data_file:
+    md5: null
+    name: SPICE1_OpenFF_dataset_v2_nc_1000_processed.npz
+  url: https://zenodo.org/records/14269264/files/spice_114_openff_dataset_v2_ntc_1000.hdf5.gz
+full_dataset_v2_HCNOFClS:
+  version: 2
+  doi:  10.5281/zenodo.14264561
+  gz_data_file:
+    length: 2306573715
+    md5: 9de6a9e9e490beddfecc24332cba7f11
+    name: SPICE1_OpenFF_dataset_v2_HCNOFClS.hdf5.gz
+  hdf5_data_file:
+    md5: 23c6da20754023daa37c5e24f4d3c432
+    name: SPICE1_OpenFF_dataset_v2_HCNOFClS.hdf5
+  processed_data_file:
+    md5: null
+    name: SPICE1_OpenFF_dataset_v2_HCNOFClS_processed.npz
+  url: https://zenodo.org/records/14264561/files/spice_114_openff_dataset_v2_HCNOFClS.hdf5.gz
+nc_1000_v2_HCNOFClS:
+  version: 2
+  doi: 10.5281/zenodo.14269058
+  gz_data_file:
+    length: 2534128
+    md5: fc07d6ac041b3ed835b20a50b97901d8
+    name: SPICE1_OpenFF_dataset_v2_nc_1000_HCNOFClS.hdf5.gz
+  hdf5_data_file:
+    md5:  03244a62f184611bbb6680d6ef6f13e3
+    name: SPICE1_OpenFF_dataset_v2_nc_1000_HCNOFClS.hdf5
+  processed_data_file:
+    md5: null
+    name: SPICE1_OpenFF_dataset_v2_nc_1000_HCNOFClS_processed.npz
+  url: https://zenodo.org/records/14269058/files/spice_114_openff_dataset_v2_ntc_1000_HCNOFClS.hdf5.gz
 full_dataset_v1:
   version: 1
   gz_data_file:

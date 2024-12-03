@@ -151,6 +151,10 @@ class CalculateProperties(torch.nn.Module):
         self.requested_properties = requested_properties
         self.include_force = "per_atom_force" in self.requested_properties
         self.include_charges = "per_system_total_charge" in self.requested_properties
+        # dipole_moment is calculated from charges, thus if dipole moment is requested
+        # we also need to calculate charges, even if we don't call per_system_total_charge
+        if "per_system_dipole_moment" in self.requested_properties:
+            self.include_charges = True
 
         # Ensure all requested properties are supported
         assert all(

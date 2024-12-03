@@ -1701,6 +1701,8 @@ class PotentialTrainer:
                     name=experiment_name,
                 ),
             )
+
+            log.debug(f'tags: {self._generate_tags(["tensorboard"])}')
         elif self.training_parameter.experiment_logger.logger_name == "wandb":
             from modelforge.utils.io import check_import
 
@@ -1909,14 +1911,27 @@ class PotentialTrainer:
         """Generates tags for the experiment."""
         import modelforge
 
+        try:
+            version = modelforge.__version__
+        except:
+            # for editable local install
+            from modelforge._version import __version__
+
+            version = __version__
+        losses = [
+            f"loss-{loss}"
+            for loss in self.training_parameter.loss_parameter.loss_components
+        ]
         tags.extend(
             [
-                str(modelforge.__version__),
+                str(version),
                 self.dataset_parameter.dataset_name,
                 self.potential_parameter.potential_name,
-                f"loss-{'-'.join(self.training_parameter.loss_parameter.loss_components)}",
+                # f"loss-{'-'.join(self.training_parameter.loss_parameter.loss_components)}",
             ]
         )
+        tags.extend(losses)
+
         return tags
 
 

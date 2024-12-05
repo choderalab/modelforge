@@ -80,6 +80,7 @@ These architectures can be trained on the following datasets (distributed via ze
 - QM9
 - SPICE1 (/openff)
 - SPICE2
+- tmQM
 
 By default, potentials predict the total energy  and per-atom forces within a given cutoff radius and can be trained on energies and forces.
 

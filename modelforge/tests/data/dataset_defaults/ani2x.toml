@@ -3,3 +3,10 @@ dataset_name = "ANI2x"
 version_select = "nc_1000_v0"
 num_workers = 4
 pin_memory = true
+properties_of_interest = ["atomic_numbers", "geometry", "energies", "forces"]
+
+[dataset.properties_assignment]
+atomic_numbers = "atomic_numbers"
+positions = "geometry"
+E = "energies"
+F = "forces"

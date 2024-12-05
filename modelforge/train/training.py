@@ -45,6 +45,11 @@ T_NNP_Parameters = TypeVar(
 from modelforge.train.losses import LossFactory, create_error_metrics
 from modelforge.train.parameters import RuntimeParameters, TrainingParameters
 
+import matplotlib
+
+# Use Agg backend for matplotlib, to avoid tkinter issues when using profiler
+matplotlib.use("Agg")
+
 __all__ = [
     "PotentialTrainer",
 ]
@@ -147,6 +152,10 @@ class CalculateProperties(torch.nn.Module):
         self.requested_properties = requested_properties
         self.include_force = "per_atom_force" in self.requested_properties
         self.include_charges = "per_system_total_charge" in self.requested_properties
+        # dipole_moment is calculated from charges, thus if dipole moment is requested
+        # we also need to calculate charges, even if we don't call per_system_total_charge
+        if "per_system_dipole_moment" in self.requested_properties:
+            self.include_charges = True
 
         # Ensure all requested properties are supported
         assert all(
@@ -1634,6 +1643,8 @@ class PotentialTrainer:
                 split=self.training_parameter.splitting_strategy.data_split,
             ),
             regenerate_processed_cache=self.dataset_parameter.regenerate_processed_cache,
+            properties_of_interest=self.dataset_parameter.properties_of_interest,
+            properties_assignment=self.dataset_parameter.properties_assignment.model_dump(),
         )
         dm.prepare_data()
         dm.setup()
@@ -1691,6 +1702,8 @@ class PotentialTrainer:
                     name=experiment_name,
                 ),
             )
+
+            log.debug(f'tags: {self._generate_tags(["tensorboard"])}')
         elif self.training_parameter.experiment_logger.logger_name == "wandb":
             from modelforge.utils.io import check_import
 
@@ -1899,14 +1912,29 @@ class PotentialTrainer:
         """Generates tags for the experiment."""
         import modelforge
 
+        try:
+            version = modelforge.__version__
+        except:
+            # Note, for an  editable local install (i.e., pip install -e )
+            # you often can't find __version__, but if you import directly from _version.py
+            # you can fake it, so you can still log version and not crash the code here
+            from modelforge._version import __version__
+
+            version = __version__
+        losses = [
+            f"loss-{loss}"
+            for loss in self.training_parameter.loss_parameter.loss_components
+        ]
         tags.extend(
             [
-                str(modelforge.__version__),
+                str(version),
                 self.dataset_parameter.dataset_name,
                 self.potential_parameter.potential_name,
-                f"loss-{'-'.join(self.training_parameter.loss_parameter.loss_components)}",
+                # f"loss-{'-'.join(self.training_parameter.loss_parameter.loss_components)}",
             ]
         )
+        tags.extend(losses)
+
         return tags
 
 

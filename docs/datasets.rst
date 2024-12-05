@@ -103,4 +103,6 @@ Explanation of fields in `qm9.toml`:
 - `dataset_name`: Specifies the name of the dataset. For this example, it is QM9.
 - `number_of_worker`: Determines the number of worker threads for data loading. Increasing the number of workers can speed up data loading but requires more memory.
 - `version_select`: Indicates the version of the dataset to use. In this example, it points to a small subset of the dataset for quick testing. To use the full QM9 dataset, set this variable to `latest`.
+- `properties_of_interest`: Lists the properties of interest to load from the hdf5 file.
+- `properties_assignment`: Maps the properties of interest to the corresponding fields in the dataset. This mapping is crucial for the correct loading of properties during training; note, many datasets contain multiple properties can potentially be swapped (e.g., energy calculated with or without dispersion corrections, different charge population schemes, different levels of theory, etc.).  Any properties listed here must appear in the properties of interest list; the code will raise a validation error if this condition is not met.
 

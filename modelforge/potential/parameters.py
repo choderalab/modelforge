@@ -53,7 +53,7 @@ class AtomicNumber(BaseModel):
     number_of_per_atom_features: int = 32
 
 
-class Featurization(BaseModel):
+class Featurization(ParametersBase):
     properties_to_featurize: List[str]
     atomic_number: AtomicNumber = Field(default_factory=AtomicNumber)
 

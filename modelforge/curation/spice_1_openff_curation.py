@@ -163,7 +163,7 @@ class SPICE1OpenFFCuration(DatasetCuration):
             "dft_total_force": "series_atom",
             "formation_energy": "series_mol",
             "mbis_charges": "series_atom",
-            "scf_dipole": "series_atom",
+            "scf_dipole": "series_mol",
         }
 
     # we will use the retry package to allow us to resume download if we lose connection to the server

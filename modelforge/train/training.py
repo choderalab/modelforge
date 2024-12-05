@@ -1914,7 +1914,9 @@ class PotentialTrainer:
         try:
             version = modelforge.__version__
         except:
-            # for editable local install
+            # Note, for an  editable local install (i.e., pip install -e )
+            # you often can't find __version__, but if you import directly from _version.py
+            # you can fake it, so you can still log version and not crash the code here
             from modelforge._version import __version__
 
             version = __version__

@@ -47,6 +47,7 @@ from modelforge.train.parameters import RuntimeParameters, TrainingParameters
 
 import matplotlib
 
+# Use Agg backend for matplotlib, to avoid tkinter issues when using profiler
 matplotlib.use("Agg")
 
 __all__ = [

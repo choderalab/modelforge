@@ -1002,9 +1002,7 @@ class DataModule(pl.LightningDataModule):
         if self.properties_assignment is not None:
             from modelforge.utils import PropertyNames
 
-            dataset._properties_names = PropertyNames(
-                **self.properties_assignment.model_dump()
-            )
+            dataset._properties_names = PropertyNames(**self.properties_assignment)
 
         torch_dataset = self._create_torch_dataset(dataset)
         # if dataset statistics is present load it from disk
@@ -1442,6 +1440,8 @@ def initialize_datamodule(
     regression_ase: bool = False,
     regenerate_dataset_statistic: bool = False,
     local_cache_dir="./",
+    properties_of_interest: Optional[PropertyNames] = None,
+    properties_assignment: Optional[Dict[str, str]] = None,
 ) -> DataModule:
     """
     Initialize a dataset for a given mode.
@@ -1457,6 +1457,8 @@ def initialize_datamodule(
         regression_ase=regression_ase,
         regenerate_dataset_statistic=regenerate_dataset_statistic,
         local_cache_dir=local_cache_dir,
+        properties_of_interest=properties_of_interest,
+        properties_assignment=properties_assignment,
     )
     data_module.prepare_data()
     data_module.setup()

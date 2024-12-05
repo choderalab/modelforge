@@ -774,6 +774,33 @@ def test_dataset_splitting(
 
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])
+def test_properties_assignment(
+    dataset_name,
+    datamodule_factory,
+    prep_temp_dir,
+):
+    """Test random_split on the the dataset."""
+    dm = datamodule_factory(
+        dataset_name=dataset_name,
+        batch_size=512,
+        version_select="nc_1000_v0",
+        local_cache_dir=str(prep_temp_dir),
+        properties_of_interest=[
+            "atomic_numbers",
+            "geometry",
+            "internal_energy_at_0K",
+            "dipole_moment",
+        ],
+        properties_assignment={
+            "E": "internal_energy_at_0K",
+            "positions": "geometry",
+            "atomic_numbers": "atomic_numbers",
+            "dipole_moment": "dipole_moment",
+        },
+    )
+
+
+@pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_dataset_downloader(dataset_name, dataset_factory, prep_temp_dir):
     """
     Test the DatasetDownloader functionality.

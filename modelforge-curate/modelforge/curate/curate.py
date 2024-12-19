@@ -356,6 +356,13 @@ class Record:
 
     @property
     def n_atoms(self):
+        """
+        Get the number of atoms in the record
+
+        Returns
+        -------
+            int: number of atoms in the record
+        """
         # the validate function will set self._n_atoms to -1 if the number of atoms cannot be determined
         # or if the number of atoms is inconsistent between properties
         # otherwise will set it to the value from the atomic_numbers
@@ -364,6 +371,14 @@ class Record:
 
     @property
     def n_configs(self):
+        """
+        Get the number of configurations in the record
+
+        Returns
+        -------
+            int: number of configurations in the record
+        """
+
         # the validate function will set self._n_configs to -1 if the number of configurations cannot be determined
         # or if the number of configurations is inconsistent between properties.
         # will set it to the value from the properties otherwise
@@ -371,6 +386,13 @@ class Record:
         return self._n_configs
 
     def to_dict(self):
+        """
+        Convert the record to a dictionary
+
+        Returns
+        -------
+            dict: dictionary representation of the record
+        """
         return {
             "name": self.name,
             "n_atoms": self.n_atoms,
@@ -382,6 +404,13 @@ class Record:
         }
 
     def _validate_n_atoms(self):
+        """
+        Validate the number of atoms in the record by checking that all per_atom properties have the same number of atoms as the atomic numbers.
+
+        Returns
+        -------
+            bool: True if the number of atoms is defined and consistent, False otherwise.
+        """
         self._n_atoms = -1
         if self.atomic_numbers is not None:
             for key, value in self.per_atom.items():
@@ -399,6 +428,13 @@ class Record:
         return True
 
     def _validate_n_configs(self):
+        """
+        Validate the number of configurations in the record by checking that all properties have the same number of configurations.
+
+        Returns
+        -------
+            bool: True if the number of configurations is defined and consistent, False otherwise.
+        """
         n_configs = []
         for key, value in self.per_atom.items():
             n_configs.append(value.n_configs)
@@ -431,7 +467,7 @@ class Record:
 
         Returns
         -------
-            True if the record is valid, False otherwise.
+            True if the record validated, False otherwise.
         """
         if self._validate_n_atoms() and self._validate_n_configs():
             return True
@@ -465,12 +501,23 @@ class SourceDataset:
         self.unit_system = unit_system
         self.append_property = append_property
 
-    # add a record to the dataset by giving it a unique name
-    # the idea here is to just create an empty container that we can add properties to
     def add_record(
         self, record_name: str, properties: Optional[List[Type[CurateBase]]] = None
     ):
+        """
+        Add a record to the dataset. If properties are provided, they will be added to the record.
 
+        Parameters
+        ----------
+        record_name: str
+            Name of the record/
+        properties: List[Type[CurateBase]], optional, default=None
+            List of properties to add to the record. If not provided, an empty record will be created.
+
+        Returns
+        -------
+
+        """
         # I think this should error out if we've already encountered a name, as that would imply
         # some issue with the datasset construction
         if record_name in self.records.keys():
@@ -483,11 +530,38 @@ class SourceDataset:
             self.add_properties_to_record(record_name, properties)
 
     def add_properties(self, record_name: str, properties: List[Type[CurateBase]]):
+        """
+        Add a list of properties to a record in the dataset.
 
+        Parameters
+        ----------
+        record_name: str
+            Name of the record to add the properties to.
+        properties: List[Type[CurateBase]]
+            List of properties to add to the record.
+
+        Returns
+        -------
+
+        """
         for property in properties:
             self.add_property(record_name, property)
 
     def add_property(self, record_name: str, property: Type[CurateBase]):
+        """
+        Add a property to a record in the dataset.
+
+        Parameters
+        ----------
+        record_name: str
+            Name of the record to add the property to.
+        property: Type[CurateBase]
+            Property to add to the record.
+
+        Returns
+        -------
+
+        """
         # check if the record exists; if it does not add it
         if record_name not in self.records.keys():
             log.info(
@@ -635,15 +709,47 @@ class SourceDataset:
                 self.records[record_name].per_system[property.name] = property
 
     def get_record(self, record_name: str):
+        """
+        Get a record from the dataset. Returns an instance of the Record class.
+
+        Parameters
+        ----------
+        record_name: str
+            Name of the record to get
+        Returns
+        -------
+            Record: instance of the Record class corresponding to the record name
+
+        """
         return self.records[record_name]
 
     def validate_record(self, record_name: str):
+        """
+        Validate a record to ensure that the number of atoms and configurations are consistent across all properties.
+
+        Issues are reported in the errors log, but no exceptions are raised.
+
+        Parameters
+        ----------
+        record_name: str
+            Name of the record to validate
+
+        Returns
+        -------
+            bool: True if the record validated, False otherwise.
+        """
+
+        validation_status = True
         # every record should have atomic numbers, positions, and energies
         # make sure atomic_numbers have been set
         if self.records[record_name].atomic_numbers is None:
-            raise ValueError(
+            validation_status = False
+            log.error(
                 f"No atomic numbers set for record {record_name}. These are required."
             )
+            # raise ValueError(
+            #     f"No atomic numbers set for record {record_name}. These are required."
+            # )
 
         # ensure we added positions and energies as these are the minimum requirements for a dataset along with
         # atomic_numbers
@@ -653,9 +759,13 @@ class SourceDataset:
                 positions_in_properties = True
                 break
         if positions_in_properties == False:
-            raise ValueError(
+            validation_status = False
+            log.error(
                 f"No positions found in properties for record {record_name}. These are required."
             )
+            # raise ValueError(
+            #     f"No positions found in properties for record {record_name}. These are required."
+            # )
 
         # we need to ensure we have some type of energy defined
         energy_in_properties = False
@@ -665,22 +775,34 @@ class SourceDataset:
                 break
 
         if energy_in_properties == False:
-            raise ValueError(
+            validation_status = False
+            log.error(
                 f"No energies found in properties for record {record_name}. These are required."
             )
+            # raise ValueError(
+            #     f"No energies found in properties for record {record_name}. These are required."
+            # )
 
         # run record validation for number of atoms
         # this will check that all per_atom properties have the same number of atoms as the atomic numbers
         if self.records[record_name]._validate_n_atoms() == False:
-            raise ValueError(
+            validation_status = False
+            log.error(
                 f"Number of atoms for properties in record {record_name} are not consistent."
             )
+            # raise ValueError(
+            #     f"Number of atoms for properties in record {record_name} are not consistent."
+            # )
         # run record validation for number of configurations
         # this will check that all properties have the same number of configurations
         if self.records[record_name]._validate_n_configs() == False:
-            raise ValueError(
+            validation_status = False
+            log.error(
                 f"Number of configurations for properties in record {record_name} are not consistent."
             )
+            # raise ValueError(
+            #     f"Number of configurations for properties in record {record_name} are not consistent."
+            # )
 
         # check that the units provided are compatible with the expected units for the property type
         # e.g., ensure things that should be length have units of length.
@@ -696,9 +818,13 @@ class SourceDataset:
             expected_units = self.unit_system[property_type]
             # check to make sure units are compatible with the expected units for the property type
             if not expected_units.is_compatible_with(property_units, "chem"):
-                raise ValueError(
+                validation_status = False
+                log.error(
                     f"Unit of {property_record.name} is not compatible with the expected unit {expected_units} for record {record_name}."
                 )
+                # raise ValueError(
+                #     f"Unit of {property_record.name} is not compatible with the expected unit {expected_units} for record {record_name}."
+                # )
 
         for property in self.records[record_name].per_system.keys():
             property_record = self.records[record_name].per_system[property]
@@ -710,18 +836,60 @@ class SourceDataset:
             expected_units = self.unit_system[property_type]
             property_units = property_record.units
             if not expected_units.is_compatible_with(property_units, "chem"):
-                raise ValueError(
+                validation_status = False
+                log.error(
                     f"Unit of {property_record.name} is not compatible with the expected unit {expected_units} for record {record_name}."
                 )
+                # raise ValueError(
+                #     f"Unit of {property_record.name} is not compatible with the expected unit {expected_units} for record {record_name}."
+                # )
+        return validation_status
 
     def validate_records(self):
+        """
+        Validate records to ensure that the number of atoms and configurations are consistent across all properties.
+
+        Issues are reported in the errors log, but no exceptions are raised.
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+            bool: True if all the records are validated, False otherwise.
+        """
         # check that all properties in a record have the same number configs and number of atoms (where applicable)
         from tqdm import tqdm
 
+        validation_status = []
         for record_name in tqdm(self.records.keys()):
-            self.validate_record(record_name)
+            validation_status.append(self.validate_record(record_name))
+
+        if all(validation_status):
+            log.info("All records validated successfully.")
+            return True
+        else:
+            sum_failures = sum([1 for status in validation_status if status == False])
+            log.error(
+                f"{sum_failures} record(s) failed validation. See error logs for more information."
+            )
+            return False
 
     def to_hdf5(self, file_path: str, file_name: str):
+        """
+        Write the dataset to an HDF5 file.
+
+        Parameters
+        ----------
+        file_path: str
+            Path where the file should be written.
+        file_name: str
+            Name of the file to write. Must end in .hdf5
+
+        Returns
+        -------
+
+        """
         import h5py
         import os
 

@@ -1,0 +1,84 @@
+[build-system]
+requires = ["setuptools>=61.0", "versioningit~=3.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "modelforge-curate"
+description = "modelforge module with API to curate datsets"
+dynamic = ["version"]
+readme = "README.md"
+authors = [
+    { name = "Christopher Iacovella", email = "chris.iacovella@choderalab.org" },
+    { name = "Marcus Wieder", email = "marcus.wieder@choderalab.org" },
+]
+license = { text = "MIT" }
+# See https://pypi.org/classifiers/
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "Operating System :: POSIX :: Linux",
+    "Environment :: GPU",
+    "Environment :: GPU :: NVIDIA CUDA",
+]
+requires-python = ">=3.10"
+
+[project.urls]
+Source = "https://github.com/choderalab/modelforge"
+Documentation = "https://modelforge.readthedocs.io/"
+Wiki = "https://github.com/choderalab/modelforge/wiki"
+
+[tool.setuptools]
+# Disable zipping because mypy cannot read zip imports and this may affect downstream development.
+# https://mypy.readthedocs.io/en/stable/installed_packages.html?highlight=zip#using-installed-packages-with-mypy-pep-561
+# NOTE: We might consider removing this once we can test the code in a 
+# production environment since zipping the package may increase performance.
+zip-safe = false
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+# Ref https://setuptools.pypa.io/en/latest/userguide/datafiles.html#package-data
+[tool.setuptools.package-data]
+modelforge = [
+    "py.typed"
+]
+
+# https://versioningit.readthedocs.io/en/stable/configuration.html#
+[tool.versioningit]
+default-version = "1+unknown"
+
+[tool.versioningit.format]
+distance = "{base_version}+{distance}.{vcs}{rev}"
+dirty = "{base_version}+{distance}.{vcs}{rev}.dirty"
+distance-dirty = "{base_version}+{distance}.{vcs}{rev}.dirty"
+
+[tool.versioningit.vcs]
+method = "git"
+match = ["*"]
+default-tag = "1.0.0"
+
+[tool.versioningit.write]
+file = "modelforge/curate/_version.py"
+
+
+[tool.coverage.run]
+# .coveragerc to control coverage.py and pytest-cov
+omit = [
+    # Omit the tests
+    "modelforge/curate/tests/*",
+    # Omit generated versioningit
+    "modelforge/curate/_version.py"
+]
+
+[tool.flake8]
+max-line-length = 88
+extend-ignore = ['E203',]
+
+[tool.isort]
+profile = "black"
+
+[tool.black]
+line-length = 88

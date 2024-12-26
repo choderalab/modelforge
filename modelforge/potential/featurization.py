@@ -9,7 +9,7 @@ from modelforge.utils.prop import NNPInput
 class AddPerMoleculeValue(nn.Module):
     """
     Module that adds a per-molecule value to a per-atom property tensor.
-    The per-molecule value is expanded to match th elength of the per-atom property tensor.
+    The per-molecule value is expanded to match the length of the per-atom property tensor.
 
     Parameters
     ----------
@@ -50,17 +50,56 @@ class AddPerMoleculeValue(nn.Module):
         return torch.cat((per_atom_property_tensor, expanded_values), dim=1)
 
 
-class AdditionalEmbedding(nn.Module):
+class GroupPeriodEmbedding(nn.Module):
 
     def __init__(self, embedding_tensor: torch.Tensor, key: str):
+        """
+        Initialize the Embedding class for either group or period embedding
+        Parameters
+        ----------
+        embedding_tensor: torch.Tensor
+            The existing embedding tensor (atomic numbers)
+        key: str
+            Either "atomic_groups" or "atomic_periods"
+        """
         super().__init__()
         self.key = key
         self.embedding_tensor = embedding_tensor
 
+
+    def _assign_atomic_group_period(self):
+        """
+        Assign atomic group to the input data.
+
+        Returns
+        -------
+        torch.Tensor
+            The atomic group tensor.
+        """
+
+
+        self.atomic_groups = torch.tensor(
+            [group[atomic_number.item()] for atomic_number in self.atomic_numbers]
+        )
+        self.atomic_periods = torch.tensor(
+            [period[atomic_number.item()] for atomic_number in self.atomic_numbers]
+        )
+
     def forward(
         self, per_atom_property_tensor: torch.Tensor, data: NNPInput
     ) -> torch.Tensor:
-        value = getattr(data, self.key)
+
+        atomic_numbers = getattr(data, "atomic_numbers")
+        if self.key == "atomic_groups":
+            from modelforge.potential.utils import atomic_group_dict
+            value = torch.tensor(
+            [atomic_group_dict[atomic_number.item()] for atomic_number in atomic_numbers]
+        )
+        elif self.key == "atomic_periods":
+            from modelforge.potential.utils import atomic_period_dict
+            value = torch.tensor(
+            [atomic_period_dict[atomic_number.item()] for atomic_number in atomic_numbers]
+        )
         return torch.cat(
             (per_atom_property_tensor, self.embedding_tensor(value)), dim=1
         )
@@ -182,7 +221,7 @@ class FeaturizeInput(nn.Module):
                 and featurization in self._SUPPORTED_FEATURIZATION_TYPES
             ):
                 self.embeddings.append(
-                    AdditionalEmbedding(
+                    GroupPeriodEmbedding(
                         torch.nn.Embedding(
                             int(featurization_config[featurization]["maximum_period"]),
                             int(
@@ -203,7 +242,7 @@ class FeaturizeInput(nn.Module):
                 and featurization in self._SUPPORTED_FEATURIZATION_TYPES
             ):
                 self.embeddings.append(
-                    AdditionalEmbedding(
+                    GroupPeriodEmbedding(
                         torch.nn.Embedding(
                             int(featurization_config[featurization]["maximum_group"]),
                             int(
@@ -224,7 +263,7 @@ class FeaturizeInput(nn.Module):
                 featurization == "per_system_total_charge"
                 and featurization in self._SUPPORTED_FEATURIZATION_TYPES
             ):
-                # transform output o f embedding with shape (nr_atoms,
+                # transform output of embedding with shape (nr_atoms,
                 # nr_features) to (nr_atoms, nr_features + 1). The added
                 # features is the total charge (which will be transformed to a
                 # per-atom property)

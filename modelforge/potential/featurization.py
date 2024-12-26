@@ -67,24 +67,6 @@ class GroupPeriodEmbedding(nn.Module):
         self.embedding_tensor = embedding_tensor
 
 
-    def _assign_atomic_group_period(self):
-        """
-        Assign atomic group to the input data.
-
-        Returns
-        -------
-        torch.Tensor
-            The atomic group tensor.
-        """
-
-
-        self.atomic_groups = torch.tensor(
-            [group[atomic_number.item()] for atomic_number in self.atomic_numbers]
-        )
-        self.atomic_periods = torch.tensor(
-            [period[atomic_number.item()] for atomic_number in self.atomic_numbers]
-        )
-
     def forward(
         self, per_atom_property_tensor: torch.Tensor, data: NNPInput
     ) -> torch.Tensor:

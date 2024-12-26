@@ -55,6 +55,7 @@ class GroupPeriodEmbedding(nn.Module):
     def __init__(self, embedding_tensor: torch.Tensor, key: str):
         """
         Initialize the Embedding class for either group or period embedding
+
         Parameters
         ----------
         embedding_tensor: torch.Tensor
@@ -66,7 +67,6 @@ class GroupPeriodEmbedding(nn.Module):
         self.key = key
         self.embedding_tensor = embedding_tensor
 
-
     def forward(
         self, per_atom_property_tensor: torch.Tensor, data: NNPInput
     ) -> torch.Tensor:
@@ -74,14 +74,22 @@ class GroupPeriodEmbedding(nn.Module):
         atomic_numbers = getattr(data, "atomic_numbers")
         if self.key == "atomic_groups":
             from modelforge.potential.utils import atomic_group_dict
+
             value = torch.tensor(
-            [atomic_group_dict[atomic_number.item()] for atomic_number in atomic_numbers]
-        )
+                [
+                    atomic_group_dict[atomic_number.item()]
+                    for atomic_number in atomic_numbers
+                ]
+            )
         elif self.key == "atomic_periods":
             from modelforge.potential.utils import atomic_period_dict
+
             value = torch.tensor(
-            [atomic_period_dict[atomic_number.item()] for atomic_number in atomic_numbers]
-        )
+                [
+                    atomic_period_dict[atomic_number.item()]
+                    for atomic_number in atomic_numbers
+                ]
+            )
         return torch.cat(
             (per_atom_property_tensor, self.embedding_tensor(value)), dim=1
         )

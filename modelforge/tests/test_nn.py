@@ -1,6 +1,8 @@
 from .test_potentials import load_configs_into_pydantic_models
 import pytest
 
+import torch
+
 
 @pytest.fixture(scope="session")
 def prep_temp_dir(tmp_path_factory):

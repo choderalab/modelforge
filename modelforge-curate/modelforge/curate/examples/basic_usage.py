@@ -1,4 +1,3 @@
-from ase.ga.cutandsplicepairing import Positions
 from modelforge.curate.curate import *
 import numpy as np
 
@@ -17,14 +16,15 @@ new_dataset = SourceDataset("test_dataset")
 new_dataset.add_record("mol1")
 
 # Next we can define the atomic numbers of the record using the AtomicNumbers pydantic model.
-# This model can accept either a List or numpy array; it will automatically convert a list to a numpy array internally.
+# This model can accept either a List or numpy array; if a list is provided it will automatically convert
+# it to a numpy array internally.
 # The array should be of (n_atoms, 1); the model will raise an error if shape[1] !=1 or len(shape) != 2
 atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
 
 
 # Define positions; again, this accepts either a List or a numpy array.
 # Since positions have units associated with them, we also need to specify the units
-# Units can be passed as ann openff.units Unit or a string that can be understood by openff.units.
+# Units can be passed as an openff.units Unit or a string that can be understood by openff.units.
 # Note positions are a per_atom property, and thus must be a 3d array with shape (n_configs, n_atoms, 3).
 # if shape[2] !=3 and len(shape) != 3, this will raise an error.
 
@@ -58,7 +58,7 @@ new_dataset.add_properties(
 # we can view an individual record by using get_record method
 mol1_record = new_dataset.get_record(record_name="mol1")
 
-# Printing this will provided a formatted output of the record data:
+# Printing this will provide a formatted output of the record data:
 print(mol1_record)
 
 # The record can also be exported to a dictionary
@@ -68,14 +68,14 @@ mol1_record.to_dict()
 # Note, within the Record class, accessing n_atoms and n_configs, triggers validation to ensure
 # the number of atoms and number of configurations defined are consistent.
 # If values are inconsistent detailed warning messages will be provided in the log.
-# Since printing requests these variables, validation is performed, although this can be triggered manually:
+# Validation can also be triggered manually:
 
 mol1_record.validate()
 
 # More complete validation can be performed at the dataset level. This validation includes:
 # 1- consistent number of atoms
 # 2- consistent number of configurations
-# 3 - validation of units (e.g., that the unit provided for Positions is a length),
+# 3 -validation of units (e.g., that the unit provided for Positions is a length),
 # 4- ensuring that atomic_numbers, positions, and energies have been defined in the dataset
 
 # This can be done on an individual record

@@ -313,6 +313,12 @@ class MetaData(RecordProperty):
 
 
 class AtomicNumbers(RecordProperty):
+    """
+    Class to define the atomic numbers of a record.
+
+    The atomic numbers must be a 2d array of shape (n_atoms, 1).
+    """
+
     name: str = "atomic_numbers"
     value: NdArray
     units: unit.Unit = unit.dimensionless
@@ -575,7 +581,7 @@ class SourceDataset:
             if self.records[record_name].atomic_numbers is not None:
                 raise ValueError(f"Atomic numbers already set for record {record_name}")
 
-            self.records[record_name].atomic_numbers = property
+            self.records[record_name].atomic_numbers = property.model_copy(deep=True)
 
             # Note, the number of atoms will always be set by the atomic_numbers property.
             # We will later validate that per_atom properties are consistent with this value later
@@ -602,7 +608,9 @@ class SourceDataset:
                 raise ValueError(
                     f"The name atomic_numbers is reserved. Use AtomicNumbers to define them, not the MetaData class."
                 )
-            self.records[record_name].meta_data[property.name] = property
+            self.records[record_name].meta_data[property.name] = property.model_copy(
+                deep=True
+            )
 
         elif property.classification == PropertyClassification.per_atom:
             if property.name in self.records[record_name].per_system.keys():
@@ -659,7 +667,9 @@ class SourceDataset:
                 )
 
             else:
-                self.records[record_name].per_atom[property.name] = property
+                self.records[record_name].per_atom[property.name] = property.model_copy(
+                    deep=True
+                )
         elif property.classification == PropertyClassification.per_system:
             if property.name in self.records[record_name].per_atom.keys():
                 raise ValueError(
@@ -706,7 +716,9 @@ class SourceDataset:
                     )
                 )
             else:
-                self.records[record_name].per_system[property.name] = property
+                self.records[record_name].per_system[property.name] = (
+                    property.model_copy(deep=True)
+                )
 
     def get_record(self, record_name: str):
         """

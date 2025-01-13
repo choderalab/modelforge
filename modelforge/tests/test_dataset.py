@@ -1218,6 +1218,6 @@ def test_element_filter(
     dm = datamodule_factory(
         dataset_name=dataset_name,
         local_cache_dir=str(prep_temp_dir),
-        element_filter=None,
+        element_filter=[(17, 29), (-78, 17)],
     )
     dm.prepare_data()

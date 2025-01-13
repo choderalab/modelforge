@@ -869,6 +869,7 @@ class DataModule(pl.LightningDataModule):
         regenerate_processed_cache: bool = True,
         properties_of_interest: Optional[PropertyNames] = None,
         properties_assignment: Optional[Dict[str, str]] = None,
+        element_filter: Optional[List[tuple]] = None,
     ):
         """
         Initializes adData module for PyTorch Lightning handling data preparation and loading object with the specified configuration.
@@ -936,6 +937,7 @@ class DataModule(pl.LightningDataModule):
 
         self.properties_of_interest = properties_of_interest
         self.properties_assignment = properties_assignment
+        self.element_filter = element_filter
 
         # make sure we can handle a path with a ~ in it
         self.local_cache_dir = os.path.expanduser(local_cache_dir)
@@ -1004,6 +1006,8 @@ class DataModule(pl.LightningDataModule):
 
             dataset._properties_names = PropertyNames(**self.properties_assignment)
 
+        dataset = self._filter_by_element(dataset)
+
         torch_dataset = self._create_torch_dataset(dataset)
         # if dataset statistics is present load it from disk
         if (
@@ -1055,8 +1059,13 @@ class DataModule(pl.LightningDataModule):
                     "Atomic self energies or atomic energies statistics are missing."
                 )
 
+
         # Save processed dataset and statistics for later use in setup
         self._cache_dataset(torch_dataset)
+
+    def _filter_by_element(self, dataset):
+
+        return dataset
 
     def _log_dataset_statistic(self, dataset_statistic):
         """Save the dataset statistics to a file with units"""
@@ -1442,6 +1451,7 @@ def initialize_datamodule(
     local_cache_dir="./",
     properties_of_interest: Optional[PropertyNames] = None,
     properties_assignment: Optional[Dict[str, str]] = None,
+    element_filter: Optional[List[tuple]] = None,
 ) -> DataModule:
     """
     Initialize a dataset for a given mode.
@@ -1459,6 +1469,7 @@ def initialize_datamodule(
         local_cache_dir=local_cache_dir,
         properties_of_interest=properties_of_interest,
         properties_assignment=properties_assignment,
+        element_filter=element_filter,
     )
     data_module.prepare_data()
     data_module.setup()

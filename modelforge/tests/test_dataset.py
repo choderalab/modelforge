@@ -1208,3 +1208,16 @@ def test_shifting_center_of_mass_to_origin(prep_temp_dir):
 
         assert torch.allclose(pairs.r_ij, pairs_ns.r_ij, atol=1e-4)
         assert torch.allclose(pairs.d_ij, pairs_ns.d_ij, atol=1e-4)
+
+
+@pytest.mark.parametrize("dataset_name", ["tmqm"])
+def test_element_filter(
+        dataset_name,
+        datamodule_factory,
+):
+    dm = datamodule_factory(
+        dataset_name=dataset_name,
+        local_cache_dir=str(prep_temp_dir),
+        element_filter=None,
+    )
+    dm.prepare_data()

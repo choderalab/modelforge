@@ -152,11 +152,14 @@ class RecordProperty(CurateBase):
     @model_validator(mode="after")
     def _check_unit_type(self) -> Self:
 
-        if not self.units.is_compatible_with(UnitSystem()[self.property_type], "chem"):
-            raise ValueError(
-                f"Unit {self.units} of {self.name} are not compatible with the property type {self.property_type}.\n"
-            )
-        return self
+        if self.classification != "meta_data":
+            if not self.units.is_compatible_with(
+                UnitSystem()[self.property_type], "chem"
+            ):
+                raise ValueError(
+                    f"Unit {self.units} of {self.name} are not compatible with the property type {self.property_type}.\n"
+                )
+            return self
 
     @computed_field
     @property
@@ -544,6 +547,52 @@ class SourceDataset:
         if properties is not None:
             self.add_properties_to_record(record_name, properties)
 
+    def update_record(self, record: Record):
+        """
+        Update a record in the dataset by overwriting the existing record with the input.
+
+        This is useful if a record was accessed via get_record and then modified or in copying the contents
+        from a different dataset.
+
+        Note, if  record.name is changed, the record will be added as a new record.
+
+
+        Parameters
+        ----------
+        record: Record
+            Record to update.
+
+        Returns
+        -------
+
+        """
+        if not record.name in self.records.keys():
+            log.info(
+                f"Record with name {record.name} does not exist in the dataset, creating it."
+            )
+
+        self.records[record.name] = record
+
+    def remove_record(self, record_name: str):
+        """
+        Remove a record from the dataset.
+
+        Parameters
+        ----------
+        record_name: str
+            Name of the record to remove.
+
+        Returns
+        -------
+
+        """
+        if record_name in self.records.keys():
+            self.records.pop(record_name)
+        else:
+            log.warning(
+                f"Record with name {record_name} does not exist in the dataset."
+            )
+
     def add_properties(self, record_name: str, properties: List[Type[CurateBase]]):
         """
         Add a list of properties to a record in the dataset.
@@ -742,7 +791,9 @@ class SourceDataset:
             Record: instance of the Record class corresponding to the record name
 
         """
-        return self.records[record_name]
+        from copy import deepcopy
+
+        return deepcopy(self.records[record_name])
 
     def validate_record(self, record_name: str):
         """

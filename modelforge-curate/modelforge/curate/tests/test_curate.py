@@ -54,24 +54,41 @@ def test_initialize_properties():
     assert meta_data.classification == "meta_data"
     assert meta_data.property_type == "meta_data"
 
-    # various tests that should fail based on wrong dimensions
+    # various tests that should fail based on wrong dimensions or units
     with pytest.raises(ValueError):
         positions = Positions(
             value=[[[1.0, 1.0, 1.0, 2.0], [2.0, 2.0, 2.0, 3.0]]], units="nanometer"
         )
+    # not units! we don't assume, must specify
     with pytest.raises(ValueError):
         positions = Positions(value=np.array([[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]))
 
+    # wrong shape
     with pytest.raises(ValueError):
         energies = Energies(value=np.array([0.1]), units=unit.hartree)
 
+    # wrong shape
     with pytest.raises(ValueError):
         energies = Energies(value=np.array([[0.1, 0.3]]), units=unit.hartree)
 
+    # wrong shape
     with pytest.raises(ValueError):
         atomic_numbers = AtomicNumbers(value=np.array([[1, 6]]))
+
+    # wrong shape
     with pytest.raises(ValueError):
         atomic_numbers = AtomicNumbers(value=np.array([[1, 6], [1, 6]]))
+
+    # incompatible units
+    with pytest.raises(ValueError):
+        energies = Energies(
+            value=np.array([[0.1], [0.3]]), units=unit.kilojoule_per_mole**2
+        )
+    # incompatible units
+    with pytest.raises(ValueError):
+        positions = Positions(
+            value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units=unit.hartree
+        )
 
 
 def test_add_properties():
@@ -145,6 +162,24 @@ def test_append_properties():
         positions = Positions(value=[[[3.0, 1.0, 1.0]]], units="nanometer")
 
         new_dataset.add_properties("mol1", [positions])
+
+    # modify the record and then call the update_record method
+    new_pos = np.array([[[1.0, 1.0, 1.0], [3.0, 30, 3.0]]])
+    record.per_atom["positions"].value = new_pos
+    new_dataset.update_record(record)
+
+    assert np.all(record.per_atom["positions"].value == new_pos)
+    assert np.all(new_dataset.get_record("mol1").per_atom["positions"].value == new_pos)
+    # modify the name; this should add a new record
+    record.name = "mol2"
+    new_dataset.update_record(record)
+
+    assert "mol2" in new_dataset.records.keys()
+
+    assert new_dataset.get_record("mol2")
+
+    new_dataset.remove_record("mol2")
+    assert "mol2" not in new_dataset.records.keys()
 
 
 def test_write_hdf5(prep_temp_dir):
@@ -222,3 +257,14 @@ def test_write_hdf5(prep_temp_dir):
         assert mol3["positions"].shape == (1, 2, 3)
         assert mol3["energies"].shape == (1, 1)
         assert mol3["smiles"][()].decode("utf-8") == "[CH]"
+
+
+def test_unit_system():
+    units = UnitSystem()
+
+    units.length = unit.angstrom
+
+    assert units.length == unit.angstrom
+
+    units.add_property_type("pressure", unit.bar)
+    assert units.pressure == unit.bar

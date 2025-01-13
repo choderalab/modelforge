@@ -97,7 +97,7 @@ class UnitSystem:
         self.atomic_numbers = unit.dimensionless
         self.dimensionless = unit.dimensionless
 
-    def add_property(self, property_name: str, unit: unit.Unit):
+    def add_property_type(self, property_name: str, unit: unit.Unit):
         setattr(self, property_name, unit)
 
     def __repr__(self):
@@ -147,6 +147,15 @@ class RecordProperty(CurateBase):
                     f"Shape of property '{self.name}' should have at least 3 dimensions (per_atom), found {len(self.value.shape)}"
                 )
 
+        return self
+
+    @model_validator(mode="after")
+    def _check_unit_type(self) -> Self:
+
+        if not self.units.is_compatible_with(UnitSystem()[self.property_type], "chem"):
+            raise ValueError(
+                f"Unit {self.units} of {self.name} are not compatible with the property type {self.property_type}.\n"
+            )
         return self
 
     @computed_field

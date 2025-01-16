@@ -434,6 +434,7 @@ ACTIVATION_FUNCTIONS = {
     # Add more activation functions as needed
 }
 
+
 atomic_period_dict = {
     1: 1,  # H
     2: 1,  # He

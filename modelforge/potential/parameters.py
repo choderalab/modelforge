@@ -53,9 +53,21 @@ class AtomicNumber(BaseModel):
     number_of_per_atom_features: int = 32
 
 
+class AtomicPeriod(BaseModel):
+    maximum_period: int = 8
+    number_of_per_period_features: int = 32
+
+
+class AtomicGroup(BaseModel):
+    maximum_group: int = 18
+    number_of_per_group_features: int = 32
+
+
 class Featurization(ParametersBase):
     properties_to_featurize: List[str]
     atomic_number: AtomicNumber = Field(default_factory=AtomicNumber)
+    atomic_period: AtomicPeriod = Field(default_factory=AtomicPeriod)
+    atomic_group: AtomicGroup = Field(default_factory=AtomicGroup)
 
 
 class ActivationFunctionName(CaseInsensitiveEnum):

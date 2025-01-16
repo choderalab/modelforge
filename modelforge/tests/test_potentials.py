@@ -18,7 +18,7 @@ from modelforge.utils.misc import load_configs_into_pydantic_models
 
 @pytest.fixture(scope="session")
 def prep_temp_dir(tmp_path_factory):
-    fn = tmp_path_factory.mktemp("test_models_temp")
+    fn = tmp_path_factory.mktemp("test_potentials_temp")
     return fn
 
 
@@ -835,7 +835,7 @@ def test_calculate_energies_and_forces(
     assert torch.allclose(E_inference, E_training, atol=1e-4)
     assert torch.allclose(F_inference, F_training, atol=1e-4)
 
-    # now compare agains the compiled inference model using the neighborlist
+    # now compare against the compiled inference model using the neighborlist
     # optimized for MD. NOTE: this requires to reduce the batch size to 1
     # since the neighborlist is not batched
 

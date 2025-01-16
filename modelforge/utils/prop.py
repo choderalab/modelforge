@@ -186,6 +186,7 @@ class Metadata:
         return self
 
     def to_dtype(self, dtype: torch.dtype):
+        """Move all **relevant** tensors to specified dtype."""
         self.per_system_energy = self.per_system_energy.to(dtype)
         self.per_atom_force = self.per_atom_force.to(dtype)
         self.per_system_dipole_moment = self.per_system_dipole_moment.to(dtype)

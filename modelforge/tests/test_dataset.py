@@ -1,5 +1,6 @@
 import os
 import sys
+from multiprocessing.managers import Value
 
 import numpy as np
 import pytest
@@ -1213,16 +1214,96 @@ def test_shifting_center_of_mass_to_origin(prep_temp_dir):
 def test_element_filter(dataset_name, prep_temp_dir):
     local_cache_dir = str(prep_temp_dir) + "/data_test"
 
+    atomic_number = np.array([
+        [1], [2], [3], [4], [5], [6], [7], [8], [9], [10], [11], [12],
+    ])
+
+    # positive tests
+
+    # Case 1
     data = _ImplementedDatasets.get_dataset_class(
         dataset_name,
     )(
         version_select="nc_1000_v0",
         local_cache_dir=local_cache_dir,
-        element_filter=[(0, 1), (1, 2)],
+        element_filter=[(1,)],
     )
-
-    atomic_number = np.array([
-        [1], [2], [3], [4], [5], [6], [7], [8], [9], [10], [11], [12], [13],
-    ])
-
     assert data._satisfy_element_filter(atomic_number)
+
+    # Case 2
+    data = _ImplementedDatasets.get_dataset_class(
+        dataset_name,
+    )(
+        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        element_filter=[(1, 2, 3)],
+    )
+    assert data._satisfy_element_filter(atomic_number)
+
+    # Case 3
+    data = _ImplementedDatasets.get_dataset_class(
+        dataset_name,
+    )(
+        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        element_filter=[(1, 2), (3, 4), (5, 6)],
+    )
+    assert data._satisfy_element_filter(atomic_number)
+
+    # Case 4
+    data = _ImplementedDatasets.get_dataset_class(
+        dataset_name,
+    )(
+        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        element_filter=[(1, 2), (3, -15)],
+    )
+    assert data._satisfy_element_filter(atomic_number)
+
+    # negative tests
+
+    # Case 5
+    data = _ImplementedDatasets.get_dataset_class(
+        dataset_name,
+    )(
+        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        element_filter=[(-1,)],
+    )
+    assert not data._satisfy_element_filter(atomic_number)
+
+    # Case 6
+    data = _ImplementedDatasets.get_dataset_class(
+        dataset_name,
+    )(
+        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        element_filter=[(1, 2), (3, -4)],
+    )
+    assert not data._satisfy_element_filter(atomic_number)
+
+    # Case 7
+    try:
+        data = _ImplementedDatasets.get_dataset_class(
+            dataset_name,
+        )(
+            version_select="nc_1000_v0",
+            local_cache_dir=local_cache_dir,
+            element_filter=[(0, 2), (3, -15)],
+        )
+        data._satisfy_element_filter(atomic_number)
+    except ValueError as e:
+        assert e.args[0] == "Invalid atomic number input: 0! Please input a valid atomic number."
+
+    # Case 8
+    try:
+        data = _ImplementedDatasets.get_dataset_class(
+            dataset_name,
+        )(
+            version_select="nc_1000_v0",
+            local_cache_dir=local_cache_dir,
+            element_filter=[(1, "Hydrogen"), (3, -15)],
+        )
+        data._satisfy_element_filter(atomic_number)
+    except TypeError as e:
+        assert e.args[0] == "Please use atomic number to refer to element types!"

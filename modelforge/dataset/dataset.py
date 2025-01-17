@@ -447,14 +447,18 @@ class HDF5Dataset(ABC):
         else:
             for each_filter in self.element_filter:
                 result = True
-                sorted_filter = sorted(list(each_filter), reverse=True)
+                try:
+                    sorted_filter = sorted(list(each_filter), reverse=True)
+                except TypeError:
+                    raise TypeError("Please use atomic number to refer to element types!")
                 for each_element in sorted_filter:
-                    if each_element > 0:
-                        result = result and np.isin(each_element, data)
-                    elif each_element < 0:
-                        result = result and not np.isnan(each_element, data)
-                    else:
-                        assert f"Invalid atomic number input: {each_element}!"
+                        if each_element > 0:
+                            result = result and np.isin(each_element, data)
+                        elif each_element < 0:
+                            result = result and not np.isin(-each_element, data)
+                        else:
+                            raise ValueError(f"Invalid atomic number input: {each_element}! "
+                                              f"Please input a valid atomic number.")
                 if result is True:
                     break
 

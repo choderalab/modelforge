@@ -189,7 +189,7 @@ class Positions(RecordProperty):
     property_type: PropertyType = PropertyType.length
 
     @model_validator(mode="after")
-    def _check_position_shape(self):
+    def _check_position_shape(self) -> Self:
         # we already validate that any per_atom property cannot have less than 3 dimensions
         # but we know that positions must be 3d.
         if len(self.value.shape) != 3:
@@ -200,6 +200,7 @@ class Positions(RecordProperty):
             raise ValueError(
                 f"Shape of position should be [n_configs, n_atoms, 3], found {len(self.value.shape)}"
             )
+        return self
 
 
 class Energies(RecordProperty):
@@ -217,7 +218,7 @@ class Energies(RecordProperty):
     )
 
     @model_validator(mode="after")
-    def _check_energy_shape(self):
+    def _check_energy_shape(self) -> Self:
         # we already validate that any per_atom property cannot have less than 2 dimensions
         # but energies is a special case that should always be 2.
         if len(self.value.shape) != 2:
@@ -228,6 +229,7 @@ class Energies(RecordProperty):
             raise ValueError(
                 f"Shape of energy should be [n_configs, 1], found {len(self.value.shape)}"
             )
+        return self
 
 
 class Forces(RecordProperty):
@@ -238,7 +240,7 @@ class Forces(RecordProperty):
     property_type: PropertyType = PropertyType.force
 
     @model_validator(mode="after")
-    def _check_force_shape(self):
+    def _check_force_shape(self) -> Self:
         if len(self.value.shape) != 3:
             raise ValueError(
                 f"Shape of force should be [n_configs, n_atoms, 3], found {len(self.value.shape)}"
@@ -247,6 +249,7 @@ class Forces(RecordProperty):
             raise ValueError(
                 f"Shape of force should be [n_configs, n_atoms, 3], found {len(self.value.shape)}"
             )
+        return self
 
 
 class PartialCharges(RecordProperty):
@@ -257,11 +260,12 @@ class PartialCharges(RecordProperty):
     property_type: PropertyType = PropertyType.charge
 
     @model_validator(mode="after")
-    def _check_charge_shape(self):
+    def _check_charge_shape(self) -> Self:
         if self.value.shape[2] != 1:
             raise ValueError(
                 f"Shape of charge should be [n_configs, n_atoms, 1], found {len(self.value.shape)}"
             )
+        return self
 
 
 class TotalCharge(RecordProperty):
@@ -278,11 +282,12 @@ class TotalCharge(RecordProperty):
     )
 
     @model_validator(mode="after")
-    def _check_charge_shape(self):
+    def _check_charge_shape(self) -> Self:
         if self.value.shape[1] != 1:
             raise ValueError(
                 f"Shape of charge should be [n_configs, 1], found {len(self.value.shape)}"
             )
+        return self
 
 
 class DipoleMoment(RecordProperty):
@@ -293,11 +298,12 @@ class DipoleMoment(RecordProperty):
     property_type: PropertyType = PropertyType.dipole_moment
 
     @model_validator(mode="after")
-    def _check_dipole_moment_shape(self):
+    def _check_dipole_moment_shape(self) -> Self:
         if self.value.shape[1] != 3:
             raise ValueError(
                 f"Shape of dipole moment should be [n_configs, 3], found {len(self.value.shape)}"
             )
+        return self
 
 
 class QuadrupoleMoment(RecordProperty):

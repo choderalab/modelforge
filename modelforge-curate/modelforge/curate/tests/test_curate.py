@@ -3,6 +3,7 @@ import numpy as np
 from openff.units import unit
 
 from modelforge.curate.curate import *
+from schnetpack.properties import dipole_moment, polarizability
 
 
 def test_source_dataset_init():
@@ -53,6 +54,72 @@ def test_initialize_properties():
     assert meta_data.value == "[CH]"
     assert meta_data.classification == "meta_data"
     assert meta_data.property_type == "meta_data"
+
+    partial_charges = PartialCharges(
+        value=np.array([[[0.1], [-0.1]]]), units=unit.elementary_charge
+    )
+    assert partial_charges.value.shape == (1, 2, 1)
+    assert partial_charges.units == unit.elementary_charge
+    assert partial_charges.classification == "per_atom"
+    assert partial_charges.name == "partial_charges"
+    assert partial_charges.property_type == "charge"
+
+    forces = Forces(
+        value=np.array([[[0.1, 0.1, 0.1], [-0.1, -0.1, -0.1]]]),
+        units=unit.kilojoule_per_mole / unit.nanometer,
+    )
+    assert forces.value.shape == (1, 2, 3)
+    assert forces.units == unit.kilojoule_per_mole / unit.nanometer
+    assert forces.classification == "per_atom"
+    assert forces.name == "forces"
+    assert forces.property_type == "force"
+
+    total_charge = TotalCharge(value=np.array([[[0.1]]]), units=unit.elementary_charge)
+    assert total_charge.value.shape == (1, 1, 1)
+    assert total_charge.units == unit.elementary_charge
+    assert total_charge.classification == "per_system"
+    assert total_charge.name == "total_charge"
+    assert total_charge.property_type == "charge"
+
+    dipole_moment = DipoleMoment(value=np.array([[0.1, 0.1, 0.1]]), units=unit.debye)
+    assert dipole_moment.value.shape == (1, 3)
+    assert dipole_moment.units == unit.debye
+    assert dipole_moment.classification == "per_system"
+    assert dipole_moment.name == "dipole_moment"
+    assert dipole_moment.property_type == "dipole_moment"
+
+    quadrupole_moment = QuadrupoleMoment(
+        value=np.array([[[0.1, 0.1, 0.1], [0.1, 0.1, 0.1], [0.1, 0.1, 0.1]]]),
+        units=unit.debye * unit.nanometer,
+    )
+    assert quadrupole_moment.value.shape == (1, 3, 3)
+    assert quadrupole_moment.units == unit.debye * unit.nanometer
+    assert quadrupole_moment.classification == "per_system"
+    assert quadrupole_moment.name == "quadrupole_moment"
+    assert quadrupole_moment.property_type == "quadrupole_moment"
+
+    polarizability = Polarizability(
+        value=np.array([[[0.1, 0.1, 0.1], [0.1, 0.1, 0.1], [0.1, 0.1, 0.1]]]),
+        units=unit.bohr**3,
+    )
+    assert polarizability.value.shape == (1, 3, 3)
+    assert polarizability.units == unit.bohr**3
+    assert polarizability.classification == "per_system"
+    assert polarizability.name == "polarizability"
+    assert polarizability.property_type == "polarizability"
+
+    base_prop = RecordProperty(
+        name="test_prop",
+        value=np.array([[[0.1, 0.1, 0.1], [0.1, 0.1, 0.1], [0.1, 0.1, 0.1]]]),
+        units=unit.nanometer,
+        property_type="length",
+        classification="per_atom",
+    )
+    assert base_prop.value.shape == (1, 3, 3)
+    assert base_prop.units == unit.nanometer
+    assert base_prop.classification == "per_atom"
+    assert base_prop.name == "test_prop"
+    assert base_prop.property_type == "length"
 
     # various tests that should fail based on wrong dimensions or units
     with pytest.raises(ValueError):
@@ -261,10 +328,24 @@ def test_write_hdf5(prep_temp_dir):
 
 def test_unit_system():
     units = UnitSystem()
+    assert units.unit_system_name == "default"
+    assert units.length == unit.nanometer
+    assert units.force == unit.kilojoule_per_mole / unit.nanometer
+    assert units.energy == unit.kilojoule_per_mole
+    assert units.charge == unit.elementary_charge
+    assert units.dipole_moment == unit.elementary_charge * unit.nanometer
+    assert units.quadrupole_moment == unit.elementary_charge * unit.nanometer**2
+    assert units.polarizability == unit.nanometer**3
+    assert units.atomic_numbers == unit.dimensionless
+    assert units.dimensionless == unit.dimensionless
 
+    # test setting up different units
     units.length = unit.angstrom
-
     assert units.length == unit.angstrom
 
+    units.energy = unit.hartree
+    assert units.energy == unit.hartree
+
+    # test adding a property
     units.add_property_type("pressure", unit.bar)
     assert units.pressure == unit.bar

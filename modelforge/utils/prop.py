@@ -61,7 +61,6 @@ class NNPInput:
         is_periodic: torch.Tensor = torch.tensor([False]),
         pair_list: torch.Tensor = torch.tensor([]),
         per_atom_partial_charge: torch.Tensor = torch.tensor([]),
-        populate_element_fields: List[str] = None,
     ):
         self.atomic_numbers = atomic_numbers
         self.positions = positions
@@ -74,13 +73,6 @@ class NNPInput:
 
         # Validate inputs
         self._validate_inputs()
-
-    def _populate_element_fields(self):
-        for field in self.populate_element_fields:
-            for atomic_number in self.atomic_numbers:
-                temp_value = element_data(field, atomic_number)
-
-            self.__setattr__(field, atomic_number)
 
     def _validate_inputs(self):
         # Get shapes of the arrays

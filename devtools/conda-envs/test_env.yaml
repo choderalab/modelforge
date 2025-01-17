@@ -4,7 +4,7 @@ channels:
   - pytorch
 dependencies:
   # Base depends
-  - python
+  - python=3.11
   - pip
   - h5py
   - tqdm

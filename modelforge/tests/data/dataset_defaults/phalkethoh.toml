@@ -3,6 +3,7 @@ dataset_name = "PHALKETHOH"
 version_select = "nc_1000_v1"
 num_workers = 4
 pin_memory = true
+element_filter = []
 properties_of_interest = ["geometry", "atomic_numbers", "dft_total_energy", "dft_total_force", "total_charge", "scf_dipole"]
 
 [dataset.properties_assignment]

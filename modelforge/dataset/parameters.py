@@ -80,8 +80,8 @@ class DatasetParameters(BaseModel):
     pin_memory: bool
     regenerate_processed_cache: bool = False
     properties_of_interest: List[str]
-    element_filter: List[tuple]
     properties_assignment: PropertiesDefinition
+    element_filter: List[tuple] = None
 
     @model_validator(mode="after")
     def validate_properties(self) -> Self:

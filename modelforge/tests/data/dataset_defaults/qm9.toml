@@ -3,7 +3,6 @@ dataset_name = "QM9"
 version_select = "nc_1000_v0"
 num_workers = 4
 pin_memory = true
-element_filter = []
 properties_of_interest = ["atomic_numbers", "geometry", "internal_energy_at_0K", "dipole_moment"]
 
 [dataset.properties_assignment]

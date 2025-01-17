@@ -1,3 +1,5 @@
+import copy
+
 from modelforge.curate.utils import (
     _convert_unit_str_to_unit_unit,
     _convert_list_to_ndarray,
@@ -685,11 +687,11 @@ class SourceDataset:
         self.unit_system = unit_system
         self.append_property = append_property
 
-    def add_record(
+    def create_record(
         self, record_name: str, properties: Optional[List[Type[CurateBase]]] = None
     ):
         """
-        Add a record to the dataset. If properties are provided, they will be added to the record.
+        Create a record in the dataset. If properties are provided, they will be added to the record.
 
         Parameters
         ----------
@@ -703,7 +705,7 @@ class SourceDataset:
 
         """
         # I think this should error out if we've already encountered a name, as that would imply
-        # some issue with the datasset construction
+        # some issue with the dataset construction
         if record_name in self.records.keys():
             raise ValueError(
                 f"Record with name {record_name} already exists in the dataset"
@@ -713,31 +715,56 @@ class SourceDataset:
         if properties is not None:
             self.add_properties_to_record(record_name, properties)
 
+    def add_record(self, record: Record):
+        """
+        Add a record to the dataset.
+
+        Note, this will raise an error if the record already exists in the dataset.
+        Parameters
+        ----------
+        Record: Record
+            Instance of the Record class to add to the dataset.
+
+        Returns
+        -------
+
+        """
+        if record.name in self.records.keys():
+            log.warning(
+                f"Record with name {record.name} already exists in the dataset."
+            )
+            raise ValueError(
+                f"Record with name {record.name} already exists in the dataset."
+            )
+
+        self.records[record.name] = copy.deepcopy(record)
+
     def update_record(self, record: Record):
         """
         Update a record in the dataset by overwriting the existing record with the input.
 
-        This is useful if a record was accessed via get_record and then modified or in copying the contents
+        This is useful if a record was accessed via get_record and then modified or for copying a record
         from a different dataset.
 
-        Note, if  record.name is changed, the record will be added as a new record.
 
 
         Parameters
         ----------
         record: Record
             Record to update.
-
         Returns
         -------
 
         """
         if not record.name in self.records.keys():
-            log.info(
-                f"Record with name {record.name} does not exist in the dataset, creating it."
+            log.warning(
+                f"Record with name {record.name} does not exist in the dataset. Use the add_record function."
+            )
+            raise ValueError(
+                f"Record with name {record.name} does not exist in the dataset."
             )
 
-        self.records[record.name] = record
+        self.records[record.name] = copy.deepcopy(record)
 
     def remove_record(self, record_name: str):
         """
@@ -797,7 +824,7 @@ class SourceDataset:
             log.info(
                 f"Record with name {record_name} does not exist in the dataset. Creating it now."
             )
-            self.add_record(record_name)
+            self.create_record(record_name)
 
         self.records[record_name].add_property(property)
 

@@ -10,10 +10,10 @@ def test_source_dataset_init():
     new_dataset = SourceDataset("test_dataset")
     assert new_dataset.dataset_name == "test_dataset"
 
-    new_dataset.add_record("mol1")
+    new_dataset.create_record("mol1")
     assert "mol1" in new_dataset.records
 
-    new_dataset.add_record("mol2")
+    new_dataset.create_record("mol2")
 
     assert len(new_dataset.records) == 2
 
@@ -192,10 +192,15 @@ def test_add_properties_to_records_directly():
 
     assert record.n_configs == 2
 
+    new_dataset = SourceDataset("test_dataset")
+    new_dataset.add_record(record)
+
+    assert "mol1" in new_dataset.records.keys()
+
 
 def test_add_properties():
     new_dataset = SourceDataset("test_dataset")
-    new_dataset.add_record("mol1")
+    new_dataset.create_record("mol1")
     positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
     energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
     atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
@@ -228,7 +233,7 @@ def test_add_properties():
 def test_append_properties():
     new_dataset = SourceDataset("test_dataset", append_property=True)
 
-    new_dataset.add_record("mol1")
+    new_dataset.create_record("mol1")
     positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
     energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
     atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
@@ -272,9 +277,15 @@ def test_append_properties():
 
     assert np.all(record.per_atom["positions"].value == new_pos)
     assert np.all(new_dataset.get_record("mol1").per_atom["positions"].value == new_pos)
-    # modify the name; this should add a new record
+
+    # modify the name; this should fail because the record doesn't exist now
+    # since search is done by name
     record.name = "mol2"
-    new_dataset.update_record(record)
+    with pytest.raises(ValueError):
+        new_dataset.update_record(record)
+
+    # since name changed, need to create the record
+    new_dataset.add_record(record)
 
     assert "mol2" in new_dataset.records.keys()
 
@@ -286,7 +297,7 @@ def test_append_properties():
 
 def test_write_hdf5(prep_temp_dir):
     new_dataset = SourceDataset("test_dataset")
-    new_dataset.add_record("mol1")
+    new_dataset.create_record("mol1")
     positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
     energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
     atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
@@ -294,7 +305,7 @@ def test_write_hdf5(prep_temp_dir):
 
     new_dataset.add_properties("mol1", [positions, energies, atomic_numbers, meta_data])
 
-    new_dataset.add_record("mol2")
+    new_dataset.create_record("mol2")
     positions = Positions(
         value=[
             [[2.0, 1.0, 1.0], [2.0, 2.0, 2.0], [3.0, 3.0, 3.0]],
@@ -307,7 +318,7 @@ def test_write_hdf5(prep_temp_dir):
     meta_data = MetaData(name="smiles", value="COH")
     new_dataset.add_properties("mol2", [positions, energies, atomic_numbers, meta_data])
 
-    new_dataset.add_record("mol3")
+    new_dataset.create_record("mol3")
     positions = Positions(value=[[[3.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
     energies = Energies(value=np.array([[0.3]]), units=unit.hartree)
     atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))

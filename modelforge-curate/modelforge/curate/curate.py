@@ -345,7 +345,7 @@ class AtomicNumbers(RecordProperty):
 
 
 class Record:
-    def __init__(self, name: str):
+    def __init__(self, name: str, append_property: bool = False):
         self.name = name
         self.per_atom = {}
         self.per_system = {}
@@ -353,6 +353,7 @@ class Record:
         self.atomic_numbers = None
         self._n_atoms = -1
         self._n_configs = -1
+        self.append_property = append_property
 
     def __repr__(self):
 
@@ -497,6 +498,165 @@ class Record:
             return True
         return False
 
+    def add_properties(self, properties: List[Type[CurateBase]]):
+        """
+        Add a list of properties to the record.
+
+        Parameters
+        ----------
+        properties: List[Type[CurateBase]]
+            List of properties to add to the record.
+        Returns
+        -------
+
+        """
+        for property in properties:
+            self.add_property(property)
+
+    def add_property(self, property: Type[CurateBase]):
+        """
+        Add a property to the record.
+
+        Parameters
+        ----------
+        property: Type[CurateBase]
+            Property to add to the record.
+        Returns
+        -------
+
+        """
+        if property.classification == PropertyClassification.atomic_numbers:
+            # we will not allow atomic numbers to be set twice
+            if self.atomic_numbers is not None:
+                raise ValueError(f"Atomic numbers already set for record {self.name}")
+
+            self.atomic_numbers = property.model_copy(deep=True)
+
+            # Note, the number of atoms will always be set by the atomic_numbers property.
+            # We will later validate that per_atom properties are consistent with this value later
+            # since we are not enforcing that atomic_numbers need to be set before any other property
+
+        elif property.classification == PropertyClassification.meta_data:
+            if property.name in self.meta_data.keys():
+                log.warning(
+                    f"Metadata with name {property.name} already exists in the record {self.name}."
+                )
+                raise ValueError(
+                    f"Metadata with name {property.name} already exists in the record {self.name}"
+                )
+
+            elif property.name in self.per_atom.keys():
+                raise ValueError(
+                    f"Property with name {property.name} already exists in the record {self.name}, but as a per_atom property."
+                )
+            elif property.name in self.per_system.keys():
+                raise ValueError(
+                    f"Property with name {property.name} already exists in the record {self.name}, but as a per_system property."
+                )
+            elif property.name == "atomic_numbers":
+                raise ValueError(
+                    f"The name atomic_numbers is reserved. Use AtomicNumbers to define them, not the MetaData class."
+                )
+            self.meta_data[property.name] = property.model_copy(deep=True)
+
+        elif property.classification == PropertyClassification.per_atom:
+            if property.name in self.per_system.keys():
+                raise ValueError(
+                    f"Property with name {property.name} already exists in the record {self.name}, but as a per_system property."
+                )
+            elif property.name in self.meta_data.keys():
+                raise ValueError(
+                    f"Property with name {property.name} already exists in the record {self.name}, but as a meta_data property."
+                )
+            elif property.name == "atomic_numbers":
+                raise ValueError(
+                    f"The name atomic_numbers is reserved. Use AtomicNumbers to define them."
+                )
+            elif property.name in self.per_atom.keys():
+                if self.append_property == False:
+                    error_msg = f"Property with name {property.name} already exists in the record {self.name}."
+                    error_msg += (
+                        f"Set append_property=True to append to the existing property."
+                    )
+                    raise ValueError(error_msg)
+                # if the property already exists, we will use vstack to add it to the existing array
+                # after first checking that the dimensions are consistent
+                # note we do not check shape[0], as that corresponds to the number of configurations
+                assert (
+                    self.per_atom[property.name].value.shape[1]
+                    == property.value.shape[1]
+                )
+                assert (
+                    self.per_atom[property.name].value.shape[2]
+                    == property.value.shape[2]
+                )
+                # In order to append to the array, everything needs to have the same units
+                # We will use the units of the first property that was added
+
+                temp_array = property.value
+                if property.units != self.per_atom[property.name].units:
+                    temp_array = (
+                        unit.Quantity(property.value, property.units)
+                        .to(
+                            self.per_atom[property.name].units,
+                            "chem",
+                        )
+                        .magnitude
+                    )
+                self.per_atom[property.name].value = np.vstack(
+                    (
+                        self.per_atom[property.name].value,
+                        temp_array,
+                    )
+                )
+
+            else:
+                self.per_atom[property.name] = property.model_copy(deep=True)
+        elif property.classification == PropertyClassification.per_system:
+            if property.name in self.per_atom.keys():
+                raise ValueError(
+                    f"Property with name {property.name} already exists in the record {self.name}, but as a per_atom property."
+                )
+            elif property.name in self.meta_data.keys():
+                raise ValueError(
+                    f"Property with name {property.name} already exists in the record {self.name}, but as a meta_data property."
+                )
+            elif property.name == "atomic_numbers":
+                raise ValueError(
+                    f"The name atomic_numbers is reserved. Use AtomicNumbers to define them."
+                )
+            elif property.name in self.per_system.keys():
+                if self.append_property == False:
+                    error_msg = f"Property with name {property.name} already exists in the record {self.name}."
+                    error_msg += (
+                        f"Set append_property=True to append to the existing property."
+                    )
+                    raise ValueError(error_msg)
+
+                assert (
+                    self.per_system[property.name].value.shape[1]
+                    == property.value.shape[1]
+                )
+                temp_array = property.value
+                if property.units != self.per_system[property.name].units:
+                    temp_array = (
+                        unit.Quantity(property.value, property.units)
+                        .to(
+                            self.per_system[property.name].units,
+                            "chem",
+                        )
+                        .magnitude
+                    )
+
+                self.per_system[property.name].value = np.vstack(
+                    (
+                        self.per_system[property.name].value,
+                        temp_array,
+                    )
+                )
+            else:
+                self.per_system[property.name] = property.model_copy(deep=True)
+
 
 class SourceDataset:
     def __init__(
@@ -549,7 +709,7 @@ class SourceDataset:
                 f"Record with name {record_name} already exists in the dataset"
             )
 
-        self.records[record_name] = Record(record_name)
+        self.records[record_name] = Record(record_name, self.append_property)
         if properties is not None:
             self.add_properties_to_record(record_name, properties)
 
@@ -639,150 +799,152 @@ class SourceDataset:
             )
             self.add_record(record_name)
 
-        if property.classification == PropertyClassification.atomic_numbers:
+        self.records[record_name].add_property(property)
 
-            # we will not allow atomic numbers to be set twice
-            if self.records[record_name].atomic_numbers is not None:
-                raise ValueError(f"Atomic numbers already set for record {record_name}")
-
-            self.records[record_name].atomic_numbers = property.model_copy(deep=True)
-
-            # Note, the number of atoms will always be set by the atomic_numbers property.
-            # We will later validate that per_atom properties are consistent with this value later
-            # since we are not enforcing that atomic_numbers need to be set before any other property
-
-        elif property.classification == PropertyClassification.meta_data:
-            if property.name in self.records[record_name].meta_data.keys():
-                log.warning(
-                    f"Metadata with name {property.name} already exists in the record {record_name}."
-                )
-                raise ValueError(
-                    f"Metadata with name {property.name} already exists in the record {record_name}"
-                )
-
-            elif property.name in self.records[record_name].per_atom.keys():
-                raise ValueError(
-                    f"Property with name {property.name} already exists in the record {record_name}, but as a per_atom property."
-                )
-            elif property.name in self.records[record_name].per_system.keys():
-                raise ValueError(
-                    f"Property with name {property.name} already exists in the record {record_name}, but as a per_system property."
-                )
-            elif property.name == "atomic_numbers":
-                raise ValueError(
-                    f"The name atomic_numbers is reserved. Use AtomicNumbers to define them, not the MetaData class."
-                )
-            self.records[record_name].meta_data[property.name] = property.model_copy(
-                deep=True
-            )
-
-        elif property.classification == PropertyClassification.per_atom:
-            if property.name in self.records[record_name].per_system.keys():
-                raise ValueError(
-                    f"Property with name {property.name} already exists in the record {record_name}, but as a per_system property."
-                )
-            elif property.name in self.records[record_name].meta_data.keys():
-                raise ValueError(
-                    f"Property with name {property.name} already exists in the record {record_name}, but as a meta_data property."
-                )
-            elif property.name == "atomic_numbers":
-                raise ValueError(
-                    f"The name atomic_numbers is reserved. Use AtomicNumbers to define them."
-                )
-            elif property.name in self.records[record_name].per_atom.keys():
-                if self.append_property == False:
-                    error_msg = f"Property with name {property.name} already exists in the record {record_name}."
-                    error_msg += (
-                        f"Set append_property=True to append to the existing property."
-                    )
-                    raise ValueError(error_msg)
-                # if the property already exists, we will use vstack to add it to the existing array
-                # after first checking that the dimensions are consistent
-                # note we do not check shape[0], as that corresponds to the number of configurations
-                assert (
-                    self.records[record_name].per_atom[property.name].value.shape[1]
-                    == property.value.shape[1]
-                )
-                assert (
-                    self.records[record_name].per_atom[property.name].value.shape[2]
-                    == property.value.shape[2]
-                )
-                # In order to append to the array, everything needs to have the same units
-                # We will use the units of the first property that was added
-
-                temp_array = property.value
-                if (
-                    property.units
-                    != self.records[record_name].per_atom[property.name].units
-                ):
-                    temp_array = (
-                        unit.Quantity(property.value, property.units)
-                        .to(
-                            self.records[record_name].per_atom[property.name].units,
-                            "chem",
-                        )
-                        .magnitude
-                    )
-                self.records[record_name].per_atom[property.name].value = np.vstack(
-                    (
-                        self.records[record_name].per_atom[property.name].value,
-                        temp_array,
-                    )
-                )
-
-            else:
-                self.records[record_name].per_atom[property.name] = property.model_copy(
-                    deep=True
-                )
-        elif property.classification == PropertyClassification.per_system:
-            if property.name in self.records[record_name].per_atom.keys():
-                raise ValueError(
-                    f"Property with name {property.name} already exists in the record {record_name}, but as a per_atom property."
-                )
-            elif property.name in self.records[record_name].meta_data.keys():
-                raise ValueError(
-                    f"Property with name {property.name} already exists in the record {record_name}, but as a meta_data property."
-                )
-            elif property.name == "atomic_numbers":
-                raise ValueError(
-                    f"The name atomic_numbers is reserved. Use AtomicNumbers to define them."
-                )
-            elif property.name in self.records[record_name].per_system.keys():
-                if self.append_property == False:
-                    error_msg = f"Property with name {property.name} already exists in the record {record_name}."
-                    error_msg += (
-                        f"Set append_property=True to append to the existing property."
-                    )
-                    raise ValueError(error_msg)
-
-                assert (
-                    self.records[record_name].per_system[property.name].value.shape[1]
-                    == property.value.shape[1]
-                )
-                temp_array = property.value
-                if (
-                    property.units
-                    != self.records[record_name].per_system[property.name].units
-                ):
-                    temp_array = (
-                        unit.Quantity(property.value, property.units)
-                        .to(
-                            self.records[record_name].per_system[property.name].units,
-                            "chem",
-                        )
-                        .magnitude
-                    )
-
-                self.records[record_name].per_system[property.name].value = np.vstack(
-                    (
-                        self.records[record_name].per_system[property.name].value,
-                        temp_array,
-                    )
-                )
-            else:
-                self.records[record_name].per_system[property.name] = (
-                    property.model_copy(deep=True)
-                )
+        # if property.classification == PropertyClassification.atomic_numbers:
+        #
+        #     # we will not allow atomic numbers to be set twice
+        #     if self.records[record_name].atomic_numbers is not None:
+        #         raise ValueError(f"Atomic numbers already set for record {record_name}")
+        #
+        #     self.records[record_name].atomic_numbers = property.model_copy(deep=True)
+        #
+        #     # Note, the number of atoms will always be set by the atomic_numbers property.
+        #     # We will later validate that per_atom properties are consistent with this value later
+        #     # since we are not enforcing that atomic_numbers need to be set before any other property
+        #
+        # elif property.classification == PropertyClassification.meta_data:
+        #     if property.name in self.records[record_name].meta_data.keys():
+        #         log.warning(
+        #             f"Metadata with name {property.name} already exists in the record {record_name}."
+        #         )
+        #         raise ValueError(
+        #             f"Metadata with name {property.name} already exists in the record {record_name}"
+        #         )
+        #
+        #     elif property.name in self.records[record_name].per_atom.keys():
+        #         raise ValueError(
+        #             f"Property with name {property.name} already exists in the record {record_name}, but as a per_atom property."
+        #         )
+        #     elif property.name in self.records[record_name].per_system.keys():
+        #         raise ValueError(
+        #             f"Property with name {property.name} already exists in the record {record_name}, but as a per_system property."
+        #         )
+        #     elif property.name == "atomic_numbers":
+        #         raise ValueError(
+        #             f"The name atomic_numbers is reserved. Use AtomicNumbers to define them, not the MetaData class."
+        #         )
+        #     self.records[record_name].meta_data[property.name] = property.model_copy(
+        #         deep=True
+        #     )
+        #
+        # elif property.classification == PropertyClassification.per_atom:
+        #     if property.name in self.records[record_name].per_system.keys():
+        #         raise ValueError(
+        #             f"Property with name {property.name} already exists in the record {record_name}, but as a per_system property."
+        #         )
+        #     elif property.name in self.records[record_name].meta_data.keys():
+        #         raise ValueError(
+        #             f"Property with name {property.name} already exists in the record {record_name}, but as a meta_data property."
+        #         )
+        #     elif property.name == "atomic_numbers":
+        #         raise ValueError(
+        #             f"The name atomic_numbers is reserved. Use AtomicNumbers to define them."
+        #         )
+        #     elif property.name in self.records[record_name].per_atom.keys():
+        #         if self.append_property == False:
+        #             error_msg = f"Property with name {property.name} already exists in the record {record_name}."
+        #             error_msg += (
+        #                 f"Set append_property=True to append to the existing property."
+        #             )
+        #             raise ValueError(error_msg)
+        #         # if the property already exists, we will use vstack to add it to the existing array
+        #         # after first checking that the dimensions are consistent
+        #         # note we do not check shape[0], as that corresponds to the number of configurations
+        #         assert (
+        #             self.records[record_name].per_atom[property.name].value.shape[1]
+        #             == property.value.shape[1]
+        #         )
+        #         assert (
+        #             self.records[record_name].per_atom[property.name].value.shape[2]
+        #             == property.value.shape[2]
+        #         )
+        #         # In order to append to the array, everything needs to have the same units
+        #         # We will use the units of the first property that was added
+        #
+        #         temp_array = property.value
+        #         if (
+        #             property.units
+        #             != self.records[record_name].per_atom[property.name].units
+        #         ):
+        #             temp_array = (
+        #                 unit.Quantity(property.value, property.units)
+        #                 .to(
+        #                     self.records[record_name].per_atom[property.name].units,
+        #                     "chem",
+        #                 )
+        #                 .magnitude
+        #             )
+        #         self.records[record_name].per_atom[property.name].value = np.vstack(
+        #             (
+        #                 self.records[record_name].per_atom[property.name].value,
+        #                 temp_array,
+        #             )
+        #         )
+        #
+        #     else:
+        #         self.records[record_name].per_atom[property.name] = property.model_copy(
+        #             deep=True
+        #         )
+        # elif property.classification == PropertyClassification.per_system:
+        #     if property.name in self.records[record_name].per_atom.keys():
+        #         raise ValueError(
+        #             f"Property with name {property.name} already exists in the record {record_name}, but as a per_atom property."
+        #         )
+        #     elif property.name in self.records[record_name].meta_data.keys():
+        #         raise ValueError(
+        #             f"Property with name {property.name} already exists in the record {record_name}, but as a meta_data property."
+        #         )
+        #     elif property.name == "atomic_numbers":
+        #         raise ValueError(
+        #             f"The name atomic_numbers is reserved. Use AtomicNumbers to define them."
+        #         )
+        #     elif property.name in self.records[record_name].per_system.keys():
+        #         if self.append_property == False:
+        #             error_msg = f"Property with name {property.name} already exists in the record {record_name}."
+        #             error_msg += (
+        #                 f"Set append_property=True to append to the existing property."
+        #             )
+        #             raise ValueError(error_msg)
+        #
+        #         assert (
+        #             self.records[record_name].per_system[property.name].value.shape[1]
+        #             == property.value.shape[1]
+        #         )
+        #         temp_array = property.value
+        #         if (
+        #             property.units
+        #             != self.records[record_name].per_system[property.name].units
+        #         ):
+        #             temp_array = (
+        #                 unit.Quantity(property.value, property.units)
+        #                 .to(
+        #                     self.records[record_name].per_system[property.name].units,
+        #                     "chem",
+        #                 )
+        #                 .magnitude
+        #             )
+        #
+        #         self.records[record_name].per_system[property.name].value = np.vstack(
+        #             (
+        #                 self.records[record_name].per_system[property.name].value,
+        #                 temp_array,
+        #             )
+        #         )
+        #     else:
+        #         self.records[record_name].per_system[property.name] = (
+        #             property.model_copy(deep=True)
+        #         )
 
     def get_record(self, record_name: str):
         """

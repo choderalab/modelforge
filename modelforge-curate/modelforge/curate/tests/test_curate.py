@@ -158,6 +158,41 @@ def test_initialize_properties():
         )
 
 
+def test_add_properties_to_records_directly():
+    record = Record(name="mol1")
+
+    positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
+    energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
+    atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
+    meta_data = MetaData(name="smiles", value="[CH]")
+
+    record.add_property(property=atomic_numbers)
+    record.add_properties([positions, energies, meta_data])
+
+    assert "positions" in record.per_atom
+    assert "energies" in record.per_system
+    assert "smiles" in record.meta_data
+    assert record.atomic_numbers is not None
+    assert record.n_atoms == 2
+    assert record.n_configs == 1
+    assert record.validate() == True
+
+    with pytest.raises(ValueError):
+        record.add_property(property=positions)
+
+    record = Record(name="mol1", append_property=True)
+    record.add_property(property=atomic_numbers)
+    record.add_properties([positions, energies, meta_data])
+
+    positions2 = Positions(
+        value=[[[3.0, 1.0, 1.0], [4.0, 2.0, 2.0]]], units="nanometer"
+    )
+
+    record.add_properties([positions2, energies])
+
+    assert record.n_configs == 2
+
+
 def test_add_properties():
     new_dataset = SourceDataset("test_dataset")
     new_dataset.add_record("mol1")

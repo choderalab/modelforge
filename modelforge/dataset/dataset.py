@@ -225,7 +225,8 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
         return BatchData(nnp_input, metadata)
 
 
-class HDF5Dataset:
+from abc import ABC, abstractmethod
+class HDF5Dataset(ABC):
     """
     Manages data stored in HDF5 format, supporting processing and interaction.
 
@@ -246,6 +247,7 @@ class HDF5Dataset:
         local_cache_dir: str,
         force_download: bool = False,
         regenerate_cache: bool = False,
+        element_filter: List[tuple] = None,
     ):
         """
         Initializes the HDF5Dataset with paths to raw and processed data files.
@@ -277,9 +279,20 @@ class HDF5Dataset:
         self.local_cache_dir = os.path.expanduser(local_cache_dir)
         self.force_download = force_download
         self.regenerate_cache = regenerate_cache
+        self.element_filter = element_filter
 
         self.hdf5data: Optional[Dict[str, List[np.ndarray]]] = None
         self.numpy_data: Optional[np.ndarray] = None
+
+    @property
+    @abstractmethod
+    def properties_of_interest(self):
+        pass
+
+    @property
+    @abstractmethod
+    def _available_properties_association(self):
+        pass
 
     def _ungzip_hdf5(self) -> None:
         """
@@ -388,8 +401,9 @@ class HDF5Dataset:
             os.remove(f"{file_path}/{file_name}.lockfile")
         return True
 
+    @staticmethod
     def _file_validation(
-        self, file_name: str, file_path: str, checksum: str = None
+        file_name: str, file_path: str, checksum: str = None
     ) -> bool:
         """
         Validates if the file exists, and if the calculated checksum matches the expected checksum.
@@ -426,6 +440,26 @@ class HDF5Dataset:
         else:
             return True
 
+    def _satisfy_element_filter(self, data):
+        result = True
+        if self.element_filter is None:
+            pass
+        else:
+            for each_filter in self.element_filter:
+                result = True
+                sorted_filter = sorted(list(each_filter), reverse=True)
+                for each_element in sorted_filter:
+                    if each_element > 0:
+                        result = result and np.isin(each_element, data)
+                    elif each_element < 0:
+                        result = result and not np.isnan(each_element, data)
+                    else:
+                        assert f"Invalid atomic number input: {each_element}!"
+                if result is True:
+                    break
+
+        return result
+
     def _from_hdf5(self) -> None:
         """
         Processes and extracts data from an hdf5 file.
@@ -433,7 +467,7 @@ class HDF5Dataset:
         Examples
         --------
         >>> hdf5_data = HDF5Dataset("raw_data.hdf5", "processed_data.npz")
-        >>> processed_data = hdf5_data._from_hdf5()
+        >>> hdf5_data._from_hdf5()
 
         """
         from collections import OrderedDict
@@ -526,7 +560,11 @@ class HDF5Dataset:
                             value in hf[record].keys()
                             for value in self.properties_of_interest
                         ]
-                        if all(property_found):
+
+                        # filter by elements
+                        satisfy_element_filter = self._satisfy_element_filter(hf[record]["atomic_numbers"])
+
+                        if all(property_found) and satisfy_element_filter:
                             # we want to exclude conformers with NaN values for any property of interest
                             configs_nan_by_prop: Dict[str, np.ndarray] = (
                                 OrderedDict()
@@ -791,8 +829,8 @@ class DatasetFactory:
         # It is important to check the keys used to generate the npz file, as these are allowed to be changed by the user.
 
         if data._file_validation(
-            data.processed_data_file["name"],
-            data.local_cache_dir,
+            file_name=data.processed_data_file["name"],
+            file_path=data.local_cache_dir,
         ) and (
             data._metadata_validation(
                 data.processed_data_file["name"].replace(".npz", ".json"),
@@ -997,6 +1035,7 @@ class DataModule(pl.LightningDataModule):
             version_select=self.version_select,
             local_cache_dir=self.local_cache_dir,
             regenerate_cache=self.regenerate_cache,
+            element_filter=self.element_filter,
         )
         if self.properties_of_interest is not None:
             dataset.properties_of_interest = self.properties_of_interest
@@ -1006,8 +1045,8 @@ class DataModule(pl.LightningDataModule):
 
             dataset._properties_names = PropertyNames(**self.properties_assignment)
 
-        self._create_torch_dataset(dataset)    # init dataset.numpy_data
-        dataset = self._filter_by_element(dataset)
+        # self._create_torch_dataset(dataset)    # init dataset.numpy_data
+        # dataset = self._filter_by_element(dataset)
         torch_dataset = self._create_torch_dataset(dataset)
         # if dataset statistics is present load it from disk
         if (

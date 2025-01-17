@@ -109,7 +109,6 @@ def test_get_properties(dataset_name, single_batch_with_batchsize, prep_temp_dir
         local_cache_dir=str(prep_temp_dir),
         version_select=version,
     )
-    a = 7
 
 
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
@@ -1210,14 +1209,20 @@ def test_shifting_center_of_mass_to_origin(prep_temp_dir):
         assert torch.allclose(pairs.d_ij, pairs_ns.d_ij, atol=1e-4)
 
 
-@pytest.mark.parametrize("dataset_name", ["tmqm"])
-def test_element_filter(
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
+def test_element_filter(dataset_name, prep_temp_dir):
+    local_cache_dir = str(prep_temp_dir) + "/data_test"
+
+    data = _ImplementedDatasets.get_dataset_class(
         dataset_name,
-        datamodule_factory,
-):
-    dm = datamodule_factory(
-        dataset_name=dataset_name,
-        local_cache_dir=str(prep_temp_dir),
-        element_filter=[(17, 29), (-78, 17)],
+    )(
+        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        element_filter=[(0, 1), (1, 2)],
     )
-    dm.prepare_data()
+
+    atomic_number = np.array([
+        [1], [2], [3], [4], [5], [6], [7], [8], [9], [10], [11], [12], [13],
+    ])
+
+    assert data._satisfy_element_filter(atomic_number)

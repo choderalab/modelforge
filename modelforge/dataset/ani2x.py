@@ -76,6 +76,7 @@ class ANI2xDataset(HDF5Dataset):
         local_cache_dir: str = ".",
         force_download: bool = False,
         regenerate_cache: bool = False,
+        element_filter: List[tuple] = None,
     ) -> None:
         """
         Initialize the ANI2xDataset class.
@@ -167,6 +168,7 @@ class ANI2xDataset(HDF5Dataset):
             local_cache_dir=local_cache_dir,
             force_download=force_download,
             regenerate_cache=regenerate_cache,
+            element_filter=element_filter,
         )
 
     @property

@@ -266,9 +266,9 @@ def test_append_properties():
     assert record.validate() == True
 
     with pytest.raises(AssertionError):
-        positions = Positions(value=[[[3.0, 1.0, 1.0]]], units="nanometer")
+        positions22 = Positions(value=[[[3.0, 1.0, 1.0]]], units="nanometer")
 
-        new_dataset.add_properties("mol1", [positions])
+        new_dataset.add_properties("mol1", [positions22])
 
     # modify the record and then call the update_record method
     new_pos = np.array([[[1.0, 1.0, 1.0], [3.0, 30, 3.0]]])
@@ -277,6 +277,9 @@ def test_append_properties():
 
     assert np.all(record.per_atom["positions"].value == new_pos)
     assert np.all(new_dataset.get_record("mol1").per_atom["positions"].value == new_pos)
+
+    with pytest.raises(ValueError):
+        new_dataset.add_property("mol1", atomic_numbers)
 
     # modify the name; this should fail because the record doesn't exist now
     # since search is done by name
@@ -293,6 +296,16 @@ def test_append_properties():
 
     new_dataset.remove_record("mol2")
     assert "mol2" not in new_dataset.records.keys()
+
+    record_new = Record(name="mol1", append_property=True)
+    record_new.add_properties([positions, energies, atomic_numbers, meta_data])
+    assert record_new.validate()
+
+    record_new.add_properties([positions, energies])
+
+    assert record_new.n_configs == 2
+    with pytest.raises(ValueError):
+        record_new.add_property(atomic_numbers)
 
 
 def test_write_hdf5(prep_temp_dir):
@@ -373,25 +386,43 @@ def test_write_hdf5(prep_temp_dir):
 
 
 def test_unit_system():
-    units = UnitSystem()
-    assert units.unit_system_name == "default"
-    assert units.length == unit.nanometer
-    assert units.force == unit.kilojoule_per_mole / unit.nanometer
-    assert units.energy == unit.kilojoule_per_mole
-    assert units.charge == unit.elementary_charge
-    assert units.dipole_moment == unit.elementary_charge * unit.nanometer
-    assert units.quadrupole_moment == unit.elementary_charge * unit.nanometer**2
-    assert units.polarizability == unit.nanometer**3
-    assert units.atomic_numbers == unit.dimensionless
-    assert units.dimensionless == unit.dimensionless
 
-    # test setting up different units
-    units.length = unit.angstrom
-    assert units.length == unit.angstrom
+    assert GlobalUnitSystem.name == "default"
+    assert GlobalUnitSystem.length == unit.nanometer
+    assert GlobalUnitSystem.force == unit.kilojoule_per_mole / unit.nanometer
+    assert GlobalUnitSystem.energy == unit.kilojoule_per_mole
+    assert GlobalUnitSystem.charge == unit.elementary_charge
+    assert GlobalUnitSystem.dipole_moment == unit.elementary_charge * unit.nanometer
+    assert (
+        GlobalUnitSystem.quadrupole_moment == unit.elementary_charge * unit.nanometer**2
+    )
+    assert GlobalUnitSystem.polarizability == unit.nanometer**3
+    assert GlobalUnitSystem.atomic_numbers == unit.dimensionless
+    assert GlobalUnitSystem.dimensionless == unit.dimensionless
 
-    units.energy = unit.hartree
-    assert units.energy == unit.hartree
+    assert GlobalUnitSystem.get_units("length") == unit.nanometer
+    assert (
+        GlobalUnitSystem.get_units("force") == unit.kilojoule_per_mole / unit.nanometer
+    )
+    assert GlobalUnitSystem.get_units("energy") == unit.kilojoule_per_mole
+    assert GlobalUnitSystem.get_units("charge") == unit.elementary_charge
+    assert (
+        GlobalUnitSystem.get_units("dipole_moment")
+        == unit.elementary_charge * unit.nanometer
+    )
+    assert (
+        GlobalUnitSystem.get_units("quadrupole_moment")
+        == unit.elementary_charge * unit.nanometer**2
+    )
+    assert GlobalUnitSystem.get_units("polarizability") == unit.nanometer**3
+    assert GlobalUnitSystem.get_units("atomic_numbers") == unit.dimensionless
+    assert GlobalUnitSystem.get_units("dimensionless") == unit.dimensionless
 
-    # test adding a property
-    units.add_property_type("pressure", unit.bar)
-    assert units.pressure == unit.bar
+    GlobalUnitSystem.length = unit.angstrom
+    assert GlobalUnitSystem.length == unit.angstrom
+
+    GlobalUnitSystem.set_global_units("pressure", unit.bar)
+    assert GlobalUnitSystem.get_units("pressure") == unit.bar
+
+    GlobalUnitSystem.set_global_units("length", unit.nanometer)
+    assert GlobalUnitSystem.length == unit.nanometer

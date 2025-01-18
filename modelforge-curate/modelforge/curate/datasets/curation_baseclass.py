@@ -14,7 +14,7 @@ class DatasetCuration(ABC):
         self,
         hdf5_file_name: str,
         output_file_dir: Optional[str] = "./",
-        local_cache_dir: Optional[str] = "./datasets",
+        local_cache_dir: Optional[str] = "./datasets_cache",
         version_select: str = "latest",
     ):
         """

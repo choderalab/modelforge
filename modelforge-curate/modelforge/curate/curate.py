@@ -85,29 +85,69 @@ class PropertyType(str, Enum):
     meta_data = "meta_data"
 
 
-class UnitSystem:
+class GlobalUnitSystem:
+    name = "default"
+    length = unit.nanometer
+    force = unit.kilojoule_per_mole / unit.nanometer
+    energy = unit.kilojoule_per_mole
+    charge = unit.elementary_charge
+    dipole_moment = unit.elementary_charge * unit.nanometer
+    quadrupole_moment = unit.elementary_charge * unit.nanometer**2
+    polarizability = unit.nanometer**3
+    atomic_numbers = unit.dimensionless
+    dimensionless = unit.dimensionless
 
-    def __init__(self, name: str = "default"):
-        self.unit_system_name = name
-        self.length = unit.nanometer
-        self.force = unit.kilojoule_per_mole / unit.nanometer
-        self.energy = unit.kilojoule_per_mole
-        self.charge = unit.elementary_charge
-        self.dipole_moment = unit.elementary_charge * unit.nanometer
-        self.quadrupole_moment = unit.elementary_charge * unit.nanometer**2
-        self.polarizability = unit.nanometer**3
-        self.atomic_numbers = unit.dimensionless
-        self.dimensionless = unit.dimensionless
+    @classmethod
+    def set_global_units(cls, property_type: str, units: Union[str, unit.Unit]):
+        """
+        This can be used to add a new property/unit combination to the class
+        or change the default units for a property in the class.
 
-    def add_property_type(self, property_name: str, unit: unit.Unit):
-        setattr(self, property_name, unit)
+        Parameters
+        ----------
+        property_type, str:
+            type of the property (e.g., length, force, energy, charge, etc.)
+        units, openff.units.Unit or str:
+            openff.units object or compatible string that defines the units of the property type
+
+        """
+        if isinstance(units, str):
+            from modelforge.curate.utils import _convert_unit_str_to_unit_unit
+
+            units = _convert_unit_str_to_unit_unit(units)
+
+        if not isinstance(units, unit.Unit):
+            raise ValueError(
+                "Units must be an openff.units object or compatible string."
+            )
+
+        setattr(cls, property_type, units)
+
+    @classmethod
+    def get_units(cls, key):
+
+        return getattr(cls, key)
 
     def __repr__(self):
 
-        return "\n".join([f"{key} : {value}" for key, value in self.__dict__.items()])
+        attributes_to_print = {
+            attr: getattr(self, attr) for attr in dir(self) if not attr.startswith("__")
+        }
+        attributes_to_print.pop("get_units")
+        attributes_to_print.pop("set_global_units")
+        return "\n".join(
+            [f"{key} : {value}" for key, value in attributes_to_print.items()]
+        )
 
     def __getitem__(self, item):
-        return getattr(self, item)
+        # if item in cls.__dict__.keys():
+        #     return getattr(cls, item)
+        # else:
+        #     return None
+        try:
+            return getattr(self, item)
+        except AttributeError:
+            raise AttributeError(f"Unit {item} not found in the unit system.")
 
 
 class RecordProperty(CurateBase):
@@ -156,7 +196,7 @@ class RecordProperty(CurateBase):
 
         if self.classification != "meta_data":
             if not self.units.is_compatible_with(
-                UnitSystem()[self.property_type], "chem"
+                GlobalUnitSystem.get_units(self.property_type), "chem"
             ):
                 raise ValueError(
                     f"Unit {self.units} of {self.name} are not compatible with the property type {self.property_type}.\n"
@@ -664,7 +704,6 @@ class SourceDataset:
     def __init__(
         self,
         dataset_name: str,
-        unit_system: UnitSystem = UnitSystem(),
         append_property: bool = False,
     ):
         """
@@ -674,8 +713,6 @@ class SourceDataset:
         ----------
         dataset_name: str
             Name of the dataset
-        unit_system: UnitSystem, optional, default=UnitSystem()
-            Unit system to use for the dataset.  Will use default units if not provided.
         append_property: bool, optional, default=False
             If True, append an array to existing array if a property with the same name is added multiple times to a record.
             If False, an error will be raised if trying to add a property with the same name already exists in a record
@@ -684,7 +721,6 @@ class SourceDataset:
 
         self.dataset_name = dataset_name
         self.records = {}
-        self.unit_system = unit_system
         self.append_property = append_property
 
     def create_record(
@@ -828,151 +864,6 @@ class SourceDataset:
 
         self.records[record_name].add_property(property)
 
-        # if property.classification == PropertyClassification.atomic_numbers:
-        #
-        #     # we will not allow atomic numbers to be set twice
-        #     if self.records[record_name].atomic_numbers is not None:
-        #         raise ValueError(f"Atomic numbers already set for record {record_name}")
-        #
-        #     self.records[record_name].atomic_numbers = property.model_copy(deep=True)
-        #
-        #     # Note, the number of atoms will always be set by the atomic_numbers property.
-        #     # We will later validate that per_atom properties are consistent with this value later
-        #     # since we are not enforcing that atomic_numbers need to be set before any other property
-        #
-        # elif property.classification == PropertyClassification.meta_data:
-        #     if property.name in self.records[record_name].meta_data.keys():
-        #         log.warning(
-        #             f"Metadata with name {property.name} already exists in the record {record_name}."
-        #         )
-        #         raise ValueError(
-        #             f"Metadata with name {property.name} already exists in the record {record_name}"
-        #         )
-        #
-        #     elif property.name in self.records[record_name].per_atom.keys():
-        #         raise ValueError(
-        #             f"Property with name {property.name} already exists in the record {record_name}, but as a per_atom property."
-        #         )
-        #     elif property.name in self.records[record_name].per_system.keys():
-        #         raise ValueError(
-        #             f"Property with name {property.name} already exists in the record {record_name}, but as a per_system property."
-        #         )
-        #     elif property.name == "atomic_numbers":
-        #         raise ValueError(
-        #             f"The name atomic_numbers is reserved. Use AtomicNumbers to define them, not the MetaData class."
-        #         )
-        #     self.records[record_name].meta_data[property.name] = property.model_copy(
-        #         deep=True
-        #     )
-        #
-        # elif property.classification == PropertyClassification.per_atom:
-        #     if property.name in self.records[record_name].per_system.keys():
-        #         raise ValueError(
-        #             f"Property with name {property.name} already exists in the record {record_name}, but as a per_system property."
-        #         )
-        #     elif property.name in self.records[record_name].meta_data.keys():
-        #         raise ValueError(
-        #             f"Property with name {property.name} already exists in the record {record_name}, but as a meta_data property."
-        #         )
-        #     elif property.name == "atomic_numbers":
-        #         raise ValueError(
-        #             f"The name atomic_numbers is reserved. Use AtomicNumbers to define them."
-        #         )
-        #     elif property.name in self.records[record_name].per_atom.keys():
-        #         if self.append_property == False:
-        #             error_msg = f"Property with name {property.name} already exists in the record {record_name}."
-        #             error_msg += (
-        #                 f"Set append_property=True to append to the existing property."
-        #             )
-        #             raise ValueError(error_msg)
-        #         # if the property already exists, we will use vstack to add it to the existing array
-        #         # after first checking that the dimensions are consistent
-        #         # note we do not check shape[0], as that corresponds to the number of configurations
-        #         assert (
-        #             self.records[record_name].per_atom[property.name].value.shape[1]
-        #             == property.value.shape[1]
-        #         )
-        #         assert (
-        #             self.records[record_name].per_atom[property.name].value.shape[2]
-        #             == property.value.shape[2]
-        #         )
-        #         # In order to append to the array, everything needs to have the same units
-        #         # We will use the units of the first property that was added
-        #
-        #         temp_array = property.value
-        #         if (
-        #             property.units
-        #             != self.records[record_name].per_atom[property.name].units
-        #         ):
-        #             temp_array = (
-        #                 unit.Quantity(property.value, property.units)
-        #                 .to(
-        #                     self.records[record_name].per_atom[property.name].units,
-        #                     "chem",
-        #                 )
-        #                 .magnitude
-        #             )
-        #         self.records[record_name].per_atom[property.name].value = np.vstack(
-        #             (
-        #                 self.records[record_name].per_atom[property.name].value,
-        #                 temp_array,
-        #             )
-        #         )
-        #
-        #     else:
-        #         self.records[record_name].per_atom[property.name] = property.model_copy(
-        #             deep=True
-        #         )
-        # elif property.classification == PropertyClassification.per_system:
-        #     if property.name in self.records[record_name].per_atom.keys():
-        #         raise ValueError(
-        #             f"Property with name {property.name} already exists in the record {record_name}, but as a per_atom property."
-        #         )
-        #     elif property.name in self.records[record_name].meta_data.keys():
-        #         raise ValueError(
-        #             f"Property with name {property.name} already exists in the record {record_name}, but as a meta_data property."
-        #         )
-        #     elif property.name == "atomic_numbers":
-        #         raise ValueError(
-        #             f"The name atomic_numbers is reserved. Use AtomicNumbers to define them."
-        #         )
-        #     elif property.name in self.records[record_name].per_system.keys():
-        #         if self.append_property == False:
-        #             error_msg = f"Property with name {property.name} already exists in the record {record_name}."
-        #             error_msg += (
-        #                 f"Set append_property=True to append to the existing property."
-        #             )
-        #             raise ValueError(error_msg)
-        #
-        #         assert (
-        #             self.records[record_name].per_system[property.name].value.shape[1]
-        #             == property.value.shape[1]
-        #         )
-        #         temp_array = property.value
-        #         if (
-        #             property.units
-        #             != self.records[record_name].per_system[property.name].units
-        #         ):
-        #             temp_array = (
-        #                 unit.Quantity(property.value, property.units)
-        #                 .to(
-        #                     self.records[record_name].per_system[property.name].units,
-        #                     "chem",
-        #                 )
-        #                 .magnitude
-        #             )
-        #
-        #         self.records[record_name].per_system[property.name].value = np.vstack(
-        #             (
-        #                 self.records[record_name].per_system[property.name].value,
-        #                 temp_array,
-        #             )
-        #         )
-        #     else:
-        #         self.records[record_name].per_system[property.name] = (
-        #             property.model_copy(deep=True)
-        #         )
-
     def get_record(self, record_name: str):
         """
         Get a record from the dataset. Returns an instance of the Record class.
@@ -1082,7 +973,7 @@ class SourceDataset:
             assert property_record.classification == PropertyClassification.per_atom
 
             property_units = property_record.units
-            expected_units = self.unit_system[property_type]
+            expected_units = GlobalUnitSystem.get_units(property_type)
             # check to make sure units are compatible with the expected units for the property type
             if not expected_units.is_compatible_with(property_units, "chem"):
                 validation_status = False
@@ -1100,7 +991,7 @@ class SourceDataset:
             property_type = property_record.property_type
 
             assert property_record.classification == PropertyClassification.per_system
-            expected_units = self.unit_system[property_type]
+            expected_units = GlobalUnitSystem.get_units(property_type)
             property_units = property_record.units
             if not expected_units.is_compatible_with(property_units, "chem"):
                 validation_status = False
@@ -1191,7 +1082,7 @@ class SourceDataset:
 
                 for key, property in self.records[record].per_atom.items():
 
-                    target_units = self.unit_system[property.property_type]
+                    target_units = GlobalUnitSystem.get_units(property.property_type)
                     record_group.create_dataset(
                         key,
                         data=unit.Quantity(property.value, property.units)
@@ -1203,7 +1094,7 @@ class SourceDataset:
                     record_group[key].attrs["format"] = "per_atom"
 
                 for key, property in self.records[record].per_system.items():
-                    target_units = self.unit_system[property.property_type]
+                    target_units = GlobalUnitSystem.get_units(property.property_type)
                     record_group.create_dataset(
                         key,
                         data=unit.Quantity(property.value, property.units)
@@ -1224,7 +1115,9 @@ class SourceDataset:
                         record_group[key].attrs["u"] = str(target_units)
                         record_group[key].attrs["format"] = "meta_data"
                     elif isinstance(property.value, (float, int)):
-                        target_units = self.unit_system[property.property_type]
+                        target_units = GlobalUnitSystem.get_units(
+                            property.property_type
+                        )
 
                         if target_units == unit.dimensionless:
                             record_group.create_dataset(
@@ -1241,7 +1134,9 @@ class SourceDataset:
                         record_group[key].attrs["u"] = str(target_units)
                         record_group[key].attrs["format"] = "meta_data"
                     elif isinstance(property.value, np.ndarray):
-                        target_units = self.unit_system[property.property_type]
+                        target_units = GlobalUnitSystem.get_units(
+                            property.property_type
+                        )
 
                         if target_units == unit.dimensionless:
                             record_group.create_dataset(

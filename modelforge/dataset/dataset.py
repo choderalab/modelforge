@@ -226,6 +226,8 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
 
 
 from abc import ABC, abstractmethod
+
+
 class HDF5Dataset(ABC):
     """
     Manages data stored in HDF5 format, supporting processing and interaction.
@@ -402,9 +404,7 @@ class HDF5Dataset(ABC):
         return True
 
     @staticmethod
-    def _file_validation(
-        file_name: str, file_path: str, checksum: str = None
-    ) -> bool:
+    def _file_validation(file_name: str, file_path: str, checksum: str = None) -> bool:
         """
         Validates if the file exists, and if the calculated checksum matches the expected checksum.
 
@@ -450,15 +450,19 @@ class HDF5Dataset(ABC):
                 try:
                     sorted_filter = sorted(list(each_filter), reverse=True)
                 except TypeError:
-                    raise TypeError("Please use atomic number to refer to element types!")
+                    raise TypeError(
+                        "Please use atomic number to refer to element types!"
+                    )
                 for each_element in sorted_filter:
-                        if each_element > 0:
-                            result = result and np.isin(each_element, data)
-                        elif each_element < 0:
-                            result = result and not np.isin(-each_element, data)
-                        else:
-                            raise ValueError(f"Invalid atomic number input: {each_element}! "
-                                              f"Please input a valid atomic number.")
+                    if each_element > 0:
+                        result = result and np.isin(each_element, data)
+                    elif each_element < 0:
+                        result = result and not np.isin(-each_element, data)
+                    else:
+                        raise ValueError(
+                            f"Invalid atomic number input: {each_element}! "
+                            f"Please input a valid atomic number."
+                        )
                 if result is True:
                     break
 
@@ -566,7 +570,9 @@ class HDF5Dataset(ABC):
                         ]
 
                         # filter by elements
-                        satisfy_element_filter = self._satisfy_element_filter(hf[record]["atomic_numbers"])
+                        satisfy_element_filter = self._satisfy_element_filter(
+                            hf[record]["atomic_numbers"]
+                        )
 
                         if all(property_found) and satisfy_element_filter:
                             # we want to exclude conformers with NaN values for any property of interest

@@ -1214,9 +1214,22 @@ def test_shifting_center_of_mass_to_origin(prep_temp_dir):
 def test_element_filter(dataset_name, prep_temp_dir):
     local_cache_dir = str(prep_temp_dir) + "/data_test"
 
-    atomic_number = np.array([
-        [1], [2], [3], [4], [5], [6], [7], [8], [9], [10], [11], [12],
-    ])
+    atomic_number = np.array(
+        [
+            [1],
+            [2],
+            [3],
+            [4],
+            [5],
+            [6],
+            [7],
+            [8],
+            [9],
+            [10],
+            [11],
+            [12],
+        ]
+    )
 
     # positive tests
 
@@ -1293,7 +1306,10 @@ def test_element_filter(dataset_name, prep_temp_dir):
         )
         data._satisfy_element_filter(atomic_number)
     except ValueError as e:
-        assert e.args[0] == "Invalid atomic number input: 0! Please input a valid atomic number."
+        assert (
+            e.args[0]
+            == "Invalid atomic number input: 0! Please input a valid atomic number."
+        )
 
     # Case 8
     try:

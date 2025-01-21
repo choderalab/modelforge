@@ -1233,6 +1233,16 @@ def test_element_filter(dataset_name, prep_temp_dir):
 
     # positive tests
 
+    # Case 0: Include any system
+    data = _ImplementedDatasets.get_dataset_class(
+        dataset_name,
+    )(
+        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        element_filter=[],
+    )
+    assert data._satisfy_element_filter(atomic_number)
+
     # Case 1: Systems with atomic number 1
     data = _ImplementedDatasets.get_dataset_class(
         dataset_name,
@@ -1302,16 +1312,6 @@ def test_element_filter(dataset_name, prep_temp_dir):
         version_select="nc_1000_v0",
         local_cache_dir=local_cache_dir,
         element_filter=[(-1,)],
-    )
-    assert not data._satisfy_element_filter(atomic_number)
-
-    # Case 7
-    data = _ImplementedDatasets.get_dataset_class(
-        dataset_name,
-    )(
-        version_select="nc_1000_v0",
-        local_cache_dir=local_cache_dir,
-        element_filter=[(1, 2), (3, -4)],
     )
     assert not data._satisfy_element_filter(atomic_number)
 

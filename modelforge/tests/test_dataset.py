@@ -375,6 +375,7 @@ def test_metadata_validation(prep_temp_dir):
             "geometry",
             "dipole_moment",
         ],
+        "element_filter": str([[6, 1]]),
         "hdf5_checksum": "305a0602860f181fafa75f7c7e3e6de4",
         "hdf5_gz_checkusm": "dc8ada0d808d02c699daf2000aff1fe9",
         "date_generated": "2024-04-11 14:05:14.297305",

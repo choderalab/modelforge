@@ -392,6 +392,9 @@ class HDF5Dataset(ABC):
                         )
                         return False
 
+                    if self._npz_metadata["element_filter"] != self.element_filter:
+                        log.warning("Element filter for hdf5 file used to generate npz file does not match current file in dataloader.")
+
                     if (
                         self._npz_metadata["hdf5_checksum"]
                         != self.hdf5_data_file["md5"]
@@ -795,6 +798,7 @@ class HDF5Dataset(ABC):
         # we can also add in the date of generation so we can report on when the datafile was generated when we load the npz
         metadata = {
             "data_keys": list(self.hdf5data.keys()),
+            "element_filter": self.element_filter,
             "hdf5_checksum": self.hdf5_data_file["md5"],
             "hdf5_gz_checkusm": self.gz_data_file["md5"],
             "date_generated": str(datetime.datetime.now()),

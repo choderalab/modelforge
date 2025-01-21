@@ -1233,7 +1233,17 @@ def test_element_filter(dataset_name, prep_temp_dir):
 
     # positive tests
 
-    # Case 1
+    # Case 0: Include all systems
+    data = _ImplementedDatasets.get_dataset_class(
+        dataset_name,
+    )(
+        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        element_filter=[],
+    )
+    assert data._satisfy_element_filter(atomic_number)
+
+    # Case 1: Include systems with atomic number 1
     data = _ImplementedDatasets.get_dataset_class(
         dataset_name,
     )(
@@ -1243,7 +1253,7 @@ def test_element_filter(dataset_name, prep_temp_dir):
     )
     assert data._satisfy_element_filter(atomic_number)
 
-    # Case 2
+    # Case 2: Include systems with atomic number 1 AND 2 AND 3
     data = _ImplementedDatasets.get_dataset_class(
         dataset_name,
     )(
@@ -1253,7 +1263,8 @@ def test_element_filter(dataset_name, prep_temp_dir):
     )
     assert data._satisfy_element_filter(atomic_number)
 
-    # Case 3
+    # Case 3: Include systems with atomic number
+    #         (1 AND 2) OR (3 AND 4) OR (5 AND 6)
     data = _ImplementedDatasets.get_dataset_class(
         dataset_name,
     )(
@@ -1263,7 +1274,8 @@ def test_element_filter(dataset_name, prep_temp_dir):
     )
     assert data._satisfy_element_filter(atomic_number)
 
-    # Case 4
+    # Case 4: Include systems satisfying atomic number
+    #         (1 AND 2) OR (3 AND without 15)
     data = _ImplementedDatasets.get_dataset_class(
         dataset_name,
     )(
@@ -1273,7 +1285,7 @@ def test_element_filter(dataset_name, prep_temp_dir):
     )
     assert data._satisfy_element_filter(atomic_number)
 
-    # Case 5: Should both be true regardless of filter ordering
+    # Case 5: Should both be true regardless of filter ordering, since 1 AND 2 are in this test molecule
     data = _ImplementedDatasets.get_dataset_class(
         dataset_name,
     )(
@@ -1293,7 +1305,7 @@ def test_element_filter(dataset_name, prep_temp_dir):
 
     # negative tests
 
-    # Case 6
+    # Case 6: Systems excluding atomic number 1
     data = _ImplementedDatasets.get_dataset_class(
         dataset_name,
     )(
@@ -1303,17 +1315,7 @@ def test_element_filter(dataset_name, prep_temp_dir):
     )
     assert not data._satisfy_element_filter(atomic_number)
 
-    # Case 7
-    data = _ImplementedDatasets.get_dataset_class(
-        dataset_name,
-    )(
-        version_select="nc_1000_v0",
-        local_cache_dir=local_cache_dir,
-        element_filter=[(1, 2), (3, -4)],
-    )
-    assert not data._satisfy_element_filter(atomic_number)
-
-    # Case 8
+    # Case 8: atomic number 0 will raise an error
     try:
         data = _ImplementedDatasets.get_dataset_class(
             dataset_name,
@@ -1329,7 +1331,7 @@ def test_element_filter(dataset_name, prep_temp_dir):
             == "Invalid atomic number input: 0! Please input a valid atomic number."
         )
 
-    # Case 9
+    # Case 9: raise TypeError when anything not integer is in the filter list
     try:
         data = _ImplementedDatasets.get_dataset_class(
             dataset_name,

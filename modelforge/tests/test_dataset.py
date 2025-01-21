@@ -1273,9 +1273,27 @@ def test_element_filter(dataset_name, prep_temp_dir):
     )
     assert data._satisfy_element_filter(atomic_number)
 
+    # Case 5: Should both be true regardless of filter ordering
+    data = _ImplementedDatasets.get_dataset_class(
+        dataset_name,
+    )(
+        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        element_filter=[(1, 2), (-3,)],
+    )
+    assert data._satisfy_element_filter(atomic_number)
+    data = _ImplementedDatasets.get_dataset_class(
+        dataset_name,
+    )(
+        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        element_filter=[(-3,), (1, 2)],
+    )
+    assert data._satisfy_element_filter(atomic_number)
+
     # negative tests
 
-    # Case 5
+    # Case 6
     data = _ImplementedDatasets.get_dataset_class(
         dataset_name,
     )(
@@ -1285,7 +1303,7 @@ def test_element_filter(dataset_name, prep_temp_dir):
     )
     assert not data._satisfy_element_filter(atomic_number)
 
-    # Case 6
+    # Case 7
     data = _ImplementedDatasets.get_dataset_class(
         dataset_name,
     )(
@@ -1295,7 +1313,7 @@ def test_element_filter(dataset_name, prep_temp_dir):
     )
     assert not data._satisfy_element_filter(atomic_number)
 
-    # Case 7
+    # Case 8
     try:
         data = _ImplementedDatasets.get_dataset_class(
             dataset_name,
@@ -1311,7 +1329,7 @@ def test_element_filter(dataset_name, prep_temp_dir):
             == "Invalid atomic number input: 0! Please input a valid atomic number."
         )
 
-    # Case 8
+    # Case 9
     try:
         data = _ImplementedDatasets.get_dataset_class(
             dataset_name,

@@ -463,7 +463,9 @@ class HDF5Dataset(ABC):
                             f"Invalid atomic number input: {each_element}! "
                             f"Please input a valid atomic number."
                         )
-                if result is True:
+                # If any element filters are true,
+                # then we include because sub-lists comparison is an OR operator
+                if result:
                     break
 
         return result

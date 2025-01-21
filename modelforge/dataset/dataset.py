@@ -393,7 +393,9 @@ class HDF5Dataset(ABC):
                         return False
 
                     if self._npz_metadata["element_filter"] != str(self.element_filter):
-                        log.warning("Element filter for hdf5 file used to generate npz file does not match current file in dataloader.")
+                        log.warning(
+                            "Element filter for hdf5 file used to generate npz file does not match current file in dataloader."
+                        )
 
                     if (
                         self._npz_metadata["hdf5_checksum"]

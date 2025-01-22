@@ -539,11 +539,14 @@ class HDF5Dataset(ABC):
                     value_format = hf[next(iter(hf.keys()))][value].attrs["format"]
                     if value_format == "single_rec":
                         single_rec_data[value] = []
-                    elif value_format == "single_atom":
+                    elif (
+                        value_format == "single_atom"
+                        or value_format == "atomic_numbers"
+                    ):
                         single_atom_data[value] = []
-                    elif value_format == "series_mol":
+                    elif value_format == "series_mol" or value_format == "per_system":
                         series_mol_data[value] = []
-                    elif value_format == "series_atom":
+                    elif value_format == "series_atom" or value_format == "per_atom":
                         series_atom_data[value] = []
                     else:
                         raise ValueError(

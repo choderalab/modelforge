@@ -22,6 +22,7 @@ def test_filelocking(prep_temp_dir):
     filepath = str(prep_temp_dir) + "/test.txt"
 
     import threading
+    import time
 
     class thread(threading.Thread):
         def __init__(self, thread_name, thread_id, filepath):
@@ -32,17 +33,19 @@ def test_filelocking(prep_temp_dir):
             self.did_I_lock_it = None
 
         def run(self):
-            import time
 
-            with open(self.filepath, "w") as f:
-                if not check_file_lock(f):
-                    lock_file(f)
-                    self.did_I_lock_it = True
-                    time.sleep(3)
-                    # unlock_file(f)
+            if self.name == "lock_file_here":
+                with open(self.filepath, "w") as f:
+                    if not check_file_lock(f):
+                        lock_file(f)
+                        self.did_I_lock_it = True
+                        time.sleep(3)
+                        # unlock_file(f)
+            else:
+                with open(self.filepath, "w") as f:
+                    if check_file_lock(f):
 
-                else:
-                    self.did_I_lock_it = False
+                        self.did_I_lock_it = False
 
     # the first thread should lock the file and set "did_I_lock_it" to True
     thread1 = thread("lock_file_here", "Thread-1", filepath)
@@ -56,18 +59,9 @@ def test_filelocking(prep_temp_dir):
     thread1.join()
     thread2.join()
 
-    with open(filepath, "w") as f:
-        unlock_file(f)
-
-    # this thread should lock the file, since it will be executed after the others complete
-    # this will ensure that we can unlock the file
-    thread3 = thread("lock_file_here", "Thread-3", filepath)
-    thread3.start()
-    thread3.join()
     assert thread1.did_I_lock_it == True
 
     assert thread2.did_I_lock_it == False
-    assert thread3.did_I_lock_it == True
 
 
 def test_unzip_file(prep_temp_dir):

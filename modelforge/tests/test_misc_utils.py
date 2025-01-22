@@ -39,7 +39,7 @@ def test_filelocking(prep_temp_dir):
                     lock_file(f)
                     self.did_I_lock_it = True
                     time.sleep(3)
-                    unlock_file(f)
+                    # unlock_file(f)
 
                 else:
                     self.did_I_lock_it = False
@@ -55,6 +55,9 @@ def test_filelocking(prep_temp_dir):
     thread2.start()
     thread1.join()
     thread2.join()
+
+    with open(filepath, "w") as f:
+        unlock_file(f)
 
     # this thread should lock the file, since it will be executed after the others complete
     # this will ensure that we can unlock the file

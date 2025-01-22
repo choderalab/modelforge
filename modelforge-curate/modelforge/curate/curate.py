@@ -83,17 +83,25 @@ class PropertyType(str, Enum):
     polarizability = "polarizability"
     atomic_numbers = "atomic_numbers"
     meta_data = "meta_data"
+    frequency = "frequency"
+    wavenumber = "wavenumber"
+    area = "area"
+    heat_capacity = "heat_capacity"
 
 
 class GlobalUnitSystem:
     name = "default"
     length = unit.nanometer
+    area = unit.nanometer**2
     force = unit.kilojoule_per_mole / unit.nanometer
     energy = unit.kilojoule_per_mole
     charge = unit.elementary_charge
     dipole_moment = unit.elementary_charge * unit.nanometer
     quadrupole_moment = unit.elementary_charge * unit.nanometer**2
+    frequency = unit.gigahertz
+    wavenumber = unit.cm**-1
     polarizability = unit.nanometer**3
+    heat_capacity = unit.kilojoule_per_mole / unit.kelvin
     atomic_numbers = unit.dimensionless
     dimensionless = unit.dimensionless
 
@@ -344,6 +352,22 @@ class DipoleMoment(RecordProperty):
         if self.value.shape[1] != 3:
             raise ValueError(
                 f"Shape of dipole moment should be [n_configs, 3], found {len(self.value.shape)}"
+            )
+        return self
+
+
+class DipoleMomentScalar(RecordProperty):
+    name: str = "dipole_moment_scalar"
+    value: NdArray
+    units: unit.Unit
+    classification: PropertyClassification = PropertyClassification.per_system
+    property_type: PropertyType = PropertyType.dipole_moment
+
+    @model_validator(mode="after")
+    def _check_dipole_moment_shape(self) -> Self:
+        if self.value.shape[1] != 1:
+            raise ValueError(
+                f"Shape of scalar dipole moment should be [n_configs, 1], found {len(self.value.shape)}"
             )
         return self
 
@@ -722,6 +746,25 @@ class SourceDataset:
         self.dataset_name = dataset_name
         self.records = {}
         self.append_property = append_property
+
+    def total_records(self):
+        """
+        Get the total number of records in the dataset.
+
+        Returns
+        -------
+
+        """
+        return len(self.records)
+
+    def total_configs(self):
+        """
+        Get the total number of configurations in the dataset.
+        """
+        total_config = 0
+        for record in self.records.values():
+            total_config += record.n_configs
+        return total_config
 
     def create_record(
         self, record_name: str, properties: Optional[List[Type[CurateBase]]] = None

@@ -270,11 +270,8 @@ class QM9Curation(DatasetCuration):
                 value=np.array(properties["dipole_moment"]).reshape(1, 1),
                 units="debye",
             )
-            from modelforge.curate.datasets.curation_baseclass import (
-                compute_dipole_moment,
-            )
 
-            dipole_moment = compute_dipole_moment(
+            dipole_moment = self._compute_dipole_moment(
                 atomic_numbers=atomic_numbers,
                 partial_charges=partial_charges,
                 positions=positions,

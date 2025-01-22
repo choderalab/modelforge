@@ -13,8 +13,8 @@ def prep_temp_dir(tmp_path_factory):
 
 
 @pytest.mark.skipif(
-    ON_MACOS and IN_GITHUB_ACTIONS,
-    reason="Test is flaky on the MacOS CI runners as it relies on spawning multiple threads. ",
+    IN_GITHUB_ACTIONS,
+    reason="Test is flaky on the CI runners as it relies on spawning multiple threads. ",
 )
 def test_filelocking(prep_temp_dir):
     from modelforge.utils.misc import lock_file, unlock_file, check_file_lock

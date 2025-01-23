@@ -29,3 +29,59 @@ nc_1000_v0:
     md5: null
     name: tmqm_dataset_v0_nc_1000_processed.npz
   url: https://zenodo.org/records/14188628/files/tmqm_dataset_v0_ntc_1000.hdf5.gz
+subset_v0_PdZnFeCu:
+  version: 0
+  doi: 10.5281/zenodo.14662046
+  gz_data_file:
+    length: 328369864
+    md5: ac6238ed997edf3c5dd004c65948938e
+    name: tmqm_dataset_v0_PdZnFeCu.hdf5.gz
+  hdf5_data_file:
+    md5: 473c51eb0a7f7aa505b5b2f6d8ab7a2e
+    name: tmqm_dataset_v0_PdZnFeCu.hdf5
+  processed_data_file:
+    md5: null
+    name: tmqm_dataset_v0_PdZnFeCu_processed.npz
+  url: https://zenodo.org/records/14662046/files/tmqm_dataset_PdZnFeCu_v0.hdf5.gz
+subset_v0_PdZnFeCu_CHPSONFClBr:
+  version: 0
+  doi: 10.5281/zenodo.14662151
+  gz_data_file:
+    length: 219402320
+    md5: 3848feb003ee0741a9605b80dd0442e0
+    name: tmqm_dataset_v0_PdZnFeCu_CHPSONFClBr.hdf5.gz
+  hdf5_data_file:
+    md5: 6b347b14a99dfaff0806e27c3eb95822
+    name: tmqm_dataset_v0_PdZnFeCu_CHPSONFClBr.hdf5
+  processed_data_file:
+    md5: null
+    name: tmqm_dataset_v0_PdZnFeCu_CHPSONFClBr_processed.npz
+  url: https://zenodo.org/records/14662151/files/tmqm_dataset_PdZnFeCu_CHPSONFClBr_v0.hdf5.gz
+subset_v0_PdZnFeCuNiPtIrRhCrAg:
+  version: 0
+  doi: 10.5281/zenodo.14662309
+  gz_data_file:
+    length: 718394696
+    md5: 574f18b68f61d1d8a2390e31fb821836
+    name: tmqm_dataset_v0_PdZnFeCuNiPtIrRhCrAg.hdf5.gz
+  hdf5_data_file:
+    md5: 868757f857992f9ae1deba6988852bde
+    name: tmqm_dataset_v0_PdZnFeCuNiPtIrRhCrAg.hdf5
+  processed_data_file:
+    md5: null
+    name: tmqm_dataset_v0_PdZnFeCuNiPtIrRhCrAg_processed.npz
+  url: https://zenodo.org/records/14662309/files/tmqm_dataset_PdZnFeCuNiPtIrRhCrAg_v0.hdf5.gz
+subset_v0_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr:
+  version: 0
+  doi: 10.5281/zenodo.14662340
+  gz_data_file:
+    length: 483656824
+    md5: 5afa78ba84f575332dc10b4c9aa5c924
+    name: tmqm_dataset_v0_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr.hdf5.gz
+  hdf5_data_file:
+    md5: 413fe18c26c2962620f491d8b5b248bf
+    name: tmqm_dataset_v0_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr.hdf5
+  processed_data_file:
+    md5: null
+    name: tmqm_dataset_v0_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr_processed.npz
+  url: https://zenodo.org/records/14662340/files/tmqm_dataset_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr_v0.hdf5.gz

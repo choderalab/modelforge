@@ -98,6 +98,7 @@ class tmQMDataset(HDF5Dataset):
         local_cache_dir: str = ".",
         force_download: bool = False,
         regenerate_cache=False,
+        element_filter: List[tuple] = None,
     ) -> None:
         """
         Initialize the tmQMData class.
@@ -178,6 +179,7 @@ class tmQMDataset(HDF5Dataset):
             local_cache_dir=local_cache_dir,
             force_download=force_download,
             regenerate_cache=regenerate_cache,
+            element_filter=element_filter,
         )
 
         # values from regression

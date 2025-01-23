@@ -359,7 +359,15 @@ def test_write_hdf5(prep_temp_dir):
 
         assert mol1["atomic_numbers"].shape == (2, 1)
         assert mol1["positions"].shape == (1, 2, 3)
+        assert mol1["positions"].attrs["u"] == "nanometer"
+        assert mol1["positions"].attrs["format"] == "per_atom"
+        assert mol1["positions"].attrs["property_type"] == "length"
+
         assert mol1["energies"].shape == (1, 1)
+        assert mol1["energies"].attrs["u"] == "kilojoule_per_mole"
+        assert mol1["energies"].attrs["format"] == "per_system"
+        assert mol1["energies"].attrs["property_type"] == "energy"
+
         assert mol1["smiles"][()].decode("utf-8") == "[CH]"
 
         mol2 = f["mol2"]

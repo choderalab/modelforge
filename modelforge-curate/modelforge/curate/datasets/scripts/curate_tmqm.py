@@ -1,23 +1,27 @@
 """
-This script will generate hdf5 datafiles for the QM9 dataset using the QM9Curation class.
+This script will generate hdf5 datafiles for the tmQM dataset using the tmQMCuration class.
 
 This will generate separate HDF5 files for:
  - the full dataset
  - a subset of the dataset with a maximum of 1000 conformers.
 
-The QM9 dataset includes 133,885 organic molecules with up to nine total heavy atoms (C,O,N,or F; excluding H).
-All properties were calculated at the B3LYP/6-31G(2df,p) level of quantum chemistry.
+    The tmQM dataset contains the geometries and properties of 86,665 mononuclear complexes extracted from the
+    Cambridge Structural Database, including Werner, bioinorganic, and organometallic complexes based on a large
+    variety of organic ligands and 30 transition metals (the 3d, 4d, and 5d from groups 3 to 12).
+    All complexes are closed-shell, with a formal charge in the range {+1, 0, −1}e
 
-Citation: Ramakrishnan, R., Dral, P., Rupp, M. et al.
-            "Quantum chemistry structures and properties of 134 kilo molecules."
-            Sci Data 1, 140022 (2014).
-            https://doi.org/10.1038/sdata.2014.22
+    Citation:
 
-DOI for dataset: 10.6084/m9.figshare.c.978904.v5
+    David Balcells and Bastian Bjerkem Skjelstad,
+    tmQM Dataset—Quantum Geometries and Properties of 86k Transition Metal Complexes
+    Journal of Chemical Information and Modeling 2020 60 (12), 6135-6146
+    DOI: 10.1021/acs.jcim.0c01041
+
+    Original dataset source: https://github.com/uiocompcat/tmQM
 """
 
 
-def qm9_wrapper(
+def tmqm_wrapper(
     hdf5_file_name: str,
     output_file_dir: str,
     local_cache_dir: str,
@@ -28,7 +32,7 @@ def qm9_wrapper(
     total_conformers=None,
 ):
     """
-    This instantiates and calls the QM9Curation class to generate the hdf5 file for the QM9 dataset.
+    This instantiates and calls the tmQMCuration class to generate the hdf5 file for the tmQM dataset.
 
     Parameters
     ----------
@@ -54,23 +58,23 @@ def qm9_wrapper(
 
 
     """
-    from modelforge.curate.datasets.qm9_curation import QM9Curation
+    from modelforge.curate.datasets.tmqm_curation import tmQMCuration
 
-    qm9 = QM9Curation(
+    tmqm = tmQMCuration(
         hdf5_file_name=hdf5_file_name,
         output_file_dir=output_file_dir,
         local_cache_dir=local_cache_dir,
         version_select=version_select,
     )
 
-    qm9.process(
+    tmqm.process(
         force_download=force_download,
         max_records=max_records,
         max_conformers_per_record=max_conformers_per_record,
         total_conformers=total_conformers,
     )
-    print(f"Total records: {qm9.total_records()}")
-    print(f"Total configurations: {qm9.total_configs()}")
+    print(f"Total records: {tmqm.total_records()}")
+    print(f"Total configs: {tmqm.total_configs()}")
 
 
 def main():
@@ -79,30 +83,31 @@ def main():
 
     local_prefix = os.path.expanduser("~/mf_datasets")
     output_file_dir = f"{local_prefix}/hdf5_files"
-    local_cache_dir = f"{local_prefix}/qm9_dataset"
+    local_cache_dir = f"{local_prefix}/tmqm_dataset"
 
     # We'll want to provide some simple means of versioning
     # if we make updates to either the underlying dataset, curation modules, or parameters given to the code
-    version = "1.0"
+    version = "0"
+    version_out = "1.0"
     # version of the dataset to curate
-    version_select = f"v_0"
+    version_select = f"v_{version}"
     # Curate the test dataset with 1000 total conformers
-    hdf5_file_name = f"qm9_dataset_v{version}_ntc_1000.hdf5"
+    hdf5_file_name = f"tmqm_dataset_v{version_out}_ntc_1000.hdf5"
 
-    qm9_wrapper(
+    tmqm_wrapper(
         hdf5_file_name,
         output_file_dir,
         local_cache_dir,
         force_download=False,
         version_select=version_select,
-        max_conformers_per_record=1,  # there is only one conformer per molecule in the QM9 dataset
+        max_conformers_per_record=1,  # there is only one conformer per molecule in the tmqm dataset
         total_conformers=1000,
     )
 
     # Curates the full dataset
-    hdf5_file_name = f"qm9_dataset_v{version}.hdf5"
+    hdf5_file_name = f"tmqm_dataset_v{version_out}.hdf5"
 
-    qm9_wrapper(
+    tmqm_wrapper(
         hdf5_file_name,
         output_file_dir,
         local_cache_dir,

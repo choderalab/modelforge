@@ -80,6 +80,7 @@ class PropertyType(str, Enum):
     charge = "charge"
     dipole_moment = "dipole_moment"
     quadrupole_moment = "quadrupole_moment"
+    octupole_moment = "octupole_moment"
     polarizability = "polarizability"
     atomic_numbers = "atomic_numbers"
     meta_data = "meta_data"
@@ -87,6 +88,7 @@ class PropertyType(str, Enum):
     wavenumber = "wavenumber"
     area = "area"
     heat_capacity = "heat_capacity"
+    dimensionless = "dimensionless"
 
 
 class GlobalUnitSystem:
@@ -98,6 +100,7 @@ class GlobalUnitSystem:
     charge = unit.elementary_charge
     dipole_moment = unit.elementary_charge * unit.nanometer
     quadrupole_moment = unit.elementary_charge * unit.nanometer**2
+    octupole_moment = unit.elementary_charge * unit.nanometer**3
     frequency = unit.gigahertz
     wavenumber = unit.cm**-1
     polarizability = unit.nanometer**3
@@ -340,6 +343,22 @@ class TotalCharge(RecordProperty):
         return self
 
 
+class SpinMultiplicities(RecordProperty):
+    name: str = "spin_multiplicities"
+    value: NdArray
+    units: unit.Unit = unit.dimensionless
+    classification: PropertyClassification = PropertyClassification.per_system
+    property_type: PropertyType = PropertyType.dimensionless
+
+    @model_validator(mode="after")
+    def _check_spin_multiplicity_shape(self) -> Self:
+        if self.value.shape[1] != 1:
+            raise ValueError(
+                f"Shape of spin multiplicities should be [n_configs, 1], found {len(self.value.shape)}"
+            )
+        return self
+
+
 class DipoleMoment(RecordProperty):
     name: str = "dipole_moment"
     value: NdArray
@@ -378,6 +397,14 @@ class QuadrupoleMoment(RecordProperty):
     units: unit.Unit
     classification: PropertyClassification = PropertyClassification.per_system
     property_type: PropertyType = PropertyType.quadrupole_moment
+
+
+class OctupoleMoment(RecordProperty):
+    name: str = "octupole_moment"
+    value: NdArray
+    units: unit.Unit
+    classification: PropertyClassification = PropertyClassification.per_system
+    property_type: PropertyType = PropertyType.octupole_moment
 
 
 class Polarizability(RecordProperty):
@@ -1110,92 +1137,108 @@ class SourceDataset:
         self.validate_records()
 
         log.info("Writing records to HDF5 file")
-        with h5py.File(full_file_path, "w") as f:
-            for record in tqdm(self.records.keys()):
-                record_group = f.create_group(record)
+        from modelforge.utils.misc import OpenWithLock
 
-                record_group.create_dataset(
-                    "atomic_numbers",
-                    data=self.records[record].atomic_numbers.value,
-                    shape=self.records[record].atomic_numbers.value.shape,
-                )
-                record_group.create_dataset(
-                    "n_configs", data=self.records[record].n_configs
-                )
+        with OpenWithLock(f"{full_file_path}.lockfile", "w") as lockfile:
+            with h5py.File(full_file_path, "w") as f:
+                for record in tqdm(self.records.keys()):
+                    record_group = f.create_group(record)
 
-                for key, property in self.records[record].per_atom.items():
-
-                    target_units = GlobalUnitSystem.get_units(property.property_type)
                     record_group.create_dataset(
-                        key,
-                        data=unit.Quantity(property.value, property.units)
-                        .to(target_units, "chem")
-                        .magnitude,
-                        shape=property.value.shape,
+                        "atomic_numbers",
+                        data=self.records[record].atomic_numbers.value,
+                        shape=self.records[record].atomic_numbers.value.shape,
                     )
-                    record_group[key].attrs["u"] = str(target_units)
-                    record_group[key].attrs["format"] = "per_atom"
+                    record_group["atomic_numbers"].attrs["format"] = str(
+                        self.records[record].atomic_numbers.classification
+                    )
+                    record_group["atomic_numbers"].attrs["property_type"] = str(
+                        self.records[record].atomic_numbers.property_type
+                    )
 
-                for key, property in self.records[record].per_system.items():
-                    target_units = GlobalUnitSystem.get_units(property.property_type)
                     record_group.create_dataset(
-                        key,
-                        data=unit.Quantity(property.value, property.units)
-                        .to(target_units, "chem")
-                        .magnitude,
-                        shape=property.value.shape,
+                        "n_configs", data=self.records[record].n_configs
                     )
-                    record_group[key].attrs["u"] = str(target_units)
-                    record_group[key].attrs["format"] = "per_system"
+                    record_group["n_configs"].attrs["format"] = "meta_data"
 
-                for key, property in self.records[record].meta_data.items():
-                    if isinstance(property.value, str):
-                        record_group.create_dataset(
-                            key,
-                            data=property.value,
-                            dtype=dt,
-                        )
-                        record_group[key].attrs["u"] = str(target_units)
-                        record_group[key].attrs["format"] = "meta_data"
-                    elif isinstance(property.value, (float, int)):
+                    for key, property in self.records[record].per_atom.items():
+
                         target_units = GlobalUnitSystem.get_units(
                             property.property_type
                         )
+                        record_group.create_dataset(
+                            key,
+                            data=unit.Quantity(property.value, property.units)
+                            .to(target_units, "chem")
+                            .magnitude,
+                            shape=property.value.shape,
+                        )
+                        record_group[key].attrs["u"] = str(target_units)
+                        record_group[key].attrs["format"] = str(property.classification)
+                        record_group[key].attrs["property_type"] = str(
+                            property.property_type
+                        )
 
-                        if target_units == unit.dimensionless:
+                    for key, property in self.records[record].per_system.items():
+                        target_units = GlobalUnitSystem.get_units(
+                            property.property_type
+                        )
+                        record_group.create_dataset(
+                            key,
+                            data=unit.Quantity(property.value, property.units)
+                            .to(target_units, "chem")
+                            .magnitude,
+                            shape=property.value.shape,
+                        )
+
+                        record_group[key].attrs["u"] = str(target_units)
+                        record_group[key].attrs["format"] = str(property.classification)
+                        record_group[key].attrs["property_type"] = str(
+                            property.property_type
+                        )
+
+                    for key, property in self.records[record].meta_data.items():
+                        if isinstance(property.value, str):
+                            record_group.create_dataset(
+                                key,
+                                data=property.value,
+                                dtype=dt,
+                            )
+                            record_group[key].attrs["u"] = str(property.units)
+                            record_group[key].attrs["format"] = str(
+                                property.classification
+                            )
+                            record_group[key].attrs["property_type"] = str(
+                                property.property_type
+                            )
+
+                        elif isinstance(property.value, (float, int)):
+
                             record_group.create_dataset(
                                 key,
                                 data=property.value,
                             )
-                        else:
-                            record_group.create_dataset(
-                                key,
-                                data=unit.Quantity(property.value, property.units)
-                                .to(target_units, "chem")
-                                .magnitude,
+                            record_group[key].attrs["u"] = str(property.units)
+                            record_group[key].attrs["format"] = str(
+                                property.classification
                             )
-                        record_group[key].attrs["u"] = str(target_units)
-                        record_group[key].attrs["format"] = "meta_data"
-                    elif isinstance(property.value, np.ndarray):
-                        target_units = GlobalUnitSystem.get_units(
-                            property.property_type
-                        )
+                            record_group[key].attrs["property_type"] = str(
+                                property.property_type
+                            )
 
-                        if target_units == unit.dimensionless:
+                        elif isinstance(property.value, np.ndarray):
+
                             record_group.create_dataset(
-                                key, data=property.value, shape=property.shape
+                                key, data=property.value, shape=property.value.shape
+                            )
+                            record_group[key].attrs["u"] = str(property.units)
+                            record_group[key].attrs["format"] = str(
+                                property.classification
+                            )
+                            record_group[key].attrs["property_type"] = str(
+                                property.property_type
                             )
                         else:
-                            record_group.create_dataset(
-                                key,
-                                data=unit.Quantity(property.value, property.units)
-                                .to(target_units, "chem")
-                                .magnitude,
-                                shape=property.value.shape,
+                            raise ValueError(
+                                f"Unsupported type ({type(property.value)}) for metadata {key}"
                             )
-                        record_group[key].attrs["u"] = str(target_units)
-                        record_group[key].attrs["format"] = "meta_data"
-                    else:
-                        raise ValueError(
-                            f"Unsupported type ({type(property.value)})for metadata {key}"
-                        )

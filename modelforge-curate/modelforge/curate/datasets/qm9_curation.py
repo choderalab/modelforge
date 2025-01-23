@@ -1,8 +1,6 @@
 from modelforge.curate.curate import *
 from modelforge.curate.datasets.curation_baseclass import DatasetCuration
 
-from modelforge.potential.neighbors import Pairlist
-from modelforge.utils.units import chem_context
 import numpy as np
 
 from typing import Optional, List
@@ -35,7 +33,9 @@ class QM9Curation(DatasetCuration):
 
         Examples
         --------
-        >>> qm9_data = QM9Curation(hdf5_file_name='qm9_dataset.hdf5', output_file_dir='~/mf_datasets/hdf5_files', local_cache_dir='~/mf_datasets/qm9_dataset')
+        >>> qm9_data = QM9Curation(hdf5_file_name='qm9_dataset.hdf5',
+        >>>                         output_file_dir='~/mf_datasets/hdf5_files',
+        >>>                         local_cache_dir='~/mf_datasets/qm9_dataset')
         >>> qm9_data.process()
 
     """
@@ -50,7 +50,7 @@ class QM9Curation(DatasetCuration):
         self.dataset = SourceDataset("qm9")
 
         from importlib import resources
-        from modelforge.curation import yaml_files
+        from modelforge.curate.datasets import yaml_files
         import yaml
 
         yaml_file = resources.files(yaml_files) / "qm9_curation.yaml"
@@ -519,4 +519,6 @@ class QM9Curation(DatasetCuration):
             total_conformers,
         )
 
-        self.dataset.to_hdf5(self.output_file_dir, self.hdf5_file_name)
+        self.dataset.to_hdf5(
+            file_path=self.output_file_dir, file_name=self.hdf5_file_name
+        )

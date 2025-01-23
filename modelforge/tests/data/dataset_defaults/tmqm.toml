@@ -4,6 +4,7 @@ version_select = "nc_1000_v0"
 num_workers = 4
 pin_memory = true
 properties_of_interest = ["atomic_numbers", "geometry", "total_energy", "total_charge", "dipole_moment_computed", "dipole_moment_computed_scaled"]
+element_filter = []
 
 [dataset.properties_assignment]
 atomic_numbers = "atomic_numbers"

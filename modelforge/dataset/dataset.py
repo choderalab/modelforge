@@ -225,7 +225,10 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
         return BatchData(nnp_input, metadata)
 
 
-class HDF5Dataset:
+from abc import ABC, abstractmethod
+
+
+class HDF5Dataset(ABC):
     """
     Manages data stored in HDF5 format, supporting processing and interaction.
 
@@ -246,6 +249,7 @@ class HDF5Dataset:
         local_cache_dir: str,
         force_download: bool = False,
         regenerate_cache: bool = False,
+        element_filter: List[tuple] = None,
     ):
         """
         Initializes the HDF5Dataset with paths to raw and processed data files.
@@ -277,9 +281,20 @@ class HDF5Dataset:
         self.local_cache_dir = os.path.expanduser(local_cache_dir)
         self.force_download = force_download
         self.regenerate_cache = regenerate_cache
+        self.element_filter = element_filter
 
         self.hdf5data: Optional[Dict[str, List[np.ndarray]]] = None
         self.numpy_data: Optional[np.ndarray] = None
+
+    @property
+    @abstractmethod
+    def properties_of_interest(self):
+        pass
+
+    @property
+    @abstractmethod
+    def _available_properties_association(self):
+        pass
 
     def _ungzip_hdf5(self) -> None:
         """
@@ -377,6 +392,11 @@ class HDF5Dataset:
                         )
                         return False
 
+                    if self._npz_metadata["element_filter"] != str(self.element_filter):
+                        log.warning(
+                            "Element filter for hdf5 file used to generate npz file does not match current file in dataloader."
+                        )
+
                     if (
                         self._npz_metadata["hdf5_checksum"]
                         != self.hdf5_data_file["md5"]
@@ -388,9 +408,8 @@ class HDF5Dataset:
             os.remove(f"{file_path}/{file_name}.lockfile")
         return True
 
-    def _file_validation(
-        self, file_name: str, file_path: str, checksum: str = None
-    ) -> bool:
+    @staticmethod
+    def _file_validation(file_name: str, file_path: str, checksum: str = None) -> bool:
         """
         Validates if the file exists, and if the calculated checksum matches the expected checksum.
 
@@ -426,6 +445,36 @@ class HDF5Dataset:
         else:
             return True
 
+    def _satisfy_element_filter(self, data):
+        result = True
+        if self.element_filter is None:
+            pass
+        else:
+            for each_filter in self.element_filter:
+                result = True
+                try:
+                    for each_element in each_filter:
+                        if each_element > 0:
+                            result = result and np.isin(each_element, data)
+                        elif each_element < 0:
+                            result = result and not np.isin(-each_element, data)
+                        else:
+                            raise ValueError(
+                                f"Invalid atomic number input: {each_element}! "
+                                f"Please input a valid atomic number."
+                            )
+                except TypeError:
+                    raise TypeError(
+                        "Please use atomic number to refer to element types!"
+                    )
+                # If any element filters are true,
+                # then we include because sub-lists comparison is an OR operator
+                if result:
+                    result = bool(result)
+                    break
+
+        return result
+
     def _from_hdf5(self) -> None:
         """
         Processes and extracts data from an hdf5 file.
@@ -433,7 +482,7 @@ class HDF5Dataset:
         Examples
         --------
         >>> hdf5_data = HDF5Dataset("raw_data.hdf5", "processed_data.npz")
-        >>> processed_data = hdf5_data._from_hdf5()
+        >>> hdf5_data._from_hdf5()
 
         """
         from collections import OrderedDict
@@ -490,11 +539,14 @@ class HDF5Dataset:
                     value_format = hf[next(iter(hf.keys()))][value].attrs["format"]
                     if value_format == "single_rec":
                         single_rec_data[value] = []
-                    elif value_format == "single_atom":
+                    elif (
+                        value_format == "single_atom"
+                        or value_format == "atomic_numbers"
+                    ):
                         single_atom_data[value] = []
-                    elif value_format == "series_mol":
+                    elif value_format == "series_mol" or value_format == "per_system":
                         series_mol_data[value] = []
-                    elif value_format == "series_atom":
+                    elif value_format == "series_atom" or value_format == "per_atom":
                         series_atom_data[value] = []
                     else:
                         raise ValueError(
@@ -526,7 +578,13 @@ class HDF5Dataset:
                             value in hf[record].keys()
                             for value in self.properties_of_interest
                         ]
-                        if all(property_found):
+
+                        # filter by elements
+                        satisfy_element_filter = self._satisfy_element_filter(
+                            hf[record]["atomic_numbers"]
+                        )
+
+                        if all(property_found) and satisfy_element_filter:
                             # we want to exclude conformers with NaN values for any property of interest
                             configs_nan_by_prop: Dict[str, np.ndarray] = (
                                 OrderedDict()
@@ -745,6 +803,7 @@ class HDF5Dataset:
         # we can also add in the date of generation so we can report on when the datafile was generated when we load the npz
         metadata = {
             "data_keys": list(self.hdf5data.keys()),
+            "element_filter": str(self.element_filter),
             "hdf5_checksum": self.hdf5_data_file["md5"],
             "hdf5_gz_checkusm": self.gz_data_file["md5"],
             "date_generated": str(datetime.datetime.now()),
@@ -791,8 +850,8 @@ class DatasetFactory:
         # It is important to check the keys used to generate the npz file, as these are allowed to be changed by the user.
 
         if data._file_validation(
-            data.processed_data_file["name"],
-            data.local_cache_dir,
+            file_name=data.processed_data_file["name"],
+            file_path=data.local_cache_dir,
         ) and (
             data._metadata_validation(
                 data.processed_data_file["name"].replace(".npz", ".json"),
@@ -869,6 +928,7 @@ class DataModule(pl.LightningDataModule):
         regenerate_processed_cache: bool = True,
         properties_of_interest: Optional[PropertyNames] = None,
         properties_assignment: Optional[Dict[str, str]] = None,
+        element_filter: Optional[List[tuple]] = None,
     ):
         """
         Initializes adData module for PyTorch Lightning handling data preparation and loading object with the specified configuration.
@@ -936,6 +996,7 @@ class DataModule(pl.LightningDataModule):
 
         self.properties_of_interest = properties_of_interest
         self.properties_assignment = properties_assignment
+        self.element_filter = element_filter
 
         # make sure we can handle a path with a ~ in it
         self.local_cache_dir = os.path.expanduser(local_cache_dir)
@@ -995,6 +1056,7 @@ class DataModule(pl.LightningDataModule):
             version_select=self.version_select,
             local_cache_dir=self.local_cache_dir,
             regenerate_cache=self.regenerate_cache,
+            element_filter=self.element_filter,
         )
         if self.properties_of_interest is not None:
             dataset.properties_of_interest = self.properties_of_interest
@@ -1442,6 +1504,7 @@ def initialize_datamodule(
     local_cache_dir="./",
     properties_of_interest: Optional[PropertyNames] = None,
     properties_assignment: Optional[Dict[str, str]] = None,
+    element_filter: Optional[List[tuple]] = None,
 ) -> DataModule:
     """
     Initialize a dataset for a given mode.
@@ -1459,6 +1522,7 @@ def initialize_datamodule(
         local_cache_dir=local_cache_dir,
         properties_of_interest=properties_of_interest,
         properties_assignment=properties_assignment,
+        element_filter=element_filter,
     )
     data_module.prepare_data()
     data_module.setup()

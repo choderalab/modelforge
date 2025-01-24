@@ -503,6 +503,31 @@ class Record:
         self._validate_n_configs()
         return self._n_configs
 
+    def slice_record(self, min: int = 0, max: int = -1) -> Self:
+        """
+        Slice the record to only include a subset of configs
+
+        Slicing occurs on all per_atom and per_system properties
+
+        Parameters
+        ----------
+        min: int
+            Starting index for slicing.
+        max: int
+            ending index for slicing.
+
+        Returns
+        -------
+            Record: Slice record.
+        """
+        new_record = copy.deepcopy(self)
+        for key, value in self.per_atom.items():
+            new_record.per_atom[key].value = value.value[min:max]
+        for key, value in self.per_system.items():
+            new_record.per_system[key].value = value.value[min:max]
+
+        return new_record
+
     def to_dict(self):
         """
         Convert the record to a dictionary
@@ -678,7 +703,7 @@ class Record:
                 assert (
                     self.per_atom[property.name].value.shape[1]
                     == property.value.shape[1]
-                )
+                ), f"{self.name}: n_atoms of {property.name} does not: {property.value.shape[1]} != {self.per_atom[property.name].value.shape[1]}."
                 assert (
                     self.per_atom[property.name].value.shape[2]
                     == property.value.shape[2]
@@ -950,6 +975,27 @@ class SourceDataset:
         from copy import deepcopy
 
         return deepcopy(self.records[record_name])
+
+    def slice_record(self, record_name: str, min: int = 0, max: int = -1) -> Record:
+        """
+        Slice a record to only include a subset of configs
+
+        Slicing occurs on all per_atom and per_system properties
+
+        Parameters
+        ----------
+        record_name: str
+            Name of the record to slice.
+        min: int
+            Starting index for slicing.
+        max: int
+            Ending index for slicing.
+
+        Returns
+        -------
+            Record: A copy of the sliced record.
+        """
+        return self.records[record_name].slice_record(min=min, max=max)
 
     def validate_record(self, record_name: str):
         """

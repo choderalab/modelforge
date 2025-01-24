@@ -47,8 +47,6 @@ class QM9Curation(DatasetCuration):
         # read in the yaml file that defines the dataset download url and md5 checksum
         # this yaml file should be stored along with the curated dataset
 
-        self.dataset = SourceDataset("qm9")
-
         from importlib import resources
         from modelforge.curate.datasets import yaml_files
         import yaml

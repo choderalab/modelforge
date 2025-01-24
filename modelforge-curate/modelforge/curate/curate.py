@@ -439,6 +439,7 @@ class AtomicNumbers(RecordProperty):
 
 class Record:
     def __init__(self, name: str, append_property: bool = False):
+        assert isinstance(name, str)
         self.name = name
         self.per_atom = {}
         self.per_system = {}
@@ -835,6 +836,8 @@ class SourceDataset:
         -------
 
         """
+        assert isinstance(record_name, str)
+
         # I think this should error out if we've already encountered a name, as that would imply
         # some issue with the dataset construction
         if record_name in self.records.keys():
@@ -910,6 +913,7 @@ class SourceDataset:
         -------
 
         """
+        assert isinstance(record_name, str)
         if record_name in self.records.keys():
             self.records.pop(record_name)
         else:
@@ -932,6 +936,7 @@ class SourceDataset:
         -------
 
         """
+
         for property in properties:
             self.add_property(record_name, property)
 
@@ -950,6 +955,7 @@ class SourceDataset:
         -------
 
         """
+        assert isinstance(record_name, str)
         # check if the record exists; if it does not add it
         if record_name not in self.records.keys():
             log.info(
@@ -972,6 +978,7 @@ class SourceDataset:
             Record: instance of the Record class corresponding to the record name
 
         """
+        assert isinstance(record_name, str)
         from copy import deepcopy
 
         return deepcopy(self.records[record_name])
@@ -995,6 +1002,8 @@ class SourceDataset:
         -------
             Record: A copy of the sliced record.
         """
+        assert isinstance(record_name, str)
+
         return self.records[record_name].slice_record(min=min, max=max)
 
     def validate_record(self, record_name: str):

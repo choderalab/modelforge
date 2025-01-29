@@ -116,6 +116,7 @@ _ATOMIC_NUMBER_TO_ELEMENT: Dict[int, str] = {
     100: "Fm",
 }
 
+_ATOMIC_ELEMENT_TO_NUMBER = {v: k for k, v in _ATOMIC_NUMBER_TO_ELEMENT.items()}
 
 if TYPE_CHECKING:
     from modelforge.dataset.dataset import TorchDataset

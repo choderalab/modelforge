@@ -514,6 +514,8 @@ class HDF5Dataset(ABC):
             )
         from modelforge.utils.misc import OpenWithLock
 
+        log.debug(f"Reading data from {temp_hdf5_file}")
+        log.debug(f"element filter: {self.element_filter}")
         # h5py does file locking internally, but will exit immediately if the file is locked by another program
         # let us create a simple lockfile to prevent this, as OpenWithLock will just wait until the lockfile is unlocked
         # before proceeding
@@ -534,6 +536,11 @@ class HDF5Dataset(ABC):
                 # value shapes: (n_confs, n_atoms, *)
 
                 # initialize each relevant value in data dicts to empty list
+                # note to provide compatibility of old and new data file formats,
+                # we will allow the format to be either the new or old terminology
+                # i.e., series_mol or per_system, series_atom or per_atom
+                # the only quantity that was allowed to be "single_atom" was "atomic_numbers"
+
                 for value in self.properties_of_interest:
 
                     value_format = hf[next(iter(hf.keys()))][value].attrs["format"]

@@ -1,0 +1,9 @@
+dataset_name: spice2
+latest: v_0
+v_0:
+  version: 0
+  notes: SPICE 2.0.1 release
+  dataset_download_url: https://zenodo.org/records/10975225/files/SPICE-2.0.1.hdf5
+  dataset_md5_checksum: bfba2224b6540e1390a579569b475510
+  dataset_length: 37479271148
+  dataset_filename: SPICE-2.0.1.hdf5

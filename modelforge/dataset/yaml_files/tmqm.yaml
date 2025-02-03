@@ -85,3 +85,31 @@ subset_v0_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr:
     md5: null
     name: tmqm_dataset_v0_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr_processed.npz
   url: https://zenodo.org/records/14662340/files/tmqm_dataset_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr_v0.hdf5.gz
+subset_v1_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr:
+  version: 1
+  doi:  10.5281/zenodo.14796762
+  gz_data_file:
+    length: 142964216
+    md5: 9043a4e0569518df3b6b1c9d91571276
+    name: tmqm_dataset_v1_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr.hdf5.gz
+  hdf5_data_file:
+    md5: 1fc8d53e2159d211cd472fbac56308bf
+    name: tmqm_dataset_v1_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr.hdf5
+  processed_data_file:
+    md5: null
+    name: tmqm_dataset_v1_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr_processed.npz
+  url: https://zenodo.org/records/14796762/files/tmqm_dataset_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr_v1.hdf5.gz
+subset_v1_PdZnFeCu_CHPSONFClBr:
+  version: 1
+  doi:  10.5281/zenodo.14796780
+  gz_data_file:
+    length: 64821522
+    md5: f06ad890c8f4d4b177a7e4c93c605393
+    name: tmqm_dataset_v1_PdZnFeCu_CHPSONFClBr.hdf5.gz
+  hdf5_data_file:
+    md5: e5c6dc7bf9dd1d07a58d139857aab5a7
+    name: tmqm_dataset_v1_PdZnFeCu_CHPSONFClBr.hdf5
+  processed_data_file:
+    md5: null
+    name: tmqm_dataset_v1_PdZnFeCu_CHPSONFClBr_processed.npz
+  url: https://zenodo.org/records/14796780/files/tmqm_dataset_PdZnFeCu_CHPSONFClBr_v1.hdf5.gz

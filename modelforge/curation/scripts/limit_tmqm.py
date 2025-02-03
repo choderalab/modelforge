@@ -19,18 +19,18 @@ primary_and_secondary_tm_to_extract_list = []
 # Limit organics to C, H, P, S O, N, F Cl, Br by excluding
 # any that contain B, Si, As, Se, I
 
-exclude_organics = [5, 14, 33, 16, 53]
+exclude_organics = [5, 14, 33, 34, 53]
 primary_tm_excluded_organics_list = []
 primary_and_secondary_tm_excluded_organics_list = []
 
 file_output_primary = "/home/cri/datasets/hdf5_files/tmqm_dataset_PdZnFeCu_v0.hdf5"
 file_output_primary_excluded_organics = (
-    "/home/cri/datasets/hdf5_files/tmqm_dataset_PdZnFeCu_CHPSONFClBr_v0.hdf5"
+    "/home/cri/datasets/hdf5_files/tmqm_dataset_PdZnFeCu_CHPSONFClBr_v1.hdf5"
 )
 file_output_primary_secondary = (
     "/home/cri/datasets/hdf5_files/tmqm_dataset_PdZnFeCuNiPtIrRhCrAg_v0.hdf5"
 )
-file_output_primary_secondary_excluded_organics = "/home/cri/datasets/hdf5_files/tmqm_dataset_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr_v0.hdf5"
+file_output_primary_secondary_excluded_organics = "/home/cri/datasets/hdf5_files/tmqm_dataset_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr_v1.hdf5"
 
 
 with h5py.File(file_path, "r") as f:

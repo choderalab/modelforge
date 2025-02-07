@@ -1,5 +1,17 @@
-from modelforge.curate.curate import *
+from modelforge.curate import Record, SourceDataset
 from modelforge.curate.datasets.curation_baseclass import DatasetCuration
+from modelforge.curate.properties import (
+    AtomicNumbers,
+    Positions,
+    Energies,
+    Forces,
+    PartialCharges,
+    TotalCharge,
+    MetaData,
+    DipoleMomentScalarPerSystem,
+    SpinMultiplicities,
+)
+
 from modelforge.utils.units import chem_context
 import numpy as np
 
@@ -318,7 +330,7 @@ class tmQMCuration(DatasetCuration):
                         units=unit.hartree,
                     )
 
-                    dipole_moment_magnitude = DipoleMomentScalar(
+                    dipole_moment_magnitude = DipoleMomentScalarPerSystem(
                         name="dipole_moment_magnitude",
                         value=np.array(float(temp_dict["Dipole_M"])).reshape(1, 1),
                         units=unit.debye,

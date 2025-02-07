@@ -1,440 +1,23 @@
-import copy
-
-from modelforge.curate.utils import (
-    _convert_unit_str_to_unit_unit,
-    _convert_list_to_ndarray,
-    _convert_float_to_ndarray,
-    chem_context,
-    NdArray,
+from modelforge.curate.units import GlobalUnitSystem, chem_context
+from modelforge.curate.properties import (
+    PropertyBaseModel,
+    PropertyClassification,
+    PropertyType,
+    Positions,
+    Energies,
+    AtomicNumbers,
 )
+
 from openff.units import unit
 
 import numpy as np
+import copy
 
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    model_validator,
-    field_validator,
-    computed_field,
-)
-from enum import Enum
 from typing import Union, List, Type, Optional
 
 from typing_extensions import Self
 
 from loguru import logger as log
-
-
-# Define a custom config for the BaseModel to avoid extra duplication of code
-class CurateBase(BaseModel):
-    model_config = ConfigDict(
-        use_enum_values=True,
-        arbitrary_types_allowed=True,
-        validate_assignment=True,
-        extra="forbid",
-        validate_default=True,
-    )
-
-
-# Define a custom enum class that is case insensitive that we can inherit from
-class CaseInsensitiveEnum(str, Enum):
-    @classmethod
-    def _missing_(cls, value):
-        for member in cls:
-            if member.value.lower() == value.lower():
-                return member
-        return super()._missing_(value)
-
-
-class PropertyClassification(CaseInsensitiveEnum):
-    """
-    Enum class to classify a property to be able to interpret how to parse the shape
-
-    per_atom: properties have shape [n_configs, n_atoms, -1]
-    per_system: properties have shape [n_configs, 1, -1]
-    atomic_numbers: special case with shape of [n_atoms, 1].
-                    Atomic numbers do not change as configuration changes and thus this reduces memory footprint.
-    meta_data: A single entry that may be a string, float, int, or array of any shape.
-                    In general, meta_data is generally ignored when reading in a dataset for training.
-
-    """
-
-    per_atom = "per_atom"
-    per_system = "per_system"
-    atomic_numbers = "atomic_numbers"
-    meta_data = "meta_data"
-
-
-class PropertyType(str, Enum):
-    """
-    Enum class that enables us to know the type of property, e.g., force, energy, charge, etc.
-
-    This is used for validating and converting units.
-    Those things classified as "other" will require manual conversion.
-    """
-
-    length = "length"
-    force = "force"
-    energy = "energy"
-    charge = "charge"
-    dipole_moment = "dipole_moment"
-    quadrupole_moment = "quadrupole_moment"
-    octupole_moment = "octupole_moment"
-    polarizability = "polarizability"
-    atomic_numbers = "atomic_numbers"
-    meta_data = "meta_data"
-    frequency = "frequency"
-    wavenumber = "wavenumber"
-    area = "area"
-    heat_capacity = "heat_capacity"
-    dimensionless = "dimensionless"
-
-
-class GlobalUnitSystem:
-    name = "default"
-    length = unit.nanometer
-    area = unit.nanometer**2
-    force = unit.kilojoule_per_mole / unit.nanometer
-    energy = unit.kilojoule_per_mole
-    charge = unit.elementary_charge
-    dipole_moment = unit.elementary_charge * unit.nanometer
-    quadrupole_moment = unit.elementary_charge * unit.nanometer**2
-    octupole_moment = unit.elementary_charge * unit.nanometer**3
-    frequency = unit.gigahertz
-    wavenumber = unit.cm**-1
-    polarizability = unit.nanometer**3
-    heat_capacity = unit.kilojoule_per_mole / unit.kelvin
-    atomic_numbers = unit.dimensionless
-    dimensionless = unit.dimensionless
-
-    @classmethod
-    def set_global_units(cls, property_type: str, units: Union[str, unit.Unit]):
-        """
-        This can be used to add a new property/unit combination to the class
-        or change the default units for a property in the class.
-
-        Parameters
-        ----------
-        property_type, str:
-            type of the property (e.g., length, force, energy, charge, etc.)
-        units, openff.units.Unit or str:
-            openff.units object or compatible string that defines the units of the property type
-
-        """
-        if isinstance(units, str):
-            from modelforge.curate.utils import _convert_unit_str_to_unit_unit
-
-            units = _convert_unit_str_to_unit_unit(units)
-
-        if not isinstance(units, unit.Unit):
-            raise ValueError(
-                "Units must be an openff.units object or compatible string."
-            )
-
-        setattr(cls, property_type, units)
-
-    @classmethod
-    def get_units(cls, key):
-
-        return getattr(cls, key)
-
-    def __repr__(self):
-
-        attributes_to_print = {
-            attr: getattr(self, attr) for attr in dir(self) if not attr.startswith("__")
-        }
-        attributes_to_print.pop("get_units")
-        attributes_to_print.pop("set_global_units")
-        return "\n".join(
-            [f"{key} : {value}" for key, value in attributes_to_print.items()]
-        )
-
-    def __getitem__(self, item):
-        # if item in cls.__dict__.keys():
-        #     return getattr(cls, item)
-        # else:
-        #     return None
-        try:
-            return getattr(self, item)
-        except AttributeError:
-            raise AttributeError(f"Unit {item} not found in the unit system.")
-
-
-class RecordProperty(CurateBase):
-    name: str
-    value: NdArray
-    units: unit.Unit
-    classification: PropertyClassification
-    property_type: Union[PropertyType, str]
-
-    # if units are passed as spring, convert to unit.Unit object
-    converted_units = field_validator("units", mode="before")(
-        _convert_unit_str_to_unit_unit
-    )
-    converted_array = field_validator("value", mode="before")(_convert_list_to_ndarray)
-
-    @model_validator(mode="after")
-    def _check_shape(self) -> Self:
-
-        if self.classification == PropertyClassification.atomic_numbers:
-            if len(self.value.shape) != 2:
-                raise ValueError(
-                    f"Shape of '{self.name}' should be [n_atoms,1], found {len(self.value.shape)}"
-                )
-            if self.value.shape[1] != 1:
-                raise ValueError(
-                    f"Shape of '{self.name}' should be [n_atoms,1], found {len(self.value.shape)}"
-                )
-        elif self.classification == PropertyClassification.per_system:
-            # shape of a per_system property should be 2d for most properties, but it is possible to have a 3d shape if the property is a tensor.
-            if len(self.value.shape) < 2:
-                raise ValueError(
-                    f"Shape of property '{self.name}' should have at least 2 dimensions (per_system), found {len(self.value.shape)}"
-                )
-
-        elif self.classification == PropertyClassification.per_atom:
-            # shape of a per_atom property must be at least, 3d [n_configs, n_atoms, 1], but a property could be a tensor and have more dimensions.
-            if len(self.value.shape) < 3:
-                raise ValueError(
-                    f"Shape of property '{self.name}' should have at least 3 dimensions (per_atom), found {len(self.value.shape)}"
-                )
-
-        return self
-
-    @model_validator(mode="after")
-    def _check_unit_type(self) -> Self:
-
-        if self.classification != "meta_data":
-            if not self.units.is_compatible_with(
-                GlobalUnitSystem.get_units(self.property_type), "chem"
-            ):
-                raise ValueError(
-                    f"Unit {self.units} of {self.name} are not compatible with the property type {self.property_type}.\n"
-                )
-            return self
-
-    @computed_field
-    @property
-    def n_configs(self) -> int:
-        if (
-            self.classification == PropertyClassification.per_system
-            or self.classification == PropertyClassification.per_atom
-        ):
-            return self.value.shape[0]
-        return None
-
-    @computed_field
-    @property
-    def n_atoms(self) -> int:
-        if self.classification == PropertyClassification.per_atom:
-            return self.value.shape[1]
-        elif self.classification == PropertyClassification.atomic_numbers:
-            return self.value.shape[0]
-        return None
-
-
-class Positions(RecordProperty):
-    name: str = "positions"
-    value: NdArray
-    units: unit.Unit
-    classification: PropertyClassification = PropertyClassification.per_atom
-    property_type: PropertyType = PropertyType.length
-
-    @model_validator(mode="after")
-    def _check_position_shape(self) -> Self:
-        # we already validate that any per_atom property cannot have less than 3 dimensions
-        # but we know that positions must be 3d.
-        if len(self.value.shape) != 3:
-            raise ValueError(
-                f"Shape of position should be [n_configs, n_atoms, 3], found {len(self.value.shape)}"
-            )
-        if self.value.shape[2] != 3:
-            raise ValueError(
-                f"Shape of position should be [n_configs, n_atoms, 3], found {len(self.value.shape)}"
-            )
-        return self
-
-
-class Energies(RecordProperty):
-    name: str = "energies"
-    value: NdArray
-    units: unit.Unit
-    classification: PropertyClassification = PropertyClassification.per_system
-    property_type: PropertyType = PropertyType.energy
-
-    # if a float is passed, convert to a numpy array of shape (1,1)
-    # note if list given, the field validator in the RecordProperty parent class
-    # will conver to an ndarray.
-    convert_energy_array = field_validator("value", mode="before")(
-        _convert_float_to_ndarray
-    )
-
-    @model_validator(mode="after")
-    def _check_energy_shape(self) -> Self:
-        # we already validate that any per_atom property cannot have less than 2 dimensions
-        # but energies is a special case that should always be 2.
-        if len(self.value.shape) != 2:
-            raise ValueError(
-                f"Shape of energy should be [n_configs, 1], found {len(self.value.shape)}"
-            )
-        if self.value.shape[1] != 1:
-            raise ValueError(
-                f"Shape of energy should be [n_configs, 1], found {len(self.value.shape)}"
-            )
-        return self
-
-
-class Forces(RecordProperty):
-    name: str = "forces"
-    value: NdArray
-    units: unit.Unit
-    classification: PropertyClassification = PropertyClassification.per_atom
-    property_type: PropertyType = PropertyType.force
-
-    @model_validator(mode="after")
-    def _check_force_shape(self) -> Self:
-        if len(self.value.shape) != 3:
-            raise ValueError(
-                f"Shape of force should be [n_configs, n_atoms, 3], found {len(self.value.shape)}"
-            )
-        if self.value.shape[2] != 3:
-            raise ValueError(
-                f"Shape of force should be [n_configs, n_atoms, 3], found {len(self.value.shape)}"
-            )
-        return self
-
-
-class PartialCharges(RecordProperty):
-    name: str = "partial_charges"
-    value: NdArray
-    units: unit.Unit
-    classification: PropertyClassification = PropertyClassification.per_atom
-    property_type: PropertyType = PropertyType.charge
-
-    @model_validator(mode="after")
-    def _check_charge_shape(self) -> Self:
-        if self.value.shape[2] != 1:
-            raise ValueError(
-                f"Shape of charge should be [n_configs, n_atoms, 1], found {len(self.value.shape)}"
-            )
-        return self
-
-
-class TotalCharge(RecordProperty):
-    name: str = "total_charge"
-    value: NdArray
-    units: unit.Unit
-    classification: PropertyClassification = PropertyClassification.per_system
-    property_type: PropertyType = PropertyType.charge
-
-    converted_array = field_validator("value", mode="before")(_convert_float_to_ndarray)
-
-    convert_charge_array = field_validator("value", mode="before")(
-        _convert_float_to_ndarray
-    )
-
-    @model_validator(mode="after")
-    def _check_charge_shape(self) -> Self:
-        if self.value.shape[1] != 1:
-            raise ValueError(
-                f"Shape of charge should be [n_configs, 1], found {len(self.value.shape)}"
-            )
-        return self
-
-
-class SpinMultiplicities(RecordProperty):
-    name: str = "spin_multiplicities"
-    value: NdArray
-    units: unit.Unit = unit.dimensionless
-    classification: PropertyClassification = PropertyClassification.per_system
-    property_type: PropertyType = PropertyType.dimensionless
-
-    @model_validator(mode="after")
-    def _check_spin_multiplicity_shape(self) -> Self:
-        if self.value.shape[1] != 1:
-            raise ValueError(
-                f"Shape of spin multiplicities should be [n_configs, 1], found {len(self.value.shape)}"
-            )
-        return self
-
-
-class DipoleMoment(RecordProperty):
-    name: str = "dipole_moment"
-    value: NdArray
-    units: unit.Unit
-    classification: PropertyClassification = PropertyClassification.per_system
-    property_type: PropertyType = PropertyType.dipole_moment
-
-    @model_validator(mode="after")
-    def _check_dipole_moment_shape(self) -> Self:
-        if self.value.shape[1] != 3:
-            raise ValueError(
-                f"Shape of dipole moment should be [n_configs, 3], found {len(self.value.shape)}"
-            )
-        return self
-
-
-class DipoleMomentScalar(RecordProperty):
-    name: str = "dipole_moment_scalar"
-    value: NdArray
-    units: unit.Unit
-    classification: PropertyClassification = PropertyClassification.per_system
-    property_type: PropertyType = PropertyType.dipole_moment
-
-    @model_validator(mode="after")
-    def _check_dipole_moment_shape(self) -> Self:
-        if self.value.shape[1] != 1:
-            raise ValueError(
-                f"Shape of scalar dipole moment should be [n_configs, 1], found {len(self.value.shape)}"
-            )
-        return self
-
-
-class QuadrupoleMoment(RecordProperty):
-    name: str = "quadrupole_moment"
-    value: NdArray
-    units: unit.Unit
-    classification: PropertyClassification = PropertyClassification.per_system
-    property_type: PropertyType = PropertyType.quadrupole_moment
-
-
-class OctupoleMoment(RecordProperty):
-    name: str = "octupole_moment"
-    value: NdArray
-    units: unit.Unit
-    classification: PropertyClassification = PropertyClassification.per_system
-    property_type: PropertyType = PropertyType.octupole_moment
-
-
-class Polarizability(RecordProperty):
-    name: str = "polarizability"
-    value: NdArray
-    units: unit.Unit
-    classification: PropertyClassification = PropertyClassification.per_system
-    property_type: PropertyType = PropertyType.polarizability
-
-
-class MetaData(RecordProperty):
-    name: str
-    value: Union[str, int, float, List, NdArray]
-    units: unit.Unit = unit.dimensionless
-    classification: PropertyClassification = PropertyClassification.meta_data
-    property_type: PropertyType = PropertyType.meta_data
-
-
-class AtomicNumbers(RecordProperty):
-    """
-    Class to define the atomic numbers of a record.
-
-    The atomic numbers must be a 2d array of shape (n_atoms, 1).
-    """
-
-    name: str = "atomic_numbers"
-    value: NdArray
-    units: unit.Unit = unit.dimensionless
-    classification: PropertyClassification = PropertyClassification.atomic_numbers
-    property_type: PropertyType = PropertyType.atomic_numbers
 
 
 class Record:
@@ -617,13 +200,13 @@ class Record:
             return True
         return False
 
-    def add_properties(self, properties: List[Type[CurateBase]]):
+    def add_properties(self, properties: List[Type[PropertyBaseModel]]):
         """
         Add a list of properties to the record.
 
         Parameters
         ----------
-        properties: List[Type[CurateBase]]
+        properties: List[Type[PropertyBaseModel]]
             List of properties to add to the record.
         Returns
         -------
@@ -632,13 +215,13 @@ class Record:
         for property in properties:
             self.add_property(property)
 
-    def add_property(self, property: Type[CurateBase]):
+    def add_property(self, property: Type[PropertyBaseModel]):
         """
         Add a property to the record.
 
         Parameters
         ----------
-        property: Type[CurateBase]
+        property: Type[PropertyBaseModel]
             Property to add to the record.
         Returns
         -------
@@ -820,7 +403,9 @@ class SourceDataset:
         return total_config
 
     def create_record(
-        self, record_name: str, properties: Optional[List[Type[CurateBase]]] = None
+        self,
+        record_name: str,
+        properties: Optional[List[Type[PropertyBaseModel]]] = None,
     ):
         """
         Create a record in the dataset. If properties are provided, they will be added to the record.
@@ -829,7 +414,7 @@ class SourceDataset:
         ----------
         record_name: str
             Name of the record/
-        properties: List[Type[CurateBase]], optional, default=None
+        properties: List[Type[PropertyBaseModel]], optional, default=None
             List of properties to add to the record. If not provided, an empty record will be created.
 
         Returns
@@ -921,7 +506,9 @@ class SourceDataset:
                 f"Record with name {record_name} does not exist in the dataset."
             )
 
-    def add_properties(self, record_name: str, properties: List[Type[CurateBase]]):
+    def add_properties(
+        self, record_name: str, properties: List[Type[PropertyBaseModel]]
+    ):
         """
         Add a list of properties to a record in the dataset.
 
@@ -929,7 +516,7 @@ class SourceDataset:
         ----------
         record_name: str
             Name of the record to add the properties to.
-        properties: List[Type[CurateBase]]
+        properties: List[Type[PropertyBaseModel]]
             List of properties to add to the record.
 
         Returns
@@ -940,7 +527,7 @@ class SourceDataset:
         for property in properties:
             self.add_property(record_name, property)
 
-    def add_property(self, record_name: str, property: Type[CurateBase]):
+    def add_property(self, record_name: str, property: Type[PropertyBaseModel]):
         """
         Add a property to a record in the dataset.
 
@@ -948,7 +535,7 @@ class SourceDataset:
         ----------
         record_name: str
             Name of the record to add the property to.
-        property: Type[CurateBase]
+        property: Type[PropertyBaseModel]
             Property to add to the record.
 
         Returns

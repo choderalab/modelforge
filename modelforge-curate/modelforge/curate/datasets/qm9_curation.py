@@ -1,4 +1,14 @@
-from modelforge.curate.curate import *
+from modelforge.curate import Record, SourceDataset
+from modelforge.curate.properties import (
+    AtomicNumbers,
+    DipoleMomentScalarPerSystem,
+    Energies,
+    MetaData,
+    PropertyBaseModel,
+    PartialCharges,
+    Polarizability,
+    Positions,
+)
 from modelforge.curate.datasets.curation_baseclass import DatasetCuration
 
 import numpy as np
@@ -264,7 +274,7 @@ class QM9Curation(DatasetCuration):
                 value=np.array(properties["isotropic_polarizability"]).reshape(1, 1),
                 units="angstrom^3",
             )
-            dipole_moment_scalar = DipoleMomentScalar(
+            dipole_moment_scalar = DipoleMomentScalarPerSystem(
                 value=np.array(properties["dipole_moment"]).reshape(1, 1),
                 units="debye",
             )
@@ -315,7 +325,7 @@ class QM9Curation(DatasetCuration):
                 units=unit.hartree,
             )
 
-            rotational_constants = RecordProperty(
+            rotational_constants = PropertyBaseModel(
                 name="rotational_constants",
                 value=np.array(
                     [
@@ -329,21 +339,21 @@ class QM9Curation(DatasetCuration):
                 classification="per_system",
             )
 
-            harmonic_vibrational_frequencies = RecordProperty(
+            harmonic_vibrational_frequencies = PropertyBaseModel(
                 name="harmonic_vibrational_frequencies",
                 value=np.array(hvf).reshape(1, -1),
                 units=unit.cm**-1,
                 property_type="wavenumber",
                 classification="per_system",
             )
-            electronic_spatial_extent = RecordProperty(
+            electronic_spatial_extent = PropertyBaseModel(
                 name="electronic_spatial_extent",
                 value=np.array(properties["electronic_spatial_extent"]).reshape(1, 1),
                 units="angstrom^2",
                 property_type="area",
                 classification="per_system",
             )
-            heat_capacity_at_298K = RecordProperty(
+            heat_capacity_at_298K = PropertyBaseModel(
                 name="heat_capacity_at_298.15K",
                 value=np.array(properties["heat_capacity_at_298.15K"]).reshape(1, 1),
                 units=unit.calorie_per_mole / unit.kelvin,

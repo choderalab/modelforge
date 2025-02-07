@@ -660,7 +660,7 @@ class Polarizability(PropertyBaseModel):
     """
     Class to define the polarizability of a record.
 
-    The polarizability must be a 2d array of shape (n_configs, 3).
+    The polarizability must be a 2d array of shape (n_configs, 1).
 
     Parameters
     ----------
@@ -683,12 +683,12 @@ class Polarizability(PropertyBaseModel):
     classification: PropertyClassification = PropertyClassification.per_system
     property_type: PropertyType = PropertyType.polarizability
 
-    # specific validation of the value array, which must be 2d for polarizabilities, with shape [n_configs, 3]
+    # specific validation of the value array, which must be 2d for polarizabilities, with shape [n_configs, 1]
     @model_validator(mode="after")
     def _check_polarizability_shape(self) -> Self:
-        if self.value.shape[1] != 3:
+        if self.value.shape[1] != 1:
             raise ValueError(
-                f"Shape of polarizability should be [n_configs, 3], found {len(self.value.shape)}"
+                f"Shape of polarizability should be [n_configs, 1], found {len(self.value.shape)}"
             )
         return self
 

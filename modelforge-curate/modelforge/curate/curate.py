@@ -745,6 +745,78 @@ class SourceDataset:
             )
             return False
 
+    def _generate_dataset_summary(self, checksum: str, file_name: str):
+        """
+        Generate a summary of the dataset.
+
+        Returns
+        -------
+        Dict
+            summary of the dataset
+        """
+        output_dict = {}
+        output_dict["dataset_name"] = self.dataset_name
+        output_dict["md5_checksum"] = checksum
+        output_dict["filename"] = file_name
+        output_dict["total_records"] = self.total_records()
+        output_dict["total_configurations"] = self.total_configs()
+
+        key = list(self.records.keys())[0]
+
+        temp_props = {}
+        temp_props["atomic_numbers"] = {
+            "classification": str(self.records[key].atomic_numbers.classification),
+        }
+
+        for prop in self.records[key].per_atom.keys():
+            temp_props[prop] = {
+                "classification": str(self.records[key].per_atom[prop].classification),
+                "units": str(
+                    GlobalUnitSystem.get_units(
+                        self.records[key].per_atom[prop].property_type
+                    )
+                ),
+            }
+
+        for prop in self.records[key].per_system.keys():
+            temp_props[prop] = {
+                "classification": str(
+                    self.records[key].per_system[prop].classification
+                ),
+                "units": str(
+                    GlobalUnitSystem.get_units(
+                        self.records[key].per_system[prop].property_type
+                    )
+                ),
+            }
+
+        for prop in self.records[key].meta_data.keys():
+            temp_props[prop] = "meta_data"
+
+        output_dict["properties"] = temp_props
+
+        return output_dict
+
+    def summary_to_json(
+        self, file_path: str, file_name: str, hdf5_checksum: str, hdf5_file_name: str
+    ):
+        """
+        Write the dataset summary to a json file.
+
+        Parameters
+        ----------
+        file_path: str, required
+            Path to the directory where the json file will be saved.
+        file_name: str, required
+            Name of the json file to be saved.
+        """
+        import json
+
+        dataset_summary = self._generate_dataset_summary(hdf5_checksum, hdf5_file_name)
+
+        with open(f"{file_path}/{file_name}", "w") as f:
+            json.dump(dataset_summary, f, indent=4)
+
     def to_hdf5(self, file_path: str, file_name: str):
         """
         Write the dataset to an HDF5 file.
@@ -778,7 +850,7 @@ class SourceDataset:
         log.info("Validating records")
         self.validate_records()
 
-        log.info("Writing records to HDF5 file")
+        log.info(f"Writing records to {full_file_path}")
         from modelforge.utils.misc import OpenWithLock
 
         with OpenWithLock(f"{full_file_path}.lockfile", "w") as lockfile:
@@ -884,3 +956,8 @@ class SourceDataset:
                             raise ValueError(
                                 f"Unsupported type ({type(property.value)}) for metadata {key}"
                             )
+        from modelforge.utils.remote import calculate_md5_checksum
+
+        hdf5_checksum = calculate_md5_checksum(file_path=file_path, file_name=file_name)
+
+        return hdf5_checksum

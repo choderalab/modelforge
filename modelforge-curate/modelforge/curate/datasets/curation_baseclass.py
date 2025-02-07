@@ -147,3 +147,20 @@ class DatasetCuration(ABC):
             value=np.array(dipole_moment_list).reshape(-1, 3),
             units=positions.units * unit.elementary_charge,
         )
+
+    def write_hdf5_and_json_files(self, file_name: str, file_path: str):
+        """
+        Write the dataset to an hdf5 file and a json file.
+        """
+        # save out the dataset to hdf5
+        checksum = self.dataset.to_hdf5(file_name=file_name, file_path=file_path)
+        # chop off .hdf5 extension and add .json
+        json_file_name = file_name.replace(".hdf5", ".json")
+
+        # save a summary to json
+        self.dataset.summary_to_json(
+            file_path=file_path,
+            file_name=json_file_name,
+            hdf5_checksum=checksum,
+            hdf5_file_name=file_name,
+        )

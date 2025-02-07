@@ -1,5 +1,20 @@
-from modelforge.curate.curate import *
+from modelforge.curate import Record, SourceDataset
 from modelforge.curate.datasets.curation_baseclass import DatasetCuration
+from modelforge.curate.properties import (
+    AtomicNumbers,
+    Positions,
+    Energies,
+    Forces,
+    PartialCharges,
+    TotalCharge,
+    MetaData,
+    DipoleMomentPerAtom,
+    DipoleMomentPerSystem,
+    QuadrupoleMomentPerAtom,
+    QuadrupoleMomentPerSystem,
+    OctupoleMomentPerAtom,
+    BondOrders,
+)
 
 from typing import Optional
 from loguru import logger
@@ -133,9 +148,7 @@ class SPICE1Curation(DatasetCuration):
 
         input_file_name = f"{local_path_dir}/{name}"
 
-        need_to_reshape = {"formation_energy": True, "dft_total_energy": True}
-
-        dataset = SourceDataset("spice2")
+        dataset = SourceDataset("spice1")
 
         with OpenWithLock(f"{input_file_name}.lockfile", "w") as lockfile:
             with h5py.File(input_file_name, "r") as hf:
@@ -161,9 +174,6 @@ class SPICE1Curation(DatasetCuration):
                         record_temp = Record(name=name)
                         keys_list = list(hf[name].keys())
 
-                        # temp dictionary for ANI-1x and ANI-1ccx data
-                        ds_temp = {}
-
                         smiles = MetaData(
                             name="smiles",
                             value=hf[name]["smiles"][()][0].decode("utf-8"),
@@ -173,6 +183,7 @@ class SPICE1Curation(DatasetCuration):
                             name="atomic_numbers",
                             value=hf[name]["atomic_numbers"][()].reshape(-1, 1),
                         )
+                        n_atoms = atomic_numbers.n_atoms
                         record_temp.add_property(atomic_numbers)
                         if max_conformers_per_record is not None:
                             conformers_per_record = min(
@@ -235,16 +246,16 @@ class SPICE1Curation(DatasetCuration):
                             )
                             record_temp.add_property(mbis_charges)
                         if "mbis_dipoles" in keys_list:
-                            mbis_dipoles = DipoleMoment(
+                            mbis_dipoles = DipoleMomentPerAtom(
                                 name="mbis_dipoles",
-                                value=hf[name]["mbis_dipoles"][()].reshape(-1, 3)[
-                                    0:conformers_per_record
-                                ],
+                                value=hf[name]["mbis_dipoles"][()].reshape(
+                                    -1, n_atoms, 3
+                                )[0:conformers_per_record],
                                 units=hf[name]["mbis_dipoles"].attrs["units"],
                             )
                             record_temp.add_property(mbis_dipoles)
                         if "mbis_quadrupoles" in keys_list:
-                            mbis_quadrupoles = QuadrupoleMoment(
+                            mbis_quadrupoles = QuadrupoleMomentPerAtom(
                                 name="mbis_quadrupoles",
                                 value=hf[name]["mbis_quadrupoles"][()][
                                     0:conformers_per_record
@@ -253,7 +264,7 @@ class SPICE1Curation(DatasetCuration):
                             )
                             record_temp.add_property(mbis_quadrupoles)
                         if "mbis_octupoles" in keys_list:
-                            mbis_octupoles = OctupoleMoment(
+                            mbis_octupoles = OctupoleMomentPerAtom(
                                 name="mbis_octupoles",
                                 value=hf[name]["mbis_octupoles"][()][
                                     0:conformers_per_record
@@ -261,13 +272,13 @@ class SPICE1Curation(DatasetCuration):
                                 units=hf[name]["mbis_octupoles"].attrs["units"],
                             )
                             record_temp.add_property(mbis_octupoles)
-                        scf_dipole = DipoleMoment(
+                        scf_dipole = DipoleMomentPerSystem(
                             name="scf_dipole",
                             value=hf[name]["scf_dipole"][()][0:conformers_per_record],
                             units=hf[name]["scf_dipole"].attrs["units"],
                         )
                         record_temp.add_property(scf_dipole)
-                        scf_quadrupole = QuadrupoleMoment(
+                        scf_quadrupole = QuadrupoleMomentPerSystem(
                             name="scf_quadrupole",
                             value=hf[name]["scf_quadrupole"][()][
                                 0:conformers_per_record
@@ -276,6 +287,21 @@ class SPICE1Curation(DatasetCuration):
                         )
                         record_temp.add_property(scf_quadrupole)
 
+                        mayer_indices = BondOrders(
+                            name="mayer_indices",
+                            value=hf[name]["mayer_indices"][()][
+                                0:conformers_per_record
+                            ],
+                        )
+                        record_temp.add_property(mayer_indices)
+
+                        wiberg_lowdin_indices = BondOrders(
+                            name="wiberg_lowdin_indices",
+                            value=hf[name]["wiberg_lowdin_indices"][()][
+                                0:conformers_per_record
+                            ],
+                        )
+                        record_temp.add_property(wiberg_lowdin_indices)
                         # check if the record contains only the elements we are interested in
                         # if this has been defined
                         add_to_record = True
@@ -326,9 +352,9 @@ class SPICE1Curation(DatasetCuration):
 
         Examples
         --------
-        >>> spice_2_data = SPICE2Curation(hdf5_file_name='spice_2_dataset.hdf5',
-        >>>                             local_cache_dir='~/datasets/spice_2_dataset')
-        >>> spice_2_data.process()
+        >>> spice_1_data = SPICE1Curation(hdf5_file_name='spice_1_dataset.hdf5',
+        >>>                             local_cache_dir='~/datasets/spice_1_dataset')
+        >>> spice_1_data.process()
 
         """
         if max_records is not None and total_conformers is not None:
@@ -370,7 +396,7 @@ class SPICE1Curation(DatasetCuration):
             total_conformers,
             self.atomic_numbers_to_limit,
         )
-
-        self.dataset.to_hdf5(
+        logger.info(f"writing file {self.hdf5_file_name} to {self.output_file_dir}")
+        self.write_hdf5_and_json_files(
             file_name=self.hdf5_file_name, file_path=self.output_file_dir
         )

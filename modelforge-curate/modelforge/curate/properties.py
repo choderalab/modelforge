@@ -641,17 +641,17 @@ class OctupoleMomentPerAtom(PropertyBaseModel):
 
     @model_validator(mode="after")
     def _check_octupole_moment_shape(self) -> Self:
-        if self.value.shape[1] != 3:
-            raise ValueError(
-                f"Shape of octupole moment should be [n_configs, 3, 3, 3], found {len(self.value.shape)}"
-            )
         if self.value.shape[2] != 3:
             raise ValueError(
-                f"Shape of octupole moment should be [n_configs, 3, 3, 3], found {len(self.value.shape)}"
+                f"Shape of octupole moment should be [n_configs, n_atoms, 3, 3, 3], found {len(self.value.shape)}"
             )
         if self.value.shape[3] != 3:
             raise ValueError(
-                f"Shape of octupole moment should be [n_configs, 3, 3, 3], found {len(self.value.shape)}"
+                f"Shape of octupole moment should be [n_configs, n_atoms, 3, 3, 3], found {len(self.value.shape)}"
+            )
+        if self.value.shape[4] != 3:
+            raise ValueError(
+                f"Shape of octupole moment should be [n_configs, n_atoms, 3, 3, 3], found {len(self.value.shape)}"
             )
         return self
 
@@ -749,20 +749,20 @@ class AtomicNumbers(PropertyBaseModel):
     property_type: PropertyType = PropertyType.atomic_numbers
 
 
-class BondIndices(PropertyBaseModel):
+class BondOrders(PropertyBaseModel):
     """
-    Class to define the bond indices of a record.
+    Class to define the bond orders of a record.
 
-    The bond indices must be a 3d array of shape (n_configs, n_atoms, n_atoms).
+    The bond orders must be a 3d array of shape (n_configs, n_atoms, n_atoms).
 
     Parameters
     ----------
-    name : str, default="bond_indices"
+    name : str, default="bond_orders"
         The name of the property
     value : np.ndarray
-        The array of bond indices
+        The array of bond orders
     units : unit.Unit, default=unit.dimensionless
-        The units of the bond indices
+        The units of the bond orders
     classification : PropertyClassification, default=PropertyClassification.per_atom
         The classification of the property
     property_type : PropertyType, default=PropertyType.dimensionless
@@ -770,17 +770,20 @@ class BondIndices(PropertyBaseModel):
 
     """
 
-    name: str = "bond_indices"
+    name: str = "bond_orders"
     value: NdArray
     units: unit.Unit = unit.dimensionless
-    classification: PropertyClassification = PropertyClassification.meta_data
-    property_type: PropertyType = PropertyType.meta_data
+    classification: PropertyClassification = PropertyClassification.per_atom
+    property_type: PropertyType = PropertyType.dimensionless
 
     @model_validator(mode="after")
-    def _check_bond_indices_shape(self) -> Self:
-
+    def _check_bond_order_shape(self) -> Self:
+        if len(self.value.shape) != 3:
+            raise ValueError(
+                f"Shape of bond orders should be length 3,, found {len(self.value.shape)}"
+            )
         if self.value.shape[1] != self.value.shape[2]:
             raise ValueError(
-                f"Shape of bond indices should be [n_configs, n_atoms, n_atoms], found {len(self.value.shape)}"
+                f"Shape of bond orders should be [n_configs, n_atoms, n_atoms], found {self.value.shape}"
             )
         return self

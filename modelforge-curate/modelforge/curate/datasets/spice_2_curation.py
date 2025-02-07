@@ -1,6 +1,20 @@
-from modelforge.curate.curate import *
+from modelforge.curate import Record, SourceDataset
 from modelforge.curate.datasets.curation_baseclass import DatasetCuration
-
+from modelforge.curate.properties import (
+    AtomicNumbers,
+    Positions,
+    Energies,
+    Forces,
+    PartialCharges,
+    TotalCharge,
+    MetaData,
+    DipoleMomentPerAtom,
+    DipoleMomentPerSystem,
+    QuadrupoleMomentPerAtom,
+    QuadrupoleMomentPerSystem,
+    OctupoleMomentPerAtom,
+    BondOrders,
+)
 from typing import Optional
 from loguru import logger
 from openff.units import unit
@@ -174,6 +188,8 @@ class SPICE2Curation(DatasetCuration):
                             value=hf[name]["atomic_numbers"][()].reshape(-1, 1),
                         )
                         record_temp.add_property(atomic_numbers)
+                        n_atoms = atomic_numbers.n_atoms
+
                         if max_conformers_per_record is not None:
                             conformers_per_record = min(
                                 conformers_per_record,
@@ -234,17 +250,19 @@ class SPICE2Curation(DatasetCuration):
                                 units=hf[name]["mbis_charges"].attrs["units"],
                             )
                             record_temp.add_property(mbis_charges)
+                        # mbis_dipoles, mbis_quadrupoles, mbis_octupoles are per_atom properties
+
                         if "mbis_dipoles" in keys_list:
-                            mbis_dipoles = DipoleMoment(
+                            mbis_dipoles = DipoleMomentPerAtom(
                                 name="mbis_dipoles",
-                                value=hf[name]["mbis_dipoles"][()].reshape(-1, 3)[
+                                value=hf[name]["mbis_dipoles"][()][
                                     0:conformers_per_record
                                 ],
                                 units=hf[name]["mbis_dipoles"].attrs["units"],
                             )
                             record_temp.add_property(mbis_dipoles)
                         if "mbis_quadrupoles" in keys_list:
-                            mbis_quadrupoles = QuadrupoleMoment(
+                            mbis_quadrupoles = QuadrupoleMomentPerAtom(
                                 name="mbis_quadrupoles",
                                 value=hf[name]["mbis_quadrupoles"][()][
                                     0:conformers_per_record
@@ -253,7 +271,7 @@ class SPICE2Curation(DatasetCuration):
                             )
                             record_temp.add_property(mbis_quadrupoles)
                         if "mbis_octupoles" in keys_list:
-                            mbis_octupoles = OctupoleMoment(
+                            mbis_octupoles = OctupoleMomentPerAtom(
                                 name="mbis_octupoles",
                                 value=hf[name]["mbis_octupoles"][()][
                                     0:conformers_per_record
@@ -261,13 +279,14 @@ class SPICE2Curation(DatasetCuration):
                                 units=hf[name]["mbis_octupoles"].attrs["units"],
                             )
                             record_temp.add_property(mbis_octupoles)
-                        scf_dipole = DipoleMoment(
+                        # scf dipole and scf quadrupole are per_system properties
+                        scf_dipole = DipoleMomentPerSystem(
                             name="scf_dipole",
                             value=hf[name]["scf_dipole"][()][0:conformers_per_record],
                             units=hf[name]["scf_dipole"].attrs["units"],
                         )
                         record_temp.add_property(scf_dipole)
-                        scf_quadrupole = QuadrupoleMoment(
+                        scf_quadrupole = QuadrupoleMomentPerSystem(
                             name="scf_quadrupole",
                             value=hf[name]["scf_quadrupole"][()][
                                 0:conformers_per_record
@@ -275,6 +294,22 @@ class SPICE2Curation(DatasetCuration):
                             units=hf[name]["scf_quadrupole"].attrs["units"],
                         )
                         record_temp.add_property(scf_quadrupole)
+
+                        mayer_indices = BondOrders(
+                            name="mayer_indices",
+                            value=hf[name]["mayer_indices"][()][
+                                0:conformers_per_record
+                            ],
+                        )
+                        record_temp.add_property(mayer_indices)
+
+                        wiberg_lowdin_indices = BondOrders(
+                            name="wiberg_lowdin_indices",
+                            value=hf[name]["wiberg_lowdin_indices"][()][
+                                0:conformers_per_record
+                            ],
+                        )
+                        record_temp.add_property(wiberg_lowdin_indices)
 
                         # check if the record contains only the elements we are interested in
                         # if this has been defined
@@ -371,6 +406,7 @@ class SPICE2Curation(DatasetCuration):
             self.atomic_numbers_to_limit,
         )
 
-        self.dataset.to_hdf5(
+        logger.info(f"writing file {self.hdf5_file_name} to {self.output_file_dir}")
+        self.write_hdf5_and_json_files(
             file_name=self.hdf5_file_name, file_path=self.output_file_dir
         )

@@ -293,6 +293,7 @@ class ANI2xCuration(DatasetCuration):
             total_conformers,
         )
 
-        self.dataset.to_hdf5(
-            file_path=self.output_file_dir, file_name=self.hdf5_file_name
+        logger.info(f"writing file {self.hdf5_file_name} to {self.output_file_dir}")
+        self.write_hdf5_and_json_files(
+            file_name=self.hdf5_file_name, file_path=self.output_file_dir
         )

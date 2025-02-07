@@ -3,12 +3,12 @@ from abc import ABC, abstractmethod
 from typing import Dict, List, Optional
 from loguru import logger
 from openff.units import unit
-from modelforge.curate.curate import (
+from modelforge.curate.properties import (
     AtomicNumbers,
     PartialCharges,
     Positions,
-    DipoleMoment,
-    DipoleMomentScalar,
+    DipoleMomentPerSystem,
+    DipoleMomentScalarPerSystem,
 )
 
 
@@ -78,10 +78,11 @@ class DatasetCuration(ABC):
         atomic_numbers: AtomicNumbers,
         partial_charges: PartialCharges,
         positions: Positions,
-        dipole_moment_scalar: Optional[DipoleMomentScalar] = None,
-    ) -> DipoleMoment:
+        dipole_moment_scalar: Optional[DipoleMomentScalarPerSystem] = None,
+    ) -> DipoleMomentPerSystem:
         """
-        Compute the dipole moment from the atomic numbers, partial charges, and positions, rescaling to give the same magnitude to match the
+        Compute the per-system  dipole moment from the atomic numbers, partial charges, and positions,
+        rescaling to give the same magnitude to match the
         magnitude of the dipole moment (i.e., scalar) if provided.
 
         Parameters
@@ -92,13 +93,13 @@ class DatasetCuration(ABC):
             partial charges of the atoms in the system
         positions: Positions
             positions of the atoms in the system
-        dipole_moment_scalar: Optional[DipoleMomentScalar]
+        dipole_moment_scalar: Optional[DipoleMomentScalarPerSystem], optional, default=None
             scalar dipole moment to rescale the computed dipole moment
 
         Returns
         -------
-            DipoleMoment
-                computed dipole moment
+            DipoleMomentPerSystem
+                computed per system dipole moment
         """
         from openff.units.elements import MASSES
         from openff.units import unit
@@ -142,7 +143,7 @@ class DatasetCuration(ABC):
 
             dipole_moment_list.append(dm_temp)
 
-        return DipoleMoment(
+        return DipoleMomentPerSystem(
             value=np.array(dipole_moment_list).reshape(-1, 3),
             units=positions.units * unit.elementary_charge,
         )

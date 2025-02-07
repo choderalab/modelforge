@@ -1,6 +1,15 @@
 from typing import List, Tuple, Dict, Optional
 
-from modelforge.curate.curate import *
+from modelforge.curate import Record, SourceDataset
+from modelforge.curate.properties import (
+    AtomicNumbers,
+    TotalCharge,
+    Energies,
+    Positions,
+    Forces,
+    DipoleMomentPerSystem,
+    MetaData,
+)
 from modelforge.curate.datasets.curation_baseclass import DatasetCuration
 from modelforge.utils.io import import_, check_import
 
@@ -416,7 +425,7 @@ class PhAlkEthOHCuration(DatasetCuration):
                             )
                             dataset.add_property(name, dft_total_force)
 
-                            scf_dipole = DipoleMoment(
+                            scf_dipole = DipoleMomentPerSystem(
                                 name="scf_dipole",
                                 value=np.array(
                                     properties["properties"]["scf dipole"]
@@ -424,7 +433,7 @@ class PhAlkEthOHCuration(DatasetCuration):
                                 units=unit.elementary_charge * unit.bohr,
                             )
                             dataset.add_property(name, scf_dipole)
-        dataset.validate()
+        dataset.validate_records()
         if total_conformers is not None or max_conformers_per_record is not None:
             conformers_count = 0
             dataset_restricted = SourceDataset("PhAlkEthOH_openff")

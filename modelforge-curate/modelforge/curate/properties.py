@@ -428,7 +428,7 @@ class DipoleMomentPerSystem(PropertyBaseModel):
 
     Parameters
     ----------
-    name : str, default="dipole_moment"
+    name : str, default="dipole_moment_per_system"
         The name of the property
     value : np.ndarray
         The array of dipole moments
@@ -465,7 +465,7 @@ class DipoleMomentScalarPerSystem(PropertyBaseModel):
 
     Parameters
     ----------
-    name : str, default="dipole_moment_scalar"
+    name : str, default="dipole_moment_scalar_per_system"
         The name of the property
     value : np.ndarray
         The array of scalar dipole moments
@@ -501,7 +501,7 @@ class QuadrupoleMomentPerSystem(PropertyBaseModel):
     The quadrupole moment must be a 2d array of shape (n_configs, 3, 3).
     Parameters
     ----------
-    name : str, default="quadrupole_moment"
+    name : str, default="quadrupole_moment_per_system"
         The name of the property
     value : np.ndarray
         The array of quadrupole moments
@@ -541,7 +541,7 @@ class DipoleMomentPerAtom(PropertyBaseModel):
 
     Parameters
     ----------
-    name : str, default="dipole_moment"
+    name : str, default="dipole_moment_per_atom"
         The name of the property
     value : np.ndarray
         The array of dipole moments
@@ -554,7 +554,7 @@ class DipoleMomentPerAtom(PropertyBaseModel):
 
     """
 
-    name: str = "dipole_moment"
+    name: str = "dipole_moment_per_atom"
     value: NdArray
     units: unit.Unit
     classification: PropertyClassification = PropertyClassification.per_atom
@@ -636,7 +636,7 @@ class OctupoleMomentPerAtom(PropertyBaseModel):
     name: str = "octupole_moment_per_atom"
     value: NdArray
     units: unit.Unit
-    classification: PropertyClassification = PropertyClassification.per_system
+    classification: PropertyClassification = PropertyClassification.per_atom
     property_type: PropertyType = PropertyType.octupole_moment
 
     @model_validator(mode="after")

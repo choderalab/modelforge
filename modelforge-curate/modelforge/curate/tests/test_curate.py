@@ -2,8 +2,9 @@ import pytest
 import numpy as np
 from openff.units import unit
 
-from modelforge.curate.curate import *
-from schnetpack.properties import dipole_moment, polarizability
+from modelforge.curate import Record, SourceDataset
+from modelforge.curate.units import GlobalUnitSystem
+from modelforge.curate.properties import *
 
 
 def test_source_dataset_init():
@@ -81,34 +82,99 @@ def test_initialize_properties():
     assert total_charge.name == "total_charge"
     assert total_charge.property_type == "charge"
 
-    dipole_moment = DipoleMoment(value=np.array([[0.1, 0.1, 0.1]]), units=unit.debye)
+    dipole_moment = DipoleMomentPerSystem(
+        value=np.array([[0.1, 0.1, 0.1]]), units=unit.debye
+    )
     assert dipole_moment.value.shape == (1, 3)
     assert dipole_moment.units == unit.debye
     assert dipole_moment.classification == "per_system"
-    assert dipole_moment.name == "dipole_moment"
+    assert dipole_moment.name == "dipole_moment_per_system"
     assert dipole_moment.property_type == "dipole_moment"
 
-    quadrupole_moment = QuadrupoleMoment(
+    quadrupole_moment = QuadrupoleMomentPerSystem(
         value=np.array([[[0.1, 0.1, 0.1], [0.1, 0.1, 0.1], [0.1, 0.1, 0.1]]]),
         units=unit.debye * unit.nanometer,
     )
     assert quadrupole_moment.value.shape == (1, 3, 3)
     assert quadrupole_moment.units == unit.debye * unit.nanometer
     assert quadrupole_moment.classification == "per_system"
-    assert quadrupole_moment.name == "quadrupole_moment"
+    assert quadrupole_moment.name == "quadrupole_moment_per_system"
     assert quadrupole_moment.property_type == "quadrupole_moment"
 
+    dipole_moment_scalar = DipoleMomentScalarPerSystem(
+        value=np.array([[0.1]]), units=unit.debye
+    )
+    assert dipole_moment_scalar.value.shape == (1, 1)
+    assert dipole_moment_scalar.units == unit.debye
+    assert dipole_moment_scalar.classification == "per_system"
+    assert dipole_moment_scalar.name == "dipole_moment_scalar_per_system"
+    assert dipole_moment_scalar.property_type == "dipole_moment"
+
+    dipole_moment_per_atom = DipoleMomentPerAtom(
+        value=np.array([[[0.1, 0.1, 0.1], [0.1, 0.1, 0.1]]]), units=unit.debye
+    )
+    assert dipole_moment_per_atom.value.shape == (1, 2, 3)
+    assert dipole_moment_per_atom.units == unit.debye
+    assert dipole_moment_per_atom.classification == "per_atom"
+    assert dipole_moment_per_atom.name == "dipole_moment_per_atom"
+    assert dipole_moment_per_atom.property_type == "dipole_moment"
+    assert dipole_moment_per_atom.n_atoms == 2
+    assert dipole_moment_per_atom.n_configs == 1
+
+    quadrupole_moment_per_atom = QuadrupoleMomentPerAtom(
+        value=np.array(
+            [
+                [
+                    [[0.1, 0.1, 0.1], [0.1, 0.1, 0.1], [0.1, 0.1, 0.1]],
+                    [[0.1, 0.1, 0.1], [0.1, 0.1, 0.1], [0.1, 0.1, 0.1]],
+                ]
+            ]
+        ),
+        units=unit.debye * unit.nanometer,
+    )
+    assert quadrupole_moment_per_atom.value.shape == (1, 2, 3, 3)
+    assert quadrupole_moment_per_atom.units == unit.debye * unit.nanometer
+    assert quadrupole_moment_per_atom.classification == "per_atom"
+    assert quadrupole_moment_per_atom.name == "quadrupole_moment_per_atom"
+    assert quadrupole_moment_per_atom.property_type == "quadrupole_moment"
+    assert quadrupole_moment_per_atom.n_atoms == 2
+    assert quadrupole_moment_per_atom.n_configs == 1
+
+    # octupole moment has value of shape (M, N, 3,3,3)
+    octupole_moment_per_atom = OctupoleMomentPerAtom(
+        value=np.array(
+            [
+                [
+                    [
+                        [[0.1, 0.1, 0.1], [0.1, 0.1, 0.1], [0.1, 0.1, 0.1]],
+                        [[0.1, 0.1, 0.1], [0.1, 0.1, 0.1], [0.1, 0.1, 0.1]],
+                        [[0.1, 0.1, 0.1], [0.1, 0.1, 0.1], [0.1, 0.1, 0.1]],
+                    ]
+                ]
+            ]
+        ),
+        units=unit.debye * unit.nanometer**2,
+    )
+
+    assert octupole_moment_per_atom.value.shape == (1, 1, 3, 3, 3)
+    assert octupole_moment_per_atom.units == unit.debye * unit.nanometer**2
+    assert octupole_moment_per_atom.classification == "per_atom"
+    assert octupole_moment_per_atom.name == "octupole_moment_per_atom"
+    assert octupole_moment_per_atom.property_type == "octupole_moment"
+    assert octupole_moment_per_atom.n_atoms == 1
+    assert octupole_moment_per_atom.n_configs == 1
+
     polarizability = Polarizability(
-        value=np.array([[[0.1, 0.1, 0.1], [0.1, 0.1, 0.1], [0.1, 0.1, 0.1]]]),
+        value=np.array([[0.1]]),
         units=unit.bohr**3,
     )
-    assert polarizability.value.shape == (1, 3, 3)
+    assert polarizability.value.shape == (1, 1)
     assert polarizability.units == unit.bohr**3
     assert polarizability.classification == "per_system"
     assert polarizability.name == "polarizability"
     assert polarizability.property_type == "polarizability"
 
-    base_prop = RecordProperty(
+    base_prop = PropertyBaseModel(
         name="test_prop",
         value=np.array([[[0.1, 0.1, 0.1], [0.1, 0.1, 0.1], [0.1, 0.1, 0.1]]]),
         units=unit.nanometer,
@@ -176,6 +242,8 @@ def test_add_properties_to_records_directly():
     assert record.n_atoms == 2
     assert record.n_configs == 1
     assert record.validate() == True
+    assert record._validate_n_atoms() == True
+    assert record._validate_n_configs() == True
 
     with pytest.raises(ValueError):
         record.add_property(property=positions)
@@ -228,6 +296,64 @@ def test_add_properties():
 
     with pytest.raises(ValueError):
         new_dataset.add_properties("mol1", [atomic_numbers])
+
+
+def test_slicing_properties():
+    record = Record(name="mol1")
+
+    positions = Positions(
+        value=[
+            [[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]],
+            [[3.0, 3.0, 3.0], [4.0, 4.0, 4.0]],
+            [[5.0, 5.0, 5.0], [6.0, 6.0, 6.0]],
+            [[7.0, 7.0, 7.0], [8.0, 8.0, 8.0]],
+        ],
+        units="nanometer",
+    )
+    energies = Energies(
+        value=np.array([[0.1], [0.2], [0.3], [0.4]]), units=unit.hartree
+    )
+    atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
+    meta_data = MetaData(name="smiles", value="[CH]")
+
+    record.add_property(property=atomic_numbers)
+    record.add_properties([positions, energies, meta_data])
+
+    sliced1 = record.slice_record(0, 1)
+
+    assert sliced1.n_configs == 1
+    assert sliced1.per_system["energies"].value == [[0.1]]
+
+
+def test_counting_records():
+    new_dataset = SourceDataset("test_dataset")
+
+    new_dataset.create_record("mol1")
+    new_dataset.create_record("mol2")
+    new_dataset.create_record("mol3")
+    new_dataset.create_record("mol4")
+
+    positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
+    energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
+    atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
+
+    new_dataset.add_properties("mol1", [positions, energies, atomic_numbers])
+    new_dataset.add_properties("mol2", [positions, energies, atomic_numbers])
+    new_dataset.add_properties("mol3", [positions, energies, atomic_numbers])
+
+    positions = Positions(
+        value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]], [[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]],
+        units="nanometer",
+    )
+    energies = Energies(value=np.array([[0.1], [0.2]]), units=unit.hartree)
+    atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
+
+    new_dataset.add_properties("mol4", [positions, energies, atomic_numbers])
+
+    assert new_dataset.total_records() == 4
+    assert new_dataset.total_configs() == 5
+
+    new_dataset.validate_records()
 
 
 def test_append_properties():
@@ -338,11 +464,21 @@ def test_write_hdf5(prep_temp_dir):
     meta_data = MetaData(name="smiles", value="[CH]")
     new_dataset.add_properties("mol3", [positions, energies, atomic_numbers, meta_data])
 
-    new_dataset.to_hdf5(file_path=str(prep_temp_dir), file_name="test_dataset.hdf5")
+    checksum = new_dataset.to_hdf5(
+        file_path=str(prep_temp_dir), file_name="test_dataset.hdf5"
+    )
+
+    new_dataset.summary_to_json(
+        file_path=str(prep_temp_dir),
+        file_name="test_dataset.json",
+        hdf5_checksum=checksum,
+        hdf5_file_name="test_dataset.hdf5",
+    )
 
     import os
 
     assert os.path.exists(str(prep_temp_dir / "test_dataset.hdf5")) == True
+    assert os.path.exists(str(prep_temp_dir / "test_dataset.json")) == True
 
     import h5py
 
@@ -391,6 +527,16 @@ def test_write_hdf5(prep_temp_dir):
         assert mol3["positions"].shape == (1, 2, 3)
         assert mol3["energies"].shape == (1, 1)
         assert mol3["smiles"][()].decode("utf-8") == "[CH]"
+
+    import json
+
+    with open(str(prep_temp_dir / "test_dataset.json"), "r") as f:
+        data = json.load(f)
+        assert data["dataset_name"] == "test_dataset"
+        assert data["total_records"] == new_dataset.total_records()
+        assert data["total_configurations"] == new_dataset.total_configs()
+        assert data["md5_checksum"] == checksum
+        assert data["filename"] == "test_dataset.hdf5"
 
 
 def test_unit_system():

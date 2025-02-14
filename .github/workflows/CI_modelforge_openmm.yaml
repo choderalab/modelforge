@@ -79,7 +79,7 @@ jobs:
         # conda setup requires this special shell
         run: |
           set -e
-          pytest -n ${{matrix.n_procs}} --dist loadgroup -v --cov=modelforge --cov-report=xml --color=yes --durations=50 modelforge-openmm/modelforge/openmm/tests/
+          pytest -n ${{matrix.n_procs}} --dist loadgroup -v --cov=modelforge-openmm --cov-report=xml --color=yes --durations=50 modelforge-openmm/modelforge/openmm/tests/
 
       - name: CodeCov
         uses: codecov/codecov-action@v4

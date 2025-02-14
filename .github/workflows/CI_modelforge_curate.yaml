@@ -81,7 +81,7 @@ jobs:
       - name: Run tests
         # conda setup requires this special shell
         run: |
-          pytest -n ${{matrix.n_procs}} --dist loadgroup -v --cov=modelforge --cov-report=xml --color=yes --durations=50 modelforge-curate/modelforge/curate/tests/
+          pytest -n ${{matrix.n_procs}} --dist loadgroup -v --cov=modelforge-curate --cov-report=xml --color=yes --durations=50 modelforge-curate/modelforge/curate/tests/
 
       - name: CodeCov
         uses: codecov/codecov-action@v4

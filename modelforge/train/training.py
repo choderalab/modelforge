@@ -1645,6 +1645,7 @@ class PotentialTrainer:
             regenerate_processed_cache=self.dataset_parameter.regenerate_processed_cache,
             properties_of_interest=self.dataset_parameter.properties_of_interest,
             properties_assignment=self.dataset_parameter.properties_assignment.model_dump(),
+            element_filter=self.dataset_parameter.element_filter,
         )
         dm.prepare_data()
         dm.setup()

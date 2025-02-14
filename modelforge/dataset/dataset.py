@@ -514,6 +514,8 @@ class HDF5Dataset(ABC):
             )
         from modelforge.utils.misc import OpenWithLock
 
+        log.debug(f"Reading data from {temp_hdf5_file}")
+        log.debug(f"element filter: {self.element_filter}")
         # h5py does file locking internally, but will exit immediately if the file is locked by another program
         # let us create a simple lockfile to prevent this, as OpenWithLock will just wait until the lockfile is unlocked
         # before proceeding

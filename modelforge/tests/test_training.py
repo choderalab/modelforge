@@ -358,6 +358,37 @@ def test_train_from_single_toml_file(prep_temp_dir):
     read_config_and_train(config_path, local_cache_dir=str(prep_temp_dir))
 
 
+def test_train_from_single_toml_file_element_filter(prep_temp_dir):
+    from importlib import resources
+
+    from modelforge.tests import data
+    from modelforge.train.training import read_config_and_train
+
+    config_path = resources.files(data) / f"config.toml"
+
+    from modelforge.potential.potential import NeuralNetworkPotentialFactory
+    from modelforge.train.training import read_config
+
+    (
+        training_parameter,
+        dataset_parameter,
+        potential_parameter,
+        runtime_parameter,
+    ) = read_config(
+        condensed_config_path=config_path,
+    )
+
+    trainer = NeuralNetworkPotentialFactory.generate_trainer(
+        potential_parameter=potential_parameter,
+        training_parameter=training_parameter,
+        dataset_parameter=dataset_parameter,
+        runtime_parameter=runtime_parameter,
+    )
+    import numpy as np
+
+    assert np.all(np.array(trainer.datamodule.element_filter) == np.array([[6, 1]]))
+
+
 def test_error_calculation(single_batch_with_batchsize, prep_temp_dir):
     # test the different Loss classes
     from modelforge.train.losses import (

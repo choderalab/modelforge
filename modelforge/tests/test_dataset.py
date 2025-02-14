@@ -1344,3 +1344,25 @@ def test_element_filter(dataset_name, prep_temp_dir):
         data._satisfy_element_filter(atomic_number)
     except TypeError as e:
         assert e.args[0] == "Please use atomic number to refer to element types!"
+
+
+def test_element_filter_setting(prep_temp_dir):
+    local_cache_dir = str(prep_temp_dir) + "/data_test"
+
+    # test filter setting
+    data = _ImplementedDatasets.get_dataset_class(
+        "QM9",
+    )(
+        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        element_filter=[(1, 6)],
+    )
+    assert data.element_filter == [(1, 6)]
+
+    data = _ImplementedDatasets.get_dataset_class(
+        "QM9",
+    )(
+        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+    )
+    assert data.element_filter is None

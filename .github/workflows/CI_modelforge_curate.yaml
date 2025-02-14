@@ -1,4 +1,4 @@
-name: CI
+name: CI_modelforge_curate
 
 on:
   # GitHub has started calling new repo's first branch "main" https://github.com/github/renaming
@@ -73,6 +73,8 @@ jobs:
         # conda setup requires this special shell
         run: |
           python -m pip install . --no-deps
+          python -m pip install -e ./modelforge-curate --no-deps
+
           micromamba list
 
 

@@ -45,10 +45,10 @@ class Record:
             output_string += f"* n_configs: {self.n_configs}\n"
         output_string += "* atomic_numbers:\n"
         output_string += f" -  {self.atomic_numbers}\n"
-        output_string += f"* per-atom properties ({list(self.per_atom.keys())}):\n"
+        output_string += f"* per-atom properties: ({list(self.per_atom.keys())}):\n"
         for key, value in self.per_atom.items():
             output_string += f" -  {value}\n"
-        output_string += f"* per-system properties ({list(self.per_system.keys())}):\n"
+        output_string += f"* per-system properties: ({list(self.per_system.keys())}):\n"
         for key, value in self.per_system.items():
             output_string += f" -  {value}\n"
         output_string += f"* meta_data: ({list(self.meta_data.keys())})\n"

@@ -126,11 +126,11 @@ class PropertyBaseModel(BaseModel):
         if self.classification == PropertyClassification.atomic_numbers:
             if len(self.value.shape) != 2:
                 raise ValueError(
-                    f"Shape of '{self.name}' should be [n_atoms,1], found {len(self.value.shape)}"
+                    f"Shape of '{self.name}' should be [n_atoms,1], found {self.value.shape}"
                 )
             if self.value.shape[1] != 1:
                 raise ValueError(
-                    f"Shape of '{self.name}' should be [n_atoms,1], found {len(self.value.shape)}"
+                    f"Shape of '{self.name}' should be [n_atoms,1], found {self.value.shape}"
                 )
         elif self.classification == PropertyClassification.per_system:
             # shape of a per_system property should be 2d for most properties, but it is possible to have a 3d shape if the property is a tensor.
@@ -216,11 +216,11 @@ class Positions(PropertyBaseModel):
         # but we know that positions must be 3d.
         if len(self.value.shape) != 3:
             raise ValueError(
-                f"Shape of position should be [n_configs, n_atoms, 3], found {len(self.value.shape)}"
+                f"Shape of position should be [n_configs, n_atoms, 3], found {self.value.shape}"
             )
         if self.value.shape[2] != 3:
             raise ValueError(
-                f"Shape of position should be [n_configs, n_atoms, 3], found {len(self.value.shape)}"
+                f"Shape of position should be [n_configs, n_atoms, 3], found {self.value.shape}"
             )
         return self
 
@@ -260,11 +260,11 @@ class Energies(PropertyBaseModel):
         # but energies is a special case that should always be 2.
         if len(self.value.shape) != 2:
             raise ValueError(
-                f"Shape of energy should be [n_configs, 1], found {len(self.value.shape)}"
+                f"Shape of energy should be [n_configs, 1], found {self.value.shape}"
             )
         if self.value.shape[1] != 1:
             raise ValueError(
-                f"Shape of energy should be [n_configs, 1], found {len(self.value.shape)}"
+                f"Shape of energy should be [n_configs, 1], found {self.value.shape}"
             )
         return self
 
@@ -301,11 +301,11 @@ class Forces(PropertyBaseModel):
     def _check_force_shape(self) -> Self:
         if len(self.value.shape) != 3:
             raise ValueError(
-                f"Shape of force should be [n_configs, n_atoms, 3], found {len(self.value.shape)}"
+                f"Shape of force should be [n_configs, n_atoms, 3], found {self.value.shape}"
             )
         if self.value.shape[2] != 3:
             raise ValueError(
-                f"Shape of force should be [n_configs, n_atoms, 3], found {len(self.value.shape)}"
+                f"Shape of force should be [n_configs, n_atoms, 3], found {self.value.shape}"
             )
         return self
 
@@ -342,7 +342,7 @@ class PartialCharges(PropertyBaseModel):
     def _check_charge_shape(self) -> Self:
         if self.value.shape[2] != 1:
             raise ValueError(
-                f"Shape of charge should be [n_configs, n_atoms, 1], found {len(self.value.shape)}"
+                f"Shape of charge should be [n_configs, n_atoms, 1], found {self.value.shape}"
             )
         return self
 
@@ -419,7 +419,7 @@ class SpinMultiplicities(PropertyBaseModel):
     def _check_spin_multiplicity_shape(self) -> Self:
         if self.value.shape[1] != 1:
             raise ValueError(
-                f"Shape of spin multiplicities should be [n_configs, 1], found {len(self.value.shape)}"
+                f"Shape of spin multiplicities should be [n_configs, 1], found {self.value.shape}"
             )
         return self
 
@@ -456,7 +456,7 @@ class DipoleMomentPerSystem(PropertyBaseModel):
     def _check_dipole_moment_shape(self) -> Self:
         if self.value.shape[1] != 3:
             raise ValueError(
-                f"Shape of dipole moment should be [n_configs, 3], found {len(self.value.shape)}"
+                f"Shape of dipole moment should be [n_configs, 3], found {self.value.shape}"
             )
         return self
 
@@ -493,7 +493,7 @@ class DipoleMomentScalarPerSystem(PropertyBaseModel):
     def _check_dipole_moment_shape(self) -> Self:
         if self.value.shape[1] != 1:
             raise ValueError(
-                f"Shape of scalar dipole moment should be [n_configs, 1], found {len(self.value.shape)}"
+                f"Shape of scalar dipole moment should be [n_configs, 1], found {self.value.shape}"
             )
         return self
 
@@ -528,11 +528,11 @@ class QuadrupoleMomentPerSystem(PropertyBaseModel):
     def _check_quadrupole_moment_shape(self) -> Self:
         if self.value.shape[1] != 3:
             raise ValueError(
-                f"Shape of quadrupole moment should be [n_configs, 3, 3], found {len(self.value.shape)}"
+                f"Shape of quadrupole moment should be [n_configs, 3, 3], found {self.value.shape}"
             )
         if self.value.shape[2] != 3:
             raise ValueError(
-                f"Shape of quadrupole moment should be [n_configs, 3, 3], found {len(self.value.shape)}"
+                f"Shape of quadrupole moment should be [n_configs, 3, 3], found {self.value.shape}"
             )
         return self
 
@@ -569,11 +569,11 @@ class DipoleMomentPerAtom(PropertyBaseModel):
     def _check_dipole_moment_shape(self) -> Self:
         if len(self.value.shape) != 3:
             raise ValueError(
-                f"Shape of dipole moment should be [n_configs, n_atoms, 3], found {len(self.value.shape)}"
+                f"Shape of dipole moment should be [n_configs, n_atoms, 3], found {self.value.shape}"
             )
         if self.value.shape[2] != 3:
             raise ValueError(
-                f"Shape of dipole moment should be [n_configs, n_atoms, 3], found {len(self.value.shape)}"
+                f"Shape of dipole moment should be [n_configs, n_atoms, 3], found {self.value.shape}"
             )
         return self
 
@@ -609,11 +609,11 @@ class QuadrupoleMomentPerAtom(PropertyBaseModel):
     def _check_quadrupole_moment_shape(self) -> Self:
         if self.value.shape[2] != 3:
             raise ValueError(
-                f"Shape of quadrupole moment should be [n_configs, n_atoms, 3, 3], found {len(self.value.shape)}"
+                f"Shape of quadrupole moment should be [n_configs, n_atoms, 3, 3], found {self.value.shape}"
             )
         if self.value.shape[3] != 3:
             raise ValueError(
-                f"Shape of quadrupole moment should be [n_configs, n_atoms, 3, 3], found {len(self.value.shape)}"
+                f"Shape of quadrupole moment should be [n_configs, n_atoms, 3, 3], found {self.value.shape}"
             )
         return self
 
@@ -647,15 +647,15 @@ class OctupoleMomentPerAtom(PropertyBaseModel):
     def _check_octupole_moment_shape(self) -> Self:
         if self.value.shape[2] != 3:
             raise ValueError(
-                f"Shape of octupole moment should be [n_configs, n_atoms, 3, 3, 3], found {len(self.value.shape)}"
+                f"Shape of octupole moment should be [n_configs, n_atoms, 3, 3, 3], found {self.value.shape}"
             )
         if self.value.shape[3] != 3:
             raise ValueError(
-                f"Shape of octupole moment should be [n_configs, n_atoms, 3, 3, 3], found {len(self.value.shape)}"
+                f"Shape of octupole moment should be [n_configs, n_atoms, 3, 3, 3], found {self.value.shape}"
             )
         if self.value.shape[4] != 3:
             raise ValueError(
-                f"Shape of octupole moment should be [n_configs, n_atoms, 3, 3, 3], found {len(self.value.shape)}"
+                f"Shape of octupole moment should be [n_configs, n_atoms, 3, 3, 3], found {self.value.shape}"
             )
         return self
 

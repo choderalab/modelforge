@@ -378,7 +378,11 @@ class TotalCharge(PropertyBaseModel):
     def _check_charge_shape(self) -> Self:
         if self.value.shape[1] != 1:
             raise ValueError(
-                f"Shape of charge should be [n_configs, 1], found {len(self.value.shape)}"
+                f"Shape of charge should be [n_configs, 1], found {self.value.shape}"
+            )
+        if len(self.value.shape) != 2:
+            raise ValueError(
+                f"Shape of charge should be 2d, found {len(self.value.shape)}"
             )
         return self
 
@@ -688,7 +692,11 @@ class Polarizability(PropertyBaseModel):
     def _check_polarizability_shape(self) -> Self:
         if self.value.shape[1] != 1:
             raise ValueError(
-                f"Shape of polarizability should be [n_configs, 1], found {len(self.value.shape)}"
+                f"Shape of polarizability should be [n_configs, 1], found {self.value.shape}"
+            )
+        if len(self.value.shape) != 2:
+            raise ValueError(
+                f"Shape of polarizability should be 2d, found {len(self.value.shape)}"
             )
         return self
 

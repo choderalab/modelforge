@@ -36,6 +36,10 @@ def test_initialize_positions():
         positions = Positions(
             value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units=unit.hartree
         )
+    with pytest.raises(ValueError):
+        positions = Positions(
+            value=[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]], units=unit.kilojoule_per_mole
+        )
 
 
 def test_initialize_energies():
@@ -62,6 +66,9 @@ def test_initialize_energies():
     # wrong shape
     with pytest.raises(ValueError):
         energies = Energies(value=np.array([[0.1, 0.3]]), units=unit.hartree)
+
+    with pytest.raises(ValueError):
+        energies = Energies(value=np.array([[[0.1]]]), units=unit.hartree)
 
 
 def test_initialize_atomic_numbers():

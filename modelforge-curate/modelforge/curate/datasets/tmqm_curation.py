@@ -348,14 +348,14 @@ class tmQMCuration(DatasetCuration):
 
                     record_temp = dataset.get_record(record_name)
 
-                    dipole_moment_computed_scaled = self._compute_dipole_moment(
+                    dipole_moment_computed_scaled = self.compute_dipole_moment(
                         atomic_numbers=record_temp.atomic_numbers,
                         partial_charges=record_temp.per_atom["partial_charges"],
                         positions=record_temp.per_atom["positions"],
                         dipole_moment_scalar=dipole_moment_magnitude,
                     )
                     dipole_moment_computed_scaled.name = "dipole_moment_computed_scaled"
-                    dipole_moment_computed = self._compute_dipole_moment(
+                    dipole_moment_computed = self.compute_dipole_moment(
                         atomic_numbers=record_temp.atomic_numbers,
                         partial_charges=record_temp.per_atom["partial_charges"],
                         positions=record_temp.per_atom["positions"],

@@ -279,7 +279,7 @@ class QM9Curation(DatasetCuration):
                 units="debye",
             )
 
-            dipole_moment = self._compute_dipole_moment(
+            dipole_moment = self.compute_dipole_moment(
                 atomic_numbers=atomic_numbers,
                 partial_charges=partial_charges,
                 positions=positions,

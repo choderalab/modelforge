@@ -24,10 +24,14 @@ class tmQMCuration(DatasetCuration):
     """
     Routines to fetch and process the transition metal quantum mechanics (tmQM) dataset into a curated hdf5 file.
 
-    The tmQM dataset contains the geometries and properties of 86,665 mononuclear complexes extracted from the
+    The tmQM dataset contains the geometries and properties of 108,541  mononuclear complexes extracted from the
     Cambridge Structural Database, including Werner, bioinorganic, and organometallic complexes based on a large
     variety of organic ligands and 30 transition metals (the 3d, 4d, and 5d from groups 3 to 12).
     All complexes are closed-shell, with a formal charge in the range {+1, 0, −1}e
+
+    Note the original version of the dataset (marked old in the repo and described in the original paper)
+    contains 86,665 complexes. The new version of the dataset contains 108,541 complexes by running the same criteria
+    on a newer version of the CSD. The new version of the dataset is the one used in this curation.
 
     Citation:
 
@@ -46,11 +50,8 @@ class tmQMCuration(DatasetCuration):
         Name of the hdf5 file that will be generated.
     output_file_dir: str, optional, default='./'
         Location to write the output hdf5 file.
-    local_cache_dir: str, optional, default='./qm9_datafiles'
+    local_cache_dir: str, optional, default='./'
         Location to save downloaded dataset.
-    convert_units: bool, optional, default=True
-        Convert from [e.g., angstrom, bohr, hartree] (i.e., source units)
-        to [nanometer, kJ/mol] (i.e., target units)
 
     Examples
     --------
@@ -442,7 +443,7 @@ class tmQMCuration(DatasetCuration):
             If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
             Can be used in conjunction with max_records and max_conformers_per_record.
 
-        Note for qm9, only a single conformer is present per record, so max_records and total_conformers behave the same way,
+        Note for tmQM, only a single conformer is present per record, so max_records and total_conformers behave the same way,
         and max_conformers_per_record does not alter the behavior (i.e., it is always 1).
 
         Examples

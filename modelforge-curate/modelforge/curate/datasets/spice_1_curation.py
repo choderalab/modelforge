@@ -47,7 +47,7 @@ class SPICE1Curation(DatasetCuration):
         name of the hdf5 file generated for the SPICE dataset
     output_file_dir: str, optional, default='./'
         Path to write the output hdf5 files.
-    local_cache_dir: str, optional, default='./spice_dataset'
+    local_cache_dir: str, optional, default='./'
         Location to save downloaded dataset.
 
     Examples

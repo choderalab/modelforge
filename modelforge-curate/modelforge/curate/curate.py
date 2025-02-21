@@ -593,6 +593,82 @@ class SourceDataset:
 
         return self.records[record_name].slice_record(min=min, max=max)
 
+    def subset_dataset_max_records(self, max_records: int) -> Self:
+        """
+        Subset the dataset to only include a certain number of records
+
+        This will retrieve the first max_records records in the dataset.
+
+        Parameters
+        ----------
+        max_records: int
+            Maximum number of records to include in the subset.
+
+        Returns
+        -------
+            SourceDataset: A copy of the subset of the dataset.
+        """
+
+        new_dataset = SourceDataset(
+            self.dataset_name, append_property=self.append_property
+        )
+
+        for record_name in list(self.records.keys())[0:max_records]:
+            record = self.get_record(record_name)
+            new_dataset.add_record(record)
+
+        return new_dataset
+
+    def subset_dataset_total_conformers(
+        self, total_conformers: int, max_conformers_per_record: Optional[int] = None
+    ) -> Self:
+        """
+        Subset the dataset to only include a certain number of conformers.
+
+        Parameters
+        ----------
+        total_conformers: int
+            Total number of conformers to include in the subset.
+        max_conformers_per_record: Optional[int], default=None
+            Maximum number of conformers to include per record. If None, all conformers in a record will be included.
+
+        Returns
+        -------
+            SourceDataset: A copy of the subset of the dataset.
+        """
+        new_dataset = SourceDataset(
+            self.dataset_name, append_property=self.append_property
+        )
+
+        total_conformers_to_add = total_conformers
+
+        for record_name in self.records.keys():
+
+            record = self.get_record(record_name)
+            n_configs = record.n_configs
+
+            # we set a max number we want per record,
+            # we can set it here
+            if max_conformers_per_record is not None:
+                n_configs_to_add = max_conformers_per_record
+                # if we have fewer than the max, just set to n_configs
+                if n_configs < max_conformers_per_record:
+                    n_configs_to_add = n_configs
+                # now check to see if the n_configs_to_add is more than what we still need to hit max conformers
+                if n_configs_to_add > total_conformers_to_add:
+                    n_configs_to_add = total_conformers_to_add
+
+            else:
+                n_configs_to_add = n_configs
+                if n_configs_to_add > total_conformers_to_add:
+                    n_configs_to_add = total_conformers_to_add
+
+            record = record.slice_record(0, n_configs_to_add)
+            new_dataset.add_record(record)
+            total_conformers_to_add -= n_configs_to_add
+            if total_conformers_to_add == 0:
+                return new_dataset
+
     def validate_record(self, record_name: str):
         """
         Validate a record to ensure that the number of atoms and configurations are consistent across all properties.

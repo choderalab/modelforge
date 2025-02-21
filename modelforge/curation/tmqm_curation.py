@@ -33,11 +33,8 @@ class tmQMCuration(DatasetCuration):
         Name of the hdf5 file that will be generated.
     output_file_dir: str, optional, default='./'
         Location to write the output hdf5 file.
-    local_cache_dir: str, optional, default='./qm9_datafiles'
+    local_cache_dir: str, optional, default='./'
         Location to save downloaded dataset.
-    convert_units: bool, optional, default=True
-        Convert from [e.g., angstrom, bohr, hartree] (i.e., source units)
-        to [nanometer, kJ/mol] (i.e., target units)
 
     Examples
     --------

@@ -43,11 +43,9 @@ class ANI1xCuration(DatasetCuration):
         name of the hdf5 file generated for the ANI-1x dataset
     output_file_dir: str, optional, default='./'
         Path to write the output hdf5 files.
-    local_cache_dir: str, optional, default='./AN1_dataset'
+    local_cache_dir: str, optional, default='./'
         Location to save downloaded dataset.
-    convert_units: bool, optional, default=True
-        Convert from [e.g., angstrom, bohr, hartree] (i.e., source units)
-        to [nanometer, kJ/mol] (i.e., target units)
+
 
     Examples
     --------

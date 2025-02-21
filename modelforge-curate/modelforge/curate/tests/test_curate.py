@@ -567,3 +567,71 @@ def test_dataset_validation():
     new_dataset.add_property("mol2", energies)
     assert new_dataset.validate_record("mol2") == True
     assert new_dataset.validate_records() == True
+
+
+def test_dataset_max_records():
+    # Test to make sure that if we subset the dataset with max_records we get the correct number of records
+
+    ds = SourceDataset("test_dataset")
+    positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
+    energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
+    atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
+
+    for i in range(10):
+        ds.create_record(f"mol{i}")
+        ds.add_properties(f"mol{i}", [positions, energies, atomic_numbers])
+
+    ds_subset = ds.subset_dataset_max_records(5)
+
+    assert ds_subset.total_records() == 5
+    ds_subset = ds.subset_dataset_max_records(2)
+    assert ds_subset.total_records() == 2
+
+
+def test_dataset_total_conformers():
+    ds = SourceDataset("test_dataset")
+    positions = Positions(
+        value=[
+            [[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]],
+            [[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]],
+            [[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]],
+            [[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]],
+            [[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]],
+        ],
+        units="nanometer",
+    )
+    energies = Energies(
+        value=np.array([[0.1], [0.2], [0.3], [0.4], [0.5]]), units=unit.hartree
+    )
+    atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
+
+    for i in range(10):
+        ds.create_record(f"mol{i}")
+        ds.add_properties(f"mol{i}", [positions, energies, atomic_numbers])
+
+    assert ds.total_configs() == 50
+    assert ds.total_records() == 10
+
+    ds_subset = ds.subset_dataset_max_records(5)
+    assert ds_subset.total_configs() == 25
+    assert ds_subset.total_records() == 5
+
+    ds_subset = ds.subset_dataset_total_conformers(20)
+    assert ds_subset.total_configs() == 20
+    assert ds_subset.total_records() == 4
+
+    ds_subset = ds.subset_dataset_total_conformers(20, max_conformers_per_record=2)
+    assert ds_subset.total_configs() == 20
+    assert ds_subset.total_records() == 10
+
+    ds_subset = ds.subset_dataset_total_conformers(20, max_conformers_per_record=6)
+    assert ds_subset.total_configs() == 20
+    assert ds_subset.total_records() == 4
+
+    ds_subset = ds.subset_dataset_total_conformers(11, max_conformers_per_record=4)
+    assert ds_subset.total_configs() == 11
+    assert ds_subset.total_records() == 3
+
+    ds_subset = ds.subset_dataset_total_conformers(11, max_conformers_per_record=5)
+    assert ds_subset.total_configs() == 11
+    assert ds_subset.total_records() == 3

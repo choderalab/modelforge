@@ -145,9 +145,6 @@ class tmQMCuration(DatasetCuration):
     def _process_downloaded(
         self,
         local_path_dir: str,
-        max_records: Optional[int] = None,
-        max_conformers_per_record: Optional[int] = None,
-        total_conformers: Optional[int] = None,
         xyz_files: List[str] = None,
         q_files: List[str] = None,
         BO_files: List[str] = None,
@@ -159,16 +156,7 @@ class tmQMCuration(DatasetCuration):
         Parameters
         ----------
         local_path_dir: str, required
-            Path to the directory that contains the tar.bz2 file.
-        max_records: int, optional, default=None
-            If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
-            Can be used in conjunction with umax_conformers_per_record and total_conformers.
-        max_conformers_per_record: int, optional, default=None
-            If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
-            Can be used in conjunction with max_records and total_conformers.
-        total_conformers: int, optional, default=None
-            If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
-            Can be used in conjunction with max_records and max_conformers_per_record.
+            Path to the directory that contains the downloaded dataset.
         xyz_files: List[str], optional, default=None
             List of xyz files in the directory.
         q_files: List[str], optional, default=None
@@ -403,27 +391,11 @@ class tmQMCuration(DatasetCuration):
                     )
                     line_count += 1
 
-        if max_records is not None:
-            n_max = max_records
-        elif total_conformers is not None:
-            n_max = total_conformers
-        else:
-            return dataset
-
-        dataset_trimmed = SourceDataset("tmqm")
-        keys = list(dataset.records.keys())
-        for key in keys[0:n_max]:
-            record = dataset.get_record(record_name=key)
-            dataset_trimmed.add_record(record)
-
-        return dataset_trimmed
+        return dataset
 
     def process(
         self,
         force_download: bool = False,
-        max_records: Optional[int] = None,
-        max_conformers_per_record: Optional[int] = None,
-        total_conformers: Optional[int] = None,
     ) -> None:
         """
         Downloads the dataset, extracts relevant information, and writes an hdf5 file.
@@ -433,18 +405,6 @@ class tmQMCuration(DatasetCuration):
         force_download: bool, optional, default=False
             If the raw data_file is present in the local_cache_dir, the local copy will be used.
             If True, this will force the software to download the data again, even if present.
-        max_records: int, optional, default=None
-            If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
-            Can be used in conjunction with max_conformers_per_record and total_conformers.
-        max_conformers_per_record: int, optional, default=None
-            If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
-            Can be used in conjunction with max_records and total_conformers.
-        total_conformers: int, optional, default=None
-            If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
-            Can be used in conjunction with max_records and max_conformers_per_record.
-
-        Note for tmQM, only a single conformer is present per record, so max_records and total_conformers behave the same way,
-        and max_conformers_per_record does not alter the behavior (i.e., it is always 1).
 
         Examples
         --------
@@ -452,10 +412,6 @@ class tmQMCuration(DatasetCuration):
         >>> tmQM_data.process()
 
         """
-        if max_records is not None and total_conformers is not None:
-            raise ValueError(
-                "max_records and total_conformers cannot be set at the same time."
-            )
 
         from modelforge.utils.remote import download_from_url
 
@@ -519,16 +475,8 @@ class tmQMCuration(DatasetCuration):
 
         self.dataset = self._process_downloaded(
             f"{self.local_cache_dir}/tmqm_files/{self.extracted_filepath}/",
-            max_records,
-            max_conformers_per_record,
-            total_conformers,
             xyz_files,
             q_file,
             BO_files,
             csv_file,
-        )
-
-        logger.info(f"writing file {self.hdf5_file_name} to {self.output_file_dir}")
-        self.write_hdf5_and_json_files(
-            file_name=self.hdf5_file_name, file_path=self.output_file_dir
         )

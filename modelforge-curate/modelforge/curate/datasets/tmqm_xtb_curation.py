@@ -122,9 +122,6 @@ class tmQMXTBCuration(DatasetCuration):
         self,
         local_path_dir: str,
         hdf5_file_name: str,
-        max_records: Optional[int] = None,
-        max_conformers_per_record: Optional[int] = None,
-        total_conformers: Optional[int] = None,
     ):
         """
         Processes a downloaded dataset: extracts relevant information into a list of dicts.
@@ -135,15 +132,6 @@ class tmQMXTBCuration(DatasetCuration):
             Path to the directory that contains the .hd5f file.
         hdf5_file_name: str, required
             Name of the hdf5 file that will be read
-        max_records: int, optional, default=None
-            If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
-            Can be used in conjunction with umax_conformers_per_record and total_conformers.
-        max_conformers_per_record: int, optional, default=None
-            If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
-            Can be used in conjunction with max_records and total_conformers.
-        total_conformers: int, optional, default=None
-            If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
-            Can be used in conjunction with max_records and max_conformers_per_record.
 
 
 
@@ -222,25 +210,11 @@ class tmQMXTBCuration(DatasetCuration):
                         value=f[key]["stoichiometry"][()],
                     )
 
-        if total_conformers is not None:
-            dataset_trimmed  = dataset.subset_dataset_total_conformers(total_conformers, max_conformers_per_record)
-            return dataset_trimmed
-        elif max_records is not None:
-
-        dataset_trimmed = SourceDataset("tmqm")
-        keys = list(dataset.records.keys())
-        for key in keys[0:n_max]:
-            record = dataset.get_record(record_name=key)
-            dataset_trimmed.add_record(record)
-
-        return dataset_trimmed
+            return dataset
 
     def process(
         self,
         force_download: bool = False,
-        max_records: Optional[int] = None,
-        max_conformers_per_record: Optional[int] = None,
-        total_conformers: Optional[int] = None,
     ) -> None:
         """
         Downloads the dataset, extracts relevant information, and writes an hdf5 file.
@@ -250,18 +224,8 @@ class tmQMXTBCuration(DatasetCuration):
         force_download: bool, optional, default=False
             If the raw data_file is present in the local_cache_dir, the local copy will be used.
             If True, this will force the software to download the data again, even if present.
-        max_records: int, optional, default=None
-            If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
-            Can be used in conjunction with max_conformers_per_record and total_conformers.
-        max_conformers_per_record: int, optional, default=None
-            If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
-            Can be used in conjunction with max_records and total_conformers.
-        total_conformers: int, optional, default=None
-            If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
-            Can be used in conjunction with max_records and max_conformers_per_record.
 
-        Note for qm9, only a single conformer is present per record, so max_records and total_conformers behave the same way,
-        and max_conformers_per_record does not alter the behavior (i.e., it is always 1).
+
 
         Examples
         --------
@@ -298,19 +262,7 @@ class tmQMXTBCuration(DatasetCuration):
             file_name=self.dataset_filename,
             output_path_dir=f"{self.local_cache_dir}",
         )
-
-        # self.dataset = self._process_downloaded(
-        #     f"{self.local_cache_dir}/tmqm_files/{self.extracted_filepath}/",
-        #     max_records,
-        #     max_conformers_per_record,
-        #     total_conformers,
-        #     xyz_files,
-        #     q_file,
-        #     BO_files,
-        #     csv_file,
-        # )
-        #
-        # logger.info(f"writing file {self.hdf5_file_name} to {self.output_file_dir}")
-        # self.write_hdf5_and_json_files(
-        #     file_name=self.hdf5_file_name, file_path=self.output_file_dir
-        # )
+        unzipped_file_name = self.dataset_filename.replace(".gz", "")
+        self.dataset = self._process_downloaded(
+            f"{self.local_cache_dir}", unzipped_file_name
+        )

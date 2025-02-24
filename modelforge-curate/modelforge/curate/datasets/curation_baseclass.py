@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 import numpy as np
 from loguru import logger
 from openff.units import unit
+from modelforge.curate import SourceDataset
 from modelforge.curate.properties import (
     AtomicNumbers,
     PartialCharges,
@@ -21,8 +22,6 @@ class DatasetCuration(ABC):
 
     def __init__(
         self,
-        hdf5_file_name: str,
-        output_file_dir: Optional[str] = "./",
         local_cache_dir: Optional[str] = "./datasets_cache",
         version_select: str = "latest",
     ):
@@ -31,10 +30,6 @@ class DatasetCuration(ABC):
 
         Parameters
         ----------
-        hdf5_file_name: str, required
-            Name of the hdf5 file that will be generated.
-        output_file_dir: str, optional, default='./'
-            Location to write the output hdf5 file.
         local_cache_dir: str, optional, default='./qm9_datafiles'
             Location to save downloaded dataset.
         version_select: str, optional, default='latest'
@@ -43,8 +38,6 @@ class DatasetCuration(ABC):
         """
         import os
 
-        self.hdf5_file_name = hdf5_file_name
-        self.output_file_dir = output_file_dir
         # make sure we can handle a path with a ~ in it
         self.local_cache_dir = os.path.expanduser(local_cache_dir)
         self.version_select = version_select
@@ -197,19 +190,88 @@ class DatasetCuration(ABC):
             units=positions.units * unit.elementary_charge,
         )
 
-    def write_hdf5_and_json_files(self, file_name: str, file_path: str):
+    def _write_hdf5_and_json_files(
+        self, dataset: SourceDataset, file_name: str, file_path: str
+    ):
         """
         Write the dataset to an hdf5 file and a json file.
         """
         # save out the dataset to hdf5
-        checksum = self.dataset.to_hdf5(file_name=file_name, file_path=file_path)
+        checksum = dataset.to_hdf5(file_name=file_name, file_path=file_path)
         # chop off .hdf5 extension and add .json
         json_file_name = file_name.replace(".hdf5", ".json")
 
         # save a summary to json
-        self.dataset.summary_to_json(
+        dataset.summary_to_json(
             file_path=file_path,
             file_name=json_file_name,
             hdf5_checksum=checksum,
             hdf5_file_name=file_name,
         )
+
+    def to_hdf5(
+        self,
+        hdf5_file_name: str,
+        output_file_dir: Optional[str] = "./",
+        max_records: Optional[int] = None,
+        max_conformers_per_record: Optional[int] = None,
+        total_conformers: Optional[int] = None,
+    ) -> None:
+        """
+        Writes the dataset to an hdf5 file.
+
+        Parameters
+        ----------
+        hdf5_file_name: str, required
+            Name of the hdf5 file that will be generated.
+        output_file_dir: str, optional, default='./'
+            Location to write the output hdf5 file.
+        max_records: int, optional, default=None
+            If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
+            Can be used in conjunction with max_conformers_per_record and total_conformers.
+        max_conformers_per_record: int, optional, default=None
+            If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
+            Can be used in conjunction with max_records and total_conformers.
+        total_conformers: int, optional, default=None
+            If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
+            Can be used in conjunction with max_records and max_conformers_per_record.
+
+        Returns
+        -------
+        tuple (int, int)
+            total number of records and total number of configurations in the dataset
+        """
+        if max_records is not None and total_conformers is not None:
+            raise ValueError(
+                "max_records and total_conformers cannot be set at the same time."
+            )
+
+        logger.info(f"writing file {hdf5_file_name} to {output_file_dir}")
+
+        if total_conformers is not None:
+            dataset_trimmed = self.dataset.subset_dataset_total_conformers(
+                total_conformers, max_conformers_per_record
+            )
+            self._write_hdf5_and_json_files(
+                dataset=dataset_trimmed,
+                file_name=hdf5_file_name,
+                file_path=output_file_dir,
+            )
+            return (dataset_trimmed.total_records(), dataset_trimmed.total_configs())
+        elif max_records is not None:
+            dataset_trimmed = self.dataset.subset_dataset_max_records(max_records)
+            self._write_hdf5_and_json_files(
+                dataset=dataset_trimmed,
+                file_name=hdf5_file_name,
+                file_path=output_file_dir,
+            )
+            return (dataset_trimmed.total_records(), dataset_trimmed.total_configs())
+
+        else:
+
+            self._write_hdf5_and_json_files(
+                dataset=self.dataset,
+                file_name=hdf5_file_name,
+                file_path=output_file_dir,
+            )
+            return (self.dataset.total_records(), self.dataset.total_configs())

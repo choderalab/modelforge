@@ -36,17 +36,12 @@ class PhAlkEthOHCuration(DatasetCuration):
 
     Parameters
     ----------
-    hdf5_file_name, str, required
-        name of the hdf5 file generated for the SPICE dataset
-    output_file_dir: str, optional, default='./'
-        Path to write the output hdf5 files.
     local_cache_dir: str, optional, default='./'
         Location to save downloaded dataset.
 
     Examples
     --------
-    >>> PhAlkEthOH_openff_data = PhAlkEthOHOpenFFCuration(hdf5_file_name='PhAlkEthOH_openff_dataset.hdf5',
-    >>>                             local_cache_dir='~/datasets/PhAlkEthOH_openff_dataset')
+    >>> PhAlkEthOH_openff_data = PhAlkEthOHOpenFFCuration(local_cache_dir='~/datasets/PhAlkEthOH_openff_dataset')
     >>> PhAlkEthOH_openff_data.process()
 
     """
@@ -65,7 +60,6 @@ class PhAlkEthOHCuration(DatasetCuration):
         local_database_name: str,
         local_path_dir: str,
         force_download: bool,
-        max_records: Optional[int] = None,
         pbar: Optional[tqdm] = None,
     ):
         """
@@ -83,10 +77,6 @@ class PhAlkEthOHCuration(DatasetCuration):
             Path to the directory to store the local sqlite database
         force_download: bool, required
             If True, this will force the software to download the data again, even if present.
-        max_records: Optional[int], optional, default=None
-            If set to an integer, 'n', the routine will only process the first 'n' records, useful for unit tests.
-            Note, conformers of the same molecule are saved in separate records, and thus the number of molecules
-            that end up in the 'data' list after _process_downloaded is called  may be less than unit_testing_max_records.
         pbar: Optional[tqdm], optional, default=None
             Progress bar to track the download process.
 
@@ -114,9 +104,6 @@ class PhAlkEthOHCuration(DatasetCuration):
         ds.fetch_entry_names()
         entry_names = ds.entry_names
 
-        if max_records is None:
-            max_records = len(entry_names)
-
         with SqliteDict(
             f"{local_path_dir}/{local_database_name}",
             tablename=specification_name,
@@ -127,10 +114,10 @@ class PhAlkEthOHCuration(DatasetCuration):
             db_keys = set(spice_db.keys())
             to_fetch = []
             if force_download:
-                for name in entry_names[0:max_records]:
+                for name in entry_names:
                     to_fetch.append(name)
             else:
-                for name in entry_names[0:max_records]:
+                for name in entry_names:
                     if name not in db_keys:
                         to_fetch.append(name)
             if pbar is not None:
@@ -207,10 +194,7 @@ class PhAlkEthOHCuration(DatasetCuration):
         local_path_dir: str,
         filenames: List[str],
         dataset_names: List[str],
-        max_conformers_per_record: Optional[int] = None,
-        total_conformers: Optional[int] = None,
         max_force: Optional[unit.Quantity] = None,
-        final_conformer_only: Optional[bool] = None,
     ):
         """
         Processes a downloaded dataset: extracts relevant information.
@@ -223,15 +207,8 @@ class PhAlkEthOHCuration(DatasetCuration):
             Names of the raw sqlite files to process,
         dataset_names: List[str], required
             List of names of the sqlite datasets to process.
-        max_conformers_per_record: Optional[int], optional, default=None
-            If set, this will limit the number of conformers per record to the specified number.
-        total_conformers: Optional[int], optional, default=None
-            If set, this will limit the total number of conformers to the specified number.
         max_force: Optional[float], optional, default=None
-            If set, this will exclude any conformers with a force that exceeds this value.
-        final_conformer_only: Optional[bool], optional, default=None
-            If set to True, only the final conformer of each record will be processed. This should be the final
-            energy minimized conformer.
+            If the force exceeds this value the configuration will be excluded
         """
         from tqdm import tqdm
         import numpy as np
@@ -320,8 +297,6 @@ class PhAlkEthOHCuration(DatasetCuration):
                     # name = key.split("-")[0]
                     trajectory = spice_db[key][1]
 
-                    if final_conformer_only:
-                        trajectory = [trajectory[-1]]
                     for state in trajectory:
                         add_record = True
                         properties, config = state
@@ -433,48 +408,13 @@ class PhAlkEthOHCuration(DatasetCuration):
                                 units=unit.elementary_charge * unit.bohr,
                             )
                             dataset.add_property(name, scf_dipole)
-        dataset.validate_records()
-        if total_conformers is not None or max_conformers_per_record is not None:
-            conformers_count = 0
-            dataset_restricted = SourceDataset("PhAlkEthOH_openff")
-            for key in dataset.records.keys():
-                if total_conformers is not None:
-                    if conformers_count >= total_conformers:
-                        break
-                n_conformers = dataset.records[key].n_configs
-
-                if max_conformers_per_record is not None:
-                    n_conformers = min(n_conformers, max_conformers_per_record)
-
-                if total_conformers is not None:
-                    n_conformers = min(
-                        n_conformers, total_conformers - conformers_count
-                    )
-                record_temp = dataset.slice_record(key, 0, n_conformers)
-                dataset_restricted.add_record(record_temp)
-
-                conformers_count += n_conformers
-            # if any of the records have no configurations, remove them
-            for key in dataset_restricted.records.keys():
-                if dataset_restricted.records[key].n_configs == 0:
-                    dataset_restricted.remove_record(key)
-            return dataset_restricted
-        # if any of the records have no configurations, remove them
-
-        for key in dataset.records.keys():
-            if dataset.records[key].n_configs == 0:
-                dataset.remove_record(key)
 
         return dataset
 
     def process(
         self,
         force_download: bool = False,
-        max_records: Optional[int] = None,
-        max_conformers_per_record: Optional[int] = None,
-        total_conformers: Optional[int] = None,
         max_force: Optional[unit.Quantity] = None,
-        final_conformer_only=None,
         n_threads=2,
     ) -> None:
         """
@@ -485,25 +425,13 @@ class PhAlkEthOHCuration(DatasetCuration):
         force_download: bool, optional, default=False
             If the raw data_file is present in the local_cache_dir, the local copy will be used.
             If True, this will force the software to download the data again, even if present.
-        max_records: int, optional, default=None
-            If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
-            Can be used in conjunction with max_conformers_per_record and total_conformers.
-        max_conformers_per_record: int, optional, default=None
-            If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
-            Can be used in conjunction with max_records and total_conformers.
-        total_conformers: int, optional, default=None
-            If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
-            Can be used in conjunction with max_records and max_conformers_per_record.
         max_force: Optional[float], optional, default=None
             If set this any confirugrations with a force that exceeds this value will be excluded.
-        final_conformer_only: Optional[bool], optional, default=None
-            If set to True, only the final conformer of each record will be processed.
         n_threads, int, default=2
             Number of concurrent threads for retrieving data from QCArchive
         Examples
         --------
-        >>> phalkethoh_openff_data = PhAlkEthOHCuration(hdf5_file_name='phalkethoh_openff_dataset.hdf5',
-        >>>                             local_cache_dir='~/datasets/phalkethoh_openff_dataset')
+        >>> phalkethoh_openff_data = PhAlkEthOHCuration(local_cache_dir='~/datasets/phalkethoh_openff_dataset')
         >>> phalkethoh_openff_data.process()
 
         """
@@ -550,7 +478,6 @@ class PhAlkEthOHCuration(DatasetCuration):
                                 local_database_name=local_database_name,
                                 local_path_dir=self.local_cache_dir,
                                 force_download=force_download,
-                                max_records=max_records,
                                 pbar=pbar,
                             )
                         )
@@ -561,13 +488,5 @@ class PhAlkEthOHCuration(DatasetCuration):
             self.local_cache_dir,
             local_database_names,
             dataset_names,
-            max_conformers_per_record=max_conformers_per_record,
-            total_conformers=total_conformers,
             max_force=max_force,
-            final_conformer_only=final_conformer_only,
-        )
-
-        logger.info(f"writing file {self.hdf5_file_name} to {self.output_file_dir}")
-        self.write_hdf5_and_json_files(
-            file_name=self.hdf5_file_name, file_path=self.output_file_dir
         )

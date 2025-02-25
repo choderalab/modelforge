@@ -47,9 +47,9 @@ class SPICE2Curation(DatasetCuration):
 
     Examples
     --------
-    >>> spice_2_data = SPICE2Curation(hdf5_file_name='spice_2_dataset.hdf5',
-    >>>                             local_cache_dir='~/datasets/spice_2_dataset')
+    >>> spice_2_data = SPICE2Curation(local_cache_dir='~/datasets/spice_2_dataset')
     >>> spice_2_data.process()
+    >>> spice_2_data.to_hdf5(hdf5_file_name='spice2_dataset.hdf5', output_file_dir='~/datasets/hdf5_files')
 
     """
 
@@ -299,17 +299,6 @@ class SPICE2Curation(DatasetCuration):
             length=self.dataset_length,
             force_download=force_download,
         )
-
-        if limit_atomic_species is not None:
-            self.atomic_numbers_to_limit = []
-            from openff.units import elements
-
-            for symbol in limit_atomic_species:
-                for num, sym in elements.SYMBOLS.items():
-                    if sym == symbol:
-                        self.atomic_numbers_to_limit.append(num)
-        else:
-            self.atomic_numbers_to_limit = None
 
         # process the rest of the dataset
 

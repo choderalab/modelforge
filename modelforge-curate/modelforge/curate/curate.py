@@ -137,6 +137,53 @@ class Record:
 
         return status
 
+    def remove_high_force_configs(
+        self, max_force: unit.Quantity, force_key: str = "forces"
+    ):
+        """
+        Remove configurations with forces greater than the max_force
+
+        Parameters
+        ----------
+        max_force, unit.Quantity
+            Maximum force to allow in the record.
+        force_key: str, optional, default="forces"
+            Name of the property to use for filtering.
+
+        Returns
+        -------
+        record: Record
+            Copy of the Record with configurations removed.
+        """
+
+        if force_key not in self.per_atom.keys():
+            log.warning(f"Force key {force_key} not found in record {self.name}.")
+
+            raise ValueError(f"Force key {force_key} not found in record {self.name}.")
+
+        if self.per_atom[force_key].property_type != "force":
+            log.warning(f"Property {force_key} is not a force property.")
+
+            raise ValueError(f"Property {force_key} is not a force property.")
+
+        # get the indices of the configurations that have forces less than the max_force
+        indices_to_include = []
+        for i in range(self.n_configs):
+            force_magnitude = (
+                np.abs(self.per_atom[force_key].value[i])
+                * self.per_atom[force_key].units
+            )
+            if np.max(force_magnitude) <= max_force:
+                indices_to_include.append(i)
+
+        new_record = copy.deepcopy(self)
+        for key, value in self.per_atom.items():
+            new_record.per_atom[key].value = value.value[indices_to_include]
+        for key, value in self.per_system.items():
+            new_record.per_system[key].value = value.value[indices_to_include]
+
+        return new_record
+
     def to_dict(self):
         """
         Convert the record to a dictionary

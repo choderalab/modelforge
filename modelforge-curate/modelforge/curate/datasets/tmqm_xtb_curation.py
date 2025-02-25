@@ -64,18 +64,18 @@ class tmQMXTBCuration(DatasetCuration):
 
     Parameters
     ----------
-    hdf5_file_name: str, required
-        Name of the hdf5 file that will be generated.
-    output_file_dir: str, optional, default='./'
-        Location to write the output hdf5 file.
     local_cache_dir: str, optional, default='./'
         Location to save downloaded dataset.
+    version_select: str, optional, default='latest'
+        Version of the dataset to use as defined in the associated yaml file.
 
 
     Examples
     --------
-    >>> tmQM_data = tmQMCuration(hdf5_file_name='tmQM_dataset.hdf5', local_cache_dir='~/datasets/tmQM_dataset')
-    >>> tmQM_data.process()
+    >>> tmQM_xtb_data = tmQMXTBCuration(local_cache_dir='~/datasets/tmQM_dataset')
+    >>> tmQM_xtb_data.process()
+    >>> tmQM_xtb_data.to_hdf5(hdf5_file_name='tmQM_dataset.hdf5', output_file_dir='~/datasets/tmQM_dataset')
+
 
 
     """
@@ -144,7 +144,7 @@ class tmQMXTBCuration(DatasetCuration):
         import h5py
 
         dataset = SourceDataset("tmqm_xtb")
-        with OpenWithLock(f"{local_path_dir}/{hdf5_file_name}.lockfile", "r") as f:
+        with OpenWithLock(f"{local_path_dir}/{hdf5_file_name}.lockfile", "w") as f:
             with h5py.File(f"{local_path_dir}/{hdf5_file_name}", "r") as f:
                 for key in tqdm(f.keys()):
                     # set up a record
@@ -201,13 +201,13 @@ class tmQMXTBCuration(DatasetCuration):
                     # extract spin multiplicities
                     spin_multiplicities = SpinMultiplicities(
                         value=f[key]["spin_multiplicity"][()].reshape(-1, 1),
-                        units=f[key]["spin_multiplicity"].attrs["u"],
                     )
                     record.add_property(spin_multiplicities)
 
                     # metadata for scoichiometry
                     metadata = MetaData(
-                        value=f[key]["stoichiometry"][()],
+                        name="stoichiometry",
+                        value=f[key]["stoichiometry"][()].decode("utf-8"),
                     )
 
             return dataset
@@ -229,14 +229,10 @@ class tmQMXTBCuration(DatasetCuration):
 
         Examples
         --------
-        >>> tmQM_data = tmQMXTBCuration(hdf5_file_name='tmQM_xtb_dataset.hdf5', local_cache_dir='~/datasets/tmQM_Xtb_dataset')
-        >>> tmQM_data.process()
+        >>> tmQM_xtb_data = tmQMXTBCuration(local_cache_dir='~/datasets/tmQM_Xtb_dataset')
+        >>> tmQM_xtb_data.process()
 
         """
-        if max_records is not None and total_conformers is not None:
-            raise ValueError(
-                "max_records and total_conformers cannot be set at the same time."
-            )
 
         from modelforge.utils.remote import download_from_url
 

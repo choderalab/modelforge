@@ -112,6 +112,31 @@ class Record:
 
         return new_record
 
+    def contains_atomic_numbers(self, atomic_numbers_of_interest: np.ndarray) -> bool:
+        """
+        Check if the atomic numbers in the record are a subset of the input.
+
+        Parameters
+        ----------
+        atomic_numbers_of_interest: np.ndarray
+            Array of atomic numbers to check against.
+
+        Returns
+        -------
+            bool: True if the atomic numbers match, False otherwise.
+        """
+
+        if self.atomic_numbers is None:
+            log.warning(
+                f"No atomic numbers set for record {self.name}. Cannot compare."
+            )
+            return False
+        status = set(self.atomic_numbers.value.flatten()).issubset(
+            atomic_numbers_of_interest
+        )
+
+        return status
+
     def to_dict(self):
         """
         Convert the record to a dictionary
@@ -593,7 +618,9 @@ class SourceDataset:
 
         return self.records[record_name].slice_record(min=min, max=max)
 
-    def subset_dataset_max_records(self, max_records: int) -> Self:
+    def subset_dataset_max_records(
+        self, max_records: int, limit_atomic_species: Optional[np.ndarray] = None
+    ) -> Self:
         """
         Subset the dataset to only include a certain number of records
 
@@ -603,6 +630,9 @@ class SourceDataset:
         ----------
         max_records: int
             Maximum number of records to include in the subset.
+        limit_atomic_species: Optional[np.ndarray], default=None
+            Array of atomic numbers to limit the dataset to.
+            Any molecules that contain elements outside of this list will be ignored.
 
         Returns
         -------
@@ -613,14 +643,31 @@ class SourceDataset:
             self.dataset_name, append_property=self.append_property
         )
 
-        for record_name in list(self.records.keys())[0:max_records]:
-            record = self.get_record(record_name)
-            new_dataset.add_record(record)
+        record_count = 0
+        if max_records > len(self.records):
+            log.warning(
+                f"Requested number of records {max_records} is greater than the number of records in the dataset {len(self.records)}."
+            )
+            log.warning("Using all records in the dataset instead.")
+            max_records = len(self.records)
 
-        return new_dataset
+        for record_name in list(self.records.keys()):
+            record = self.get_record(record_name)
+            if limit_atomic_species is not None:
+                if record.contains_atomic_numbers(limit_atomic_species):
+                    new_dataset.add_record(record)
+                    record_count += 1
+            else:
+                new_dataset.add_record(record)
+                record_count += 1
+            if record_count == max_records:
+                return new_dataset
 
     def subset_dataset_total_conformers(
-        self, total_conformers: int, max_conformers_per_record: Optional[int] = None
+        self,
+        total_conformers: int,
+        max_conformers_per_record: Optional[int] = None,
+        limit_atomic_species: Optional[np.ndarray] = None,
     ) -> Self:
         """
         Subset the dataset to only include a certain number of conformers.
@@ -631,11 +678,21 @@ class SourceDataset:
             Total number of conformers to include in the subset.
         max_conformers_per_record: Optional[int], default=None
             Maximum number of conformers to include per record. If None, all conformers in a record will be included.
+        limit_atomic_species: Optional[np.ndarray], default=None
+            An array of atomic species to limit the dataset to.
+            Any molecules that contain elements outside of this list will be igonored
 
         Returns
         -------
             SourceDataset: A copy of the subset of the dataset.
         """
+
+        if total_conformers > self.total_configs():
+            log.warning(
+                f"Requested number of conformers {total_conformers} is greater than the number of conformers in the dataset {self.total_configs()}."
+            )
+            log.warning("Using all conformers in the dataset instead.")
+            total_conformers = self.total_configs()
         new_dataset = SourceDataset(
             self.dataset_name, append_property=self.append_property
         )
@@ -646,6 +703,10 @@ class SourceDataset:
 
             record = self.get_record(record_name)
             n_configs = record.n_configs
+
+            if limit_atomic_species is not None:
+                if not record.contains_atomic_numbers(limit_atomic_species):
+                    continue
 
             # we set a max number we want per record,
             # we can set it here
@@ -668,6 +729,30 @@ class SourceDataset:
             total_conformers_to_add -= n_configs_to_add
             if total_conformers_to_add == 0:
                 return new_dataset
+
+    def limit_atomic_species(self, atomic_numbers_to_limit: np.ndarray) -> Self:
+        """
+        Limit the dataset to only include records that contain atomic numbers in the input list.
+
+        Parameters
+        ----------
+        atomic_numbers_to_limit: np.ndarray
+            Array of atomic numbers to limit the dataset to.
+
+        Returns
+        -------
+            SourceDataset: A copy of the dataset only containing the subset.
+        """
+        new_dataset = SourceDataset(
+            self.dataset_name, append_property=self.append_property
+        )
+
+        for record_name in self.records.keys():
+            record = self.get_record(record_name)
+            if record.contains_atomic_numbers(atomic_numbers_to_limit):
+                new_dataset.add_record(record)
+
+        return new_dataset
 
     def validate_record(self, record_name: str):
         """

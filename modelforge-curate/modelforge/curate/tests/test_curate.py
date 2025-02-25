@@ -635,3 +635,56 @@ def test_dataset_total_conformers():
     ds_subset = ds.subset_dataset_total_conformers(11, max_conformers_per_record=5)
     assert ds_subset.total_configs() == 11
     assert ds_subset.total_records() == 3
+
+
+def test_limit_atomic_numbers():
+
+    atomic_numbers = AtomicNumbers(
+        value=np.array(
+            [
+                [8],
+                [6],
+                [6],
+                [1],
+            ]
+        )
+    )
+    energies = Energies(
+        value=np.array(
+            [
+                [-0.5],
+            ]
+        ),
+        units=unit.kilojoule_per_mole,
+    )
+    positions = Positions(
+        value=np.array(
+            [
+                [
+                    [0.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                    [0.0, 1.0, 0.0],
+                    [0.0, 0.0, 1.0],
+                ]
+            ]
+        ),
+        units=unit.nanometer,
+    )
+    record = Record("mol1")
+    record.add_properties([atomic_numbers, energies, positions])
+
+    dataset = SourceDataset("test")
+    dataset.add_record(record)
+
+    atomic_numbers_to_limit = np.array([8, 6, 1])
+
+    assert record.contains_atomic_numbers(atomic_numbers_to_limit) == True
+    new_dataset = dataset.limit_atomic_species(atomic_numbers_to_limit)
+
+    assert new_dataset.total_records() == 1
+
+    atomic_numbers_to_limit = np.array([8, 6])
+
+    assert record.contains_atomic_numbers(atomic_numbers_to_limit) == False
+    new_dataset = dataset.limit_atomic_species(atomic_numbers_to_limit)
+    assert new_dataset.total_records() == 0

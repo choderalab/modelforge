@@ -216,6 +216,7 @@ class DatasetCuration(ABC):
         max_records: Optional[int] = None,
         max_conformers_per_record: Optional[int] = None,
         total_conformers: Optional[int] = None,
+        limit_atomic_species: Optional[List[str]] = None,
     ) -> None:
         """
         Writes the dataset to an hdf5 file.
@@ -235,6 +236,10 @@ class DatasetCuration(ABC):
         total_conformers: int, optional, default=None
             If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
             Can be used in conjunction with max_records and max_conformers_per_record.
+        limit_atomic_species: list, optional, default=None
+            A list of atomic species to limit the dataset to. Any molecules that contain elements outside of this list
+            will be ignored. If not defined, no filtering by atomic species will be performed.
+            These can be passed as a list of strings, e.g., ['C', 'H', 'O'] or as a list of atomic numbers, e.g., [6, 1, 8].
 
         Returns
         -------
@@ -245,12 +250,35 @@ class DatasetCuration(ABC):
             raise ValueError(
                 "max_records and total_conformers cannot be set at the same time."
             )
+        import os
+
+        if limit_atomic_species is not None:
+            atomic_numbers_to_limit = []
+            from openff.units import elements
+
+            for symbol in limit_atomic_species:
+                if isinstance(symbol, str):
+                    for num, sym in elements.SYMBOLS.items():
+                        if sym == symbol:
+                            atomic_numbers_to_limit.append(num)
+                elif isinstance(symbol, int):
+                    atomic_numbers_to_limit.append(symbol)
+                else:
+                    raise ValueError(
+                        "limit_atomic_species must be a list of element symbols as strings or integers."
+                    )
+            atomic_numbers_to_limit = np.array(atomic_numbers_to_limit)
+        else:
+            atomic_numbers_to_limit = None
+
+        # make sure we can handle relative paths
+        output_file_dir = os.path.expanduser(output_file_dir)
 
         logger.info(f"writing file {hdf5_file_name} to {output_file_dir}")
 
         if total_conformers is not None:
             dataset_trimmed = self.dataset.subset_dataset_total_conformers(
-                total_conformers, max_conformers_per_record
+                total_conformers, max_conformers_per_record, atomic_numbers_to_limit
             )
             self._write_hdf5_and_json_files(
                 dataset=dataset_trimmed,
@@ -259,7 +287,9 @@ class DatasetCuration(ABC):
             )
             return (dataset_trimmed.total_records(), dataset_trimmed.total_configs())
         elif max_records is not None:
-            dataset_trimmed = self.dataset.subset_dataset_max_records(max_records)
+            dataset_trimmed = self.dataset.subset_dataset_max_records(
+                max_records, atomic_numbers_to_limit
+            )
             self._write_hdf5_and_json_files(
                 dataset=dataset_trimmed,
                 file_name=hdf5_file_name,
@@ -267,6 +297,16 @@ class DatasetCuration(ABC):
             )
             return (dataset_trimmed.total_records(), dataset_trimmed.total_configs())
 
+        elif limit_atomic_species is not None:
+            dataset_trimmed = self.dataset.subset_dataset_atomic_species(
+                atomic_numbers_to_limit
+            )
+            self._write_hdf5_and_json_files(
+                dataset=dataset_trimmed,
+                file_name=hdf5_file_name,
+                file_path=output_file_dir,
+            )
+            return (dataset_trimmed.total_records(), dataset_trimmed.total_configs())
         else:
 
             self._write_hdf5_and_json_files(

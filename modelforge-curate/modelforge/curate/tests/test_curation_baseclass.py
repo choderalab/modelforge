@@ -249,7 +249,7 @@ def test_dipole_moment_calculation():
         value=np.linalg.norm(scf_dipole_moment.value).reshape(1, 1),
         units=unit.elementary_charge * unit.nanometer,
     )
-    dataset_curation = TestCuration(hdf5_file_name="test.hdf5")
+    dataset_curation = TestCuration()
 
     dipole_moment_comp = dataset_curation.compute_dipole_moment(
         atomic_numbers=atomic_numbers, positions=positions, partial_charges=charges

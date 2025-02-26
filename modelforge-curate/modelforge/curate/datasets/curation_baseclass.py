@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 from loguru import logger
@@ -209,15 +209,38 @@ class DatasetCuration(ABC):
             hdf5_file_name=file_name,
         )
 
+    def _convert_element_list_to_atomic_numbers(
+        self, element_list: List[str]
+    ) -> np.ndarray:
+        """
+        Convert a list of element symbols to atomic numbers.
+
+        Parameters
+        ----------
+        element_list: List[str], required
+            list of element symbols
+
+        Returns
+        -------
+        np.ndarray
+            atomic numbers of the elements
+        """
+        from modelforge.dataset.utils import _ATOMIC_ELEMENT_TO_NUMBER
+
+        return np.array(
+            [_ATOMIC_ELEMENT_TO_NUMBER[element] for element in element_list]
+        )
+
     def to_hdf5(
         self,
         hdf5_file_name: str,
         output_file_dir: Optional[str] = "./",
-        max_records: Optional[int] = None,
-        max_conformers_per_record: Optional[int] = None,
-        total_conformers: Optional[int] = None,
-        limit_atomic_species: Optional[List[str]] = None,
-    ) -> None:
+        total_records: Optional[int] = None,
+        max_configurations_per_record: Optional[int] = None,
+        total_configurations: Optional[int] = None,
+        atomic_species_to_limit: Optional[List[Union[str, int]]] = None,
+        max_force: Optional[unit.Quantity] = None,
+    ) -> Tuple[int, int]:
         """
         Writes the dataset to an hdf5 file.
 
@@ -227,47 +250,64 @@ class DatasetCuration(ABC):
             Name of the hdf5 file that will be generated.
         output_file_dir: str, optional, default='./'
             Location to write the output hdf5 file.
-        max_records: int, optional, default=None
+        total_records: int, optional, default=None
             If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
-            Can be used in conjunction with max_conformers_per_record and total_conformers.
-        max_conformers_per_record: int, optional, default=None
+            Can be used in conjunction with max_configurations_per_record and total_configurations.
+        max_configurations_per_record: int, optional, default=None
             If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
-            Can be used in conjunction with max_records and total_conformers.
-        total_conformers: int, optional, default=None
+            Can be used in conjunction with total_records and total_configurations.
+        total_configurations: int, optional, default=None
             If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
-            Can be used in conjunction with max_records and max_conformers_per_record.
-        limit_atomic_species: list, optional, default=None
+            Can be used in conjunction with total_records and max_configurations_per_record.
+        atomic_species_to_limit: Optional[List[Union[str, int]]], optional, default=None
             A list of atomic species to limit the dataset to. Any molecules that contain elements outside of this list
             will be ignored. If not defined, no filtering by atomic species will be performed.
             These can be passed as a list of strings, e.g., ['C', 'H', 'O'] or as a list of atomic numbers, e.g., [6, 1, 8].
+        max_force: unit.Quantity, optional, default=None
+            Maximum force to include in the dataset. Any configuration with forces greater than this value will be excluded.
 
         Returns
         -------
         tuple (int, int)
             total number of records and total number of configurations in the dataset
         """
-        if max_records is not None and total_conformers is not None:
+        if total_records is not None and total_configurations is not None:
             raise ValueError(
-                "max_records and total_conformers cannot be set at the same time."
+                "total_records and total_configurations cannot be set at the same time."
             )
+        if max_force is not None:
+            if not isinstance(max_force, unit.Quantity):
+                raise ValueError("max_force must be a unit.Quantity.")
+
+            if not max_force.is_compatible_with(
+                unit.kilojoule_per_mole / unit.nanometer
+            ):
+                raise ValueError(
+                    f"max_force must be in units of force, found {max_force}"
+                )
+        if self.dataset.total_records() == 0:
+            raise ValueError("No records found in the dataset.")
+
         import os
 
-        if limit_atomic_species is not None:
-            atomic_numbers_to_limit = []
-            from openff.units import elements
+        if atomic_species_to_limit is not None:
 
-            for symbol in limit_atomic_species:
-                if isinstance(symbol, str):
-                    for num, sym in elements.SYMBOLS.items():
-                        if sym == symbol:
-                            atomic_numbers_to_limit.append(num)
-                elif isinstance(symbol, int):
-                    atomic_numbers_to_limit.append(symbol)
-                else:
-                    raise ValueError(
-                        "limit_atomic_species must be a list of element symbols as strings or integers."
-                    )
-            atomic_numbers_to_limit = np.array(atomic_numbers_to_limit)
+            if not isinstance(atomic_species_to_limit, list):
+                raise ValueError(
+                    "atomic_species_to_limit must be a list of element symbols as strings or integers."
+                )
+            if isinstance(atomic_species_to_limit[0], str):
+                atomic_numbers_to_limit = self._convert_element_list_to_atomic_numbers(
+                    atomic_species_to_limit
+                )
+
+            elif isinstance(atomic_species_to_limit[0], int):
+                atomic_numbers_to_limit = np.array(atomic_species_to_limit)
+            else:
+                raise ValueError(
+                    "atomic_species_to_limit must be a list of element symbols as strings or integers."
+                )
+
         else:
             atomic_numbers_to_limit = None
 
@@ -276,31 +316,24 @@ class DatasetCuration(ABC):
 
         logger.info(f"writing file {hdf5_file_name} to {output_file_dir}")
 
-        if total_conformers is not None:
-            dataset_trimmed = self.dataset.subset_dataset_total_conformers(
-                total_conformers, max_conformers_per_record, atomic_numbers_to_limit
+        # if we have applied any subset filters, apply them here:
+        if (
+            total_configurations is not None
+            or max_configurations_per_record is not None
+            or atomic_species_to_limit is not None
+            or max_force is not None
+            or total_records is not None
+        ):
+            dataset_trimmed = self.dataset.subset_dataset(
+                total_configurations=total_configurations,
+                total_records=total_records,
+                max_configurations_per_record=max_configurations_per_record,
+                atomic_numbers_to_limit=atomic_numbers_to_limit,
+                max_force=max_force,
             )
-            self._write_hdf5_and_json_files(
-                dataset=dataset_trimmed,
-                file_name=hdf5_file_name,
-                file_path=output_file_dir,
-            )
-            return (dataset_trimmed.total_records(), dataset_trimmed.total_configs())
-        elif max_records is not None:
-            dataset_trimmed = self.dataset.subset_dataset_max_records(
-                max_records, atomic_numbers_to_limit
-            )
-            self._write_hdf5_and_json_files(
-                dataset=dataset_trimmed,
-                file_name=hdf5_file_name,
-                file_path=output_file_dir,
-            )
-            return (dataset_trimmed.total_records(), dataset_trimmed.total_configs())
+            if dataset_trimmed.total_records() == 0:
+                raise ValueError("No records found in the dataset after filtering.")
 
-        elif limit_atomic_species is not None:
-            dataset_trimmed = self.dataset.subset_dataset_atomic_species(
-                atomic_numbers_to_limit
-            )
             self._write_hdf5_and_json_files(
                 dataset=dataset_trimmed,
                 file_name=hdf5_file_name,

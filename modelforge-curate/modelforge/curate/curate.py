@@ -123,7 +123,7 @@ class Record:
 
         Returns
         -------
-            bool: True if the atomic numbers match, False otherwise.
+            bool: True if the atomic numbers are contained within the input, False otherwise.
         """
 
         if self.atomic_numbers is None:
@@ -165,6 +165,7 @@ class Record:
             log.warning(f"Property {force_key} is not a force property.")
 
             raise ValueError(f"Property {force_key} is not a force property.")
+        assert isinstance(max_force, unit.Quantity)
 
         # get the indices of the configurations that have forces less than the max_force
         indices_to_include = []
@@ -665,141 +666,151 @@ class SourceDataset:
 
         return self.records[record_name].slice_record(min=min, max=max)
 
-    def subset_dataset_max_records(
-        self, max_records: int, limit_atomic_species: Optional[np.ndarray] = None
-    ) -> Self:
-        """
-        Subset the dataset to only include a certain number of records
-
-        This will retrieve the first max_records records in the dataset.
-
-        Parameters
-        ----------
-        max_records: int
-            Maximum number of records to include in the subset.
-        limit_atomic_species: Optional[np.ndarray], default=None
-            Array of atomic numbers to limit the dataset to.
-            Any molecules that contain elements outside of this list will be ignored.
-
-        Returns
-        -------
-            SourceDataset: A copy of the subset of the dataset.
-        """
-
-        new_dataset = SourceDataset(
-            self.dataset_name, append_property=self.append_property
-        )
-
-        record_count = 0
-        if max_records > len(self.records):
-            log.warning(
-                f"Requested number of records {max_records} is greater than the number of records in the dataset {len(self.records)}."
-            )
-            log.warning("Using all records in the dataset instead.")
-            max_records = len(self.records)
-
-        for record_name in list(self.records.keys()):
-            record = self.get_record(record_name)
-            if limit_atomic_species is not None:
-                if record.contains_atomic_numbers(limit_atomic_species):
-                    new_dataset.add_record(record)
-                    record_count += 1
-            else:
-                new_dataset.add_record(record)
-                record_count += 1
-            if record_count == max_records:
-                return new_dataset
-
-    def subset_dataset_total_conformers(
+    def subset_dataset(
         self,
-        total_conformers: int,
-        max_conformers_per_record: Optional[int] = None,
-        limit_atomic_species: Optional[np.ndarray] = None,
+        total_records: Optional[int] = None,
+        total_configurations: Optional[int] = None,
+        max_configurations_per_record: Optional[int] = None,
+        atomic_numbers_to_limit: Optional[np.ndarray] = None,
+        max_force: Optional[unit.Quantity] = None,
     ) -> Self:
         """
-        Subset the dataset to only include a certain number of conformers.
+        Subset the dataset to only include a certain species
 
         Parameters
         ----------
-        total_conformers: int
+        total_records: Optional[int], default=None
+            Maximum number of records to include in the subset.
+        total_configurations: Optional[int], default=None
             Total number of conformers to include in the subset.
-        max_conformers_per_record: Optional[int], default=None
+        max_configurations_per_record: Optional[int], default=None
             Maximum number of conformers to include per record. If None, all conformers in a record will be included.
-        limit_atomic_species: Optional[np.ndarray], default=None
+        atomic_numbers_to_limit: Optional[np.ndarray], default=None
             An array of atomic species to limit the dataset to.
             Any molecules that contain elements outside of this list will be igonored
-
+        max_force: Optional[unit.Quantity], default=None
+            If set, configurations with forces greater than this value will be removed.
         Returns
         -------
             SourceDataset: A copy of the subset of the dataset.
         """
 
-        if total_conformers > self.total_configs():
-            log.warning(
-                f"Requested number of conformers {total_conformers} is greater than the number of conformers in the dataset {self.total_configs()}."
+        if total_records is not None and total_configurations is not None:
+            raise ValueError(
+                "Cannot set both total_records and total_conformers. Please choose one."
             )
-            log.warning("Using all conformers in the dataset instead.")
-            total_conformers = self.total_configs()
+
+        if total_configurations is not None:
+            if total_configurations > self.total_configs():
+                log.warning(
+                    f"Requested number of configurations {total_configurations} is greater than the number of configurations in the dataset {self.total_configs()}."
+                )
+                log.warning(
+                    f"Using all configurations ({self.total_configs()} in the dataset."
+                )
+                total_configurations = self.total_configs()
+
+        if total_records is not None:
+            if total_records > len(self.records):
+                log.warning(
+                    f"Requested number of records {total_records} is greater than the number of records in the dataset {len(self.records)}."
+                )
+                log.warning("Using all records in the dataset instead.")
+                total_records = len(self.records)
+
+        # create a new empty dataset, we will add records that meet the criteria to this dataset
         new_dataset = SourceDataset(
             self.dataset_name, append_property=self.append_property
         )
 
-        total_conformers_to_add = total_conformers
+        # if we are limiting the total conformers
+        if total_configurations is not None:
 
-        for record_name in self.records.keys():
+            total_configurations_to_add = total_configurations
 
-            record = self.get_record(record_name)
-            n_configs = record.n_configs
+            for record_name in self.records.keys():
 
-            if limit_atomic_species is not None:
-                if not record.contains_atomic_numbers(limit_atomic_species):
-                    continue
+                if total_configurations_to_add > 0:
 
-            # we set a max number we want per record,
-            # we can set it here
-            if max_conformers_per_record is not None:
-                n_configs_to_add = max_conformers_per_record
-                # if we have fewer than the max, just set to n_configs
-                if n_configs < max_conformers_per_record:
-                    n_configs_to_add = n_configs
-                # now check to see if the n_configs_to_add is more than what we still need to hit max conformers
-                if n_configs_to_add > total_conformers_to_add:
-                    n_configs_to_add = total_conformers_to_add
+                    record = self.get_record(record_name)
 
-            else:
-                n_configs_to_add = n_configs
-                if n_configs_to_add > total_conformers_to_add:
-                    n_configs_to_add = total_conformers_to_add
+                    # if we have a max force, we will remove configurations with forces greater than the max_force
+                    # we will just overwrite the record with the new record
+                    if max_force is not None:
+                        record = record.remove_high_force_configs(max_force)
 
-            record = record.slice_record(0, n_configs_to_add)
-            new_dataset.add_record(record)
-            total_conformers_to_add -= n_configs_to_add
-            if total_conformers_to_add == 0:
-                return new_dataset
+                    # we need to set the total configs in the record AFTER we have done any force filtering
+                    n_configs = record.n_configs
 
-    def limit_atomic_species(self, atomic_numbers_to_limit: np.ndarray) -> Self:
-        """
-        Limit the dataset to only include records that contain atomic numbers in the input list.
+                    # if the record does not contain the appropriate atomic species, we will skip it
+                    # and move on to the next iteration
+                    if atomic_numbers_to_limit is not None:
+                        if not record.contains_atomic_numbers(atomic_numbers_to_limit):
+                            continue
 
-        Parameters
-        ----------
-        atomic_numbers_to_limit: np.ndarray
-            Array of atomic numbers to limit the dataset to.
+                    # if we set a max number of configurations we want per record, consider that here
+                    if max_configurations_per_record is not None:
+                        n_configs_to_add = max_configurations_per_record
+                        # if we have fewer than the max, just set to n_configs
+                        if n_configs < max_configurations_per_record:
+                            n_configs_to_add = n_configs
+                        # now check to see if the n_configs_to_add is more than what we still need to hit max conformers
+                        if n_configs_to_add > total_configurations_to_add:
+                            n_configs_to_add = total_configurations_to_add
+                    # even if we don't limit the number of configurations, we may still need to limit the number we
+                    # include to satisfy the total number of configurations
+                    else:
+                        n_configs_to_add = n_configs
+                        if n_configs_to_add > total_configurations_to_add:
+                            n_configs_to_add = total_configurations_to_add
 
-        Returns
-        -------
-            SourceDataset: A copy of the dataset only containing the subset.
-        """
-        new_dataset = SourceDataset(
-            self.dataset_name, append_property=self.append_property
-        )
+                    record = record.slice_record(0, n_configs_to_add)
+                    new_dataset.add_record(record)
+                    total_configurations_to_add -= n_configs_to_add
+            return new_dataset
 
-        for record_name in self.records.keys():
-            record = self.get_record(record_name)
-            if record.contains_atomic_numbers(atomic_numbers_to_limit):
+        elif total_records is not None:
+            total_records_to_add = total_records
+            for record_name in self.records.keys():
+                if total_records_to_add > 0:
+                    record = self.get_record(record_name)
+                    # if we have a max force, we will remove configurations with forces greater than the max_force
+                    # we will just overwrite the record with the new record
+                    if max_force is not None:
+                        record = record.remove_high_force_configs(max_force)
+                    # if the record does not contain the appropriate atomic species, we will skip it
+                    # and move on to the next iteration
+                    if atomic_numbers_to_limit is not None:
+                        if not record.contains_atomic_numbers(atomic_numbers_to_limit):
+                            continue
+                    # if we have a max number of configurations we want per record, consider that here
+                    if max_configurations_per_record is not None:
+                        n_to_add = min(max_configurations_per_record, record.n_configs)
+
+                        record = record.slice_record(0, n_to_add)
+
+                    new_dataset.add_record(record)
+                    total_records_to_add -= 1
+            return new_dataset
+        # if we are not going to be limiting the total number of configurations or records
+        else:
+            for record_name in self.records.keys():
+                record = self.get_record(record_name)
+                # if we have a max force, we will remove configurations with forces greater than the max_force
+                # we will just overwrite the record with the new record
+                if max_force is not None:
+                    record = record.remove_high_force_configs(max_force)
+                # if the record does not contain the appropriate atomic species, we will skip it
+                # and move on to the next iteration
+                if atomic_numbers_to_limit is not None:
+                    if not record.contains_atomic_numbers(atomic_numbers_to_limit):
+                        continue
+                if max_configurations_per_record is not None:
+                    n_to_add = min(max_configurations_per_record, record.n_configs)
+                    record = record.slice_record(0, n_to_add)
+
                 new_dataset.add_record(record)
-
-        return new_dataset
+            return new_dataset
 
     def validate_record(self, record_name: str):
         """

@@ -1,5 +1,5 @@
 import pytest
-
+import os
 import numpy as np
 from openff.units import unit
 
@@ -10,7 +10,39 @@ from modelforge.curate.properties import *
 from modelforge.curate.datasets.curation_baseclass import DatasetCuration
 
 
-def test_dipole_moment_calculation():
+def setup_test_dataset(local_cache_dir):
+    class TestCuration(DatasetCuration):
+        def _init_dataset_parameters(self):
+            self.dataset = SourceDataset("test_dataset")
+            for i in range(5):
+                atomic_numbers = AtomicNumbers(value=[[6 + i], [1]])
+                positions = Positions(
+                    value=[
+                        [[i, 0, 0], [i, 1, 1]],
+                        [[i, 0, 0], [i, 2, 2]],
+                        [[i, 0, 0], [i, 3, 3]],
+                    ],
+                    units=unit.nanometer,
+                )
+                energy = Energies(
+                    value=[[i], [i + 1.0], [i + 2.0]], units=unit.kilojoule_per_mole
+                )
+                forces = Forces(
+                    value=[
+                        [[0, 0, 0], [1, 1, 1]],
+                        [[0, 0, 0], [2, 2, 2]],
+                        [[0, 0, 0], [3, 3, 3]],
+                    ],
+                    units=unit.kilojoule_per_mole / unit.nanometer,
+                )
+                record = Record(f"record_{i}")
+                record.add_properties([atomic_numbers, positions, energy, forces])
+                self.dataset.add_record(record)
+
+    return TestCuration(local_cache_dir=local_cache_dir)
+
+
+def test_dipolemoment_calculation():
     class TestCuration(DatasetCuration):
         def _init_dataset_parameters(self):
             pass
@@ -276,3 +308,192 @@ def test_dipole_moment_calculation():
         np.linalg.norm(dipole_moment_scaled_comp.value).reshape(1, 1),
         scf_dipole_magnitude.value,
     )
+
+
+def test_base_convert_element_string_to_atomic_number(prep_temp_dir):
+    curated_dataset = setup_test_dataset(str(prep_temp_dir))
+
+    output = curated_dataset._convert_element_list_to_atomic_numbers(["C", "H"])
+    assert np.all(output == np.array([6, 1]))
+
+
+def test_base_operations(prep_temp_dir):
+    output_dir = f"{prep_temp_dir}/test_base_operations"
+    curated_dataset = setup_test_dataset(output_dir)
+
+    # test writing the dataset
+    n_record, n_configs = curated_dataset.to_hdf5(
+        hdf5_file_name="test.hdf5", output_file_dir=output_dir
+    )
+
+    assert n_record == 5
+    assert n_configs == 15
+    assert os.path.exists(f"{output_dir}/test.hdf5")
+
+    # test writing a subset of the dataset
+
+    n_record, n_configs = curated_dataset.to_hdf5(
+        hdf5_file_name="test_subset.hdf5",
+        output_file_dir=output_dir,
+        total_configurations=5,
+    )
+    assert n_record == 2
+    assert n_configs == 5
+    assert os.path.exists(f"{output_dir}/test_subset.hdf5")
+
+    # test max_conformers per record setting
+    n_record, n_configs = curated_dataset.to_hdf5(
+        hdf5_file_name="test_max_conformers.hdf5",
+        output_file_dir=output_dir,
+        max_configurations_per_record=1,
+    )
+    assert n_record == 5
+    assert n_configs == 5
+    assert os.path.exists(f"{output_dir}/test_max_conformers.hdf5")
+
+    # test max_conformers_per_record and total_conformers
+    n_record, n_configs = curated_dataset.to_hdf5(
+        hdf5_file_name="test_max_conformers_total_conf.hdf5",
+        output_file_dir=output_dir,
+        max_configurations_per_record=2,
+        total_configurations=6,
+    )
+    assert n_record == 3
+    assert n_configs == 6
+    assert os.path.exists(f"{output_dir}/test_max_conformers_total_conf.hdf5")
+
+    # test max records
+    n_record, n_configs = curated_dataset.to_hdf5(
+        hdf5_file_name="test_max_records.hdf5",
+        output_file_dir=output_dir,
+        total_records=2,
+    )
+    assert n_record == 2
+    assert n_configs == 6
+    assert os.path.exists(f"{output_dir}/test_max_records.hdf5")
+
+    # test restricting the species
+    # since I updated the first species each time I add a record, the first record will have 6 and 1, the second 7 and 1, etc.
+    n_record, n_configs = curated_dataset.to_hdf5(
+        hdf5_file_name="test_species.hdf5",
+        output_file_dir=output_dir,
+        atomic_species_to_limit=[6, 1],
+    )
+    assert n_record == 1
+    assert n_configs == 3
+    assert os.path.exists(f"{output_dir}/test_species.hdf5")
+
+    # this should have 2 records
+    n_record, n_configs = curated_dataset.to_hdf5(
+        hdf5_file_name="test_species2.hdf5",
+        output_file_dir=output_dir,
+        atomic_species_to_limit=[6, 7, 1],
+    )
+    assert n_record == 2
+    assert n_configs == 6
+    assert os.path.exists(f"{output_dir}/test_species2.hdf5")
+
+    # test combing with other restrictions
+    n_record, n_configs = curated_dataset.to_hdf5(
+        hdf5_file_name="test_species3.hdf5",
+        output_file_dir=output_dir,
+        atomic_species_to_limit=[6, 7, 1],
+        total_records=1,
+    )
+    assert n_record == 1
+    assert n_configs == 3
+    assert os.path.exists(f"{output_dir}/test_species3.hdf5")
+
+    # test combining with other restrictions some more
+    n_record, n_configs = curated_dataset.to_hdf5(
+        hdf5_file_name="test_species4.hdf5",
+        output_file_dir=output_dir,
+        atomic_species_to_limit=[6, 7, 1],
+        max_configurations_per_record=1,
+    )
+    assert n_record == 2
+    assert n_configs == 2
+    assert os.path.exists(f"{output_dir}/test_species4.hdf5")
+
+    n_record, n_configs = curated_dataset.to_hdf5(
+        hdf5_file_name="test_species5.hdf5",
+        output_file_dir=output_dir,
+        atomic_species_to_limit=[6, 7, 8, 1],
+        max_configurations_per_record=2,
+        total_configurations=5,
+    )
+    assert n_record == 3
+    assert n_configs == 5
+    assert os.path.exists(f"{output_dir}/test_species5.hdf5")
+
+    n_record, n_configs = curated_dataset.to_hdf5(
+        hdf5_file_name="test_species5.hdf5",
+        output_file_dir=output_dir,
+        atomic_species_to_limit=["C", "N", "O", "H"],
+        max_configurations_per_record=2,
+        total_configurations=5,
+    )
+    assert n_record == 3
+    assert n_configs == 5
+    assert os.path.exists(f"{output_dir}/test_species5.hdf5")
+
+    # test to see if we can remove high energy configurations
+    # anything greater than 2.5 should exlcude the last record
+    n_record, n_configs = curated_dataset.to_hdf5(
+        hdf5_file_name="test_energy.hdf5",
+        output_file_dir=output_dir,
+        max_force=2.5 * unit.kilojoule_per_mole / unit.nanometer,
+    )
+    assert n_record == 5
+    assert n_configs == 10
+
+    # we can't define total_Records and total_configurations at the same time
+    with pytest.raises(ValueError):
+        n_record, n_configs = curated_dataset.to_hdf5(
+            hdf5_file_name="test_energy.hdf5",
+            output_file_dir=output_dir,
+            total_records=5,
+            total_configurations=5,
+        )
+
+    # we need to make sure that we have defined units with max_force
+    with pytest.raises(ValueError):
+        n_record, n_configs = curated_dataset.to_hdf5(
+            hdf5_file_name="test_energy.hdf5",
+            output_file_dir=output_dir,
+            max_force=2.5,
+        )
+
+    # we need to make sure those units are actually force units
+    with pytest.raises(ValueError):
+        n_record, n_configs = curated_dataset.to_hdf5(
+            hdf5_file_name="test_energy.hdf5",
+            output_file_dir=output_dir,
+            max_force=2.5 * unit.kilojoule_per_mole,
+        )
+
+    # make sure we have passed a list of atomic species we might want to limit
+    with pytest.raises(ValueError):
+        n_record, n_configs = curated_dataset.to_hdf5(
+            hdf5_file_name="test_energy.hdf5",
+            output_file_dir=output_dir,
+            atomic_species_to_limit=6,
+        )
+
+    # exclude everything so that we have an empty dataset resulting from trimming
+    with pytest.raises(ValueError):
+        n_record, n_configs = curated_dataset.to_hdf5(
+            hdf5_file_name="test_energy.hdf5",
+            output_file_dir=output_dir,
+            atomic_species_to_limit=[100],
+        )
+
+    # make the original dataset empty
+    with pytest.raises(ValueError):
+        empty_dataset = SourceDataset("empty_dataset")
+        curated_dataset.dataset = empty_dataset
+        n_record, n_configs = curated_dataset.to_hdf5(
+            hdf5_file_name="test_energy.hdf5",
+            output_file_dir=output_dir,
+            max_force=2.5 * unit.kilojoule_per_mole / unit.nanometer,
+        )

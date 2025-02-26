@@ -569,26 +569,7 @@ def test_dataset_validation():
     assert new_dataset.validate_records() == True
 
 
-def test_dataset_max_records():
-    # Test to make sure that if we subset the dataset with max_records we get the correct number of records
-
-    ds = SourceDataset("test_dataset")
-    positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
-    energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
-    atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
-
-    for i in range(10):
-        ds.create_record(f"mol{i}")
-        ds.add_properties(f"mol{i}", [positions, energies, atomic_numbers])
-
-    ds_subset = ds.subset_dataset_max_records(5)
-
-    assert ds_subset.total_records() == 5
-    ds_subset = ds.subset_dataset_max_records(2)
-    assert ds_subset.total_records() == 2
-
-
-def test_dataset_total_conformers():
+def test_dataset_subsetting():
     ds = SourceDataset("test_dataset")
     positions = Positions(
         value=[
@@ -612,27 +593,46 @@ def test_dataset_total_conformers():
     assert ds.total_configs() == 50
     assert ds.total_records() == 10
 
-    ds_subset = ds.subset_dataset_max_records(5)
+    # check total records
+    ds_subset = ds.subset_dataset(total_records=5)
     assert ds_subset.total_configs() == 25
     assert ds_subset.total_records() == 5
 
-    ds_subset = ds.subset_dataset_total_conformers(20)
+    ds_subset = ds.subset_dataset(total_records=3)
+    assert ds_subset.total_configs() == 15
+    assert ds_subset.total_records() == 3
+
+    # check total_records and max_configurations_per_record
+    ds_subset = ds.subset_dataset(total_records=3, max_configurations_per_record=2)
+    assert ds_subset.total_configs() == 6
+    assert ds_subset.total_records() == 3
+
+    # check total_conformers
+    ds_subset = ds.subset_dataset(total_configurations=20)
     assert ds_subset.total_configs() == 20
     assert ds_subset.total_records() == 4
 
-    ds_subset = ds.subset_dataset_total_conformers(20, max_conformers_per_record=2)
+    ds_subset = ds.subset_dataset(
+        total_configurations=20, max_configurations_per_record=2
+    )
     assert ds_subset.total_configs() == 20
     assert ds_subset.total_records() == 10
 
-    ds_subset = ds.subset_dataset_total_conformers(20, max_conformers_per_record=6)
+    ds_subset = ds.subset_dataset(
+        total_configurations=20, max_configurations_per_record=6
+    )
     assert ds_subset.total_configs() == 20
     assert ds_subset.total_records() == 4
 
-    ds_subset = ds.subset_dataset_total_conformers(11, max_conformers_per_record=4)
+    ds_subset = ds.subset_dataset(
+        total_configurations=11, max_configurations_per_record=4
+    )
     assert ds_subset.total_configs() == 11
     assert ds_subset.total_records() == 3
 
-    ds_subset = ds.subset_dataset_total_conformers(11, max_conformers_per_record=5)
+    ds_subset = ds.subset_dataset(
+        total_configurations=11, max_configurations_per_record=5
+    )
     assert ds_subset.total_configs() == 11
     assert ds_subset.total_records() == 3
 
@@ -679,12 +679,253 @@ def test_limit_atomic_numbers():
     atomic_numbers_to_limit = np.array([8, 6, 1])
 
     assert record.contains_atomic_numbers(atomic_numbers_to_limit) == True
-    new_dataset = dataset.limit_atomic_species(atomic_numbers_to_limit)
+    new_dataset = dataset.subset_dataset(
+        atomic_numbers_to_limit=atomic_numbers_to_limit
+    )
 
     assert new_dataset.total_records() == 1
 
     atomic_numbers_to_limit = np.array([8, 6])
 
     assert record.contains_atomic_numbers(atomic_numbers_to_limit) == False
-    new_dataset = dataset.limit_atomic_species(atomic_numbers_to_limit)
+    new_dataset = dataset.subset_dataset(
+        atomic_numbers_to_limit=atomic_numbers_to_limit
+    )
     assert new_dataset.total_records() == 0
+
+
+def test_remove_high_force_configs():
+
+    atomic_numbers = AtomicNumbers(
+        value=np.array(
+            [
+                [6],
+                [1],
+            ]
+        )
+    )
+    energies = Energies(
+        value=np.array(
+            [
+                [1.0],
+                [2.0],
+                [3.0],
+                [4.0],
+                [5.0],
+            ]
+        ),
+        units=unit.kilojoule_per_mole,
+    )
+    positions = Positions(
+        value=np.array(
+            [
+                [
+                    [1.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                ],
+                [
+                    [2.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                ],
+                [
+                    [3.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                ],
+                [
+                    [4.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                ],
+                [
+                    [5.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                ],
+            ]
+        ),
+        units=unit.nanometer,
+    )
+    forces = Forces(
+        value=np.array(
+            [
+                [
+                    [10, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                ],
+                [
+                    [20, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                ],
+                [
+                    [30, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                ],
+                [
+                    [40, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                ],
+                [
+                    [31, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                ],
+            ]
+        ),
+        units=unit.kilojoule_per_mole / unit.nanometer,
+    )
+    record = Record("mol1")
+    record.add_properties([atomic_numbers, energies, positions, forces])
+
+    # first check the record level removal of high energy configurations
+    record_new = record.remove_high_force_configs(
+        30 * unit.kilojoule_per_mole / unit.nanometer
+    )
+    assert record_new.n_configs == 3
+
+    record_new = record.remove_high_force_configs(
+        31 * unit.kilojoule_per_mole / unit.nanometer
+    )
+    assert record_new.n_configs == 4
+    assert record_new.per_system["energies"].value.shape == (4, 1)
+    assert np.all(
+        record_new.per_system["energies"].value
+        == np.array([[1.0], [2.0], [3.0], [5.0]])
+    )
+
+    # test filtering via the dataset
+
+    dataset = SourceDataset("test")
+    dataset.add_record(record)
+
+    # effectively the same tests as above, but done on the dataset level
+    trimmed_dataset = dataset.subset_dataset(
+        total_configurations=5,
+        max_force=30 * unit.kilojoule_per_mole / unit.nanometer,
+    )
+    assert trimmed_dataset.total_records() == 1
+    assert trimmed_dataset.get_record("mol1").n_configs == 3
+    assert np.all(
+        trimmed_dataset.get_record("mol1").per_system["energies"].value
+        == np.array([[1.0], [2.0], [3.0]])
+    )
+
+    trimmed_dataset = dataset.subset_dataset(
+        total_configurations=5, max_force=31 * unit.kilojoule_per_mole / unit.nanometer
+    )
+    assert trimmed_dataset.total_records() == 1
+    assert trimmed_dataset.get_record("mol1").n_configs == 4
+    assert np.all(
+        trimmed_dataset.get_record("mol1").per_system["energies"].value
+        == np.array([[1.0], [2.0], [3.0], [5.0]])
+    )
+
+    # consider now including other restrictions on the number of configurations, records, etc.
+    # limit the number of configurations in total
+    trimmed_dataset = dataset.subset_dataset(
+        total_configurations=3, max_force=31 * unit.kilojoule_per_mole / unit.nanometer
+    )
+    assert trimmed_dataset.total_records() == 1
+    assert trimmed_dataset.get_record("mol1").n_configs == 3
+    assert np.all(
+        trimmed_dataset.get_record("mol1").per_system["energies"].value
+        == np.array([[1.0], [2.0], [3.0]])
+    )
+
+    # total_configurations and max_configurations_per_record
+    trimmed_dataset = dataset.subset_dataset(
+        total_configurations=5,
+        max_configurations_per_record=3,
+        max_force=31 * unit.kilojoule_per_mole / unit.nanometer,
+    )
+    assert trimmed_dataset.total_records() == 1
+    assert trimmed_dataset.get_record("mol1").n_configs == 3
+    assert np.all(
+        trimmed_dataset.get_record("mol1").per_system["energies"].value
+        == np.array([[1.0], [2.0], [3.0]])
+    )
+
+    # add a second record, but with different atomic numbers
+    # to further test filtering
+
+    atomic_numbers = AtomicNumbers(value=np.array([[8], [1]]))
+    record2 = Record("mol2")
+    record2.add_properties([atomic_numbers, energies, positions, forces])
+
+    dataset.add_record(record2)
+
+    #  limit total_configurations
+    trimmed_dataset = dataset.subset_dataset(
+        total_configurations=5, max_force=30 * unit.kilojoule_per_mole / unit.nanometer
+    )
+    assert trimmed_dataset.total_records() == 2
+    assert trimmed_dataset.get_record("mol1").n_configs == 3
+    assert trimmed_dataset.get_record("mol2").n_configs == 2
+    assert trimmed_dataset.total_configs() == 5
+
+    # limit total_configurations and max_configurations_per_record
+    trimmed_dataset = dataset.subset_dataset(
+        total_configurations=6,
+        max_configurations_per_record=3,
+        max_force=31 * unit.kilojoule_per_mole / unit.nanometer,
+    )
+    assert trimmed_dataset.total_records() == 2
+    assert trimmed_dataset.get_record("mol1").n_configs == 3
+    assert trimmed_dataset.get_record("mol2").n_configs == 3
+    assert trimmed_dataset.total_configs() == 6
+
+    # Add in limiting of the atomic numbers
+    trimmed_dataset = dataset.subset_dataset(
+        total_configurations=6,
+        max_configurations_per_record=3,
+        max_force=30 * unit.kilojoule_per_mole / unit.nanometer,
+        atomic_numbers_to_limit=[6, 1],
+    )
+    assert trimmed_dataset.total_records() == 1
+    assert trimmed_dataset.get_record("mol1").n_configs == 3
+    assert trimmed_dataset.total_configs() == 3
+    assert "mol2" not in trimmed_dataset.records.keys()
+
+    # same test but only restrictions on atomic_numbers and max_force
+    trimmed_dataset = dataset.subset_dataset(
+        max_force=30 * unit.kilojoule_per_mole / unit.nanometer,
+        atomic_numbers_to_limit=[6, 1],
+    )
+    assert trimmed_dataset.total_records() == 1
+    assert trimmed_dataset.get_record("mol1").n_configs == 3
+    assert trimmed_dataset.total_configs() == 3
+    assert "mol2" not in trimmed_dataset.records.keys()
+
+    # check toggling of total records
+    trimmed_dataset = dataset.subset_dataset(
+        total_records=1, max_force=30 * unit.kilojoule_per_mole / unit.nanometer
+    )
+    assert trimmed_dataset.total_records() == 1
+    assert trimmed_dataset.get_record("mol1").n_configs == 3
+    assert trimmed_dataset.total_configs() == 3
+
+    # check toggling of total records
+    trimmed_dataset = dataset.subset_dataset(
+        total_records=2, max_force=30 * unit.kilojoule_per_mole / unit.nanometer
+    )
+    assert trimmed_dataset.total_records() == 2
+    assert trimmed_dataset.get_record("mol1").n_configs == 3
+    assert trimmed_dataset.get_record("mol2").n_configs == 3
+    assert trimmed_dataset.total_configs() == 6
+
+    # make sure we can also exclude atomic numbers
+    trimmed_dataset = dataset.subset_dataset(
+        total_records=2,
+        max_force=30 * unit.kilojoule_per_mole / unit.nanometer,
+        atomic_numbers_to_limit=[6, 1],
+    )
+    assert trimmed_dataset.total_records() == 1
+    assert trimmed_dataset.get_record("mol1").n_configs == 3
+    assert trimmed_dataset.total_configs() == 3
+
+    # case where our atomic number filtering captures everything
+    trimmed_dataset = dataset.subset_dataset(
+        total_records=2,
+        max_force=30 * unit.kilojoule_per_mole / unit.nanometer,
+        atomic_numbers_to_limit=[6, 1, 8],
+    )
+    assert trimmed_dataset.total_records() == 2
+    assert trimmed_dataset.get_record("mol1").n_configs == 3
+    assert trimmed_dataset.get_record("mol2").n_configs == 3
+    assert trimmed_dataset.total_configs() == 6

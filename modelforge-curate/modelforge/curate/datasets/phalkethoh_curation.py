@@ -194,7 +194,6 @@ class PhAlkEthOHCuration(DatasetCuration):
         local_path_dir: str,
         filenames: List[str],
         dataset_names: List[str],
-        max_force: Optional[unit.Quantity] = None,
     ):
         """
         Processes a downloaded dataset: extracts relevant information.
@@ -207,8 +206,7 @@ class PhAlkEthOHCuration(DatasetCuration):
             Names of the raw sqlite files to process,
         dataset_names: List[str], required
             List of names of the sqlite datasets to process.
-        max_force: Optional[float], optional, default=None
-            If the force exceeds this value the configuration will be excluded
+
         """
         from tqdm import tqdm
         import numpy as np
@@ -313,108 +311,91 @@ class PhAlkEthOHCuration(DatasetCuration):
 
                         total_charge_temp = self._calculate_total_charge(smiles)
 
-                        # if set, let us see if the configuration has a force that exceeds the maximum
-                        if max_force is not None:
-                            force_magnitude = (
-                                np.abs(
-                                    properties["properties"]["current gradient"]
-                                    + properties["properties"][
-                                        "dispersion correction gradient"
+                        total_charge = TotalCharge(
+                            value=np.array(total_charge_temp.m).reshape(1, 1),
+                            units=total_charge_temp.u,
+                        )
+                        dataset.add_property(name, total_charge)
+
+                        positions = Positions(
+                            value=config.reshape(1, -1, 3), units=unit.bohr
+                        )
+                        dataset.add_property(name, positions)
+
+                        # Note need to typecast here because of a bug in the
+                        # qcarchive entry: see issue: https://github.com/MolSSI/QCFractal/issues/766
+                        dispersion_correction_energy = Energies(
+                            name="dispersion_correction_energy",
+                            value=np.array(
+                                float(
+                                    properties["properties"][
+                                        "dispersion correction energy"
                                     ]
                                 )
-                                * unit.hartree
-                                / unit.bohr
-                            )
-                            if np.any(force_magnitude > max_force):
-                                add_record = False
+                            ).reshape(1, 1),
+                            units=unit.hartree,
+                        )
+                        dataset.add_property(name, dispersion_correction_energy)
 
-                        if add_record:
-                            total_charge = TotalCharge(
-                                value=np.array(total_charge_temp.m).reshape(1, 1),
-                                units=total_charge_temp.u,
-                            )
-                            dataset.add_property(name, total_charge)
+                        dft_total_energy = Energies(
+                            name="dft_total_energy",
+                            value=np.array(
+                                properties["properties"]["current energy"]
+                            ).reshape(1, 1)
+                            + dispersion_correction_energy.value,
+                            units=unit.hartree,
+                        )
+                        dataset.add_property(name, dft_total_energy)
 
-                            positions = Positions(
-                                value=config.reshape(1, -1, 3), units=unit.bohr
-                            )
-                            dataset.add_property(name, positions)
+                        dispersion_correction_gradient = Forces(
+                            name="dispersion_correction_gradient",
+                            value=np.array(
+                                properties["properties"][
+                                    "dispersion correction gradient"
+                                ]
+                            ).reshape(1, -1, 3),
+                            units=unit.hartree / unit.bohr,
+                        )
+                        dataset.add_property(name, dispersion_correction_gradient)
 
-                            # Note need to typecast here because of a bug in the
-                            # qcarchive entry: see issue: https://github.com/MolSSI/QCFractal/issues/766
-                            dispersion_correction_energy = Energies(
-                                name="dispersion_correction_energy",
-                                value=np.array(
-                                    float(
-                                        properties["properties"][
-                                            "dispersion correction energy"
-                                        ]
-                                    )
-                                ).reshape(1, 1),
-                                units=unit.hartree,
-                            )
-                            dataset.add_property(name, dispersion_correction_energy)
+                        dispersion_correction_force = Forces(
+                            name="dispersion_correction_force",
+                            value=-dispersion_correction_gradient.value,
+                            units=unit.hartree / unit.bohr,
+                        )
+                        dataset.add_property(name, dispersion_correction_force)
 
-                            dft_total_energy = Energies(
-                                name="dft_total_energy",
-                                value=np.array(
-                                    properties["properties"]["current energy"]
-                                ).reshape(1, 1)
-                                + dispersion_correction_energy.value,
-                                units=unit.hartree,
-                            )
-                            dataset.add_property(name, dft_total_energy)
+                        dft_total_gradient = Forces(
+                            name="dft_total_gradient",
+                            value=np.array(
+                                properties["properties"]["current gradient"]
+                            ).reshape(1, -1, 3)
+                            + dispersion_correction_gradient.value,
+                            units=unit.hartree / unit.bohr,
+                        )
+                        dataset.add_property(name, dft_total_gradient)
 
-                            dispersion_correction_gradient = Forces(
-                                name="dispersion_correction_gradient",
-                                value=np.array(
-                                    properties["properties"][
-                                        "dispersion correction gradient"
-                                    ]
-                                ).reshape(1, -1, 3),
-                                units=unit.hartree / unit.bohr,
-                            )
-                            dataset.add_property(name, dispersion_correction_gradient)
+                        dft_total_force = Forces(
+                            name="dft_total_force",
+                            value=-dft_total_gradient.value,
+                            units=unit.hartree / unit.bohr,
+                        )
+                        dataset.add_property(name, dft_total_force)
 
-                            dispersion_correction_force = Forces(
-                                name="dispersion_correction_force",
-                                value=-dispersion_correction_gradient.value,
-                                units=unit.hartree / unit.bohr,
-                            )
-                            dataset.add_property(name, dispersion_correction_force)
-
-                            dft_total_gradient = Forces(
-                                name="dft_total_gradient",
-                                value=np.array(
-                                    properties["properties"]["current gradient"]
-                                ).reshape(1, -1, 3)
-                                + dispersion_correction_gradient.value,
-                                units=unit.hartree / unit.bohr,
-                            )
-                            dataset.add_property(name, dft_total_gradient)
-
-                            dft_total_force = Forces(
-                                name="dft_total_force",
-                                value=-dft_total_gradient.value,
-                                units=unit.hartree / unit.bohr,
-                            )
-                            dataset.add_property(name, dft_total_force)
-
-                            scf_dipole = DipoleMomentPerSystem(
-                                name="scf_dipole",
-                                value=np.array(
-                                    properties["properties"]["scf dipole"]
-                                ).reshape(1, 3),
-                                units=unit.elementary_charge * unit.bohr,
-                            )
-                            dataset.add_property(name, scf_dipole)
+                        scf_dipole = DipoleMomentPerSystem(
+                            name="scf_dipole",
+                            value=np.array(
+                                properties["properties"]["scf dipole"]
+                            ).reshape(1, 3),
+                            units=unit.elementary_charge * unit.bohr,
+                        )
+                        dataset.add_property(name, scf_dipole)
 
         return dataset
 
     def process(
         self,
         force_download: bool = False,
-        max_force: Optional[unit.Quantity] = None,
         n_threads=2,
     ) -> None:
         """
@@ -425,8 +406,6 @@ class PhAlkEthOHCuration(DatasetCuration):
         force_download: bool, optional, default=False
             If the raw data_file is present in the local_cache_dir, the local copy will be used.
             If True, this will force the software to download the data again, even if present.
-        max_force: Optional[float], optional, default=None
-            If set this any confirugrations with a force that exceeds this value will be excluded.
         n_threads, int, default=2
             Number of concurrent threads for retrieving data from QCArchive
         Examples
@@ -488,5 +467,4 @@ class PhAlkEthOHCuration(DatasetCuration):
             self.local_cache_dir,
             local_database_names,
             dataset_names,
-            max_force=max_force,
         )

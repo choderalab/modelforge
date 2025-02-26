@@ -73,6 +73,30 @@ def main():
     print(f"Total records: {total_records}")
     print(f"Total configs: {total_configs}")
 
+    # create a dataset with a subset of elements
+    # limit to only organics C, H, P, S, O, N, F, Cl, Br
+    # only include transition metals Pd, Zn, Fe, Cu
+
+    total_records, total_configs = tmqm.to_hdf5(
+        hdf5_file_name=f"tmqm_dataset_PdZnFeCu_CHPSONFClBr_v{version_out}.hdf5",
+        output_file_dir=output_file_dir,
+        limit_atomic_species=[
+            "Pd",
+            "Zn",
+            "Fe",
+            "Cu",
+            "C",
+            "H",
+            "P",
+            "S",
+            "O",
+            "N",
+            "F",
+            "Cl",
+            "Br",
+        ],
+    )
+
 
 if __name__ == "__main__":
     main()

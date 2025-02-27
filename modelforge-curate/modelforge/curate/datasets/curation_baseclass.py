@@ -22,6 +22,7 @@ class DatasetCuration(ABC):
 
     def __init__(
         self,
+        dataset_name: str,
         local_cache_dir: Optional[str] = "./datasets_cache",
         version_select: str = "latest",
     ):
@@ -30,6 +31,8 @@ class DatasetCuration(ABC):
 
         Parameters
         ----------
+        dataset_name: str, required
+            Name of the dataset to curate.
         local_cache_dir: str, optional, default='./qm9_datafiles'
             Location to save downloaded dataset.
         version_select: str, optional, default='latest'
@@ -41,6 +44,8 @@ class DatasetCuration(ABC):
         # make sure we can handle a path with a ~ in it
         self.local_cache_dir = os.path.expanduser(local_cache_dir)
         self.version_select = version_select
+        self.dataset_name = dataset_name
+
         os.makedirs(self.local_cache_dir, exist_ok=True)
 
         # initialize parameter information
@@ -240,6 +245,7 @@ class DatasetCuration(ABC):
         total_configurations: Optional[int] = None,
         atomic_species_to_limit: Optional[List[Union[str, int]]] = None,
         max_force: Optional[unit.Quantity] = None,
+        final_configuration_only: Optional[bool] = False,
     ) -> Tuple[int, int]:
         """
         Writes the dataset to an hdf5 file.
@@ -265,6 +271,8 @@ class DatasetCuration(ABC):
             These can be passed as a list of strings, e.g., ['C', 'H', 'O'] or as a list of atomic numbers, e.g., [6, 1, 8].
         max_force: unit.Quantity, optional, default=None
             Maximum force to include in the dataset. Any configuration with forces greater than this value will be excluded.
+        final_configuration_only: bool, optional, default=False
+            If True, only the final configuration of each record will be included in the dataset.
 
         Returns
         -------
@@ -323,6 +331,7 @@ class DatasetCuration(ABC):
             or atomic_species_to_limit is not None
             or max_force is not None
             or total_records is not None
+            or final_configuration_only
         ):
             import time
             import random
@@ -342,6 +351,7 @@ class DatasetCuration(ABC):
                 max_configurations_per_record=max_configurations_per_record,
                 atomic_numbers_to_limit=atomic_numbers_to_limit,
                 max_force=max_force,
+                final_configuration_only=final_configuration_only,
             )
             if dataset_trimmed.total_records() == 0:
                 raise ValueError("No records found in the dataset after filtering.")
@@ -366,3 +376,19 @@ class DatasetCuration(ABC):
                 file_path=output_file_dir,
             )
             return (self.dataset.total_records(), self.dataset.total_configs())
+
+    def load_from_db(self, local_db_dir: str, local_db_name: str):
+        """
+        Load the dataset from a local database.
+
+        Parameters
+        ----------
+        local_db_name: str, required
+            Name of the local database to load the dataset from.
+        """
+        self.dataset = SourceDataset(
+            dataset_name=self.dataset_name,
+            local_db_dir=local_db_dir,
+            local_db_name=local_db_name,
+            read_from_db=True,
+        )

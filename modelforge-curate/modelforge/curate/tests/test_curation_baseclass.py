@@ -10,10 +10,10 @@ from modelforge.curate.properties import *
 from modelforge.curate.datasets.curation_baseclass import DatasetCuration
 
 
-def setup_test_dataset(local_cache_dir):
+def setup_test_dataset(dataset_name, local_cache_dir):
     class TestCuration(DatasetCuration):
         def _init_dataset_parameters(self):
-            self.dataset = SourceDataset("test_dataset")
+            self.dataset = SourceDataset(dataset_name=self.dataset_name)
             for i in range(5):
                 atomic_numbers = AtomicNumbers(value=[[6 + i], [1]])
                 positions = Positions(
@@ -39,7 +39,7 @@ def setup_test_dataset(local_cache_dir):
                 record.add_properties([atomic_numbers, positions, energy, forces])
                 self.dataset.add_record(record)
 
-    return TestCuration(local_cache_dir=local_cache_dir)
+    return TestCuration(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
 
 
 def test_dipolemoment_calculation():
@@ -281,7 +281,7 @@ def test_dipolemoment_calculation():
         value=np.linalg.norm(scf_dipole_moment.value).reshape(1, 1),
         units=unit.elementary_charge * unit.nanometer,
     )
-    dataset_curation = TestCuration()
+    dataset_curation = TestCuration(dataset_name="test_dataset")
 
     dipole_moment_comp = dataset_curation.compute_dipole_moment(
         atomic_numbers=atomic_numbers, positions=positions, partial_charges=charges
@@ -311,7 +311,7 @@ def test_dipolemoment_calculation():
 
 
 def test_base_convert_element_string_to_atomic_number(prep_temp_dir):
-    curated_dataset = setup_test_dataset(str(prep_temp_dir))
+    curated_dataset = setup_test_dataset("test_dataset_1a", str(prep_temp_dir))
 
     output = curated_dataset._convert_element_list_to_atomic_numbers(["C", "H"])
     assert np.all(output == np.array([6, 1]))
@@ -319,7 +319,7 @@ def test_base_convert_element_string_to_atomic_number(prep_temp_dir):
 
 def test_base_operations(prep_temp_dir):
     output_dir = f"{prep_temp_dir}/test_base_operations"
-    curated_dataset = setup_test_dataset(output_dir)
+    curated_dataset = setup_test_dataset("test_dataset_1b", output_dir)
 
     # test writing the dataset
     n_record, n_configs = curated_dataset.to_hdf5(
@@ -437,6 +437,14 @@ def test_base_operations(prep_temp_dir):
     assert n_configs == 5
     assert os.path.exists(f"{output_dir}/test_species5.hdf5")
 
+    n_record, n_configs = curated_dataset.to_hdf5(
+        hdf5_file_name="test_species5.hdf5",
+        output_file_dir=output_dir,
+        final_configuration_only=True,
+    )
+    assert n_record == 5
+    assert n_configs == 5
+
     # test to see if we can remove high energy configurations
     # anything greater than 2.5 should exlcude the last record
     n_record, n_configs = curated_dataset.to_hdf5(
@@ -490,7 +498,7 @@ def test_base_operations(prep_temp_dir):
 
     # make the original dataset empty
     with pytest.raises(ValueError):
-        empty_dataset = SourceDataset("empty_dataset")
+        empty_dataset = SourceDataset(dataset_name="empty_dataset")
         curated_dataset.dataset = empty_dataset
         n_record, n_configs = curated_dataset.to_hdf5(
             hdf5_file_name="test_energy.hdf5",

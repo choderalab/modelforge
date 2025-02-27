@@ -585,6 +585,36 @@ class SourceDataset:
 
         # self.records[record.name] = copy.deepcopy(record)
 
+    def add_records(self, records: List[Record]):
+        """
+        Add a list of records to the dataset.
+
+        Parameters
+        ----------
+        records: List[Record]
+            List of records to add to the dataset.
+
+        Returns
+        -------
+
+        """
+        with SqliteDict(
+            f"{self.local_db_dir}/{self.local_db_name}",
+            autocommit=True,
+        ) as db:
+            for i in range(len(records)):
+                record_name = records[i].name
+
+                if record_name in self.records.keys():
+                    log.warning(
+                        f"Record with name {record_name} already exists in the dataset."
+                    )
+                    raise ValueError(
+                        f"Record with name {record_name} already exists in the dataset."
+                    )
+
+                db[record_name] = records[i]
+
     def update_record(self, record: Record):
         """
         Update a record in the dataset by overwriting the existing record with the input.
@@ -660,9 +690,24 @@ class SourceDataset:
         -------
 
         """
+        assert isinstance(record_name, str)
+        # check if the record exists; if it does not add it
+        if record_name not in self.records.keys():
+            log.info(
+                f"Record with name {record_name} does not exist in the dataset. Creating it now."
+            )
+            self.create_record(record_name)
 
-        for property in properties:
-            self.add_property(record_name, property)
+        with SqliteDict(
+            f"{self.local_db_dir}/{self.local_db_name}",
+            autocommit=True,
+        ) as db:
+            record = db[record_name]
+            record.add_properties(properties)
+            db[record_name] = record
+
+        # for property in properties:
+        #     self.add_property(record_name, property)
 
     def add_property(self, record_name: str, property: Type[PropertyBaseModel]):
         """
@@ -754,6 +799,7 @@ class SourceDataset:
         max_configurations_per_record: Optional[int] = None,
         atomic_numbers_to_limit: Optional[np.ndarray] = None,
         max_force: Optional[unit.Quantity] = None,
+        final_configuration_only: Optional[bool] = False,
         local_db_dir: Optional[str] = None,
         local_db_name: Optional[str] = None,
     ) -> Self:
@@ -775,6 +821,8 @@ class SourceDataset:
             Any molecules that contain elements outside of this list will be igonored
         max_force: Optional[unit.Quantity], default=None
             If set, configurations with forces greater than this value will be removed.
+        final_configuration_only: Optional[bool], default=False
+            If True, only the final configuration of each record will be included in the subset.
         local_db_dir: str, optional, default=None
             Directory to store the local database for the new dataset.  If not defined, will use the same directory as the current dataset.
         local_db_name: str, optional, default=None
@@ -791,6 +839,14 @@ class SourceDataset:
         if total_records is not None and total_configurations is not None:
             raise ValueError(
                 "Cannot set both total_records and total_conformers. Please choose one."
+            )
+
+        if (
+            final_configuration_only == True
+            and max_configurations_per_record is not None
+        ):
+            raise ValueError(
+                "Cannot set final_configuration_only=True and total_conformers. Please choose one."
             )
 
         if total_configurations is not None:
@@ -864,6 +920,7 @@ class SourceDataset:
                             # now check to see if the n_configs_to_add is more than what we still need to hit max conformers
                             if n_configs_to_add > total_configurations_to_add:
                                 n_configs_to_add = total_configurations_to_add
+
                         # even if we don't limit the number of configurations, we may still need to limit the number we
                         # include to satisfy the total number of configurations
                         else:
@@ -871,9 +928,17 @@ class SourceDataset:
                             if n_configs_to_add > total_configurations_to_add:
                                 n_configs_to_add = total_configurations_to_add
 
-                        record = record.slice_record(0, n_configs_to_add)
-                        new_dataset.add_record(record)
-                        total_configurations_to_add -= n_configs_to_add
+                        if final_configuration_only:
+                            record = record.slice_record(
+                                record.n_configs - 1, record.n_configs
+                            )
+                            new_dataset.add_record(record)
+                            total_configurations_to_add -= 1
+
+                        else:
+                            record = record.slice_record(0, n_configs_to_add)
+                            new_dataset.add_record(record)
+                            total_configurations_to_add -= n_configs_to_add
                 return new_dataset
 
         elif total_records is not None:
@@ -904,6 +969,11 @@ class SourceDataset:
 
                             record = record.slice_record(0, n_to_add)
 
+                        if final_configuration_only:
+                            record = record.slice_record(
+                                record.n_configs - 1, record.n_configs
+                            )
+
                         new_dataset.add_record(record)
                         total_records_to_add -= 1
                 return new_dataset
@@ -927,6 +997,10 @@ class SourceDataset:
                     if max_configurations_per_record is not None:
                         n_to_add = min(max_configurations_per_record, record.n_configs)
                         record = record.slice_record(0, n_to_add)
+                    if final_configuration_only:
+                        record = record.slice_record(
+                            record.n_configs - 1, record.n_configs
+                        )
 
                     new_dataset.add_record(record)
                 return new_dataset
@@ -1209,70 +1283,42 @@ class SourceDataset:
 
         with OpenWithLock(f"{full_file_path}.lockfile", "w") as lockfile:
             with h5py.File(full_file_path, "w") as f:
-                for record_name in tqdm(self.records.keys()):
-                    record_group = f.create_group(record_name)
+                with SqliteDict(
+                    f"{self.local_db_dir}/{self.local_db_name}",
+                ) as db:
+                    for record_name in tqdm(self.records.keys()):
+                        record_group = f.create_group(record_name)
 
-                    record = self.get_record(record_name)
+                        record = db[record_name]
 
-                    record_group.create_dataset(
-                        "atomic_numbers",
-                        data=record.atomic_numbers.value,
-                        shape=record.atomic_numbers.value.shape,
-                    )
-                    record_group["atomic_numbers"].attrs["format"] = str(
-                        record.atomic_numbers.classification
-                    )
-                    record_group["atomic_numbers"].attrs["property_type"] = str(
-                        record.atomic_numbers.property_type
-                    )
-
-                    record_group.create_dataset("n_configs", data=record.n_configs)
-                    record_group["n_configs"].attrs["format"] = "meta_data"
-
-                    for key, property in record.per_atom.items():
-
-                        target_units = GlobalUnitSystem.get_units(
-                            property.property_type
-                        )
                         record_group.create_dataset(
-                            key,
-                            data=unit.Quantity(property.value, property.units)
-                            .to(target_units, "chem")
-                            .magnitude,
-                            shape=property.value.shape,
+                            "atomic_numbers",
+                            data=record.atomic_numbers.value,
+                            shape=record.atomic_numbers.value.shape,
                         )
-                        record_group[key].attrs["u"] = str(target_units)
-                        record_group[key].attrs["format"] = str(property.classification)
-                        record_group[key].attrs["property_type"] = str(
-                            property.property_type
+                        record_group["atomic_numbers"].attrs["format"] = str(
+                            record.atomic_numbers.classification
                         )
-
-                    for key, property in record.per_system.items():
-                        target_units = GlobalUnitSystem.get_units(
-                            property.property_type
-                        )
-                        record_group.create_dataset(
-                            key,
-                            data=unit.Quantity(property.value, property.units)
-                            .to(target_units, "chem")
-                            .magnitude,
-                            shape=property.value.shape,
+                        record_group["atomic_numbers"].attrs["property_type"] = str(
+                            record.atomic_numbers.property_type
                         )
 
-                        record_group[key].attrs["u"] = str(target_units)
-                        record_group[key].attrs["format"] = str(property.classification)
-                        record_group[key].attrs["property_type"] = str(
-                            property.property_type
-                        )
+                        record_group.create_dataset("n_configs", data=record.n_configs)
+                        record_group["n_configs"].attrs["format"] = "meta_data"
 
-                    for key, property in record.meta_data.items():
-                        if isinstance(property.value, str):
+                        for key, property in record.per_atom.items():
+
+                            target_units = GlobalUnitSystem.get_units(
+                                property.property_type
+                            )
                             record_group.create_dataset(
                                 key,
-                                data=property.value,
-                                dtype=dt,
+                                data=unit.Quantity(property.value, property.units)
+                                .to(target_units, "chem")
+                                .magnitude,
+                                shape=property.value.shape,
                             )
-                            record_group[key].attrs["u"] = str(property.units)
+                            record_group[key].attrs["u"] = str(target_units)
                             record_group[key].attrs["format"] = str(
                                 property.classification
                             )
@@ -1280,13 +1326,19 @@ class SourceDataset:
                                 property.property_type
                             )
 
-                        elif isinstance(property.value, (float, int)):
-
+                        for key, property in record.per_system.items():
+                            target_units = GlobalUnitSystem.get_units(
+                                property.property_type
+                            )
                             record_group.create_dataset(
                                 key,
-                                data=property.value,
+                                data=unit.Quantity(property.value, property.units)
+                                .to(target_units, "chem")
+                                .magnitude,
+                                shape=property.value.shape,
                             )
-                            record_group[key].attrs["u"] = str(property.units)
+
+                            record_group[key].attrs["u"] = str(target_units)
                             record_group[key].attrs["format"] = str(
                                 property.classification
                             )
@@ -1294,22 +1346,51 @@ class SourceDataset:
                                 property.property_type
                             )
 
-                        elif isinstance(property.value, np.ndarray):
+                        for key, property in record.meta_data.items():
+                            if isinstance(property.value, str):
+                                record_group.create_dataset(
+                                    key,
+                                    data=property.value,
+                                    dtype=dt,
+                                )
+                                record_group[key].attrs["u"] = str(property.units)
+                                record_group[key].attrs["format"] = str(
+                                    property.classification
+                                )
+                                record_group[key].attrs["property_type"] = str(
+                                    property.property_type
+                                )
 
-                            record_group.create_dataset(
-                                key, data=property.value, shape=property.value.shape
-                            )
-                            record_group[key].attrs["u"] = str(property.units)
-                            record_group[key].attrs["format"] = str(
-                                property.classification
-                            )
-                            record_group[key].attrs["property_type"] = str(
-                                property.property_type
-                            )
-                        else:
-                            raise ValueError(
-                                f"Unsupported type ({type(property.value)}) for metadata {key}"
-                            )
+                            elif isinstance(property.value, (float, int)):
+
+                                record_group.create_dataset(
+                                    key,
+                                    data=property.value,
+                                )
+                                record_group[key].attrs["u"] = str(property.units)
+                                record_group[key].attrs["format"] = str(
+                                    property.classification
+                                )
+                                record_group[key].attrs["property_type"] = str(
+                                    property.property_type
+                                )
+
+                            elif isinstance(property.value, np.ndarray):
+
+                                record_group.create_dataset(
+                                    key, data=property.value, shape=property.value.shape
+                                )
+                                record_group[key].attrs["u"] = str(property.units)
+                                record_group[key].attrs["format"] = str(
+                                    property.classification
+                                )
+                                record_group[key].attrs["property_type"] = str(
+                                    property.property_type
+                                )
+                            else:
+                                raise ValueError(
+                                    f"Unsupported type ({type(property.value)}) for metadata {key}"
+                                )
         from modelforge.utils.remote import calculate_md5_checksum
 
         hdf5_checksum = calculate_md5_checksum(file_path=file_path, file_name=file_name)

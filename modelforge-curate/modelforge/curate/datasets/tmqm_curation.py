@@ -174,7 +174,9 @@ class tmQMCuration(DatasetCuration):
         from modelforge.dataset.utils import _ATOMIC_ELEMENT_TO_NUMBER
         from modelforge.utils.misc import str_to_float
 
-        dataset = SourceDataset(dataset_name="tmqm", local_db_dir=self.local_cache_dir)
+        dataset = SourceDataset(
+            dataset_name=self.dataset_name, local_db_dir=self.local_cache_dir
+        )
 
         # aggregate the snapshot contents into a list
         snapshots = []
@@ -274,9 +276,7 @@ class tmQMCuration(DatasetCuration):
             partial_charges = PartialCharges(
                 value=np.array(charges).reshape(1, -1, 1), units=unit.elementary_charge
             )
-            dataset.add_properties(
-                record_name=record_name, properties=[partial_charges]
-            )
+            dataset.add_property(record_name=record_name, property=partial_charges)
 
         columns = []
         csv_temp_dict = {}
@@ -285,7 +285,9 @@ class tmQMCuration(DatasetCuration):
         with open(csv_input_file) as csv_file:
             csv_reader = csv.reader(csv_file, delimiter=";")
             line_count = 0
-            for row in tqdm(csv_reader):
+            for row in tqdm(
+                csv_reader, desc="Processing csv file", total=len(snapshot_charges)
+            ):
                 if line_count == 0:
                     columns = row
                     line_count += 1

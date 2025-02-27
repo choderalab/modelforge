@@ -66,7 +66,9 @@ def main():
     version_select = f"v_{version}"
 
     tmqm_xtb = tmQMXTBCuration(
-        local_cache_dir=local_cache_dir, version_select=version_select
+        dataset_name="tmqm_xtb",
+        local_cache_dir=local_cache_dir,
+        version_select=version_select,
     )
 
     tmqm_xtb.process(force_download=False)

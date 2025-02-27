@@ -42,6 +42,7 @@ def main():
     from modelforge.curate.datasets.spice_1_curation import SPICE1Curation
 
     spice1_dataset = SPICE1Curation(
+        dataset_name="spice1",
         local_cache_dir=local_cache_dir,
         version_select=version_select,
     )
@@ -54,7 +55,7 @@ def main():
     # limited to the elements that will work with ANI2x
     hdf5_file_name = f"spice_1_dataset_v{version}_ntc_1000_HCNOFClS.hdf5"
 
-    spice1_dataset.to_hdf5(
+    total_records, total_configs = spice1_dataset.to_hdf5(
         hdf5_file_name=hdf5_file_name,
         output_file_dir=output_file_dir,
         total_configurations=1000,
@@ -63,26 +64,26 @@ def main():
     )
 
     print("SPICE1: 1000 configuration subset limited to ANI2x elements")
-    print(f"Total records: {spice1_dataset.total_records()}")
-    print(f"Total configs: {spice1_dataset.total_configs()}")
+    print(f"Total records: {total_records}")
+    print(f"Total configs: {total_configs}")
 
     # curate the full SPICE 1.1.4 dataset, limited to the elements that will work with ANI2x
     hdf5_file_name = f"spice_1_dataset_v{version}_HCNOFClS.hdf5"
 
-    spice1_dataset.to_hdf5(
+    total_records, total_configs = spice1_dataset.to_hdf5(
         hdf5_file_name=hdf5_file_name,
         output_file_dir=output_file_dir,
         atomic_species_to_limit=ani2x_elements,
     )
 
     print("SPICE1: full dataset limited to ANI2x elements")
-    print(f"Total records: {spice1_dataset.total_records()}")
-    print(f"Total configs: {spice1_dataset.total_configs()}")
+    print(f"Total records: {total_records}")
+    print(f"Total configs: {total_configs}")
 
     # curate the test SPICE 1.1.4 dataset with 1000 total configurations, max of 10 configurations per record
     hdf5_file_name = f"spice_1_dataset_v{version}_ntc_1000.hdf5"
 
-    spice1_dataset.to_hdf5(
+    total_records, total_configs = spice1_dataset.to_hdf5(
         hdf5_file_name=hdf5_file_name,
         output_file_dir=output_file_dir,
         total_configurations=1000,
@@ -90,18 +91,18 @@ def main():
     )
 
     print("SPICE1: 1000 configuration subset")
-    print(f"Total records: {spice1_dataset.total_records()}")
-    print(f"Total configs: {spice1_dataset.total_configs()}")
+    print(f"Total records: {total_records}")
+    print(f"Total configs: {total_configs}")
 
     # curate the full SPICE 1.1.4 dataset
     hdf5_file_name = f"spice_1_dataset_v{version}.hdf5"
 
-    spice1_dataset.to_hdf5(
+    total_records, total_configs = spice1_dataset.to_hdf5(
         hdf5_file_name=hdf5_file_name, output_file_dir=output_file_dir
     )
     print("SPICE1: full dataset")
-    print(f"Total records: {spice1_dataset.total_records()}")
-    print(f"Total configs: {spice1_dataset.total_configs()}")
+    print(f"Total records: {total_records}")
+    print(f"Total configs: {total_configs}")
 
 
 if __name__ == "__main__":

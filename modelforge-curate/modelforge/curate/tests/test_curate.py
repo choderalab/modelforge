@@ -27,7 +27,7 @@ def test_dataset_create_record(prep_temp_dir):
     # test creating a record that already exists
     # this will fail
     new_dataset = SourceDataset(
-        "test_dataset2",
+        dataset_name="test_dataset2",
         local_db_dir=str(prep_temp_dir),
         local_db_name="test_dataset2.sqlite",
     )

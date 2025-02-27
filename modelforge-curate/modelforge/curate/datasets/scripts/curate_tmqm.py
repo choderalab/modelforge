@@ -40,6 +40,7 @@ def main():
     from modelforge.curate.datasets.tmqm_curation import tmQMCuration
 
     tmqm = tmQMCuration(
+        dataset_name="tmqm",
         local_cache_dir=local_cache_dir,
         version_select=version_select,
     )

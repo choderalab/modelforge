@@ -144,7 +144,7 @@ class tmQMXTBCuration(DatasetCuration):
         import h5py
 
         dataset = SourceDataset(
-            dataset_name="tmqm_xtb", local_db_dir=self.local_cache_dir
+            dataset_name=self.dataset_name, local_db_dir=self.local_cache_dir
         )
         with OpenWithLock(f"{local_path_dir}/{hdf5_file_name}.lockfile", "w") as f:
             with h5py.File(f"{local_path_dir}/{hdf5_file_name}", "r") as f:

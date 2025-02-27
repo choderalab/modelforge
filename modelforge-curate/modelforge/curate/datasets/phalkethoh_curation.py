@@ -163,6 +163,9 @@ class PhAlkEthOHCuration(DatasetCuration):
                         if pbar is not None:
                             pbar.update(1)
 
+    from functools import lru_cache
+
+    @lru_cache(maxsize=None)
     def _calculate_total_charge(
         self, smiles: str
     ) -> Tuple[unit.Quantity, unit.Quantity]:
@@ -220,7 +223,7 @@ class PhAlkEthOHCuration(DatasetCuration):
         from numpy import newaxis
 
         dataset = SourceDataset(
-            dataset_name="PhAlkEthOH_openff",
+            dataset_name=self.dataset_name,
             append_property=True,
             local_db_dir=self.local_cache_dir,
         )
@@ -258,6 +261,7 @@ class PhAlkEthOHCuration(DatasetCuration):
                     # these properties only need to be added once
                     # so we need to check if
                     if not name in dataset.records.keys():
+                        dataset.create_record(name)
                         source = MetaData(
                             name="source", value=input_file_name.replace(".sqlite", "")
                         )
@@ -299,19 +303,18 @@ class PhAlkEthOHCuration(DatasetCuration):
                     # name = key.split("-")[0]
                     trajectory = spice_db[key][1]
 
+                    name = f'{key[: key.rfind("-")]}_{trajectory[0][0]["molecule_"]["name"]}'
+                    record = dataset.get_record(name)
+
                     for state in trajectory:
-                        add_record = True
                         properties, config = state
                         name = (
                             f'{key[: key.rfind("-")]}_{properties["molecule_"]["name"]}'
                         )
-                        smiles = (
-                            dataset.records[name]
-                            .meta_data[
-                                "canonical_isomeric_explicit_hydrogen_mapped_smiles"
-                            ]
-                            .value
-                        )
+                        # record = dataset.get_record(name)
+                        smiles = record.meta_data[
+                            "canonical_isomeric_explicit_hydrogen_mapped_smiles"
+                        ].value
 
                         total_charge_temp = self._calculate_total_charge(smiles)
 
@@ -319,12 +322,10 @@ class PhAlkEthOHCuration(DatasetCuration):
                             value=np.array(total_charge_temp.m).reshape(1, 1),
                             units=total_charge_temp.u,
                         )
-                        dataset.add_property(name, total_charge)
 
                         positions = Positions(
                             value=config.reshape(1, -1, 3), units=unit.bohr
                         )
-                        dataset.add_property(name, positions)
 
                         # Note need to typecast here because of a bug in the
                         # qcarchive entry: see issue: https://github.com/MolSSI/QCFractal/issues/766
@@ -339,7 +340,6 @@ class PhAlkEthOHCuration(DatasetCuration):
                             ).reshape(1, 1),
                             units=unit.hartree,
                         )
-                        dataset.add_property(name, dispersion_correction_energy)
 
                         dft_total_energy = Energies(
                             name="dft_total_energy",
@@ -349,7 +349,6 @@ class PhAlkEthOHCuration(DatasetCuration):
                             + dispersion_correction_energy.value,
                             units=unit.hartree,
                         )
-                        dataset.add_property(name, dft_total_energy)
 
                         dispersion_correction_gradient = Forces(
                             name="dispersion_correction_gradient",
@@ -360,14 +359,12 @@ class PhAlkEthOHCuration(DatasetCuration):
                             ).reshape(1, -1, 3),
                             units=unit.hartree / unit.bohr,
                         )
-                        dataset.add_property(name, dispersion_correction_gradient)
 
                         dispersion_correction_force = Forces(
                             name="dispersion_correction_force",
                             value=-dispersion_correction_gradient.value,
                             units=unit.hartree / unit.bohr,
                         )
-                        dataset.add_property(name, dispersion_correction_force)
 
                         dft_total_gradient = Forces(
                             name="dft_total_gradient",
@@ -377,14 +374,12 @@ class PhAlkEthOHCuration(DatasetCuration):
                             + dispersion_correction_gradient.value,
                             units=unit.hartree / unit.bohr,
                         )
-                        dataset.add_property(name, dft_total_gradient)
 
                         dft_total_force = Forces(
                             name="dft_total_force",
                             value=-dft_total_gradient.value,
                             units=unit.hartree / unit.bohr,
                         )
-                        dataset.add_property(name, dft_total_force)
 
                         scf_dipole = DipoleMomentPerSystem(
                             name="scf_dipole",
@@ -393,8 +388,34 @@ class PhAlkEthOHCuration(DatasetCuration):
                             ).reshape(1, 3),
                             units=unit.elementary_charge * unit.bohr,
                         )
-                        dataset.add_property(name, scf_dipole)
-
+                        record.add_properties(
+                            [
+                                total_charge,
+                                positions,
+                                dispersion_correction_energy,
+                                dft_total_energy,
+                                dispersion_correction_gradient,
+                                dispersion_correction_force,
+                                dft_total_gradient,
+                                dft_total_force,
+                                scf_dipole,
+                            ],
+                        )
+                        # dataset.add_properties(
+                        #     name,
+                        #     [
+                        #         total_charge,
+                        #         positions,
+                        #         dispersion_correction_energy,
+                        #         dft_total_energy,
+                        #         dispersion_correction_gradient,
+                        #         dispersion_correction_force,
+                        #         dft_total_gradient,
+                        #         dft_total_force,
+                        #         scf_dipole,
+                        #     ],
+                        # )
+                dataset.update_record(record)
         return dataset
 
     def process(

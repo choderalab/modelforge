@@ -404,7 +404,9 @@ class QM9Curation(DatasetCuration):
 
         # we do not need to do anything check unit_testing_max_conformers_per_record because qm9 only has a single conformer per record
 
-        dataset = SourceDataset(dataset_name="qm9", local_db_dir=self.local_cache_dir)
+        dataset = SourceDataset(
+            dataset_name=self.dataset_name, local_db_dir=self.local_cache_dir
+        )
         for i, file in enumerate(tqdm(files, desc="processing", total=len(files))):
             record_temp = self._parse_xyzfile(f"{local_path_dir}/{file}")
             dataset.add_record(record_temp)

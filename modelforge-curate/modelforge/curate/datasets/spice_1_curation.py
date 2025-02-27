@@ -130,7 +130,7 @@ class SPICE1Curation(DatasetCuration):
         input_file_name = f"{local_path_dir}/{name}"
 
         dataset = SourceDataset(
-            dataset_name="spice1", local_db_dir=self.local_cache_dir
+            dataset_name=self.dataset_name, local_db_dir=self.local_cache_dir
         )
 
         with OpenWithLock(f"{input_file_name}.lockfile", "w") as lockfile:

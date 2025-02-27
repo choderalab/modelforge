@@ -69,7 +69,7 @@ class ANI1xCuration(DatasetCuration):
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)
 
-        assert data_inputs["dataset_name"] == "ani1x"
+        assert data_inputs["name"] == "ani1x"
 
         if self.version_select == "latest":
             self.version_select = data_inputs["latest"]

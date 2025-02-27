@@ -245,6 +245,7 @@ class DatasetCuration(ABC):
         total_configurations: Optional[int] = None,
         atomic_species_to_limit: Optional[List[Union[str, int]]] = None,
         max_force: Optional[unit.Quantity] = None,
+        max_force_key: str = "forces",
         final_configuration_only: Optional[bool] = False,
     ) -> Tuple[int, int]:
         """
@@ -271,6 +272,8 @@ class DatasetCuration(ABC):
             These can be passed as a list of strings, e.g., ['C', 'H', 'O'] or as a list of atomic numbers, e.g., [6, 1, 8].
         max_force: unit.Quantity, optional, default=None
             Maximum force to include in the dataset. Any configuration with forces greater than this value will be excluded.
+        max_force_key: str, optional, default="forces"
+            Key to use for the maximum force. If not defined, the default key 'forces' will be used.
         final_configuration_only: bool, optional, default=False
             If True, only the final configuration of each record will be included in the dataset.
 
@@ -286,9 +289,10 @@ class DatasetCuration(ABC):
         if max_force is not None:
             if not isinstance(max_force, unit.Quantity):
                 raise ValueError("max_force must be a unit.Quantity.")
+            from modelforge.curate.units import chem_context
 
             if not max_force.is_compatible_with(
-                unit.kilojoule_per_mole / unit.nanometer
+                unit.kilojoule_per_mole / unit.nanometer, "chem"
             ):
                 raise ValueError(
                     f"max_force must be in units of force, found {max_force}"
@@ -342,7 +346,7 @@ class DatasetCuration(ABC):
             random.seed(time.time())
             number = random.randint(10000, 99999)
 
-            new_dataset_name = f"{self.dataset.dataset_name}_temp_{number}"
+            new_dataset_name = f"{self.dataset.name}_temp_{number}"
 
             dataset_trimmed = self.dataset.subset_dataset(
                 new_dataset_name=new_dataset_name,
@@ -351,6 +355,7 @@ class DatasetCuration(ABC):
                 max_configurations_per_record=max_configurations_per_record,
                 atomic_numbers_to_limit=atomic_numbers_to_limit,
                 max_force=max_force,
+                max_force_key=max_force_key,
                 final_configuration_only=final_configuration_only,
             )
             if dataset_trimmed.total_records() == 0:
@@ -390,5 +395,5 @@ class DatasetCuration(ABC):
             dataset_name=self.dataset_name,
             local_db_dir=local_db_dir,
             local_db_name=local_db_name,
-            read_from_db=True,
+            read_from_local_db=True,
         )

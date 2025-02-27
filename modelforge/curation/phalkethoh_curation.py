@@ -109,7 +109,7 @@ class PhAlkEthOHCuration(DatasetCuration):
 
         self._record_entries_series = {
             "name": "single_rec",
-            "dataset_name": "single_rec",
+            "name": "single_rec",
             "source": "single_rec",
             "total_charge": "single_atom",
             "atomic_numbers": "single_atom",
@@ -370,7 +370,7 @@ class PhAlkEthOHCuration(DatasetCuration):
                                 "canonical_isomeric_explicit_hydrogen_mapped_smiles"
                             ]
                         )
-                        data_temp["dataset_name"] = dataset_name
+                        data_temp["name"] = dataset_name
                         self.data.append(data_temp)
 
             with SqliteDict(
@@ -641,7 +641,7 @@ class PhAlkEthOHCuration(DatasetCuration):
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)
 
-        assert data_inputs["dataset_name"] == "PhAlkEthOHopenff"
+        assert data_inputs["name"] == "PhAlkEthOHopenff"
         if self.version_select == "latest":
             self.version_select = data_inputs["latest"]
             logger.debug(f"Using latest version {self.version_select}.")

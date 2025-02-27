@@ -1799,7 +1799,7 @@ def test_spice1_rename(prep_temp_dir):
 #     local_path_dir = str(prep_temp_dir)
 #     local_database_name = "test.sqlite"
 #     specification_names = ["entry", "spec_2", "spec_6"]
-#     dataset_name = "SPICE PubChem Set 1 Single Points Dataset v1.2"
+#     name = "SPICE PubChem Set 1 Single Points Dataset v1.2"
 #
 #     spice_openff_data = SPICE1OpenFFCuration(
 #         hdf5_file_name="test_dataset.hdf5",
@@ -1811,7 +1811,7 @@ def test_spice1_rename(prep_temp_dir):
 #     for specification_name in specification_names:
 #         # test downloading two new records and saving to the sqlite db
 #         spice_openff_data._fetch_singlepoint_from_qcarchive(
-#             dataset_name=dataset_name,
+#             name=name,
 #             specification_name=specification_name,
 #             local_database_name=local_database_name,
 #             local_path_dir=local_path_dir,
@@ -1820,7 +1820,7 @@ def test_spice1_rename(prep_temp_dir):
 #         )
 #
 #     spice_openff_data._process_downloaded(
-#         local_path_dir, [local_database_name], [dataset_name]
+#         local_path_dir, [local_database_name], [name]
 #     )
 
 # comment this out; this tested curation from qcarchive; updates to qcarchive seem to have changed the order

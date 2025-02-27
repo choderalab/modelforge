@@ -13,7 +13,7 @@ from modelforge.curate.datasets.curation_baseclass import DatasetCuration
 def setup_test_dataset(dataset_name, local_cache_dir):
     class TestCuration(DatasetCuration):
         def _init_dataset_parameters(self):
-            self.dataset = SourceDataset(dataset_name=self.dataset_name)
+            self.dataset = SourceDataset(name=self.dataset_name)
             for i in range(5):
                 atomic_numbers = AtomicNumbers(value=[[6 + i], [1]])
                 positions = Positions(
@@ -35,8 +35,25 @@ def setup_test_dataset(dataset_name, local_cache_dir):
                     ],
                     units=unit.kilojoule_per_mole / unit.nanometer,
                 )
+                forces_with_different_key = Forces(
+                    name="dft_total_force",
+                    value=[
+                        [[0, 0, 0], [5, 1, 1]],
+                        [[0, 0, 0], [2, 2, 2]],
+                        [[0, 0, 0], [3, 3, 3]],
+                    ],
+                    units=unit.kilojoule_per_mole / unit.nanometer,
+                )
                 record = Record(f"record_{i}")
-                record.add_properties([atomic_numbers, positions, energy, forces])
+                record.add_properties(
+                    [
+                        atomic_numbers,
+                        positions,
+                        energy,
+                        forces,
+                        forces_with_different_key,
+                    ]
+                )
                 self.dataset.add_record(record)
 
     return TestCuration(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
@@ -446,7 +463,7 @@ def test_base_operations(prep_temp_dir):
     assert n_configs == 5
 
     # test to see if we can remove high energy configurations
-    # anything greater than 2.5 should exlcude the last record
+    # anything greater than 2.5 should exclude the last record
     n_record, n_configs = curated_dataset.to_hdf5(
         hdf5_file_name="test_energy.hdf5",
         output_file_dir=output_dir,
@@ -454,6 +471,17 @@ def test_base_operations(prep_temp_dir):
     )
     assert n_record == 5
     assert n_configs == 10
+
+    # test to see if we can remove high energy configurations with a different key
+    # anything greater than 2.5 should exclude the first and the last record
+    n_record, n_configs = curated_dataset.to_hdf5(
+        hdf5_file_name="test_energy.hdf5",
+        output_file_dir=output_dir,
+        max_force=2.5 * unit.kilojoule_per_mole / unit.nanometer,
+        max_force_key="dft_total_force",
+    )
+    assert n_record == 5
+    assert n_configs == 5
 
     # we can't define total_Records and total_configurations at the same time
     with pytest.raises(ValueError):
@@ -498,7 +526,7 @@ def test_base_operations(prep_temp_dir):
 
     # make the original dataset empty
     with pytest.raises(ValueError):
-        empty_dataset = SourceDataset(dataset_name="empty_dataset")
+        empty_dataset = SourceDataset(name="empty_dataset")
         curated_dataset.dataset = empty_dataset
         n_record, n_configs = curated_dataset.to_hdf5(
             hdf5_file_name="test_energy.hdf5",

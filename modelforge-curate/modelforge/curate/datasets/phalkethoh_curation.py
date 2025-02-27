@@ -415,7 +415,7 @@ class PhAlkEthOHCuration(DatasetCuration):
                         #         scf_dipole,
                         #     ],
                         # )
-                dataset.update_record(record)
+                    dataset.update_record(record)
         return dataset
 
     def process(
@@ -455,7 +455,7 @@ class PhAlkEthOHCuration(DatasetCuration):
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)
 
-        assert data_inputs["dataset_name"] == "PhAlkEthOHopenff"
+        assert data_inputs["name"] == "PhAlkEthOHopenff"
         if self.version_select == "latest":
             self.version_select = data_inputs["latest"]
             logger.debug(f"Using latest version {self.version_select}.")

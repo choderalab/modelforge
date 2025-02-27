@@ -4,7 +4,7 @@ using the SPICEOpenFFCuration class.
 
 This will generate separate HDF5 files for:
  - the full dataset
- - a subset of the dataset with 1000 conformers, with a maximum of 10 conformers per molecule.
+ - a subset of the dataset with 1000 configurations, with a maximum of 10 configurations per molecule.
 
 
 """
@@ -36,18 +36,28 @@ def main():
     )
 
     PhAlkEthOH_openff.process(force_download=False)
+    # PhAlkEthOH_openff.load_from_db(
+    #     local_db_dir="/home/cri/mf_datasets/PhAlkEthOH_openff_dataset",
+    #     local_db_name="PhAlkEthOH_openff.sqlite",
+    # )
 
-    # curate dataset with 1000 total conformers, max of 10 conformers per record
+    # record_names = list(PhAlkEthOH_openff.dataset.records.keys())
+
+    # record = PhAlkEthOH_openff.dataset.get_record(record_names[0])
+
+    # print(record)
+    # curate dataset with 1000 total configurations, max of 10 configurations per record
     hdf5_file_name = f"PhAlkEthOH_openff_dataset_v{version}_ntc_1000.hdf5"
 
     n_total_records, n_total_configs = PhAlkEthOH_openff.to_hdf5(
         hdf5_file_name=hdf5_file_name,
         output_file_dir=output_file_dir,
-        total_conformers=1000,
-        max_conformers_per_record=10,
+        total_configurations=1000,
+        max_configurations_per_record=10,
         max_force=1.0 * unit.hartree / unit.bohr,
+        max_force_key="dft_total_force",
     )
-    print("1000 conformer subset")
+    print("1000 configuration subset")
     print(f"Total records: {n_total_records}")
     print(f"Total configs: {n_total_configs}")
 
@@ -59,11 +69,12 @@ def main():
         hdf5_file_name=hdf5_file_name,
         output_file_dir=output_file_dir,
         max_force=1.0 * unit.hartree / unit.bohr,
+        max_force_key="dft_total_force",
     )
     print(f"Total records: {n_total_records}")
     print(f"Total configs: {n_total_configs}")
 
-    # curate dataset with 1000 total conformers, last only
+    # curate dataset with 1000 total configurations, last only
     hdf5_file_name = f"PhAlkEthOH_openff_dataset_v{version}_ntc_1000_minimal.hdf5"
 
     n_total_records, n_total_configs = PhAlkEthOH_openff.to_hdf5(
@@ -71,9 +82,10 @@ def main():
         output_file_dir=output_file_dir,
         total_configurations=1000,
         max_force=1.0 * unit.hartree / unit.bohr,
+        max_force_key="dft_total_force",
         final_configuration_only=True,
     )
-    print("1000 conformer subset last configurations only")
+    print("1000 configuration subset last configurations only")
     print(f"Total records: {n_total_records}")
     print(f"Total configs: {n_total_configs}")
 
@@ -85,6 +97,7 @@ def main():
         hdf5_file_name=hdf5_file_name,
         output_file_dir=output_file_dir,
         max_force=1.0 * unit.hartree / unit.bohr,
+        max_force_key="dft_total_force",
         final_configuration_only=True,
     )
 

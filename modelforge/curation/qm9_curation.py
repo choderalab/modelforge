@@ -56,7 +56,7 @@ class QM9Curation(DatasetCuration):
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)
 
-        assert data_inputs["dataset_name"] == "qm9"
+        assert data_inputs["name"] == "qm9"
 
         if self.version_select == "latest":
             self.version_select = data_inputs["latest"]

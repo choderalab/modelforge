@@ -9,11 +9,11 @@ from modelforge.curate.properties import *
 
 def test_source_dataset_init(prep_temp_dir):
     new_dataset = SourceDataset(
-        dataset_name="test_dataset1",
+        name="test_dataset1",
         local_db_dir=str(prep_temp_dir),
         local_db_name="test_dataset1.sqlite",
     )
-    assert new_dataset.dataset_name == "test_dataset1"
+    assert new_dataset.name == "test_dataset1"
 
     new_dataset.create_record("mol1")
     assert "mol1" in new_dataset.records
@@ -27,7 +27,7 @@ def test_dataset_create_record(prep_temp_dir):
     # test creating a record that already exists
     # this will fail
     new_dataset = SourceDataset(
-        dataset_name="test_dataset2",
+        name="test_dataset2",
         local_db_dir=str(prep_temp_dir),
         local_db_name="test_dataset2.sqlite",
     )
@@ -102,7 +102,7 @@ def test_add_properties_to_records_directly(prep_temp_dir):
     assert record.n_configs == 2
 
     new_dataset = SourceDataset(
-        dataset_name="test_dataset3",
+        name="test_dataset3",
         local_db_dir=str(prep_temp_dir),
         local_db_name="test_dataset3.sqlite",
     )
@@ -567,7 +567,7 @@ def test_write_hdf5(prep_temp_dir):
 
     with open(str(prep_temp_dir / "test_dataset.json"), "r") as f:
         data = json.load(f)
-        assert data["dataset_name"] == "test_dataset8"
+        assert data["name"] == "test_dataset8"
         assert data["total_records"] == new_dataset.total_records()
         assert data["total_configurations"] == new_dataset.total_configs()
         assert data["md5_checksum"] == checksum
@@ -576,7 +576,7 @@ def test_write_hdf5(prep_temp_dir):
 
 def test_dataset_validation(prep_temp_dir):
     new_dataset = SourceDataset(
-        dataset_name="test_dataset9",
+        name="test_dataset9",
         local_db_dir=str(prep_temp_dir),
         local_db_name="test_dataset9.sqlite",
     )
@@ -609,7 +609,7 @@ def test_dataset_validation(prep_temp_dir):
 
 
 def test_dataset_subsetting(prep_temp_dir):
-    ds = SourceDataset(dataset_name="test dataset10", local_db_dir=str(prep_temp_dir))
+    ds = SourceDataset(name="test dataset10", local_db_dir=str(prep_temp_dir))
 
     assert ds.local_db_dir == str(prep_temp_dir)
     assert ds.local_db_name == "test_dataset10.sqlite"
@@ -641,7 +641,7 @@ def test_dataset_subsetting(prep_temp_dir):
     assert ds_subset.total_configs() == 25
     assert ds_subset.total_records() == 5
 
-    assert ds_subset.dataset_name == "test_dataset_sub1"
+    assert ds_subset.name == "test_dataset_sub1"
     assert ds_subset.local_db_name == "test_dataset_sub1.sqlite"
     assert ds_subset.local_db_dir == ds.local_db_dir
 
@@ -734,9 +734,7 @@ def test_limit_atomic_numbers(prep_temp_dir):
     record = Record("mol1")
     record.add_properties([atomic_numbers, energies, positions])
 
-    dataset = SourceDataset(
-        dataset_name="test_dataset11", local_db_dir=str(prep_temp_dir)
-    )
+    dataset = SourceDataset(name="test_dataset11", local_db_dir=str(prep_temp_dir))
     dataset.add_record(record)
 
     atomic_numbers_to_limit = np.array([8, 6, 1])
@@ -863,9 +861,7 @@ def test_remove_high_force_configs(prep_temp_dir):
 
     # test filtering via the dataset
 
-    dataset = SourceDataset(
-        dataset_name="test_dataset12", local_db_dir=str(prep_temp_dir)
-    )
+    dataset = SourceDataset(name="test_dataset12", local_db_dir=str(prep_temp_dir))
     dataset.add_record(record)
 
     # effectively the same tests as above, but done on the dataset level
@@ -1033,7 +1029,7 @@ def test_reading_from_db_file(prep_temp_dir):
     record.add_properties([positions, energies, atomic_numbers, smiles])
 
     ds = SourceDataset(
-        dataset_name="test_dataset14",
+        name="test_dataset14",
         local_db_dir=str(prep_temp_dir),
         local_db_name="test_dataset14.sqlite",
     )
@@ -1044,7 +1040,7 @@ def test_reading_from_db_file(prep_temp_dir):
 
     # now let us read from the file
     ds2 = SourceDataset(
-        dataset_name="test_dataset15",
+        name="test_dataset15",
         local_db_dir=str(prep_temp_dir),
         local_db_name="test_dataset14.sqlite",
         read_from_local_db=True,

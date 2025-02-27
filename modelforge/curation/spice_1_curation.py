@@ -57,7 +57,7 @@ class SPICE1Curation(DatasetCuration):
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)
 
-        assert data_inputs["dataset_name"] == "spice1"
+        assert data_inputs["name"] == "spice1"
 
         if self.version_select == "latest":
             self.version_select = data_inputs["latest"]

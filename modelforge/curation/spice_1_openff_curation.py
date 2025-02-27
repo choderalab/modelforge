@@ -149,7 +149,7 @@ class SPICE1OpenFFCuration(DatasetCuration):
 
         self._record_entries_series = {
             "name": "single_rec",
-            "dataset_name": "single_rec",
+            "name": "single_rec",
             "source": "single_rec",
             "total_charge": "series_mol",
             "atomic_numbers": "single_atom",
@@ -530,7 +530,7 @@ class SPICE1OpenFFCuration(DatasetCuration):
                                 "canonical_isomeric_explicit_hydrogen_mapped_smiles"
                             ]
                         )
-                        data_temp["dataset_name"] = dataset_name
+                        data_temp["name"] = dataset_name
                         self.data.append(data_temp)
                     else:
                         # if we have already encountered this molecule we need to append to the data
@@ -804,7 +804,7 @@ class SPICE1OpenFFCuration(DatasetCuration):
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)
 
-        assert data_inputs["dataset_name"] == "spice1openff"
+        assert data_inputs["name"] == "spice1openff"
         if self.version_select == "latest":
             self.version_select = data_inputs["latest"]
             logger.debug(f"Using latest version {self.version_select}.")

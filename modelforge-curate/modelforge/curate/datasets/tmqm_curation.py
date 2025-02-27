@@ -75,7 +75,7 @@ class tmQMCuration(DatasetCuration):
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)
 
-        assert data_inputs["dataset_name"] == "tmqm"
+        assert data_inputs["name"] == "tmqm"
 
         if self.version_select == "latest":
             self.version_select = data_inputs["latest"]

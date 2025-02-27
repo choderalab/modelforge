@@ -272,7 +272,7 @@ from modelforge.train.parameters import TrainingParameters
 
 
 @pytest.mark.parametrize("potential_name", ["ANI2x"])
-@pytest.mark.parametrize("dataset_name", ["PHALKETHOH"])
+@pytest.mark.parametrize("name", ["PHALKETHOH"])
 @pytest.mark.parametrize(
     "lr_scheduler",
     [
@@ -312,7 +312,7 @@ def test_learning_rate_scheduler(
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
-@pytest.mark.parametrize("dataset_name", ["PHALKETHOH"])
+@pytest.mark.parametrize("name", ["PHALKETHOH"])
 @pytest.mark.parametrize(
     "loss",
     ["energy", "energy_force", "normalized_energy_force", "energy_force_dipole_moment"],

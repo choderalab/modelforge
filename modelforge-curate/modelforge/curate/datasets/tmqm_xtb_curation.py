@@ -143,7 +143,9 @@ class tmQMXTBCuration(DatasetCuration):
         from modelforge.utils.misc import OpenWithLock
         import h5py
 
-        dataset = SourceDataset("tmqm_xtb")
+        dataset = SourceDataset(
+            dataset_name="tmqm_xtb", local_db_dir=self.local_cache_dir
+        )
         with OpenWithLock(f"{local_path_dir}/{hdf5_file_name}.lockfile", "w") as f:
             with h5py.File(f"{local_path_dir}/{hdf5_file_name}", "r") as f:
                 for key in tqdm(f.keys()):

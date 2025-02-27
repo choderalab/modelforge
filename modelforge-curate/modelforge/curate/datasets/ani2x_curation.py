@@ -99,7 +99,7 @@ class ANI2xCuration(DatasetCuration):
 
         conformers_counter = 0
 
-        dataset = SourceDataset("ani2x")
+        dataset = SourceDataset(dataset_name="ani2x", local_db_dir=self.local_cache_dir)
         with h5py.File(input_file_name, "r") as hf:
             #  The ani2x hdf5 file groups molecules by number of atoms
             # we need to break up each of these groups into individual molecules

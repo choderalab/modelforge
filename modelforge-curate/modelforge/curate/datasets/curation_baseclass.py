@@ -324,7 +324,19 @@ class DatasetCuration(ABC):
             or max_force is not None
             or total_records is not None
         ):
+            import time
+            import random
+
+            # generate a 5 digit random number to append to the dataset name
+            # using current time as the seed
+            # this database will be removed after the dataset is written
+            random.seed(time.time())
+            number = random.randint(10000, 99999)
+
+            new_dataset_name = f"{self.dataset.dataset_name}_temp_{number}"
+
             dataset_trimmed = self.dataset.subset_dataset(
+                new_dataset_name=new_dataset_name,
                 total_configurations=total_configurations,
                 total_records=total_records,
                 max_configurations_per_record=max_configurations_per_record,
@@ -339,7 +351,13 @@ class DatasetCuration(ABC):
                 file_name=hdf5_file_name,
                 file_path=output_file_dir,
             )
-            return (dataset_trimmed.total_records(), dataset_trimmed.total_configs())
+            n_total_records = dataset_trimmed.total_records()
+            n_total_configs = dataset_trimmed.total_configs()
+
+            # remove the database associated with the temporarily created dataset
+            dataset_trimmed._remove_local_db()
+
+            return (n_total_records, n_total_configs)
         else:
 
             self._write_hdf5_and_json_files(

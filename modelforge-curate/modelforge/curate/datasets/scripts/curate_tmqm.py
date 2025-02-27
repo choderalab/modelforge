@@ -26,7 +26,7 @@ def main():
     import os
 
     local_prefix = os.path.expanduser("~/mf_datasets")
-    output_file_dir = f"{local_prefix}/hdf5_files"
+    output_file_dir = f"{local_prefix}/hdf5_files/tmqm"
     local_cache_dir = f"{local_prefix}/tmqm_dataset"
 
     # We'll want to provide some simple means of versioning
@@ -59,17 +59,17 @@ def main():
     print(f"Total records: {total_records}")
     print(f"Total configs: {total_configs}")
 
-    # Curate the test dataset with 1000 total conformers
+    # Curate the test dataset with 1000 total configurations
     # only a single config per record
     hdf5_file_name = f"tmqm_dataset_v{version_out}_ntc_1000.hdf5"
 
     total_records, total_configs = tmqm.to_hdf5(
         hdf5_file_name=hdf5_file_name,
         output_file_dir=output_file_dir,
-        total_conformers=1000,
+        total_configurations=1000,
     )
 
-    print(" 1000 conformer subset")
+    print(" 1000 configuration subset")
     print(f"Total records: {total_records}")
     print(f"Total configs: {total_configs}")
 
@@ -80,7 +80,7 @@ def main():
     total_records, total_configs = tmqm.to_hdf5(
         hdf5_file_name=f"tmqm_dataset_PdZnFeCu_CHPSONFClBr_v{version_out}.hdf5",
         output_file_dir=output_file_dir,
-        limit_atomic_species=[
+        atomic_species_to_limit=[
             "Pd",
             "Zn",
             "Fe",
@@ -96,6 +96,101 @@ def main():
             "Br",
         ],
     )
+
+    print("Primary transition metals subset")
+    print(f"Total records: {total_records}")
+    print(f"Total configs: {total_configs}")
+
+    # same dataset but with only 1000 total_configurations
+
+    total_records, total_configs = tmqm.to_hdf5(
+        hdf5_file_name=f"tmqm_dataset_PdZnFeCu_CHPSONFClBr_v{version_out}_ntc_1000.hdf5",
+        output_file_dir=output_file_dir,
+        atomic_species_to_limit=[
+            "Pd",
+            "Zn",
+            "Fe",
+            "Cu",
+            "C",
+            "H",
+            "P",
+            "S",
+            "O",
+            "N",
+            "F",
+            "Cl",
+            "Br",
+        ],
+        total_configurations=1000,
+    )
+
+    print("Primary transition metals 1000 configuration subset")
+    print(f"Total records: {total_records}")
+    print(f"Total configs: {total_configs}")
+
+    # create a dataset with a second subset of transition metals
+    # Pd, Zn, Fe, Cu, Ni, Pt, Ir, Rh, Cr, Ag and the same organic elements as above
+
+    total_records, total_configs = tmqm.to_hdf5(
+        hdf5_file_name=f"tmqm_dataset_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr_v{version_out}.hdf5",
+        output_file_dir=output_file_dir,
+        atomic_species_to_limit=[
+            "Pd",
+            "Zn",
+            "Fe",
+            "Cu",
+            "Ni",
+            "Pt",
+            "Ir",
+            "Rh",
+            "Cr",
+            "Ag",
+            "C",
+            "H",
+            "P",
+            "S",
+            "O",
+            "N",
+            "F",
+            "Cl",
+            "Br",
+        ],
+    )
+    print("Primary + second transition metals subset")
+    print(f"Total records: {total_records}")
+    print(f"Total configs: {total_configs}")
+
+    # same dataset but with only 1000 total_configurations total
+    total_records, total_configs = tmqm.to_hdf5(
+        hdf5_file_name=f"tmqm_dataset_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr_v{version_out}.hdf5",
+        output_file_dir=output_file_dir,
+        atomic_species_to_limit=[
+            "Pd",
+            "Zn",
+            "Fe",
+            "Cu",
+            "Ni",
+            "Pt",
+            "Ir",
+            "Rh",
+            "Cr",
+            "Ag",
+            "C",
+            "H",
+            "P",
+            "S",
+            "O",
+            "N",
+            "F",
+            "Cl",
+            "Br",
+        ],
+        total_configurations=1000,
+    )
+
+    print("Primary + second transition metals 1000 configuration subset")
+    print(f"Total records: {total_records}")
+    print(f"Total configs: {total_configs}")
 
 
 if __name__ == "__main__":

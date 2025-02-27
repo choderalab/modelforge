@@ -219,7 +219,11 @@ class PhAlkEthOHCuration(DatasetCuration):
 
         from numpy import newaxis
 
-        dataset = SourceDataset("PhAlkEthOH_openff", append_property=True)
+        dataset = SourceDataset(
+            dataset_name="PhAlkEthOH_openff",
+            append_property=True,
+            local_db_dir=self.local_cache_dir,
+        )
 
         for filename, dataset_name in zip(filenames, dataset_names):
             input_file_name = f"{local_path_dir}/{filename}"

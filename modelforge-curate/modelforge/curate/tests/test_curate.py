@@ -7,9 +7,13 @@ from modelforge.curate.units import GlobalUnitSystem
 from modelforge.curate.properties import *
 
 
-def test_source_dataset_init():
-    new_dataset = SourceDataset("test_dataset")
-    assert new_dataset.dataset_name == "test_dataset"
+def test_source_dataset_init(prep_temp_dir):
+    new_dataset = SourceDataset(
+        dataset_name="test_dataset1",
+        local_db_dir=str(prep_temp_dir),
+        local_db_name="test_dataset1.sqlite",
+    )
+    assert new_dataset.dataset_name == "test_dataset1"
 
     new_dataset.create_record("mol1")
     assert "mol1" in new_dataset.records
@@ -19,10 +23,14 @@ def test_source_dataset_init():
     assert len(new_dataset.records) == 2
 
 
-def test_dataset_create_record():
+def test_dataset_create_record(prep_temp_dir):
     # test creating a record that already exists
     # this will fail
-    new_dataset = SourceDataset("test_dataset")
+    new_dataset = SourceDataset(
+        "test_dataset2",
+        local_db_dir=str(prep_temp_dir),
+        local_db_name="test_dataset2.sqlite",
+    )
     new_dataset.create_record("mol1")
     assert "mol1" in new_dataset.records
     with pytest.raises(ValueError):
@@ -57,7 +65,7 @@ def test_dataset_create_record():
     assert "mol4" in new_dataset.records
 
 
-def test_add_properties_to_records_directly():
+def test_add_properties_to_records_directly(prep_temp_dir):
     record = Record(name="mol1")
 
     positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
@@ -93,7 +101,11 @@ def test_add_properties_to_records_directly():
 
     assert record.n_configs == 2
 
-    new_dataset = SourceDataset("test_dataset")
+    new_dataset = SourceDataset(
+        dataset_name="test_dataset3",
+        local_db_dir=str(prep_temp_dir),
+        local_db_name="test_dataset3.sqlite",
+    )
     new_dataset.add_record(record)
 
     assert "mol1" in new_dataset.records.keys()
@@ -113,7 +125,6 @@ def test_record_repr(capsys):
     assert "n_configs: cannot be determined" in out
 
     record.add_properties([positions, energies, atomic_numbers, smiles])
-
     print(record)
     out, err = capsys.readouterr()
     assert "name: mol1" in out
@@ -141,7 +152,6 @@ def test_record_repr(capsys):
         " name='smiles' value='[CH]' units=<Unit('dimensionless')> classification='meta_data' property_type='meta_data' n_configs=None n_atoms=None"
         in out
     )
-    print(record)
 
 
 def test_record_to_dict():
@@ -257,8 +267,12 @@ def test_add_properties_failures():
         record.add_property(energies)
 
 
-def test_add_properties():
-    new_dataset = SourceDataset("test_dataset")
+def test_add_properties(prep_temp_dir):
+    new_dataset = SourceDataset(
+        "test_dataset4",
+        local_db_dir=str(prep_temp_dir),
+        local_db_name="test_dataset4.sqlite",
+    )
     new_dataset.create_record("mol1")
     positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
     energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
@@ -289,7 +303,7 @@ def test_add_properties():
         new_dataset.add_properties("mol1", [atomic_numbers])
 
 
-def test_slicing_properties():
+def test_slicing_properties(prep_temp_dir):
     record = Record(name="mol1")
 
     positions = Positions(
@@ -316,7 +330,11 @@ def test_slicing_properties():
     assert sliced1.per_system["energies"].value == [[0.1]]
 
     # check dataset level slicing, that just calls the record level slicing
-    new_dataset = SourceDataset("test_dataset")
+    new_dataset = SourceDataset(
+        "test_dataset5",
+        local_db_dir=str(prep_temp_dir),
+        local_db_name="test_dataset5.sqlite",
+    )
     new_dataset.add_record(record)
 
     sliced2 = new_dataset.slice_record("mol1", 0, 1)
@@ -329,8 +347,12 @@ def test_slicing_properties():
         new_dataset.slice_record(record, 0, 1)
 
 
-def test_counting_records():
-    new_dataset = SourceDataset("test_dataset")
+def test_counting_records(prep_temp_dir):
+    new_dataset = SourceDataset(
+        "test_dataset6",
+        local_db_dir=str(prep_temp_dir),
+        local_db_name="test_dataset6.sqlite",
+    )
 
     new_dataset.create_record("mol1")
     new_dataset.create_record("mol2")
@@ -360,8 +382,13 @@ def test_counting_records():
     new_dataset.validate_records()
 
 
-def test_append_properties():
-    new_dataset = SourceDataset("test_dataset", append_property=True)
+def test_append_properties(prep_temp_dir):
+    new_dataset = SourceDataset(
+        "test_dataset7",
+        append_property=True,
+        local_db_dir=str(prep_temp_dir),
+        local_db_name="test_dataset7.sqlite",
+    )
 
     new_dataset.create_record("mol1")
     positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
@@ -439,7 +466,11 @@ def test_append_properties():
 
 
 def test_write_hdf5(prep_temp_dir):
-    new_dataset = SourceDataset("test_dataset")
+    new_dataset = SourceDataset(
+        "test_dataset8",
+        local_db_dir=str(prep_temp_dir),
+        local_db_name="test_dataset8.sqlite",
+    )
     new_dataset.create_record("mol1")
     positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
     energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
@@ -536,15 +567,23 @@ def test_write_hdf5(prep_temp_dir):
 
     with open(str(prep_temp_dir / "test_dataset.json"), "r") as f:
         data = json.load(f)
-        assert data["dataset_name"] == "test_dataset"
+        assert data["dataset_name"] == "test_dataset8"
         assert data["total_records"] == new_dataset.total_records()
         assert data["total_configurations"] == new_dataset.total_configs()
         assert data["md5_checksum"] == checksum
         assert data["filename"] == "test_dataset.hdf5"
 
 
-def test_dataset_validation():
-    new_dataset = SourceDataset("test_dataset")
+def test_dataset_validation(prep_temp_dir):
+    new_dataset = SourceDataset(
+        dataset_name="test_dataset9",
+        local_db_dir=str(prep_temp_dir),
+        local_db_name="test_dataset9.sqlite",
+    )
+
+    assert new_dataset.local_db_dir == str(prep_temp_dir)
+    assert new_dataset.local_db_name == "test_dataset9.sqlite"
+
     new_dataset.create_record("mol1")
     positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
     energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
@@ -569,8 +608,12 @@ def test_dataset_validation():
     assert new_dataset.validate_records() == True
 
 
-def test_dataset_subsetting():
-    ds = SourceDataset("test_dataset")
+def test_dataset_subsetting(prep_temp_dir):
+    ds = SourceDataset(dataset_name="test dataset10", local_db_dir=str(prep_temp_dir))
+
+    assert ds.local_db_dir == str(prep_temp_dir)
+    assert ds.local_db_name == "test_dataset10.sqlite"
+
     positions = Positions(
         value=[
             [[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]],
@@ -594,50 +637,68 @@ def test_dataset_subsetting():
     assert ds.total_records() == 10
 
     # check total records
-    ds_subset = ds.subset_dataset(total_records=5)
+    ds_subset = ds.subset_dataset(new_dataset_name="test_dataset_sub1", total_records=5)
     assert ds_subset.total_configs() == 25
     assert ds_subset.total_records() == 5
 
-    ds_subset = ds.subset_dataset(total_records=3)
+    assert ds_subset.dataset_name == "test_dataset_sub1"
+    assert ds_subset.local_db_name == "test_dataset_sub1.sqlite"
+    assert ds_subset.local_db_dir == ds.local_db_dir
+
+    ds_subset = ds.subset_dataset(new_dataset_name="test_dataset_sub2", total_records=3)
     assert ds_subset.total_configs() == 15
     assert ds_subset.total_records() == 3
 
     # check total_records and max_configurations_per_record
-    ds_subset = ds.subset_dataset(total_records=3, max_configurations_per_record=2)
+    ds_subset = ds.subset_dataset(
+        new_dataset_name="test_dataset_sub3",
+        total_records=3,
+        max_configurations_per_record=2,
+    )
     assert ds_subset.total_configs() == 6
     assert ds_subset.total_records() == 3
 
     # check total_conformers
-    ds_subset = ds.subset_dataset(total_configurations=20)
+    ds_subset = ds.subset_dataset(
+        new_dataset_name="test_dataset_sub4", total_configurations=20
+    )
     assert ds_subset.total_configs() == 20
     assert ds_subset.total_records() == 4
 
     ds_subset = ds.subset_dataset(
-        total_configurations=20, max_configurations_per_record=2
+        new_dataset_name="test_dataset_sub5",
+        total_configurations=20,
+        max_configurations_per_record=2,
     )
     assert ds_subset.total_configs() == 20
     assert ds_subset.total_records() == 10
 
     ds_subset = ds.subset_dataset(
-        total_configurations=20, max_configurations_per_record=6
+        new_dataset_name="test_dataset_sub6",
+        total_configurations=20,
+        max_configurations_per_record=6,
     )
     assert ds_subset.total_configs() == 20
     assert ds_subset.total_records() == 4
 
     ds_subset = ds.subset_dataset(
-        total_configurations=11, max_configurations_per_record=4
+        new_dataset_name="test_dataset_sub7",
+        total_configurations=11,
+        max_configurations_per_record=4,
     )
     assert ds_subset.total_configs() == 11
     assert ds_subset.total_records() == 3
 
     ds_subset = ds.subset_dataset(
-        total_configurations=11, max_configurations_per_record=5
+        new_dataset_name="test_dataset_sub8",
+        total_configurations=11,
+        max_configurations_per_record=5,
     )
     assert ds_subset.total_configs() == 11
     assert ds_subset.total_records() == 3
 
 
-def test_limit_atomic_numbers():
+def test_limit_atomic_numbers(prep_temp_dir):
 
     atomic_numbers = AtomicNumbers(
         value=np.array(
@@ -673,14 +734,17 @@ def test_limit_atomic_numbers():
     record = Record("mol1")
     record.add_properties([atomic_numbers, energies, positions])
 
-    dataset = SourceDataset("test")
+    dataset = SourceDataset(
+        dataset_name="test_dataset11", local_db_dir=str(prep_temp_dir)
+    )
     dataset.add_record(record)
 
     atomic_numbers_to_limit = np.array([8, 6, 1])
 
     assert record.contains_atomic_numbers(atomic_numbers_to_limit) == True
     new_dataset = dataset.subset_dataset(
-        atomic_numbers_to_limit=atomic_numbers_to_limit
+        new_dataset_name="test_dataset11_sub",
+        atomic_numbers_to_limit=atomic_numbers_to_limit,
     )
 
     assert new_dataset.total_records() == 1
@@ -689,12 +753,20 @@ def test_limit_atomic_numbers():
 
     assert record.contains_atomic_numbers(atomic_numbers_to_limit) == False
     new_dataset = dataset.subset_dataset(
-        atomic_numbers_to_limit=atomic_numbers_to_limit
+        new_dataset_name="test_dataset11_sub2",
+        atomic_numbers_to_limit=atomic_numbers_to_limit,
     )
     assert new_dataset.total_records() == 0
 
+    # test that we fail if we give the same name for a subset
+    with pytest.raises(ValueError):
+        dataset.subset_dataset(
+            new_dataset_name="test_dataset11",
+            atomic_numbers_to_limit=atomic_numbers_to_limit,
+        )
 
-def test_remove_high_force_configs():
+
+def test_remove_high_force_configs(prep_temp_dir):
 
     atomic_numbers = AtomicNumbers(
         value=np.array(
@@ -791,11 +863,14 @@ def test_remove_high_force_configs():
 
     # test filtering via the dataset
 
-    dataset = SourceDataset("test")
+    dataset = SourceDataset(
+        dataset_name="test_dataset12", local_db_dir=str(prep_temp_dir)
+    )
     dataset.add_record(record)
 
     # effectively the same tests as above, but done on the dataset level
     trimmed_dataset = dataset.subset_dataset(
+        new_dataset_name="test_dataset12_sub1",
         total_configurations=5,
         max_force=30 * unit.kilojoule_per_mole / unit.nanometer,
     )
@@ -807,7 +882,9 @@ def test_remove_high_force_configs():
     )
 
     trimmed_dataset = dataset.subset_dataset(
-        total_configurations=5, max_force=31 * unit.kilojoule_per_mole / unit.nanometer
+        new_dataset_name="test_dataset12_sub2",
+        total_configurations=5,
+        max_force=31 * unit.kilojoule_per_mole / unit.nanometer,
     )
     assert trimmed_dataset.total_records() == 1
     assert trimmed_dataset.get_record("mol1").n_configs == 4
@@ -819,7 +896,9 @@ def test_remove_high_force_configs():
     # consider now including other restrictions on the number of configurations, records, etc.
     # limit the number of configurations in total
     trimmed_dataset = dataset.subset_dataset(
-        total_configurations=3, max_force=31 * unit.kilojoule_per_mole / unit.nanometer
+        new_dataset_name="test_dataset12_sub3",
+        total_configurations=3,
+        max_force=31 * unit.kilojoule_per_mole / unit.nanometer,
     )
     assert trimmed_dataset.total_records() == 1
     assert trimmed_dataset.get_record("mol1").n_configs == 3
@@ -830,6 +909,7 @@ def test_remove_high_force_configs():
 
     # total_configurations and max_configurations_per_record
     trimmed_dataset = dataset.subset_dataset(
+        new_dataset_name="test_dataset12_sub4",
         total_configurations=5,
         max_configurations_per_record=3,
         max_force=31 * unit.kilojoule_per_mole / unit.nanometer,
@@ -852,7 +932,9 @@ def test_remove_high_force_configs():
 
     #  limit total_configurations
     trimmed_dataset = dataset.subset_dataset(
-        total_configurations=5, max_force=30 * unit.kilojoule_per_mole / unit.nanometer
+        new_dataset_name="test_dataset12_sub5",
+        total_configurations=5,
+        max_force=30 * unit.kilojoule_per_mole / unit.nanometer,
     )
     assert trimmed_dataset.total_records() == 2
     assert trimmed_dataset.get_record("mol1").n_configs == 3
@@ -861,6 +943,7 @@ def test_remove_high_force_configs():
 
     # limit total_configurations and max_configurations_per_record
     trimmed_dataset = dataset.subset_dataset(
+        new_dataset_name="test_dataset12_sub6",
         total_configurations=6,
         max_configurations_per_record=3,
         max_force=31 * unit.kilojoule_per_mole / unit.nanometer,
@@ -872,6 +955,7 @@ def test_remove_high_force_configs():
 
     # Add in limiting of the atomic numbers
     trimmed_dataset = dataset.subset_dataset(
+        new_dataset_name="test_dataset12_sub7",
         total_configurations=6,
         max_configurations_per_record=3,
         max_force=30 * unit.kilojoule_per_mole / unit.nanometer,
@@ -884,6 +968,7 @@ def test_remove_high_force_configs():
 
     # same test but only restrictions on atomic_numbers and max_force
     trimmed_dataset = dataset.subset_dataset(
+        new_dataset_name="test_dataset12_sub8",
         max_force=30 * unit.kilojoule_per_mole / unit.nanometer,
         atomic_numbers_to_limit=[6, 1],
     )
@@ -894,7 +979,9 @@ def test_remove_high_force_configs():
 
     # check toggling of total records
     trimmed_dataset = dataset.subset_dataset(
-        total_records=1, max_force=30 * unit.kilojoule_per_mole / unit.nanometer
+        new_dataset_name="test_dataset12_sub9",
+        total_records=1,
+        max_force=30 * unit.kilojoule_per_mole / unit.nanometer,
     )
     assert trimmed_dataset.total_records() == 1
     assert trimmed_dataset.get_record("mol1").n_configs == 3
@@ -902,7 +989,9 @@ def test_remove_high_force_configs():
 
     # check toggling of total records
     trimmed_dataset = dataset.subset_dataset(
-        total_records=2, max_force=30 * unit.kilojoule_per_mole / unit.nanometer
+        new_dataset_name="test_dataset12_sub10",
+        total_records=2,
+        max_force=30 * unit.kilojoule_per_mole / unit.nanometer,
     )
     assert trimmed_dataset.total_records() == 2
     assert trimmed_dataset.get_record("mol1").n_configs == 3
@@ -911,6 +1000,7 @@ def test_remove_high_force_configs():
 
     # make sure we can also exclude atomic numbers
     trimmed_dataset = dataset.subset_dataset(
+        new_dataset_name="test_dataset12_sub11",
         total_records=2,
         max_force=30 * unit.kilojoule_per_mole / unit.nanometer,
         atomic_numbers_to_limit=[6, 1],
@@ -921,6 +1011,7 @@ def test_remove_high_force_configs():
 
     # case where our atomic number filtering captures everything
     trimmed_dataset = dataset.subset_dataset(
+        new_dataset_name="test_dataset12_sub12",
         total_records=2,
         max_force=30 * unit.kilojoule_per_mole / unit.nanometer,
         atomic_numbers_to_limit=[6, 1, 8],
@@ -929,3 +1020,34 @@ def test_remove_high_force_configs():
     assert trimmed_dataset.get_record("mol1").n_configs == 3
     assert trimmed_dataset.get_record("mol2").n_configs == 3
     assert trimmed_dataset.total_configs() == 6
+
+
+def test_reading_from_db_file(prep_temp_dir):
+    record = Record(name="mol1")
+
+    positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
+    energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
+    atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
+    smiles = MetaData(name="smiles", value="[CH]")
+
+    record.add_properties([positions, energies, atomic_numbers, smiles])
+
+    ds = SourceDataset(
+        dataset_name="test_dataset14",
+        local_db_dir=str(prep_temp_dir),
+        local_db_name="test_dataset14.sqlite",
+    )
+    ds.add_record(record)
+
+    assert ds.total_records() == 1
+    assert "mol1" in ds.records.keys()
+
+    # now let us read from the file
+    ds2 = SourceDataset(
+        dataset_name="test_dataset15",
+        local_db_dir=str(prep_temp_dir),
+        local_db_name="test_dataset14.sqlite",
+        read_from_local_db=True,
+    )
+    assert ds2.total_records() == 1
+    assert "mol1" in ds2.records.keys()

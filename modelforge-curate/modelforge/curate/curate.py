@@ -12,12 +12,13 @@ from openff.units import unit
 
 import numpy as np
 import copy
-
+import os
 from typing import Union, List, Type, Optional
 
 from typing_extensions import Self
 
 from loguru import logger as log
+from sqlitedict import SqliteDict
 
 
 class Record:
@@ -438,6 +439,9 @@ class SourceDataset:
         self,
         dataset_name: str,
         append_property: bool = False,
+        local_db_dir: Optional[str] = "./",
+        local_db_name: Optional[str] = None,
+        read_from_local_db=False,
     ):
         """
         Class to hold a dataset of properties for a given dataset name
@@ -449,12 +453,49 @@ class SourceDataset:
         append_property: bool, optional, default=False
             If True, append an array to existing array if a property with the same name is added multiple times to a record.
             If False, an error will be raised if trying to add a property with the same name already exists in a record
-            Use True if data for configurations are stored in separate files/database entries and you want to combine them.
+        local_db_dir: str, optional, default="./"
+            Directory to store the local database
+        local_db_name: str, optional, default=None
+            Name of the cache database. If None, the dataset name will be used.
+        read_from_local_db: bool, optional, default=False
+            If True, use an existing database.
+            If False, removes the existing database and creates a new one.
         """
 
         self.dataset_name = dataset_name
         self.records = {}
         self.append_property = append_property
+        self.local_db_dir = local_db_dir
+
+        if local_db_name is None:
+            self.local_db_name = dataset_name.replace(" ", "_") + ".sqlite"
+        else:
+            self.local_db_name = local_db_name
+
+        self.read_from_local_db = read_from_local_db
+        if self.read_from_local_db == False:
+            if os.path.exists(f"{self.local_db_dir}/{self.local_db_name}"):
+                log.warning(
+                    f"Database file {self.local_db_name} already exists in {self.local_db_dir}. Removing it."
+                )
+                self._remove_local_db()
+        else:
+            if not os.path.exists(f"{self.local_db_dir}/{self.local_db_name}"):
+                log.warning(
+                    f"Database file {self.local_db_name} does not exist in {self.local_db_dir}"
+                )
+                raise ValueError(
+                    f"Database file {self.local_db_name} does not exist in {self.local_db_dir}."
+                )
+            else:
+                # populate the records dict with the keys from the database
+                with SqliteDict(
+                    f"{self.local_db_dir}/{self.local_db_name}",
+                    autocommit=True,
+                ) as db:
+                    keys = list(db.keys())
+                    for key in keys:
+                        self.records[key] = key
 
     def total_records(self):
         """
@@ -471,7 +512,8 @@ class SourceDataset:
         Get the total number of configurations in the dataset.
         """
         total_config = 0
-        for record in self.records.values():
+        for record in self.records.keys():
+            record = self.get_record(record)
             total_config += record.n_configs
         return total_config
 
@@ -503,7 +545,12 @@ class SourceDataset:
                 f"Record with name {record_name} already exists in the dataset"
             )
 
-        self.records[record_name] = Record(record_name, self.append_property)
+        self.records[record_name] = record_name
+        with SqliteDict(
+            f"{self.local_db_dir}/{self.local_db_name}",
+            autocommit=True,
+        ) as db:
+            db[record_name] = Record(record_name, self.append_property)
         if properties is not None:
             self.add_properties_to_record(record_name, properties)
 
@@ -528,8 +575,15 @@ class SourceDataset:
             raise ValueError(
                 f"Record with name {record.name} already exists in the dataset."
             )
+        with SqliteDict(
+            f"{self.local_db_dir}/{self.local_db_name}",
+            autocommit=True,
+        ) as db:
+            db[record.name] = record
 
-        self.records[record.name] = copy.deepcopy(record)
+        self.records[record.name] = record.name
+
+        # self.records[record.name] = copy.deepcopy(record)
 
     def update_record(self, record: Record):
         """
@@ -555,8 +609,13 @@ class SourceDataset:
             raise ValueError(
                 f"Record with name {record.name} does not exist in the dataset."
             )
+        with SqliteDict(
+            f"{self.local_db_dir}/{self.local_db_name}",
+            autocommit=True,
+        ) as db:
+            db[record.name] = record
 
-        self.records[record.name] = copy.deepcopy(record)
+        # self.records[record.name] = copy.deepcopy(record)
 
     def remove_record(self, record_name: str):
         """
@@ -574,6 +633,11 @@ class SourceDataset:
         assert isinstance(record_name, str)
         if record_name in self.records.keys():
             self.records.pop(record_name)
+            with SqliteDict(
+                f"{self.local_db_dir}/{self.local_db_name}",
+                autocommit=True,
+            ) as db:
+                db.pop(record_name)
         else:
             log.warning(
                 f"Record with name {record_name} does not exist in the dataset."
@@ -623,7 +687,14 @@ class SourceDataset:
             )
             self.create_record(record_name)
 
-        self.records[record_name].add_property(property)
+        with SqliteDict(
+            f"{self.local_db_dir}/{self.local_db_name}",
+            autocommit=True,
+        ) as db:
+            record = db[record_name]
+            record.add_property(property)
+            db[record_name] = record
+        # self.records[record_name].add_property(property)
 
     def get_record(self, record_name: str):
         """
@@ -641,7 +712,11 @@ class SourceDataset:
         assert isinstance(record_name, str)
         from copy import deepcopy
 
-        return deepcopy(self.records[record_name])
+        with SqliteDict(
+            f"{self.local_db_dir}/{self.local_db_name}",
+            autocommit=True,
+        ) as db:
+            return db[record_name]
 
     def slice_record(self, record_name: str, min: int = 0, max: int = -1) -> Record:
         """
@@ -663,22 +738,32 @@ class SourceDataset:
             Record: A copy of the sliced record.
         """
         assert isinstance(record_name, str)
+        with SqliteDict(
+            f"{self.local_db_dir}/{self.local_db_name}",
+            autocommit=True,
+        ) as db:
+            return db[record_name].slice_record(min=min, max=max)
 
-        return self.records[record_name].slice_record(min=min, max=max)
+        # return self.records[record_name].slice_record(min=min, max=max)
 
     def subset_dataset(
         self,
+        new_dataset_name: str,
         total_records: Optional[int] = None,
         total_configurations: Optional[int] = None,
         max_configurations_per_record: Optional[int] = None,
         atomic_numbers_to_limit: Optional[np.ndarray] = None,
         max_force: Optional[unit.Quantity] = None,
+        local_db_dir: Optional[str] = None,
+        local_db_name: Optional[str] = None,
     ) -> Self:
         """
         Subset the dataset to only include a certain species
 
         Parameters
         ----------
+        new_dataset_name: str
+            Name of the new dataset that will be returned. Cannot be the same as the current dataset name.
         total_records: Optional[int], default=None
             Maximum number of records to include in the subset.
         total_configurations: Optional[int], default=None
@@ -690,11 +775,19 @@ class SourceDataset:
             Any molecules that contain elements outside of this list will be igonored
         max_force: Optional[unit.Quantity], default=None
             If set, configurations with forces greater than this value will be removed.
+        local_db_dir: str, optional, default=None
+            Directory to store the local database for the new dataset.  If not defined, will use the same directory as the current dataset.
+        local_db_name: str, optional, default=None
+            Name of the cache database for the new dataset. If None, the dataset name will be used.
+
         Returns
         -------
-            SourceDataset: A copy of the subset of the dataset.
+            SourceDataset: A new dataset that corresponds to the desired subset.
         """
-
+        if new_dataset_name == self.dataset_name:
+            raise ValueError(
+                "New dataset name cannot be the same as the current dataset name."
+            )
         if total_records is not None and total_configurations is not None:
             raise ValueError(
                 "Cannot set both total_records and total_conformers. Please choose one."
@@ -718,9 +811,17 @@ class SourceDataset:
                 log.warning("Using all records in the dataset instead.")
                 total_records = len(self.records)
 
+        if local_db_dir is None:
+            local_db_dir = self.local_db_dir
+        if local_db_name is None:
+            local_db_name = new_dataset_name.replace(" ", "_") + ".sqlite"
+
         # create a new empty dataset, we will add records that meet the criteria to this dataset
         new_dataset = SourceDataset(
-            self.dataset_name, append_property=self.append_property
+            dataset_name=new_dataset_name,
+            append_property=self.append_property,
+            local_db_dir=local_db_dir,
+            local_db_name=local_db_name,
         )
 
         # if we are limiting the total conformers
@@ -728,52 +829,92 @@ class SourceDataset:
 
             total_configurations_to_add = total_configurations
 
-            for record_name in self.records.keys():
+            with SqliteDict(
+                f"{self.local_db_dir}/{self.local_db_name}",
+                autocommit=True,
+            ) as db:
+                for record_name in self.records.keys():
 
-                if total_configurations_to_add > 0:
+                    if total_configurations_to_add > 0:
 
-                    record = self.get_record(record_name)
+                        record = db[record_name]
 
-                    # if we have a max force, we will remove configurations with forces greater than the max_force
-                    # we will just overwrite the record with the new record
-                    if max_force is not None:
-                        record = record.remove_high_force_configs(max_force)
+                        # if we have a max force, we will remove configurations with forces greater than the max_force
+                        # we will just overwrite the record with the new record
+                        if max_force is not None:
+                            record = record.remove_high_force_configs(max_force)
 
-                    # we need to set the total configs in the record AFTER we have done any force filtering
-                    n_configs = record.n_configs
+                        # we need to set the total configs in the record AFTER we have done any force filtering
+                        n_configs = record.n_configs
 
-                    # if the record does not contain the appropriate atomic species, we will skip it
-                    # and move on to the next iteration
-                    if atomic_numbers_to_limit is not None:
-                        if not record.contains_atomic_numbers(atomic_numbers_to_limit):
-                            continue
+                        # if the record does not contain the appropriate atomic species, we will skip it
+                        # and move on to the next iteration
+                        if atomic_numbers_to_limit is not None:
+                            if not record.contains_atomic_numbers(
+                                atomic_numbers_to_limit
+                            ):
+                                continue
 
-                    # if we set a max number of configurations we want per record, consider that here
-                    if max_configurations_per_record is not None:
-                        n_configs_to_add = max_configurations_per_record
-                        # if we have fewer than the max, just set to n_configs
-                        if n_configs < max_configurations_per_record:
+                        # if we set a max number of configurations we want per record, consider that here
+                        if max_configurations_per_record is not None:
+                            n_configs_to_add = max_configurations_per_record
+                            # if we have fewer than the max, just set to n_configs
+                            if n_configs < max_configurations_per_record:
+                                n_configs_to_add = n_configs
+                            # now check to see if the n_configs_to_add is more than what we still need to hit max conformers
+                            if n_configs_to_add > total_configurations_to_add:
+                                n_configs_to_add = total_configurations_to_add
+                        # even if we don't limit the number of configurations, we may still need to limit the number we
+                        # include to satisfy the total number of configurations
+                        else:
                             n_configs_to_add = n_configs
-                        # now check to see if the n_configs_to_add is more than what we still need to hit max conformers
-                        if n_configs_to_add > total_configurations_to_add:
-                            n_configs_to_add = total_configurations_to_add
-                    # even if we don't limit the number of configurations, we may still need to limit the number we
-                    # include to satisfy the total number of configurations
-                    else:
-                        n_configs_to_add = n_configs
-                        if n_configs_to_add > total_configurations_to_add:
-                            n_configs_to_add = total_configurations_to_add
+                            if n_configs_to_add > total_configurations_to_add:
+                                n_configs_to_add = total_configurations_to_add
 
-                    record = record.slice_record(0, n_configs_to_add)
-                    new_dataset.add_record(record)
-                    total_configurations_to_add -= n_configs_to_add
-            return new_dataset
+                        record = record.slice_record(0, n_configs_to_add)
+                        new_dataset.add_record(record)
+                        total_configurations_to_add -= n_configs_to_add
+                return new_dataset
 
         elif total_records is not None:
-            total_records_to_add = total_records
-            for record_name in self.records.keys():
-                if total_records_to_add > 0:
-                    record = self.get_record(record_name)
+            with SqliteDict(
+                f"{self.local_db_dir}/{self.local_db_name}",
+                autocommit=True,
+            ) as db:
+                total_records_to_add = total_records
+                for record_name in self.records.keys():
+                    if total_records_to_add > 0:
+                        record = db[record_name]
+                        # if we have a max force, we will remove configurations with forces greater than the max_force
+                        # we will just overwrite the record with the new record
+                        if max_force is not None:
+                            record = record.remove_high_force_configs(max_force)
+                        # if the record does not contain the appropriate atomic species, we will skip it
+                        # and move on to the next iteration
+                        if atomic_numbers_to_limit is not None:
+                            if not record.contains_atomic_numbers(
+                                atomic_numbers_to_limit
+                            ):
+                                continue
+                        # if we have a max number of configurations we want per record, consider that here
+                        if max_configurations_per_record is not None:
+                            n_to_add = min(
+                                max_configurations_per_record, record.n_configs
+                            )
+
+                            record = record.slice_record(0, n_to_add)
+
+                        new_dataset.add_record(record)
+                        total_records_to_add -= 1
+                return new_dataset
+        # if we are not going to be limiting the total number of configurations or records
+        else:
+            with SqliteDict(
+                f"{self.local_db_dir}/{self.local_db_name}",
+                autocommit=True,
+            ) as db:
+                for record_name in self.records.keys():
+                    record = db[record_name]
                     # if we have a max force, we will remove configurations with forces greater than the max_force
                     # we will just overwrite the record with the new record
                     if max_force is not None:
@@ -783,34 +924,12 @@ class SourceDataset:
                     if atomic_numbers_to_limit is not None:
                         if not record.contains_atomic_numbers(atomic_numbers_to_limit):
                             continue
-                    # if we have a max number of configurations we want per record, consider that here
                     if max_configurations_per_record is not None:
                         n_to_add = min(max_configurations_per_record, record.n_configs)
-
                         record = record.slice_record(0, n_to_add)
 
                     new_dataset.add_record(record)
-                    total_records_to_add -= 1
-            return new_dataset
-        # if we are not going to be limiting the total number of configurations or records
-        else:
-            for record_name in self.records.keys():
-                record = self.get_record(record_name)
-                # if we have a max force, we will remove configurations with forces greater than the max_force
-                # we will just overwrite the record with the new record
-                if max_force is not None:
-                    record = record.remove_high_force_configs(max_force)
-                # if the record does not contain the appropriate atomic species, we will skip it
-                # and move on to the next iteration
-                if atomic_numbers_to_limit is not None:
-                    if not record.contains_atomic_numbers(atomic_numbers_to_limit):
-                        continue
-                if max_configurations_per_record is not None:
-                    n_to_add = min(max_configurations_per_record, record.n_configs)
-                    record = record.slice_record(0, n_to_add)
-
-                new_dataset.add_record(record)
-            return new_dataset
+                return new_dataset
 
     def validate_record(self, record_name: str):
         """
@@ -831,107 +950,112 @@ class SourceDataset:
         validation_status = True
         # every record should have atomic numbers, positions, and energies
         # make sure atomic_numbers have been set
-        if self.records[record_name].atomic_numbers is None:
-            validation_status = False
-            log.error(
-                f"No atomic numbers set for record {record_name}. These are required."
-            )
-            # raise ValueError(
-            #     f"No atomic numbers set for record {record_name}. These are required."
-            # )
-
-        # ensure we added positions and energies as these are the minimum requirements for a dataset along with
-        # atomic_numbers
-        positions_in_properties = False
-        for property in self.records[record_name].per_atom.keys():
-            if isinstance(self.records[record_name].per_atom[property], Positions):
-                positions_in_properties = True
-                break
-        if positions_in_properties == False:
-            validation_status = False
-            log.error(
-                f"No positions found in properties for record {record_name}. These are required."
-            )
-            # raise ValueError(
-            #     f"No positions found in properties for record {record_name}. These are required."
-            # )
-
-        # we need to ensure we have some type of energy defined
-        energy_in_properties = False
-        for property in self.records[record_name].per_system.keys():
-            if isinstance(self.records[record_name].per_system[property], Energies):
-                energy_in_properties = True
-                break
-
-        if energy_in_properties == False:
-            validation_status = False
-            log.error(
-                f"No energies found in properties for record {record_name}. These are required."
-            )
-            # raise ValueError(
-            #     f"No energies found in properties for record {record_name}. These are required."
-            # )
-
-        # run record validation for number of atoms
-        # this will check that all per_atom properties have the same number of atoms as the atomic numbers
-        if self.records[record_name]._validate_n_atoms() == False:
-            validation_status = False
-            log.error(
-                f"Number of atoms for properties in record {record_name} are not consistent."
-            )
-            # raise ValueError(
-            #     f"Number of atoms for properties in record {record_name} are not consistent."
-            # )
-        # run record validation for number of configurations
-        # this will check that all properties have the same number of configurations
-        if self.records[record_name]._validate_n_configs() == False:
-            validation_status = False
-            log.error(
-                f"Number of configurations for properties in record {record_name} are not consistent."
-            )
-            # raise ValueError(
-            #     f"Number of configurations for properties in record {record_name} are not consistent."
-            # )
-
-        # check that the units provided are compatible with the expected units for the property type
-        # e.g., ensure things that should be length have units of length.
-        for property in self.records[record_name].per_atom.keys():
-
-            property_record = self.records[record_name].per_atom[property]
-
-            property_type = property_record.property_type
-            # first double check that this did indeed get pushed to the correct sub dictionary
-            assert property_record.classification == PropertyClassification.per_atom
-
-            property_units = property_record.units
-            expected_units = GlobalUnitSystem.get_units(property_type)
-            # check to make sure units are compatible with the expected units for the property type
-            if not expected_units.is_compatible_with(property_units, "chem"):
+        with SqliteDict(
+            f"{self.local_db_dir}/{self.local_db_name}",
+            autocommit=True,
+        ) as db:
+            record = db[record_name]
+            if record.atomic_numbers is None:
                 validation_status = False
                 log.error(
-                    f"Unit of {property_record.name} is not compatible with the expected unit {expected_units} for record {record_name}."
+                    f"No atomic numbers set for record {record_name}. These are required."
                 )
                 # raise ValueError(
-                #     f"Unit of {property_record.name} is not compatible with the expected unit {expected_units} for record {record_name}."
+                #     f"No atomic numbers set for record {record_name}. These are required."
                 # )
 
-        for property in self.records[record_name].per_system.keys():
-            property_record = self.records[record_name].per_system[property]
-
-            # check that the number of atoms in the property matches the number of atoms in the atomic numbers
-            property_type = property_record.property_type
-
-            assert property_record.classification == PropertyClassification.per_system
-            expected_units = GlobalUnitSystem.get_units(property_type)
-            property_units = property_record.units
-            if not expected_units.is_compatible_with(property_units, "chem"):
+            # ensure we added positions and energies as these are the minimum requirements for a dataset along with
+            # atomic_numbers
+            positions_in_properties = False
+            for property in record.per_atom.keys():
+                if isinstance(record.per_atom[property], Positions):
+                    positions_in_properties = True
+                    break
+            if positions_in_properties == False:
                 validation_status = False
                 log.error(
-                    f"Unit of {property_record.name} is not compatible with the expected unit {expected_units} for record {record_name}."
+                    f"No positions found in properties for record {record_name}. These are required."
                 )
                 # raise ValueError(
-                #     f"Unit of {property_record.name} is not compatible with the expected unit {expected_units} for record {record_name}."
+                #     f"No positions found in properties for record {record_name}. These are required."
                 # )
+
+            # we need to ensure we have some type of energy defined
+            energy_in_properties = False
+            for property in record.per_system.keys():
+                if isinstance(record.per_system[property], Energies):
+                    energy_in_properties = True
+                    break
+
+            if energy_in_properties == False:
+                validation_status = False
+                log.error(
+                    f"No energies found in properties for record {record_name}. These are required."
+                )
+                # raise ValueError(
+                #     f"No energies found in properties for record {record_name}. These are required."
+                # )
+
+            # run record validation for number of atoms
+            # this will check that all per_atom properties have the same number of atoms as the atomic numbers
+            if record._validate_n_atoms() == False:
+                validation_status = False
+                log.error(
+                    f"Number of atoms for properties in record {record_name} are not consistent."
+                )
+                # raise ValueError(
+                #     f"Number of atoms for properties in record {record_name} are not consistent."
+                # )
+            # run record validation for number of configurations
+            # this will check that all properties have the same number of configurations
+            if record._validate_n_configs() == False:
+                validation_status = False
+                log.error(
+                    f"Number of configurations for properties in record {record_name} are not consistent."
+                )
+                # raise ValueError(
+                #     f"Number of configurations for properties in record {record_name} are not consistent."
+                # )
+
+            # check that the units provided are compatible with the expected units for the property type
+            # e.g., ensure things that should be length have units of length.
+            for property in record.per_atom.keys():
+
+                property_record = record.per_atom[property]
+
+                property_type = property_record.property_type
+                # first double check that this did indeed get pushed to the correct sub dictionary
+                assert property_record.classification == PropertyClassification.per_atom
+
+                property_units = property_record.units
+                expected_units = GlobalUnitSystem.get_units(property_type)
+                # check to make sure units are compatible with the expected units for the property type
+                if not expected_units.is_compatible_with(property_units, "chem"):
+                    validation_status = False
+                    log.error(
+                        f"Unit of {property_record.name} is not compatible with the expected unit {expected_units} for record {record_name}."
+                    )
+                    # raise ValueError(
+                    #     f"Unit of {property_record.name} is not compatible with the expected unit {expected_units} for record {record_name}."
+                    # )
+
+            for property in record.per_system.keys():
+                property_record = record.per_system[property]
+
+                # check that the number of atoms in the property matches the number of atoms in the atomic numbers
+                property_type = property_record.property_type
+
+                assert (
+                    property_record.classification == PropertyClassification.per_system
+                )
+                expected_units = GlobalUnitSystem.get_units(property_type)
+                property_units = property_record.units
+                if not expected_units.is_compatible_with(property_units, "chem"):
+                    validation_status = False
+                    log.error(
+                        f"Unit of {property_record.name} is not compatible with the expected unit {expected_units} for record {record_name}."
+                    )
+
         return validation_status
 
     def validate_records(self):
@@ -981,38 +1105,39 @@ class SourceDataset:
         output_dict["total_configurations"] = self.total_configs()
 
         key = list(self.records.keys())[0]
+        with SqliteDict(
+            f"{self.local_db_dir}/{self.local_db_name}",
+            autocommit=True,
+        ) as db:
+            record = db[key]
 
-        temp_props = {}
-        temp_props["atomic_numbers"] = {
-            "classification": str(self.records[key].atomic_numbers.classification),
-        }
-
-        for prop in self.records[key].per_atom.keys():
-            temp_props[prop] = {
-                "classification": str(self.records[key].per_atom[prop].classification),
-                "units": str(
-                    GlobalUnitSystem.get_units(
-                        self.records[key].per_atom[prop].property_type
-                    )
-                ),
+            temp_props = {}
+            temp_props["atomic_numbers"] = {
+                "classification": str(record.atomic_numbers.classification),
             }
 
-        for prop in self.records[key].per_system.keys():
-            temp_props[prop] = {
-                "classification": str(
-                    self.records[key].per_system[prop].classification
-                ),
-                "units": str(
-                    GlobalUnitSystem.get_units(
-                        self.records[key].per_system[prop].property_type
-                    )
-                ),
-            }
+            for prop in record.per_atom.keys():
+                temp_props[prop] = {
+                    "classification": str(record.per_atom[prop].classification),
+                    "units": str(
+                        GlobalUnitSystem.get_units(record.per_atom[prop].property_type)
+                    ),
+                }
 
-        for prop in self.records[key].meta_data.keys():
-            temp_props[prop] = "meta_data"
+            for prop in record.per_system.keys():
+                temp_props[prop] = {
+                    "classification": str(record.per_system[prop].classification),
+                    "units": str(
+                        GlobalUnitSystem.get_units(
+                            record.per_system[prop].property_type
+                        )
+                    ),
+                }
 
-        output_dict["properties"] = temp_props
+            for prop in record.meta_data.keys():
+                temp_props[prop] = "meta_data"
+
+            output_dict["properties"] = temp_props
 
         return output_dict
 
@@ -1035,6 +1160,16 @@ class SourceDataset:
 
         with open(f"{file_path}/{file_name}", "w") as f:
             json.dump(dataset_summary, f, indent=4)
+
+    def _remove_local_db(self):
+        """
+        Remove the local database file.
+
+        Returns
+        -------
+
+        """
+        os.remove(f"{self.local_db_dir}/{self.local_db_name}")
 
     def to_hdf5(self, file_path: str, file_name: str):
         """
@@ -1074,27 +1209,27 @@ class SourceDataset:
 
         with OpenWithLock(f"{full_file_path}.lockfile", "w") as lockfile:
             with h5py.File(full_file_path, "w") as f:
-                for record in tqdm(self.records.keys()):
-                    record_group = f.create_group(record)
+                for record_name in tqdm(self.records.keys()):
+                    record_group = f.create_group(record_name)
+
+                    record = self.get_record(record_name)
 
                     record_group.create_dataset(
                         "atomic_numbers",
-                        data=self.records[record].atomic_numbers.value,
-                        shape=self.records[record].atomic_numbers.value.shape,
+                        data=record.atomic_numbers.value,
+                        shape=record.atomic_numbers.value.shape,
                     )
                     record_group["atomic_numbers"].attrs["format"] = str(
-                        self.records[record].atomic_numbers.classification
+                        record.atomic_numbers.classification
                     )
                     record_group["atomic_numbers"].attrs["property_type"] = str(
-                        self.records[record].atomic_numbers.property_type
+                        record.atomic_numbers.property_type
                     )
 
-                    record_group.create_dataset(
-                        "n_configs", data=self.records[record].n_configs
-                    )
+                    record_group.create_dataset("n_configs", data=record.n_configs)
                     record_group["n_configs"].attrs["format"] = "meta_data"
 
-                    for key, property in self.records[record].per_atom.items():
+                    for key, property in record.per_atom.items():
 
                         target_units = GlobalUnitSystem.get_units(
                             property.property_type
@@ -1112,7 +1247,7 @@ class SourceDataset:
                             property.property_type
                         )
 
-                    for key, property in self.records[record].per_system.items():
+                    for key, property in record.per_system.items():
                         target_units = GlobalUnitSystem.get_units(
                             property.property_type
                         )
@@ -1130,7 +1265,7 @@ class SourceDataset:
                             property.property_type
                         )
 
-                    for key, property in self.records[record].meta_data.items():
+                    for key, property in record.meta_data.items():
                         if isinstance(property.value, str):
                             record_group.create_dataset(
                                 key,

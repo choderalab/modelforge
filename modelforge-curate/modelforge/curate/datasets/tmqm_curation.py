@@ -174,7 +174,7 @@ class tmQMCuration(DatasetCuration):
         from modelforge.dataset.utils import _ATOMIC_ELEMENT_TO_NUMBER
         from modelforge.utils.misc import str_to_float
 
-        dataset = SourceDataset("tmqm")
+        dataset = SourceDataset(dataset_name="tmqm", local_db_dir=self.local_cache_dir)
 
         # aggregate the snapshot contents into a list
         snapshots = []

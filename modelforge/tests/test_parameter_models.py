@@ -10,7 +10,7 @@ def test_dataset_parameter_model():
 
     # test to ensure we can properly initialize
     dataset_parameter_dict = {
-        "name": "QM9",
+        "dataset_name": "QM9",
         "version_select": "latest",
         "num_workers": 4,
         "pin_memory": True,
@@ -31,7 +31,7 @@ def test_dataset_parameter_model():
 
     # test the validator on num_workers that asserts it must be greater than 0
     dataset_parameter_dict = {
-        "name": "QM9",
+        "dataset_name": "QM9",
         "version_select": "latest",
         "num_workers": -1,
         "pin_memory": True,
@@ -53,7 +53,7 @@ def test_dataset_parameter_model():
 
     # test to ensure error is raised if we do not provide all parameters
     dataset_parameter_dict = {
-        "name": "QM9",
+        "dataset_name": "QM9",
         "version_select": "latest",
         "num_workers": 4,
         "properties_of_interest": [
@@ -74,7 +74,7 @@ def test_dataset_parameter_model():
 
     # test to ensure error is raised if we set a wrong type
     dataset_parameter_dict = {
-        "name": "QM9",
+        "dataset_name": "QM9",
         "version_select": "latest",
         "num_workers": 4,
         "pin_memory": "totally_true",
@@ -94,7 +94,7 @@ def test_dataset_parameter_model():
     with pytest.raises(ValidationError):
         dataset_parameters = DatasetParameters(**dataset_parameter_dict)
 
-    # we should raise an error if we assign a wrong type to name
+    # we should raise an error if we assign a wrong type to dataset_name
     with pytest.raises(ValidationError):
         dataset_parameters.dataset_name = 4
 
@@ -104,7 +104,7 @@ def test_dataset_parameter_model():
 
     # test the validator to  ensure properties_assignment has values in properties_of_interest
     dataset_parameter_dict = {
-        "name": "QM9",
+        "dataset_name": "QM9",
         "version_select": "latest",
         "num_workers": -1,
         "pin_memory": True,

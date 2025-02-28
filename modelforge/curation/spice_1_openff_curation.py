@@ -804,7 +804,7 @@ class SPICE1OpenFFCuration(DatasetCuration):
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)
 
-        assert data_inputs["name"] == "spice1openff"
+        assert data_inputs["dataset_name"] == "spice1openff"
         if self.version_select == "latest":
             self.version_select = data_inputs["latest"]
             logger.debug(f"Using latest version {self.version_select}.")

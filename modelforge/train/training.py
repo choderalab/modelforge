@@ -1761,7 +1761,7 @@ class PotentialTrainer:
             )
 
         # Save the best model based on the validation loss
-        # NOTE: The filename is formatted as "best_{potential_name}-{name}-{epoch:02d}"
+        # NOTE: The filename is formatted as "best_{potential_name}-{dataset_name}-{epoch:02d}"
         checkpoint_filename = (
             f"best_{self.potential_parameter.potential_name}-{self.dataset_parameter.dataset_name}"
             + "-{epoch:02d}"
@@ -1905,7 +1905,7 @@ class PotentialTrainer:
             "{potential_name}", self.potential_parameter.potential_name
         )
         experiment_name = experiment_name.replace(
-            "{name}", self.dataset_parameter.dataset_name
+            "{dataset_name}", self.dataset_parameter.dataset_name
         )
         return experiment_name
 

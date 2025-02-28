@@ -32,7 +32,7 @@ def setup(potential_name: str):
     dataset_config["version_select"] = "nc_1000_v0"
 
     potential_name = potential_config["potential_name"]
-    dataset_name = dataset_config["name"]
+    dataset_name = dataset_config["dataset_name"]
     version_select = dataset_config.get("version_select", "latest")
     accelerator = training_config.get("accelerator", "cpu")
     nr_of_epochs = training_config.get("nr_of_epochs", 1)

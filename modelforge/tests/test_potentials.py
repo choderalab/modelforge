@@ -506,7 +506,7 @@ def test_energy_between_simulation_environments(
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
-@pytest.mark.parametrize("name", _ImplementedDatasets.get_all_dataset_names())
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 def test_forward_pass_with_all_datasets(
     potential_name, dataset_name, datamodule_factory, prep_temp_dir
 ):
@@ -595,7 +595,7 @@ def test_jit(potential_name, single_batch_with_batchsize, prep_temp_dir):
     potential(nnp_input)
 
 
-@pytest.mark.parametrize("name", ["QM9"])
+@pytest.mark.parametrize("dataset_name", ["QM9"])
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
@@ -619,7 +619,7 @@ def test_chemical_equivalency(
     validate_per_atom_and_per_system_properties(output)
 
 
-@pytest.mark.parametrize("name", ["QM9"])
+@pytest.mark.parametrize("dataset_name", ["QM9"])
 @pytest.mark.parametrize("potential_name", ["SchNet"])
 def test_different_neighborlists_for_inference(
     dataset_name, potential_name, single_batch_with_batchsize, prep_temp_dir
@@ -653,7 +653,7 @@ def test_different_neighborlists_for_inference(
     assert torch.allclose(output_1["per_system_energy"], output_2["per_system_energy"])
 
 
-@pytest.mark.parametrize("name", ["QM9"])
+@pytest.mark.parametrize("dataset_name", ["QM9"])
 @pytest.mark.parametrize(
     "energy_expression",
     [
@@ -710,7 +710,7 @@ def test_multiple_output_heads(
         )
 
 
-@pytest.mark.parametrize("name", ["QM9"])
+@pytest.mark.parametrize("dataset_name", ["QM9"])
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )

@@ -100,7 +100,7 @@ def test_dataset_basic_operations():
         )
 
 
-@pytest.mark.parametrize("name", _ImplementedDatasets.get_all_dataset_names())
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 def test_get_properties(dataset_name, single_batch_with_batchsize, prep_temp_dir):
 
     version = "nc_1000_v0"
@@ -112,7 +112,7 @@ def test_get_properties(dataset_name, single_batch_with_batchsize, prep_temp_dir
     )
 
 
-@pytest.mark.parametrize("name", _ImplementedDatasets.get_all_dataset_names())
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 def test_different_properties_of_interest(dataset_name, dataset_factory, prep_temp_dir):
     local_cache_dir = str(prep_temp_dir) + "/data_test"
 
@@ -240,7 +240,7 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
     assert len(raw_data_item.metadata.__slots__) == 6  # 6 properties are returned
 
 
-@pytest.mark.parametrize("name", ["QM9"])
+@pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_file_existence_after_initialization(
     dataset_name, dataset_factory, prep_temp_dir
 ):
@@ -405,7 +405,7 @@ def test_metadata_validation(prep_temp_dir):
     assert data._metadata_validation("qm9_test.json", local_cache_dir) == False
 
 
-@pytest.mark.parametrize("name", ["QM9"])
+@pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_different_scenarios_of_file_availability(
     dataset_name, prep_temp_dir, dataset_factory
 ):
@@ -477,7 +477,7 @@ def test_different_scenarios_of_file_availability(
     assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
 
 
-@pytest.mark.parametrize("name", _ImplementedDatasets.get_all_dataset_names())
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 def test_data_item_format_of_datamodule(
     dataset_name, datamodule_factory, prep_temp_dir
 ):
@@ -508,7 +508,7 @@ def test_data_item_format_of_datamodule(
 from modelforge.potential import _Implemented_NNPs
 
 
-@pytest.mark.parametrize("name", _ImplementedDatasets.get_all_dataset_names())
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 def test_removal_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir):
     # test the self energy calculation on the QM9 dataset
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
@@ -651,7 +651,7 @@ def test_dataset_neighborlist(
     )
 
 
-@pytest.mark.parametrize("name", _ImplementedDatasets.get_all_dataset_names())
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 def test_dataset_generation(dataset_name, datamodule_factory, prep_temp_dir):
     """Test the splitting of the dataset."""
 
@@ -704,7 +704,7 @@ from modelforge.dataset.utils import (
         RandomRecordSplittingStrategy,
     ],
 )
-@pytest.mark.parametrize("name", ["QM9"])
+@pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_dataset_splitting(
     splitting_strategy,
     dataset_name,
@@ -774,7 +774,7 @@ def test_dataset_splitting(
         print(f"AssertionError raised: {excinfo}")
 
 
-@pytest.mark.parametrize("name", ["QM9"])
+@pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_properties_assignment(
     dataset_name,
     datamodule_factory,
@@ -801,7 +801,7 @@ def test_properties_assignment(
     )
 
 
-@pytest.mark.parametrize("name", ["QM9"])
+@pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_dataset_downloader(dataset_name, dataset_factory, prep_temp_dir):
     """
     Test the DatasetDownloader functionality.
@@ -818,7 +818,7 @@ def test_dataset_downloader(dataset_name, dataset_factory, prep_temp_dir):
     assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
 
 
-@pytest.mark.parametrize("name", _ImplementedDatasets.get_all_dataset_names())
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 def test_numpy_dataset_assignment(dataset_name, prep_temp_dir):
     """
     Test if the numpy_dataset attribute is correctly assigned after processing or loading.
@@ -917,7 +917,7 @@ def test_energy_postprocessing(prep_temp_dir):
     assert np.isclose(stddev, 19.372371857226035)
 
 
-@pytest.mark.parametrize("name", ["QM9"])
+@pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_function_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir):
     # test the self energy calculation on the QM9 dataset
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
@@ -1211,7 +1211,7 @@ def test_shifting_center_of_mass_to_origin(prep_temp_dir):
         assert torch.allclose(pairs.d_ij, pairs_ns.d_ij, atol=1e-4)
 
 
-@pytest.mark.parametrize("name", _ImplementedDatasets.get_all_dataset_names())
+@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 def test_element_filter(dataset_name, prep_temp_dir):
     local_cache_dir = str(prep_temp_dir) + "/data_test"
 

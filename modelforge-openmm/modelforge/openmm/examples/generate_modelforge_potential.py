@@ -34,5 +34,5 @@ jit_potential.save("data/ani2x_test.pt")
 # from modelforge.dataset.dataset import single_batch
 #
 # # load in a single data
-# batch = single_batch(batch_size=1, name="qm9", local_cache_dir="./")
+# batch = single_batch(batch_size=1, dataset_name="qm9", local_cache_dir="./")
 #

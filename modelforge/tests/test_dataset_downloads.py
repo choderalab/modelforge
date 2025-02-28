@@ -42,12 +42,12 @@ for name in _ImplementedDatasets.get_all_dataset_names():
             dataset_and_version.append((name, version))
 
 
-@pytest.mark.parametrize("name, version", dataset_and_version)
+@pytest.mark.parametrize("dataset_name, version", dataset_and_version)
 @pytest.mark.data_download
 def test_download_download(dataset_name, version, prep_temp_dir):
     local_cache_dir = str(prep_temp_dir)
 
-    # if version in dataset_versions[name]:
+    # if version in dataset_versions[dataset_name]:
     data = _ImplementedDatasets.get_dataset_class(dataset_name)(
         version_select=version, local_cache_dir=local_cache_dir, force_download=True
     )

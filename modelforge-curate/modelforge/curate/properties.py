@@ -417,6 +417,10 @@ class SpinMultiplicities(PropertyBaseModel):
     # specific validation of the value array, which must be 2d for spin multiplicities, with shape [n_configs, 1]
     @model_validator(mode="after")
     def _check_spin_multiplicity_shape(self) -> Self:
+        if len(self.value.shape) != 2:
+            raise ValueError(
+                f"Shape of spin multiplicities should be 2d, found {len(self.value.shape)}"
+            )
         if self.value.shape[1] != 1:
             raise ValueError(
                 f"Shape of spin multiplicities should be [n_configs, 1], found {self.value.shape}"
@@ -491,6 +495,10 @@ class DipoleMomentScalarPerSystem(PropertyBaseModel):
     # specific validation of the value array, which must be 2d for scalar dipole moments, with shape [n_configs, 1]
     @model_validator(mode="after")
     def _check_dipole_moment_shape(self) -> Self:
+        if len(self.value.shape) != 2:
+            raise ValueError(
+                f"Shape of scalar dipole moment should be [n_configs, 1], found {self.value.shape}"
+            )
         if self.value.shape[1] != 1:
             raise ValueError(
                 f"Shape of scalar dipole moment should be [n_configs, 1], found {self.value.shape}"
@@ -607,6 +615,12 @@ class QuadrupoleMomentPerAtom(PropertyBaseModel):
 
     @model_validator(mode="after")
     def _check_quadrupole_moment_shape(self) -> Self:
+
+        if len(self.value.shape) != 4:
+            raise ValueError(
+                f"Shape of quadrupole moment should be [n_configs, n_atoms, 3, 3], found {self.value.shape}"
+            )
+
         if self.value.shape[2] != 3:
             raise ValueError(
                 f"Shape of quadrupole moment should be [n_configs, n_atoms, 3, 3], found {self.value.shape}"
@@ -645,6 +659,10 @@ class OctupoleMomentPerAtom(PropertyBaseModel):
 
     @model_validator(mode="after")
     def _check_octupole_moment_shape(self) -> Self:
+        if len(self.value.shape) != 5:
+            raise ValueError(
+                f"Shape of octupole moment should be [n_configs, n_atoms, 3, 3, 3], found {self.value.shape}"
+            )
         if self.value.shape[2] != 3:
             raise ValueError(
                 f"Shape of octupole moment should be [n_configs, n_atoms, 3, 3, 3], found {self.value.shape}"

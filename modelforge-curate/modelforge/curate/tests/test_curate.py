@@ -23,9 +23,23 @@ def test_source_dataset_init(prep_temp_dir):
     assert len(new_dataset.records) == 2
 
 
+def test_automatic_naming_of_db(prep_temp_dir):
+
+    new_dataset = SourceDataset(
+        name="test_dataset2",
+        local_db_dir=str(prep_temp_dir),
+    )
+    assert new_dataset.local_db_name == "test_dataset2.sqlite"
+    # test that we sub _ for spaces
+    new_dataset = SourceDataset(
+        name="test dataset2",
+        local_db_dir=str(prep_temp_dir),
+    )
+    assert new_dataset.local_db_name == "test_dataset2.sqlite"
+
+
 def test_dataset_create_record(prep_temp_dir):
-    # test creating a record that already exists
-    # this will fail
+
     new_dataset = SourceDataset(
         name="test_dataset2",
         local_db_dir=str(prep_temp_dir),

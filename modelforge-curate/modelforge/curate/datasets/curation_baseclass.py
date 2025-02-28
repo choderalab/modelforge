@@ -47,6 +47,8 @@ class DatasetCuration(ABC):
         self.dataset_name = dataset_name
 
         os.makedirs(self.local_cache_dir, exist_ok=True)
+        # initialize the dataset to None since nothing has been setup yet
+        self.dataset = None
 
         # initialize parameter information
         self._init_dataset_parameters()
@@ -67,7 +69,10 @@ class DatasetCuration(ABC):
         int
             total number of records in the dataset
         """
-        return self.dataset.total_records()
+        if self.dataset is not None:
+            return self.dataset.total_records()
+        else:
+            return 0
 
     def total_configs(self):
         """
@@ -78,7 +83,10 @@ class DatasetCuration(ABC):
         int
             total number of conformers in the dataset
         """
-        return self.dataset.total_configs()
+        if self.dataset is not None:
+            return self.dataset.total_configs()
+        else:
+            return 0
 
     def _calc_center_of_mass(
         self, atomic_numbers: np.ndarray, positions: np.ndarray
@@ -392,7 +400,7 @@ class DatasetCuration(ABC):
             Name of the local database to load the dataset from.
         """
         self.dataset = SourceDataset(
-            dataset_name=self.dataset_name,
+            name=self.dataset_name,
             local_db_dir=local_db_dir,
             local_db_name=local_db_name,
             read_from_local_db=True,

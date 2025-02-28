@@ -13,7 +13,9 @@ from modelforge.curate.datasets.curation_baseclass import DatasetCuration
 def setup_test_dataset(dataset_name, local_cache_dir):
     class TestCuration(DatasetCuration):
         def _init_dataset_parameters(self):
-            self.dataset = SourceDataset(name=self.dataset_name)
+            self.dataset = SourceDataset(
+                name=self.dataset_name, local_db_dir=self.local_cache_dir
+            )
             for i in range(5):
                 atomic_numbers = AtomicNumbers(value=[[6 + i], [1]])
                 positions = Positions(
@@ -338,6 +340,11 @@ def test_base_operations(prep_temp_dir):
     output_dir = f"{prep_temp_dir}/test_base_operations"
     curated_dataset = setup_test_dataset("test_dataset_1b", output_dir)
 
+    assert curated_dataset.dataset_name == "test_dataset_1b"
+    assert curated_dataset.local_cache_dir == output_dir
+    assert curated_dataset.total_records() == 5
+    assert curated_dataset.total_configs() == 15
+
     # test writing the dataset
     n_record, n_configs = curated_dataset.to_hdf5(
         hdf5_file_name="test.hdf5", output_file_dir=output_dir
@@ -524,6 +531,14 @@ def test_base_operations(prep_temp_dir):
             atomic_species_to_limit=[100],
         )
 
+    # give a bad input to atomic_species_to_limit; it can only be a list of ints or strings
+    with pytest.raises(ValueError):
+        n_record, n_configs = curated_dataset.to_hdf5(
+            hdf5_file_name="test_energy.hdf5",
+            output_file_dir=output_dir,
+            atomic_species_to_limit=[True, False, True, False],
+        )
+
     # make the original dataset empty
     with pytest.raises(ValueError):
         empty_dataset = SourceDataset(name="empty_dataset")
@@ -533,3 +548,29 @@ def test_base_operations(prep_temp_dir):
             output_file_dir=output_dir,
             max_force=2.5 * unit.kilojoule_per_mole / unit.nanometer,
         )
+
+
+def test_load_from_local_db(prep_temp_dir):
+    output_dir = f"{str(prep_temp_dir)}/test_load_from_local_db"
+    curated_dataset = setup_test_dataset("test_ds_1", local_cache_dir=output_dir)
+    assert os.path.exists(f"{output_dir}/test_ds_1.sqlite")
+
+    assert curated_dataset.total_records() == 5
+    assert curated_dataset.total_configs() == 15
+
+    class TestCuration(DatasetCuration):
+        def _init_dataset_parameters(self):
+            pass
+
+    curated_dataset2 = TestCuration(
+        dataset_name="test_ds_2", local_cache_dir=str(prep_temp_dir)
+    )
+    # since there has nothing been added to the dataset this will fail
+    assert curated_dataset2.total_records() == 0
+    assert curated_dataset2.total_configs() == 0
+
+    curated_dataset2.load_from_db(
+        local_db_dir=output_dir, local_db_name="test_ds_1.sqlite"
+    )
+    assert curated_dataset2.total_records() == 5
+    assert curated_dataset2.total_configs() == 15

@@ -487,7 +487,7 @@ class SourceDataset:
                 log.warning(
                     f"Database file {self.local_db_name} does not exist in {self.local_db_dir}"
                 )
-                raise ValueError(
+                raise FileNotFoundError(
                     f"Database file {self.local_db_name} does not exist in {self.local_db_dir}."
                 )
             else:
@@ -613,7 +613,7 @@ class SourceDataset:
                     raise ValueError(
                         f"Record with name {name} already exists in the dataset."
                     )
-
+                self.records[name] = name
                 db[name] = records[i]
 
     def update_record(self, record: Record):

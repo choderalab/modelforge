@@ -50,6 +50,8 @@ def test_dataset_create_record(prep_temp_dir):
     new_dataset.add_record(record)
     assert "mol3" in new_dataset.records
     assert len(new_dataset.records) == 3
+    record_from_db = new_dataset.get_record("mol3")
+    assert record_from_db.name == "mol3"
 
     new_dataset.remove_record("mol3")
     assert "mol3" not in new_dataset.records
@@ -67,6 +69,21 @@ def test_dataset_create_record(prep_temp_dir):
     # create record with properties
     new_dataset.create_record("mol5", properties=[property])
     assert "mol5" in new_dataset.records
+
+    # test adding multiple records
+    record6 = Record(name="mol6")
+    record7 = Record(name="mol7")
+
+    new_dataset.add_records([record6, record7])
+    assert "mol6" in new_dataset.records
+    assert "mol7" in new_dataset.records
+    record6_from_db = new_dataset.get_record("mol6")
+    assert record6_from_db.name == "mol6"
+    record7_from_db = new_dataset.get_record("mol7")
+    assert record7_from_db.name == "mol7"
+    # try adding again, it should fail
+    with pytest.raises(ValueError):
+        new_dataset.add_records([record6, record7])
 
 
 def test_add_properties_to_records_directly(prep_temp_dir):
@@ -113,6 +130,11 @@ def test_add_properties_to_records_directly(prep_temp_dir):
     new_dataset.add_record(record)
 
     assert "mol1" in new_dataset.records.keys()
+
+    # add a property when a record hasn't already been created
+    new_dataset.add_property("mol3", atomic_numbers)
+    assert "mol3" in new_dataset.records.keys()
+    assert new_dataset.get_record("mol3").atomic_numbers is not None
 
 
 def test_record_failures():
@@ -282,6 +304,7 @@ def test_add_properties_failures():
     meta_data = MetaData(name="smiles", value="[CH]")
 
     record.add_properties([positions, energies, atomic_numbers, meta_data])
+    # try adding the same properties again
     with pytest.raises(ValueError):
         record.add_property(positions)
     with pytest.raises(ValueError):
@@ -290,6 +313,35 @@ def test_add_properties_failures():
         record.add_property(atomic_numbers)
     with pytest.raises(ValueError):
         record.add_property(meta_data)
+
+    # try adding properties with same names, but different types, i.e., per_atom and per_system
+    # energies is already added as per_system, so this will fail
+    positions2 = Positions(
+        name="energies", value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer"
+    )
+
+    with pytest.raises(ValueError):
+        record.add_property(positions2)
+
+    energies = Energies(name="positions", value=np.array([[0.1]]), units=unit.hartree)
+    with pytest.raises(ValueError):
+        record.add_property(energies)
+
+    meta_data = MetaData(name="positions", value="[CH]")
+    with pytest.raises(ValueError):
+        record.add_property(meta_data)
+    meta_data = MetaData(name="energies", value="[CH]")
+    with pytest.raises(ValueError):
+        record.add_property(meta_data)
+
+    energies = Energies(name="smiles", value=np.array([[0.1]]), units=unit.hartree)
+    with pytest.raises(ValueError):
+        record.add_property(energies)
+    positions = Positions(
+        name="smiles", value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer"
+    )
+    with pytest.raises(ValueError):
+        record.add_property(positions)
 
     # we cannot have any property with the name "atomic_numbers" as it is reserved
     # so let us set up a bunch with that name and try to set them to a new record
@@ -655,7 +707,7 @@ def test_dataset_validation(prep_temp_dir):
 
 
 def test_dataset_subsetting(prep_temp_dir):
-    ds = SourceDataset(name="test dataset10", local_db_dir=str(prep_temp_dir))
+    ds = SourceDataset(name="test_dataset10", local_db_dir=str(prep_temp_dir))
 
     assert ds.local_db_dir == str(prep_temp_dir)
     assert ds.local_db_name == "test_dataset10.sqlite"
@@ -742,6 +794,36 @@ def test_dataset_subsetting(prep_temp_dir):
     )
     assert ds_subset.total_configs() == 11
     assert ds_subset.total_records() == 3
+
+    ds_subset = ds.subset_dataset(
+        new_dataset_name="test_dataset_sub9",
+        final_configuration_only=True,
+    )
+    assert ds_subset.total_configs() == 10
+    assert ds_subset.total_records() == 10
+
+    # check to ensure we fail when we should
+    # this shoudl fail because the datasetname is the same
+    with pytest.raises(ValueError):
+        ds.subset_dataset(
+            new_dataset_name="test_dataset10",
+            total_records=5,
+        )
+    # this should fail if we set total_records and total_configurations
+    with pytest.raises(ValueError):
+        ds.subset_dataset(
+            new_dataset_name="test_sub1",
+            total_records=5,
+            total_configurations=20,
+        )
+    # final_Configuration_only and max_configurations_per_record can't be set at the same time
+    with pytest.raises(ValueError):
+        ds.subset_dataset(
+            new_dataset_name="test_sub2",
+            total_records=5,
+            final_configuration_only=True,
+            max_configurations_per_record=5,
+        )
 
 
 def test_limit_atomic_numbers(prep_temp_dir):
@@ -1091,6 +1173,15 @@ def test_remove_high_force_configs(prep_temp_dir):
             atomic_numbers_to_limit=[6, 1, 8],
             max_force_key="energies",
         )
+    # this should fail because we are giving a key that isn't force but is per atom
+    with pytest.raises(ValueError):
+        trimmed_dataset = dataset.subset_dataset(
+            new_dataset_name="test_dataset12_sub15",
+            total_records=2,
+            max_force=30 * unit.kilojoule_per_mole / unit.nanometer,
+            atomic_numbers_to_limit=[6, 1, 8],
+            max_force_key="positions",
+        )
 
 
 def test_reading_from_db_file(prep_temp_dir):
@@ -1122,3 +1213,29 @@ def test_reading_from_db_file(prep_temp_dir):
     )
     assert ds2.total_records() == 1
     assert "mol1" in ds2.records.keys()
+    record_from_db = ds2.get_record("mol1")
+    assert record_from_db.validate() == True
+    assert record_from_db.n_atoms == 2
+    assert record_from_db.n_configs == 1
+    assert np.all(record_from_db.per_system["energies"].value == energies.value)
+    assert np.all(record_from_db.per_atom["positions"].value == positions.value)
+    assert np.all(record_from_db.atomic_numbers.value == atomic_numbers.value)
+    assert record_from_db.meta_data["smiles"].value == smiles.value
+
+    # this will fail because the db file doesn't exist
+    with pytest.raises(FileNotFoundError):
+        ds3 = SourceDataset(
+            name="test_dataset16",
+            local_db_dir=str(prep_temp_dir),
+            local_db_name="test_dataset_does_not_exist.sqlite",
+            read_from_local_db=True,
+        )
+    # let us try to reinitialize a dataset that exists.  it will remove it
+    ds = SourceDataset(
+        name="test_dataset14",
+        local_db_dir=str(prep_temp_dir),
+        local_db_name="test_dataset14.sqlite",
+    )
+    import os
+
+    assert os.path.exists(str(prep_temp_dir / "test_dataset14.sqlite")) == False

@@ -64,6 +64,10 @@ def test_dataset_create_record(prep_temp_dir):
     new_dataset.add_properties("mol4", [property])
     assert "mol4" in new_dataset.records
 
+    # create record with properties
+    new_dataset.create_record("mol5", properties=[property])
+    assert "mol5" in new_dataset.records
+
 
 def test_add_properties_to_records_directly(prep_temp_dir):
     record = Record(name="mol1")
@@ -109,6 +113,48 @@ def test_add_properties_to_records_directly(prep_temp_dir):
     new_dataset.add_record(record)
 
     assert "mol1" in new_dataset.records.keys()
+
+
+def test_record_failures():
+    record = Record(name="mol1")
+
+    positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
+    energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
+    atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
+    meta_data = MetaData(name="smiles", value="[CH]")
+
+    record.add_property(property=atomic_numbers)
+    record.add_properties([positions, energies, meta_data])
+
+    # this will fail because the property already exists
+    with pytest.raises(ValueError):
+        record.add_property(energies)
+
+    # this will fail because the property already exists, but with different type
+    with pytest.raises(ValueError):
+        positions = Positions(
+            name="energies",
+            value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]],
+            units="nanometer",
+        )
+        record.add_property(positions)
+
+    print(record.per_system.keys())
+    # this will fail because the property already exists, but with different type
+    with pytest.raises(ValueError):
+        energies = Energies(
+            name="positions", value=np.array([[0.1]]), units=unit.hartree
+        )
+        record.add_property(energies)
+
+    # this will fail because the property already exists, but with different type
+    with pytest.raises(ValueError):
+        positions = Positions(
+            name="atomic_numbers",
+            value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]],
+            units="nanometer",
+        )
+        record.add_property(positions)
 
 
 def test_record_repr(capsys):
@@ -763,6 +809,16 @@ def test_limit_atomic_numbers(prep_temp_dir):
             atomic_numbers_to_limit=atomic_numbers_to_limit,
         )
 
+    # create an empty record and try to limit the atomic numbers
+    # it will fail
+    with pytest.raises(ValueError):
+        record_empty = Record("mol2")
+        dataset.add_record(record_empty)
+        dataset.subset_dataset(
+            new_dataset_name="test_dataset11_sub3",
+            atomic_numbers_to_limit=atomic_numbers_to_limit,
+        )
+
 
 def test_remove_high_force_configs(prep_temp_dir):
 
@@ -1016,6 +1072,25 @@ def test_remove_high_force_configs(prep_temp_dir):
     assert trimmed_dataset.get_record("mol1").n_configs == 3
     assert trimmed_dataset.get_record("mol2").n_configs == 3
     assert trimmed_dataset.total_configs() == 6
+
+    # this will fail because we are going to try a key that doesn't exist
+    with pytest.raises(ValueError):
+        trimmed_dataset = dataset.subset_dataset(
+            new_dataset_name="test_dataset12_sub13",
+            total_records=2,
+            max_force=30 * unit.kilojoule_per_mole / unit.nanometer,
+            atomic_numbers_to_limit=[6, 1, 8, 9],
+            max_force_key="forces_that_do_not_exist",
+        )
+    # this should fail because we are giving the energy key
+    with pytest.raises(ValueError):
+        trimmed_dataset = dataset.subset_dataset(
+            new_dataset_name="test_dataset12_sub14",
+            total_records=2,
+            max_force=30 * unit.kilojoule_per_mole / unit.nanometer,
+            atomic_numbers_to_limit=[6, 1, 8],
+            max_force_key="energies",
+        )
 
 
 def test_reading_from_db_file(prep_temp_dir):

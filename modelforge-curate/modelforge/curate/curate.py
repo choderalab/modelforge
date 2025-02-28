@@ -132,7 +132,9 @@ class Record:
             log.warning(
                 f"No atomic numbers set for record {self.name}. Cannot compare."
             )
-            return False
+            raise ValueError(
+                f"No atomic numbers set for record {self.name}. Cannot compare."
+            )
         status = set(self.atomic_numbers.value.flatten()).issubset(
             atomic_numbers_of_interest
         )
@@ -551,7 +553,7 @@ class SourceDataset:
         ) as db:
             db[name] = Record(name, self.append_property)
         if properties is not None:
-            self.add_properties_to_record(name, properties)
+            self.add_properties(name, properties)
 
     def add_record(self, record: Record):
         """

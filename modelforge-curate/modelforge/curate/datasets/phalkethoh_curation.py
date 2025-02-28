@@ -108,10 +108,10 @@ class PhAlkEthOHCuration(DatasetCuration):
             f"{local_path_dir}/{local_database_name}",
             tablename=specification_name,
             autocommit=True,
-        ) as spice_db:
+        ) as ph_db:
             # defining the db_keys as a set is faster for
             # searching to see if a key exists
-            db_keys = set(spice_db.keys())
+            db_keys = set(ph_db.keys())
             to_fetch = []
             if force_download:
                 for name in entry_names:
@@ -136,7 +136,7 @@ class PhAlkEthOHCuration(DatasetCuration):
                     for entry in ds.iterate_entries(
                         to_fetch, force_refetch=force_download
                     ):
-                        spice_db[entry.dict()["name"]] = entry
+                        ph_db[entry.dict()["name"]] = entry
                         if pbar is not None:
                             pbar.update(1)
 
@@ -151,9 +151,9 @@ class PhAlkEthOHCuration(DatasetCuration):
                         force_refetch=force_download,
                         include=["**"],
                     ):
-                        # spice_db[record[0]] = [record[2].dict(), record[2].trajectory]
+                        # ph_db[record[0]] = [record[2].dict(), record[2].trajectory]
 
-                        spice_db[record[0]] = [
+                        ph_db[record[0]] = [
                             record[2].dict()["status"].value,
                             [
                                 [traj.dict(), traj.molecule.geometry]
@@ -223,7 +223,7 @@ class PhAlkEthOHCuration(DatasetCuration):
         from numpy import newaxis
 
         dataset = SourceDataset(
-            dataset_name=self.dataset_name,
+            name=self.dataset_name,
             append_property=True,
             local_db_dir=self.local_cache_dir,
         )
@@ -248,11 +248,11 @@ class PhAlkEthOHCuration(DatasetCuration):
             # first read in molecules from entry
             with SqliteDict(
                 input_file_name, tablename="entry", autocommit=False
-            ) as spice_db:
+            ) as ph_db:
                 logger.debug(f"Processing {filename} entries.")
                 for key in tqdm(non_error_keys):
 
-                    val = spice_db[key].dict()
+                    val = ph_db[key].dict()
                     # name = key.split("-")[0]
                     # I've encountered a few instances where the record name is not sufficiently unique
                     # (saturated vs unsaturated ring); appending the chemical formula should make it unique
@@ -296,12 +296,12 @@ class PhAlkEthOHCuration(DatasetCuration):
 
             with SqliteDict(
                 input_file_name, tablename="default", autocommit=False
-            ) as spice_db:
+            ) as ph_db:
                 logger.debug(f"Processing {filename} default spec.")
 
                 for key in tqdm(non_error_keys):
                     # name = key.split("-")[0]
-                    trajectory = spice_db[key][1]
+                    trajectory = ph_db[key][1]
 
                     name = f'{key[: key.rfind("-")]}_{trajectory[0][0]["molecule_"]["name"]}'
                     record = dataset.get_record(name)
@@ -455,7 +455,7 @@ class PhAlkEthOHCuration(DatasetCuration):
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)
 
-        assert data_inputs["name"] == "PhAlkEthOHopenff"
+        assert data_inputs["dataset_name"] == "PhAlkEthOHopenff"
         if self.version_select == "latest":
             self.version_select = data_inputs["latest"]
             logger.debug(f"Using latest version {self.version_select}.")

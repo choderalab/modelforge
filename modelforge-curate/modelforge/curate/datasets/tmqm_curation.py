@@ -75,7 +75,7 @@ class tmQMCuration(DatasetCuration):
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)
 
-        assert data_inputs["name"] == "tmqm"
+        assert data_inputs["dataset_name"] == "tmqm"
 
         if self.version_select == "latest":
             self.version_select = data_inputs["latest"]
@@ -175,7 +175,7 @@ class tmQMCuration(DatasetCuration):
         from modelforge.utils.misc import str_to_float
 
         dataset = SourceDataset(
-            dataset_name=self.dataset_name, local_db_dir=self.local_cache_dir
+            name=self.dataset_name, local_db_dir=self.local_cache_dir
         )
 
         # aggregate the snapshot contents into a list
@@ -218,7 +218,7 @@ class tmQMCuration(DatasetCuration):
 
             # end of file, now parse the inputs
             record_name = properties["CSD_code"]
-            dataset.create_record(record_name=record_name)
+            dataset.create_record(name=record_name)
 
             positions = Positions(
                 value=np.array(geometry).reshape(1, -1, 3), units=unit.angstrom
@@ -241,7 +241,7 @@ class tmQMCuration(DatasetCuration):
                 name="metal_n_ligands", value=np.array(properties["MND"])
             )
             dataset.add_properties(
-                record_name=record_name,
+                name=record_name,
                 properties=[
                     positions,
                     total_charge,
@@ -276,7 +276,7 @@ class tmQMCuration(DatasetCuration):
             partial_charges = PartialCharges(
                 value=np.array(charges).reshape(1, -1, 1), units=unit.elementary_charge
             )
-            dataset.add_property(record_name=record_name, property=partial_charges)
+            dataset.add_property(name=record_name, property=partial_charges)
 
         columns = []
         csv_temp_dict = {}
@@ -326,7 +326,7 @@ class tmQMCuration(DatasetCuration):
                     )
 
                     dataset.add_properties(
-                        record_name=record_name,
+                        name=record_name,
                         properties=[
                             electronic_energy,
                             dispersion_energy,
@@ -335,7 +335,7 @@ class tmQMCuration(DatasetCuration):
                         ],
                     )
 
-                    record_temp = dataset.get_record(record_name)
+                    record_temp = dataset.get_record(name=record_name)
 
                     dipole_moment_computed_scaled = self.compute_dipole_moment(
                         atomic_numbers=record_temp.atomic_numbers,
@@ -352,7 +352,7 @@ class tmQMCuration(DatasetCuration):
                     dipole_moment_computed.name = "dipole_moment_computed"
 
                     dataset.add_properties(
-                        record_name=record_name,
+                        name=record_name,
                         properties=[
                             dipole_moment_computed,
                             dipole_moment_computed_scaled,
@@ -381,7 +381,7 @@ class tmQMCuration(DatasetCuration):
                     )
 
                     dataset.add_properties(
-                        record_name=record_name,
+                        name=record_name,
                         properties=[
                             metal_center_charge,
                             energy_of_lumo,

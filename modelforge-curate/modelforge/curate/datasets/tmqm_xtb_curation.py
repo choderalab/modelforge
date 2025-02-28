@@ -8,7 +8,7 @@ from modelforge.curate.properties import (
     PartialCharges,
     TotalCharge,
     MetaData,
-    DipoleMomentScalarPerSystem,
+    DipoleMomentPerSystem,
     SpinMultiplicities,
 )
 
@@ -96,7 +96,7 @@ class tmQMXTBCuration(DatasetCuration):
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)
 
-        assert data_inputs["name"] == "tmqm_xtb"
+        assert data_inputs["dataset_name"] == "tmqm_xtb"
 
         if self.version_select == "latest":
             self.version_select = data_inputs["latest"]
@@ -144,7 +144,7 @@ class tmQMXTBCuration(DatasetCuration):
         import h5py
 
         dataset = SourceDataset(
-            dataset_name=self.dataset_name, local_db_dir=self.local_cache_dir
+            name=self.dataset_name, local_db_dir=self.local_cache_dir
         )
         with OpenWithLock(f"{local_path_dir}/{hdf5_file_name}.lockfile", "w") as f:
             with h5py.File(f"{local_path_dir}/{hdf5_file_name}", "r") as f:
@@ -187,8 +187,8 @@ class tmQMXTBCuration(DatasetCuration):
                     record.add_property(partial_charges)
 
                     # extract the dipole moment
-                    dipole_moment = DipoleMomentScalarPerSystem(
-                        value=f[key]["dipole_moment"][()].reshape(-1, 1),
+                    dipole_moment = DipoleMomentPerSystem(
+                        value=f[key]["dipole_moment"][()].reshape(-1, 3),
                         units=f[key]["dipole_moment"].attrs["u"],
                     )
                     record.add_property(dipole_moment)
@@ -211,6 +211,7 @@ class tmQMXTBCuration(DatasetCuration):
                         name="stoichiometry",
                         value=f[key]["stoichiometry"][()].decode("utf-8"),
                     )
+                    dataset.add_record(record)
 
             return dataset
 

@@ -53,7 +53,7 @@ class ANI2xCuration(DatasetCuration):
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)
 
-        assert data_inputs["name"] == "ani2x"
+        assert data_inputs["dataset_name"] == "ani2x"
 
         if self.version_select == "latest":
             self.version_select = data_inputs["latest"]
@@ -100,7 +100,7 @@ class ANI2xCuration(DatasetCuration):
         conformers_counter = 0
 
         dataset = SourceDataset(
-            dataset_name=self.dataset_name, local_db_dir=self.local_cache_dir
+            name=self.dataset_name, local_db_dir=self.local_cache_dir
         )
         with h5py.File(input_file_name, "r") as hf:
             #  The ani2x hdf5 file groups molecules by number of atoms

@@ -60,10 +60,9 @@ def main():
 
     # We'll want to provide some simple means of versioning
     # if we make updates to either the underlying dataset, curation modules, or parameters given to the code
-    version = "0"
     version_out = "1.0"
     # version of the dataset to curate
-    version_select = f"v_{version}"
+    version_select = "v_1_400K"
 
     tmqm_xtb = tmQMXTBCuration(
         dataset_name="tmqm_xtb",
@@ -76,7 +75,7 @@ def main():
     # curate the fill dataset:
     hdf5_file_name = f"tmqm_xtb_dataset_v{version_out}.hdf5"
 
-    total_records, total_configs = tmqm.to_hdf5(
+    total_records, total_configs = tmqm_xtb.to_hdf5(
         hdf5_file_name=hdf5_file_name, output_file_dir=output_file_dir
     )
 
@@ -88,13 +87,14 @@ def main():
     # only a single config per record
     hdf5_file_name = f"tmqm_xtb_dataset_v{version_out}_ntc_1000.hdf5"
 
-    total_records, total_configs = tmqm.to_hdf5(
+    total_records, total_configs = tmqm_xtb.to_hdf5(
         hdf5_file_name=hdf5_file_name,
         output_file_dir=output_file_dir,
-        total_conformers=1000,
+        total_configurations=1000,
+        max_configurations_per_record=10,
     )
 
-    print(" 1000 conformer subset")
+    print(" 1000 configuration subset")
     print(f"Total records: {total_records}")
     print(f"Total configs: {total_configs}")
 

@@ -61,7 +61,7 @@ class QM9Curation(DatasetCuration):
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)
 
-        assert data_inputs["name"] == "qm9"
+        assert data_inputs["dataset_name"] == "qm9"
 
         if self.version_select == "latest":
             self.version_select = data_inputs["latest"]
@@ -405,7 +405,7 @@ class QM9Curation(DatasetCuration):
         # we do not need to do anything check unit_testing_max_conformers_per_record because qm9 only has a single conformer per record
 
         dataset = SourceDataset(
-            dataset_name=self.dataset_name, local_db_dir=self.local_cache_dir
+            name=self.dataset_name, local_db_dir=self.local_cache_dir
         )
         for i, file in enumerate(tqdm(files, desc="processing", total=len(files))):
             record_temp = self._parse_xyzfile(f"{local_path_dir}/{file}")

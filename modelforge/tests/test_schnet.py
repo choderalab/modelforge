@@ -143,8 +143,6 @@ def test_compare_implementation_against_reference_implementation():
     # test the implementation of the representation part of the PaiNN model
     # ---------------------------------------- #
     model = setup_schnet_model(1234).double()
-    # ---------------------------------------- #
-
     # ------------------------------------ #
     # reference values
     # generated with schnetpack2.0

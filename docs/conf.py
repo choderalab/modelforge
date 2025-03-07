@@ -19,6 +19,7 @@ import sys
 sys.path.insert(0, os.path.abspath(".."))
 
 import modelforge
+import modelforge.curate
 
 
 # -- Project information -----------------------------------------------------

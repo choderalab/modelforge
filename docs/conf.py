@@ -54,7 +54,18 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.extlinks",
     "sphinx.ext.autosectionlabel",
+    "nbsphinx",
+    "sphinxcontrib.collections",
 ]
+
+collections = {
+    "notebooks": {
+        "driver": "copy_folder",
+        "source": "../modelforge-curate/modelforge/curate/examples",
+        "target": "notebooks",
+        "ignore": [".sqlite", ".db", ".py"],
+    }
+}
 
 autosummary_generate = True
 napoleon_google_docstring = False

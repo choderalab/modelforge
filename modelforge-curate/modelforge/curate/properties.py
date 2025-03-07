@@ -222,6 +222,15 @@ class Positions(PropertyBaseModel):
             raise ValueError(
                 f"Shape of position should be [n_configs, n_atoms, 3], found {self.value.shape}"
             )
+        # check to ensure the classification and property type have not been changed
+        if self.classification != PropertyClassification.per_atom:
+            raise ValueError(
+                f"Classification of position should be per_atom, found {self.classification}"
+            )
+        if self.property_type != PropertyType.length:
+            raise ValueError(
+                f"Property type of position should be length, found {self.property_type}"
+            )
         return self
 
 
@@ -266,6 +275,15 @@ class Energies(PropertyBaseModel):
             raise ValueError(
                 f"Shape of energy should be [n_configs, 1], found {self.value.shape}"
             )
+        # check to ensure the classification and property type have not been changed
+        if self.classification != PropertyClassification.per_system:
+            raise ValueError(
+                f"Classification of energy should be per_system, found {self.classification}"
+            )
+        if self.property_type != PropertyType.energy:
+            raise ValueError(
+                f"Property type of energy should be energy, found {self.property_type}"
+            )
         return self
 
 
@@ -307,6 +325,15 @@ class Forces(PropertyBaseModel):
             raise ValueError(
                 f"Shape of force should be [n_configs, n_atoms, 3], found {self.value.shape}"
             )
+        # check to ensure the classification and property type have not been changed
+        if self.classification != PropertyClassification.per_atom:
+            raise ValueError(
+                f"Classification of force should be per_atom, found {self.classification}"
+            )
+        if self.property_type != PropertyType.force:
+            raise ValueError(
+                f"Property type of force should be force, found {self.property_type}"
+            )
         return self
 
 
@@ -344,6 +371,16 @@ class PartialCharges(PropertyBaseModel):
             raise ValueError(
                 f"Shape of charge should be [n_configs, n_atoms, 1], found {self.value.shape}"
             )
+        # check to ensure the classification and property type have not been changed
+        if self.classification != PropertyClassification.per_atom:
+            raise ValueError(
+                f"Classification of charge should be per_atom, found {self.classification}"
+            )
+        if self.property_type != PropertyType.charge:
+            raise ValueError(
+                f"Property type of charge should be charge, found {self.property_type}"
+            )
+
         return self
 
 
@@ -384,6 +421,16 @@ class TotalCharge(PropertyBaseModel):
             raise ValueError(
                 f"Shape of charge should be 2d, found {len(self.value.shape)}"
             )
+        # check to ensure the classification and property type have not been changed
+        if self.classification != PropertyClassification.per_system:
+            raise ValueError(
+                f"Classification of charge should be per_system, found {self.classification}"
+            )
+        if self.property_type != PropertyType.charge:
+            raise ValueError(
+                f"Property type of charge should be charge, found {self.property_type}"
+            )
+
         return self
 
 
@@ -425,6 +472,16 @@ class SpinMultiplicities(PropertyBaseModel):
             raise ValueError(
                 f"Shape of spin multiplicities should be [n_configs, 1], found {self.value.shape}"
             )
+        # check to ensure the classification and property type have not been changed
+        if self.classification != PropertyClassification.per_system:
+            raise ValueError(
+                f"Classification of spin multiplicities should be per_system, found {self.classification}"
+            )
+        if self.property_type != PropertyType.dimensionless:
+            raise ValueError(
+                f"Property type of spin multiplicities should be dimensionless, found {self.property_type}"
+            )
+
         return self
 
 
@@ -462,6 +519,16 @@ class DipoleMomentPerSystem(PropertyBaseModel):
             raise ValueError(
                 f"Shape of dipole moment should be [n_configs, 3], found {self.value.shape}"
             )
+        # check to ensure the classification and property type have not been changed
+        if self.classification != PropertyClassification.per_system:
+            raise ValueError(
+                f"Classification of dipole moment should be per_system, found {self.classification}"
+            )
+        if self.property_type != PropertyType.dipole_moment:
+            raise ValueError(
+                f"Property type of dipole moment should be dipole_moment, found {self.property_type}"
+            )
+
         return self
 
 
@@ -503,6 +570,15 @@ class DipoleMomentScalarPerSystem(PropertyBaseModel):
             raise ValueError(
                 f"Shape of scalar dipole moment should be [n_configs, 1], found {self.value.shape}"
             )
+        # check to ensure the classification and property type have not been changed
+        if self.classification != PropertyClassification.per_system:
+            raise ValueError(
+                f"Classification of dipole moment should be per_system, found {self.classification}"
+            )
+        if self.property_type != PropertyType.dipole_moment:
+            raise ValueError(
+                f"Property type of dipole moment should be dipole_moment, found {self.property_type}"
+            )
         return self
 
 
@@ -541,6 +617,15 @@ class QuadrupoleMomentPerSystem(PropertyBaseModel):
         if self.value.shape[2] != 3:
             raise ValueError(
                 f"Shape of quadrupole moment should be [n_configs, 3, 3], found {self.value.shape}"
+            )
+        # check to ensure the classification and property type have not been changed
+        if self.classification != PropertyClassification.per_system:
+            raise ValueError(
+                f"Classification of quadrupole moment should be per_system, found {self.classification}"
+            )
+        if self.property_type != PropertyType.quadrupole_moment:
+            raise ValueError(
+                f"Property type of quadrupole moment should be quadrupole_moment, found {self.property_type}"
             )
         return self
 
@@ -582,6 +667,15 @@ class DipoleMomentPerAtom(PropertyBaseModel):
         if self.value.shape[2] != 3:
             raise ValueError(
                 f"Shape of dipole moment should be [n_configs, n_atoms, 3], found {self.value.shape}"
+            )
+        # check to ensure the classification and property type have not been changed
+        if self.classification != PropertyClassification.per_atom:
+            raise ValueError(
+                f"Classification of dipole moment should be per_atom, found {self.classification}"
+            )
+        if self.property_type != PropertyType.dipole_moment:
+            raise ValueError(
+                f"Property type of dipole moment should be dipole_moment, found {self.property_type}"
             )
         return self
 
@@ -629,6 +723,16 @@ class QuadrupoleMomentPerAtom(PropertyBaseModel):
             raise ValueError(
                 f"Shape of quadrupole moment should be [n_configs, n_atoms, 3, 3], found {self.value.shape}"
             )
+        # check to ensure the classification and property type have not been changed
+        if self.classification != PropertyClassification.per_atom:
+            raise ValueError(
+                f"Classification of quadrupole moment should be per_atom, found {self.classification}"
+            )
+        if self.property_type != PropertyType.quadrupole_moment:
+            raise ValueError(
+                f"Property type of quadrupole moment should be quadrupole_moment, found {self.property_type}"
+            )
+
         return self
 
 
@@ -675,6 +779,16 @@ class OctupoleMomentPerAtom(PropertyBaseModel):
             raise ValueError(
                 f"Shape of octupole moment should be [n_configs, n_atoms, 3, 3, 3], found {self.value.shape}"
             )
+        # check to ensure the classification and property type have not been changed
+        if self.classification != PropertyClassification.per_atom:
+            raise ValueError(
+                f"Classification of octupole moment should be per_atom, found {self.classification}"
+            )
+        if self.property_type != PropertyType.octupole_moment:
+            raise ValueError(
+                f"Property type of octupole moment should be octupole_moment, found {self.property_type}"
+            )
+
         return self
 
 
@@ -715,6 +829,15 @@ class Polarizability(PropertyBaseModel):
         if len(self.value.shape) != 2:
             raise ValueError(
                 f"Shape of polarizability should be 2d, found {len(self.value.shape)}"
+            )
+        # check to ensure the classification and property type have not been changed
+        if self.classification != PropertyClassification.per_system:
+            raise ValueError(
+                f"Classification of polarizability should be per_system, found {self.classification}"
+            )
+        if self.property_type != PropertyType.polarizability:
+            raise ValueError(
+                f"Property type of polarizability should be polarizability, found {self.property_type}"
             )
         return self
 
@@ -774,6 +897,19 @@ class AtomicNumbers(PropertyBaseModel):
     classification: PropertyClassification = PropertyClassification.atomic_numbers
     property_type: PropertyType = PropertyType.atomic_numbers
 
+    # make sure no one has changed the type or classification of the property
+    @model_validator(mode="after")
+    def _assert_classification_and_type_unchanged(self) -> Self:
+        if self.classification != PropertyClassification.atomic_numbers:
+            raise ValueError(
+                f"Classification of atomic numbers should be atomic_numbers, found {self.classification}"
+            )
+        if self.property_type != PropertyType.atomic_numbers:
+            raise ValueError(
+                f"Property type of atomic numbers should be atomic_numbers, found {self.property_type}"
+            )
+        return self
+
 
 class BondOrders(PropertyBaseModel):
     """
@@ -811,5 +947,14 @@ class BondOrders(PropertyBaseModel):
         if self.value.shape[1] != self.value.shape[2]:
             raise ValueError(
                 f"Shape of bond orders should be [n_configs, n_atoms, n_atoms], found {self.value.shape}"
+            )
+        # check to ensure the classification and property type have not been changed
+        if self.classification != PropertyClassification.per_atom:
+            raise ValueError(
+                f"Classification of bond orders should be per_atom, found {self.classification}"
+            )
+        if self.property_type != PropertyType.dimensionless:
+            raise ValueError(
+                f"Property type of bond orders should be dimensionless, found {self.property_type}"
             )
         return self

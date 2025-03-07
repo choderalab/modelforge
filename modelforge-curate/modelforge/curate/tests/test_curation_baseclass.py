@@ -61,7 +61,7 @@ def setup_test_dataset(dataset_name, local_cache_dir):
     return TestCuration(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
 
 
-def test_dipolemoment_calculation():
+def test_dipolemoment_calculation(prep_temp_dir):
     class TestCuration(DatasetCuration):
         def _init_dataset_parameters(self):
             pass
@@ -300,7 +300,9 @@ def test_dipolemoment_calculation():
         value=np.linalg.norm(scf_dipole_moment.value).reshape(1, 1),
         units=unit.elementary_charge * unit.nanometer,
     )
-    dataset_curation = TestCuration(dataset_name="test_dataset")
+    dataset_curation = TestCuration(
+        dataset_name="test_dataset", local_cache_dir=str(prep_temp_dir)
+    )
 
     dipole_moment_comp = dataset_curation.compute_dipole_moment(
         atomic_numbers=atomic_numbers, positions=positions, partial_charges=charges

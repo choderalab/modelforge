@@ -48,6 +48,18 @@ def test_initialize_positions():
         positions = Positions(
             value=[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]], units=unit.kilojoule_per_mole
         )
+    with pytest.raises(ValueError):
+        positions = Positions(
+            value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]],
+            units=unit.nanometer,
+            classification="per_system",
+        )
+    with pytest.raises(ValueError):
+        positions = Positions(
+            value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]],
+            units=unit.nanometer,
+            property_type="energy",
+        )
 
 
 def test_initialize_energies():
@@ -78,6 +90,17 @@ def test_initialize_energies():
     with pytest.raises(ValueError):
         energies = Energies(value=np.array([[[0.1]]]), units=unit.hartree)
 
+    with pytest.raises(ValueError):
+        energies = Energies(
+            value=np.array([[0.1], [0.3]]),
+            units=unit.hartree,
+            classification="per_atom",
+        )
+    with pytest.raises(ValueError):
+        energies = Energies(
+            value=np.array([[0.1], [0.3]]), units=unit.hartree, property_type="length"
+        )
+
 
 def test_initialize_atomic_numbers():
     atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
@@ -101,6 +124,16 @@ def test_initialize_atomic_numbers():
     with pytest.raises(ValueError):
         atomic_numbers = AtomicNumbers(
             value=np.array([[1.0], [6.0]]), units="nanometers"
+        )
+    with pytest.raises(ValueError):
+        atomic_numbers = AtomicNumbers(
+            value=np.array([[1], [6]]),
+            units=unit.nanometer,
+            classification="per_system",
+        )
+    with pytest.raises(ValueError):
+        atomic_numbers = AtomicNumbers(
+            value=np.array([[1], [6]]), units=unit.nanometer, property_type="energy"
         )
 
 
@@ -131,6 +164,18 @@ def test_initialize_partial_charges():
     with pytest.raises(ValueError):
         partial_charges = PartialCharges(
             value=np.array([0.1]), units=unit.elementary_charge
+        )
+    with pytest.raises(ValueError):
+        partial_charges = PartialCharges(
+            value=np.array([[[0.1], [-0.1]]]),
+            units=unit.elementary_charge,
+            classification="per_system",
+        )
+    with pytest.raises(ValueError):
+        partial_charges = PartialCharges(
+            value=np.array([[[0.1], [-0.1]]]),
+            units=unit.elementary_charge,
+            property_type="energy",
         )
 
 
@@ -171,6 +216,18 @@ def test_initialize_forces():
             value=np.array([[[[0.1, 0.1, 0.1], [-0.1, -0.1, -0.1]]]]),
             units=unit.kilojoule_per_mole,
         )
+    with pytest.raises(ValueError):
+        forces = Forces(
+            value=np.array([[[0.1, 0.1, 0.1], [-0.1, -0.1, -0.1]]]),
+            units=unit.kilojoule_per_mole / unit.nanometer,
+            classification="per_system",
+        )
+    with pytest.raises(ValueError):
+        forces = Forces(
+            value=np.array([[[0.1, 0.1, 0.1], [-0.1, -0.1, -0.1]]]),
+            units=unit.kilojoule_per_mole / unit.nanometer,
+            property_type="energy",
+        )
 
 
 def test_initialize_total_charge():
@@ -191,6 +248,19 @@ def test_initialize_total_charge():
         total_charge = TotalCharge(
             value=np.array([[[0.1, 0.1, 0.1]]]), units=unit.elementary_charge
         )
+    with pytest.raises(ValueError):
+        total_charge = TotalCharge(
+            value=np.array([[0.1]]),
+            units=unit.elementary_charge,
+            classification="per_atom",
+        )
+
+    with pytest.raises(ValueError):
+        total_charge = TotalCharge(
+            value=np.array([[0.1]]),
+            units=unit.elementary_charge,
+            property_type="energy",
+        )
 
 
 def test_initialize_dipole_moment_per_system():
@@ -210,6 +280,16 @@ def test_initialize_dipole_moment_per_system():
     with pytest.raises(ValueError):
         dipole_moment = DipoleMomentPerSystem(
             value=np.array([[[0.1, 0.1, 0.1], [0.1, 0.1, 0.1]]]), units=unit.debye
+        )
+    with pytest.raises(ValueError):
+        dipole_moment = DipoleMomentPerSystem(
+            value=np.array([[0.1, 0.1, 0.1]]),
+            units=unit.debye,
+            classification="per_atom",
+        )
+    with pytest.raises(ValueError):
+        dipole_moment = DipoleMomentPerSystem(
+            value=np.array([[0.1, 0.1, 0.1]]), units=unit.debye, property_type="energy"
         )
 
 
@@ -245,6 +325,18 @@ def test_initialize_quadruople_moment_per_system():
                 ),
                 units=unit.debye * unit.nanometer,
             )
+        with pytest.raises(ValueError):
+            quadrupole_moment = QuadrupoleMomentPerSystem(
+                value=np.array([[[0.1, 0.1, 0.1], [0.1, 0.1, 0.1], [0.1, 0.1, 0.1]]]),
+                units=unit.debye * unit.nanometer,
+                classification="per_atom",
+            )
+        with pytest.raises(ValueError):
+            quadrupole_moment = QuadrupoleMomentPerSystem(
+                value=np.array([[[0.1, 0.1, 0.1], [0.1, 0.1, 0.1], [0.1, 0.1, 0.1]]]),
+                units=unit.debye * unit.nanometer,
+                property_type="energy",
+            )
 
 
 def test_initialize_dipole_moment_scalar_per_system():
@@ -269,6 +361,14 @@ def test_initialize_dipole_moment_scalar_per_system():
         dipole_moment_scalar = DipoleMomentScalarPerSystem(
             value=np.array([[[0.1]]]), units=unit.debye
         )
+    with pytest.raises(ValueError):
+        dipole_moment_scalar = DipoleMomentScalarPerSystem(
+            value=np.array([[0.1]]), units=unit.debye, classification="per_atom"
+        )
+    with pytest.raises(ValueError):
+        dipole_moment_scalar = DipoleMomentScalarPerSystem(
+            value=np.array([[0.1]]), units=unit.debye, property_type="energy"
+        )
 
 
 def test_initialize_dipole_moment_per_atom():
@@ -282,6 +382,29 @@ def test_initialize_dipole_moment_per_atom():
     assert dipole_moment_per_atom.property_type == "dipole_moment"
     assert dipole_moment_per_atom.n_atoms == 2
     assert dipole_moment_per_atom.n_configs == 1
+
+    with pytest.raises(ValueError):
+        dipole_moment_per_atom = DipoleMomentPerAtom(
+            value=np.array([[[[0.1, 0.1, 0.1], [0.1, 0.1, 0.1]]]]), units=unit.debye
+        )
+    with pytest.raises(ValueError):
+        dipole_moment_per_atom = DipoleMomentPerAtom(
+            value=np.array([[[0.1, 0.1, 0.1, 0.1], [0.1, 0.1, 0.1, 0.1]]]),
+            units=unit.debye,
+        )
+
+    with pytest.raises(ValueError):
+        dipole_moment_per_atom = DipoleMomentPerAtom(
+            value=np.array([[[0.1, 0.1, 0.1], [0.1, 0.1, 0.1]]]),
+            units=unit.debye,
+            classification="per_system",
+        )
+    with pytest.raises(ValueError):
+        dipole_moment_per_atom = DipoleMomentPerAtom(
+            value=np.array([[[0.1, 0.1, 0.1], [0.1, 0.1, 0.1]]]),
+            units=unit.debye,
+            property_type="energy",
+        )
 
 
 def test_initialize_quadrupole_moment_per_atom():
@@ -349,6 +472,32 @@ def test_initialize_quadrupole_moment_per_atom():
                 ]
             ),
             units=unit.debye * unit.nanometer,
+        )
+    with pytest.raises(ValueError):
+        quadrupole_moment_per_atom = QuadrupoleMomentPerAtom(
+            value=np.array(
+                [
+                    [
+                        [[0.1, 0.1, 0.1], [0.1, 0.1, 0.1], [0.1, 0.1, 0.1]],
+                        [[0.1, 0.1, 0.1], [0.1, 0.1, 0.1], [0.1, 0.1, 0.1]],
+                    ]
+                ]
+            ),
+            units=unit.debye * unit.nanometer,
+            classification="per_system",
+        )
+    with pytest.raises(ValueError):
+        quadrupole_moment_per_atom = QuadrupoleMomentPerAtom(
+            value=np.array(
+                [
+                    [
+                        [[0.1, 0.1, 0.1], [0.1, 0.1, 0.1], [0.1, 0.1, 0.1]],
+                        [[0.1, 0.1, 0.1], [0.1, 0.1, 0.1], [0.1, 0.1, 0.1]],
+                    ]
+                ]
+            ),
+            units=unit.debye * unit.nanometer,
+            property_type="energy",
         )
 
 
@@ -439,6 +588,38 @@ def test_initialize_octupole_moment_per_atom():
             ),
             units=unit.debye * unit.nanometer**2,
         )
+    with pytest.raises(ValueError):
+        octupole_moment_per_atom = OctupoleMomentPerAtom(
+            value=np.array(
+                [
+                    [
+                        [
+                            [[0.1, 0.1, 0.1], [0.1, 0.1, 0.1], [0.1, 0.1, 0.1]],
+                            [[0.1, 0.1, 0.1], [0.1, 0.1, 0.1], [0.1, 0.1, 0.1]],
+                            [[0.1, 0.1, 0.1], [0.1, 0.1, 0.1], [0.1, 0.1, 0.1]],
+                        ]
+                    ]
+                ]
+            ),
+            units=unit.debye * unit.nanometer**2,
+            classification="per_system",
+        )
+    with pytest.raises(ValueError):
+        octupole_moment_per_atom = OctupoleMomentPerAtom(
+            value=np.array(
+                [
+                    [
+                        [
+                            [[0.1, 0.1, 0.1], [0.1, 0.1, 0.1], [0.1, 0.1, 0.1]],
+                            [[0.1, 0.1, 0.1], [0.1, 0.1, 0.1], [0.1, 0.1, 0.1]],
+                            [[0.1, 0.1, 0.1], [0.1, 0.1, 0.1], [0.1, 0.1, 0.1]],
+                        ]
+                    ]
+                ]
+            ),
+            units=unit.debye * unit.nanometer**2,
+            property_type="energy",
+        )
 
 
 def test_initialize_polarizability():
@@ -467,6 +648,18 @@ def test_initialize_polarizability():
             value=np.array([[[0.1]]]),
             units=unit.bohr**3,
         )
+    with pytest.raises(ValueError):
+        polarizability = Polarizability(
+            value=np.array([[0.1]]),
+            units=unit.bohr**3,
+            classification="per_atom",
+        )
+    with pytest.raises(ValueError):
+        polarizability = Polarizability(
+            value=np.array([[0.1]]),
+            units=unit.bohr**3,
+            property_type="energy",
+        )
 
 
 def test_spin_multiplicities():
@@ -483,6 +676,15 @@ def test_spin_multiplicities():
         spin_multiplicity = SpinMultiplicities(value=np.array([[1, 2, 3, 4]]))
     with pytest.raises(ValueError):
         spin_multiplicity = SpinMultiplicities(value=np.array([[[1]]]))
+
+    with pytest.raises(ValueError):
+        spin_multiplicity = SpinMultiplicities(
+            value=np.array([[1]]), classification="per_atom"
+        )
+    with pytest.raises(ValueError):
+        spin_multiplicity = SpinMultiplicities(
+            value=np.array([[1]]), property_type="energy"
+        )
 
 
 def test_initialize_base_model():
@@ -514,3 +716,14 @@ def test_initialize_bond_orders():
         bond_orders = BondOrders(value=np.array([[[1, 2, 3], [1, 2, 3]]]))
     with pytest.raises(ValueError):
         bond_orders = BondOrders(value=np.array([[[[1, 2, 3], [1, 2, 3], [1, 2, 3]]]]))
+
+    with pytest.raises(ValueError):
+        bond_orders = BondOrders(
+            value=np.array([[[1, 2, 3], [1, 2, 3], [1, 2, 3]]]),
+            classification="per_system",
+        )
+
+    with pytest.raises(ValueError):
+        bond_orders = BondOrders(
+            value=np.array([[[1, 2, 3], [1, 2, 3], [1, 2, 3]]]), property_type="energy"
+        )

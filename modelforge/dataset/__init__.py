@@ -1,4 +1,4 @@
-"""Module that contains classes and function for loading and processing of datasets. """
+"""Module that contains classes and function for loading and processing of datasets."""
 
 from .qm9 import QM9Dataset
 from .ani1x import ANI1xDataset

@@ -73,6 +73,8 @@ jobs:
         # conda setup requires this special shell
         run: |
           python -m pip install . --no-deps
+          python -m pip install -e ./modelforge-curate --no-deps
+
           micromamba list
 
 

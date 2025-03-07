@@ -25,7 +25,7 @@ import modelforge
 
 project = "modelforge"
 copyright = (
-    "2024, Chodera Lab. Project structure based on the "
+    "2025, Chodera Lab. Project structure based on the "
     "Computational Molecular Science Python Cookiecutter version 1.1"
 )
 author = "Marcus Wieder"

@@ -4,7 +4,8 @@ Utility functions for neural network potentials.
 
 import math
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Callable, Optional, Dict
+
 
 import torch
 import torch.nn as nn
@@ -215,11 +216,6 @@ class DenseWithCustomDist(nn.Linear):
         return self.activation_function(y)
 
 
-from typing import Dict
-
-from openff.units import unit
-
-
 class ShiftedSoftplus(nn.Module):
     def __init__(self):
         super().__init__()
@@ -303,9 +299,6 @@ def pair_list(
     return pair_indices.to(device)
 
 
-from openff.units import unit
-
-
 def convert_str_to_unit_in_dataset_statistics(
     dataset_statistic: Dict[str, Dict[str, str]]
 ) -> Dict[str, Dict[str, unit.Quantity]]:
@@ -318,7 +311,6 @@ def convert_str_to_unit_in_dataset_statistics(
 def remove_units_from_dataset_statistics(
     dataset_statistic: Dict[str, Dict[str, unit.Quantity]]
 ) -> Dict[str, Dict[str, float]]:
-    from openff.units import unit
 
     from modelforge.utils.units import chem_context
 

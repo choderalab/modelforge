@@ -300,7 +300,7 @@ def pair_list(
 
 
 def convert_str_to_unit_in_dataset_statistics(
-    dataset_statistic: Dict[str, Dict[str, str]]
+    dataset_statistic: Dict[str, Dict[str, str]],
 ) -> Dict[str, Dict[str, unit.Quantity]]:
     for key, value in dataset_statistic.items():
         for sub_key, sub_value in value.items():
@@ -309,7 +309,7 @@ def convert_str_to_unit_in_dataset_statistics(
 
 
 def remove_units_from_dataset_statistics(
-    dataset_statistic: Dict[str, Dict[str, unit.Quantity]]
+    dataset_statistic: Dict[str, Dict[str, unit.Quantity]],
 ) -> Dict[str, Dict[str, float]]:
 
     from modelforge.utils.units import chem_context

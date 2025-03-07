@@ -802,16 +802,16 @@ class SourceDataset:
         local_db_name: Optional[str] = None,
     ) -> Self:
         """
-        Subset the dataset to only include a certain species
+        Subset the dataset based on various criteria
 
         Parameters
         ----------
         new_dataset_name: str
             Name of the new dataset that will be returned. Cannot be the same as the current dataset name.
         total_records: Optional[int], default=None
-            Maximum number of records to include in the subset.
+            Maximum number of records to include in the subset. Cannot be used in conjunction with total_configurations.
         total_configurations: Optional[int], default=None
-            Total number of conformers to include in the subset.
+            Total number of conformers to include in the subset. annot be used in conjunction with total_records
         max_configurations_per_record: Optional[int], default=None
             Maximum number of conformers to include per record. If None, all conformers in a record will be included.
         atomic_numbers_to_limit: Optional[np.ndarray], default=None
@@ -1136,6 +1136,26 @@ class SourceDataset:
 
         return validation_status
 
+    def print_record(self, name):
+        """
+        Print a record to the console.
+
+        Parameters
+        ----------
+        name: str
+            Name of the record to print.
+
+        Returns
+        -------
+
+        """
+        with SqliteDict(
+            f"{self.local_db_dir}/{self.local_db_name}",
+            autocommit=True,
+        ) as db:
+            record = db[name]
+            print(record)
+
     def validate_records(self):
         """
         Validate records to ensure that the number of atoms and configurations are consistent across all properties.
@@ -1166,9 +1186,17 @@ class SourceDataset:
             )
             return False
 
-    def _generate_dataset_summary(self, checksum: str, file_name: str):
+    def generate_dataset_summary(self, checksum: str = None, file_name: str = None):
         """
         Generate a summary of the dataset.
+
+        Parameters
+        ----------
+        checksum: str, optional, default=None
+            MD5 checksum of the dataset file.
+        file_name: str, optional, default=None
+            Name of the dataset file.
+
 
         Returns
         -------
@@ -1177,8 +1205,10 @@ class SourceDataset:
         """
         output_dict = {}
         output_dict["name"] = self.name
-        output_dict["md5_checksum"] = checksum
-        output_dict["filename"] = file_name
+        if checksum is not None:
+            output_dict["md5_checksum"] = checksum
+        if file_name is not None:
+            output_dict["filename"] = file_name
         output_dict["total_records"] = self.total_records()
         output_dict["total_configurations"] = self.total_configs()
 
@@ -1234,7 +1264,7 @@ class SourceDataset:
         """
         import json
 
-        dataset_summary = self._generate_dataset_summary(hdf5_checksum, hdf5_file_name)
+        dataset_summary = self.generate_dataset_summary(hdf5_checksum, hdf5_file_name)
 
         with open(f"{file_path}/{file_name}", "w") as f:
             json.dump(dataset_summary, f, indent=4)

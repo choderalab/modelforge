@@ -100,7 +100,7 @@ class PropertyBaseModel(BaseModel):
     value: NdArray
     units: unit.Unit
     classification: PropertyClassification
-    property_type: Union[PropertyType, str]
+    property_type: PropertyType
 
     model_config = ConfigDict(
         use_enum_values=True,

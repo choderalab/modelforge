@@ -65,6 +65,7 @@ collections = {
     }
 }
 
+fail_on_warning = False
 autosummary_generate = True
 napoleon_google_docstring = False
 napoleon_use_param = False

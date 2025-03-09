@@ -34,7 +34,7 @@ dependencies:
   # Docs
   - sphinx_rtd_theme
   - nbsphinx
-  - -ipython
+  - ipython
 
   - pip:
       - jax

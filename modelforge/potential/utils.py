@@ -331,6 +331,7 @@ def read_dataset_statistics(
 
     # read file
     dataset_statistic = toml.load(dataset_statistic_filename)
+
     # convert to float (to kJ/mol and then strip the units)
     # dataset statistic is a Dict[str, Dict[str, unit.Quantity]], we need to strip the units
     if remove_units:
@@ -346,6 +347,7 @@ def scatter_softmax(
     dim_size: int,
 ) -> torch.Tensor:
     """
+
     Computes the softmax operation over values in the `src` tensor that share indices specified in the `index` tensor
     along a given axis `dim`.
 
@@ -373,6 +375,7 @@ def scatter_softmax(
     -------
     Tensor
         A tensor where the softmax operation has been applied along the specified dimension.
+
 
     Notes
     -----

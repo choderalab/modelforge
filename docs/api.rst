@@ -9,5 +9,4 @@ API Documentation
     modelforge.dataset
     modelforge.utils
     modelforge.curation
-    modelforge.curate
 

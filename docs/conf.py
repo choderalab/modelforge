@@ -26,7 +26,7 @@ copyright = (
     "2025, Chodera Lab. Project structure based on the "
     "Computational Molecular Science Python Cookiecutter version 1.1"
 )
-author = "Marcus Wieder"
+author = "Marcus Wieder, Christopher Iacovella, and the Chodera Lab"
 
 # The short X.Y version
 version = ""

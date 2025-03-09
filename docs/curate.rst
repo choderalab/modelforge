@@ -1,5 +1,5 @@
 modelforge.curate
-===============
+==================
 The curate module provides an API for creating modelforge compatible hdf5 datasets from raw data.
 The curate class works on a hierarchy of classes that are used to define the structure of the dataset.
 

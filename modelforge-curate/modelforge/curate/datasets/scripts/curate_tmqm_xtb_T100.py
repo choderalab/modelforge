@@ -71,8 +71,9 @@ def main():
         version_select=version_select,
     )
 
+    tmqm_xtb.load_from_db(local_cache_dir, "tmqm_xtb.sqlite")
     # tmqm_xtb.process(force_download=False)
-    tmqm_xtb.process(force_download=False, cutoff=0.1 * unit.angstrom)
+    # tmqm_xtb.process(force_download=False, cutoff=0.1 * unit.angstrom)
 
     # # curate the fill dataset:
     # hdf5_file_name = f"tmqm_xtb_dataset_T100_v{version_out}.hdf5"
@@ -167,8 +168,36 @@ def main():
     # print(f"Total records: {total_records}")
     # print(f"Total configs: {total_configs}")
 
+    # # 1000 configurations test set
+    # hdf5_file_name = f"tmqm_xtb_dataset_PdZnFeCu_T100_ntc_1000_v{version_out}.hdf5"
+    # atomic_species_to_limit = [
+    #     "Pd",
+    #     "Zn",
+    #     "Fe",
+    #     "Cu",
+    #     "C",
+    #     "H",
+    #     "P",
+    #     "S",
+    #     "O",
+    #     "N",
+    #     "F",
+    #     "Cl",
+    #     "Br",
+    # ]
+    # total_records, total_configs = tmqm_xtb.to_hdf5(
+    #     hdf5_file_name=hdf5_file_name,
+    #     output_file_dir=output_file_dir,
+    #     atomic_species_to_limit=atomic_species_to_limit,
+    #     total_configurations=1000,
+    # )
+    #
+    # print("primary configuration subset")
+    # print(f"Total records: {total_records}")
+    # print(f"Total configs: {total_configs}")
+
     # 1000 configurations test set
-    hdf5_file_name = f"tmqm_xtb_dataset_PdZnFeCu_T100_ntc_1000_v{version_out}.hdf5"
+    hdf5_file_name = f"tmqm_xtb_dataset_PdZnFeCu_T100_first_v{version_out}.hdf5"
     atomic_species_to_limit = [
         "Pd",
         "Zn",
@@ -188,10 +217,10 @@ def main():
         hdf5_file_name=hdf5_file_name,
         output_file_dir=output_file_dir,
         atomic_species_to_limit=atomic_species_to_limit,
-        total_configurations=1000,
+        max_configurations_per_record=1,
     )
 
-    print("primary configuration subset")
+    print("primary configuration subset of first config only")
     print(f"Total records: {total_records}")
     print(f"Total configs: {total_configs}")
 

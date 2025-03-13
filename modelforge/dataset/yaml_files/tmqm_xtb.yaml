@@ -43,3 +43,17 @@ nc_1000_v1:
     md5: null
     name: mqm_xtb_dataset_PdZnFeCu_T100K_ntc_1000_v1.npz
   url: https://zenodo.org/records/15015505/files/tmqm_xtb_dataset_PdZnFeCu_T100_ntc_1000_v1.0.hdf5.gz
+PdZnFeCu_T100K_single_config_v1:
+  version: 1
+  doi: 10.5281/zenodo.15021819
+  gz_data_file:
+    length: 96544047
+    md5: cb86823c62d2127c209cded323c03eef
+    name: tmqm_xtb_dataset_PdZnFeCu_T100K_single_config_v1.hdf5.gz
+  hdf5_data_file:
+    md5: 96811817c3d65fdbe1c3691125ff0664
+    name: tmqm_xtb_dataset_PdZnFeCu_T100K_single_config_v1.hdf5
+  processed_data_file:
+    md5: null
+    name: tmqm_xtb_dataset_PdZnFeCu_T100K_single_config_v1.npz
+  url: https://zenodo.org/records/15021819/files/tmqm_xtb_dataset_PdZnFeCu_T100_first_v1.0.hdf5.gz

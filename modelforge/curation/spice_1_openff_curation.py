@@ -149,7 +149,7 @@ class SPICE1OpenFFCuration(DatasetCuration):
 
         self._record_entries_series = {
             "name": "single_rec",
-            "dataset_name": "single_rec",
+            "name": "single_rec",
             "source": "single_rec",
             "total_charge": "series_mol",
             "atomic_numbers": "single_atom",
@@ -530,7 +530,7 @@ class SPICE1OpenFFCuration(DatasetCuration):
                                 "canonical_isomeric_explicit_hydrogen_mapped_smiles"
                             ]
                         )
-                        data_temp["dataset_name"] = dataset_name
+                        data_temp["name"] = dataset_name
                         self.data.append(data_temp)
                     else:
                         # if we have already encountered this molecule we need to append to the data

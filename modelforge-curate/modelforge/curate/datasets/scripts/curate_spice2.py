@@ -23,73 +23,12 @@ https://doi.org/10.5281/zenodo.8222043
 """
 
 
-def spice2_wrapper(
-    hdf5_file_name: str,
-    output_file_dir: str,
-    local_cache_dir: str,
-    force_download: bool = False,
-    version_select: str = "latest",
-    max_records=None,
-    max_conformers_per_record=None,
-    total_conformers=None,
-    limit_atomic_species=None,
-):
-    """
-     This curates and processes the SPICE2 dataset into an hdf5 file.
-
-
-    Parameters
-    ----------
-    hdf5_file_name: str, required
-        Name of the hdf5 file that will be generated.
-    output_file_dir: str, required
-        Directory where the hdf5 file will be saved.
-    local_cache_dir: str, required
-        Directory where the intermediate data will be saved; in this case it will be tarred file downloaded
-        from figshare and the expanded archive that contains xyz files for each molecule in the dataset.
-    force_download: bool, optional, default=False
-        If False, we will use the tarred file that exists in the local_cache_dir (if it exists);
-        If True, the tarred file will be downloaded, even if it exists locally.
-    version_select: str, optional, default="latest"
-        The version of the dataset to use as defined in the associated yaml file.
-        If "latest", the most recent version will be used.
-    max_records: int, optional, default=None
-        The maximum number of records to process.
-    max_conformers_per_record: int, optional, default=None
-        The maximum number of conformers to process for each record.
-    total_conformers: int, optional, default=None
-        The total number of conformers to process.
-    limit_atomic_species: list, optional, default=None
-        A list of atomic species to limit the dataset to. Any molecules that contain elements outside of this list
-        will be ignored. If not defined, no filtering by atomic species will be performed.
-
-    """
-    from modelforge.curate.datasets.spice_2_curation import SPICE2Curation
-
-    spice_2_data = SPICE2Curation(
-        hdf5_file_name=hdf5_file_name,
-        output_file_dir=output_file_dir,
-        local_cache_dir=local_cache_dir,
-        version_select=version_select,
-    )
-
-    spice_2_data.process(
-        force_download=force_download,
-        max_records=max_records,
-        max_conformers_per_record=max_conformers_per_record,
-        total_conformers=total_conformers,
-        limit_atomic_species=limit_atomic_species,
-    )
-    print(f"Total records: {spice_2_data.total_records()}")
-    print(f"Total configs: {spice_2_data.total_configs()}")
-
-
 def main():
     # define the location where to store and output the files
     import os
 
     local_prefix = os.path.expanduser("~/mf_datasets")
-    output_file_dir = f"{local_prefix}/hdf5_files"
+    output_file_dir = f"{local_prefix}/hdf5_files/spice2"
     local_cache_dir = f"{local_prefix}/spice2_dataset"
 
     # We'll want to provide some simple means of versioning
@@ -99,58 +38,71 @@ def main():
     version_select = f"v_0"
 
     # version v_0 corresponds to SPICE 2.0.1
+    # start with processing the full dataset
+    from modelforge.curate.datasets.spice_2_curation import SPICE2Curation
+
+    spice2_dataset = SPICE2Curation(
+        dataset_name="spice2",
+        local_cache_dir=local_cache_dir,
+        version_select=version_select,
+    )
+
+    spice2_dataset.process(force_download=False)
 
     ani2x_elements = ["H", "C", "N", "O", "F", "Cl", "S"]
 
-    # curate SPICE 2.0.1 dataset with 1000 total conformers, max of 10 conformers per record
+    # curate SPICE 2.0.1 dataset with 1000 total configurations, max of 10 conformers per record
     # limited to the elements that will work with ANI2x
     hdf5_file_name = f"spice_2_dataset_v{version}_ntc_1000_HCNOFClS.hdf5"
 
-    spice2_wrapper(
-        hdf5_file_name,
-        output_file_dir,
-        local_cache_dir,
-        force_download=False,
-        version_select=version_select,
-        max_conformers_per_record=10,
-        total_conformers=1000,
-        limit_atomic_species=ani2x_elements,
+    total_records, total_configs = spice2_dataset.to_hdf5(
+        hdf5_file_name=hdf5_file_name,
+        output_file_dir=output_file_dir,
+        total_configurations=1000,
+        max_configurations_per_record=10,
+        atomic_species_to_limit=ani2x_elements,
     )
+
+    print("SPICE2: 1000 configuration subset limited to ANI2x elements")
+    print(f"Total records: {total_records}")
+    print(f"Total configs: {total_configs}")
+
     # curate the full SPICE 2.0.1 dataset, limited to the elements that will work with ANI2x
     hdf5_file_name = f"spice_2_dataset_v{version}_HCNOFClS.hdf5"
 
-    spice2_wrapper(
-        hdf5_file_name,
-        output_file_dir,
-        local_cache_dir,
-        force_download=False,
-        version_select=version_select,
-        limit_atomic_species=ani2x_elements,
+    total_records, total_configs = spice2_dataset.to_hdf5(
+        hdf5_file_name=hdf5_file_name,
+        output_file_dir=output_file_dir,
+        atomic_species_to_limit=ani2x_elements,
     )
 
-    # curate the test SPICE 2.0.1 dataset with 1000 total conformers, max of 10 conformers per record
+    print("SPICE2: full dataset limited to ANI2x elements")
+    print(f"Total records: {total_records}")
+    print(f"Total configs: {total_configs}")
+
+    # curate the test SPICE 2.0.1 dataset with 1000 total configurations, max of 10 configurations per record
     hdf5_file_name = f"spice_2_dataset_v{version}_ntc_1000.hdf5"
 
-    spice2_wrapper(
-        hdf5_file_name,
-        output_file_dir,
-        local_cache_dir,
-        force_download=False,
-        version_select=version_select,
-        max_conformers_per_record=10,
-        total_conformers=1000,
+    total_records, total_configs = spice2_dataset.to_hdf5(
+        hdf5_file_name=hdf5_file_name,
+        output_file_dir=output_file_dir,
+        total_configurations=1000,
+        max_configurations_per_record=10,
     )
+
+    print("SPICE2: 1000 configuration subset")
+    print(f"Total records: {total_records}")
+    print(f"Total configs: {total_configs}")
 
     # curate the full SPICE 2.0.1 dataset
     hdf5_file_name = f"spice_2_dataset_v{version}.hdf5"
 
-    spice2_wrapper(
-        hdf5_file_name,
-        output_file_dir,
-        local_cache_dir,
-        force_download=False,
-        version_select=version_select,
+    total_records, total_configs = spice2_dataset.to_hdf5(
+        hdf5_file_name=hdf5_file_name, output_file_dir=output_file_dir
     )
+    print("SPICE2: full dataset")
+    print(f"Total records: {total_records}")
+    print(f"Total configs: {total_configs}")
 
 
 if __name__ == "__main__":

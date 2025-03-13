@@ -1,6 +1,15 @@
 from typing import List, Tuple, Dict, Optional
 
-from modelforge.curate.curate import *
+from modelforge.curate import Record, SourceDataset
+from modelforge.curate.properties import (
+    AtomicNumbers,
+    TotalCharge,
+    Energies,
+    Positions,
+    Forces,
+    DipoleMomentPerSystem,
+    MetaData,
+)
 from modelforge.curate.datasets.curation_baseclass import DatasetCuration
 from modelforge.utils.io import import_, check_import
 
@@ -27,17 +36,12 @@ class PhAlkEthOHCuration(DatasetCuration):
 
     Parameters
     ----------
-    hdf5_file_name, str, required
-        name of the hdf5 file generated for the SPICE dataset
-    output_file_dir: str, optional, default='./'
-        Path to write the output hdf5 files.
-    local_cache_dir: str, optional, default='./spice_dataset'
+    local_cache_dir: str, optional, default='./'
         Location to save downloaded dataset.
 
     Examples
     --------
-    >>> PhAlkEthOH_openff_data = PhAlkEthOHOpenFFCuration(hdf5_file_name='PhAlkEthOH_openff_dataset.hdf5',
-    >>>                             local_cache_dir='~/datasets/PhAlkEthOH_openff_dataset')
+    >>> PhAlkEthOH_openff_data = PhAlkEthOHOpenFFCuration(local_cache_dir='~/datasets/PhAlkEthOH_openff_dataset')
     >>> PhAlkEthOH_openff_data.process()
 
     """
@@ -56,7 +60,6 @@ class PhAlkEthOHCuration(DatasetCuration):
         local_database_name: str,
         local_path_dir: str,
         force_download: bool,
-        max_records: Optional[int] = None,
         pbar: Optional[tqdm] = None,
     ):
         """
@@ -74,10 +77,6 @@ class PhAlkEthOHCuration(DatasetCuration):
             Path to the directory to store the local sqlite database
         force_download: bool, required
             If True, this will force the software to download the data again, even if present.
-        max_records: Optional[int], optional, default=None
-            If set to an integer, 'n', the routine will only process the first 'n' records, useful for unit tests.
-            Note, conformers of the same molecule are saved in separate records, and thus the number of molecules
-            that end up in the 'data' list after _process_downloaded is called  may be less than unit_testing_max_records.
         pbar: Optional[tqdm], optional, default=None
             Progress bar to track the download process.
 
@@ -105,23 +104,20 @@ class PhAlkEthOHCuration(DatasetCuration):
         ds.fetch_entry_names()
         entry_names = ds.entry_names
 
-        if max_records is None:
-            max_records = len(entry_names)
-
         with SqliteDict(
             f"{local_path_dir}/{local_database_name}",
             tablename=specification_name,
             autocommit=True,
-        ) as spice_db:
+        ) as ph_db:
             # defining the db_keys as a set is faster for
             # searching to see if a key exists
-            db_keys = set(spice_db.keys())
+            db_keys = set(ph_db.keys())
             to_fetch = []
             if force_download:
-                for name in entry_names[0:max_records]:
+                for name in entry_names:
                     to_fetch.append(name)
             else:
-                for name in entry_names[0:max_records]:
+                for name in entry_names:
                     if name not in db_keys:
                         to_fetch.append(name)
             if pbar is not None:
@@ -140,7 +136,7 @@ class PhAlkEthOHCuration(DatasetCuration):
                     for entry in ds.iterate_entries(
                         to_fetch, force_refetch=force_download
                     ):
-                        spice_db[entry.dict()["name"]] = entry
+                        ph_db[entry.dict()["name"]] = entry
                         if pbar is not None:
                             pbar.update(1)
 
@@ -155,9 +151,9 @@ class PhAlkEthOHCuration(DatasetCuration):
                         force_refetch=force_download,
                         include=["**"],
                     ):
-                        # spice_db[record[0]] = [record[2].dict(), record[2].trajectory]
+                        # ph_db[record[0]] = [record[2].dict(), record[2].trajectory]
 
-                        spice_db[record[0]] = [
+                        ph_db[record[0]] = [
                             record[2].dict()["status"].value,
                             [
                                 [traj.dict(), traj.molecule.geometry]
@@ -167,6 +163,9 @@ class PhAlkEthOHCuration(DatasetCuration):
                         if pbar is not None:
                             pbar.update(1)
 
+    from functools import lru_cache
+
+    @lru_cache(maxsize=None)
     def _calculate_total_charge(
         self, smiles: str
     ) -> Tuple[unit.Quantity, unit.Quantity]:
@@ -198,10 +197,6 @@ class PhAlkEthOHCuration(DatasetCuration):
         local_path_dir: str,
         filenames: List[str],
         dataset_names: List[str],
-        max_conformers_per_record: Optional[int] = None,
-        total_conformers: Optional[int] = None,
-        max_force: Optional[unit.Quantity] = None,
-        final_conformer_only: Optional[bool] = None,
     ):
         """
         Processes a downloaded dataset: extracts relevant information.
@@ -214,15 +209,7 @@ class PhAlkEthOHCuration(DatasetCuration):
             Names of the raw sqlite files to process,
         dataset_names: List[str], required
             List of names of the sqlite datasets to process.
-        max_conformers_per_record: Optional[int], optional, default=None
-            If set, this will limit the number of conformers per record to the specified number.
-        total_conformers: Optional[int], optional, default=None
-            If set, this will limit the total number of conformers to the specified number.
-        max_force: Optional[float], optional, default=None
-            If set, this will exclude any conformers with a force that exceeds this value.
-        final_conformer_only: Optional[bool], optional, default=None
-            If set to True, only the final conformer of each record will be processed. This should be the final
-            energy minimized conformer.
+
         """
         from tqdm import tqdm
         import numpy as np
@@ -235,7 +222,11 @@ class PhAlkEthOHCuration(DatasetCuration):
 
         from numpy import newaxis
 
-        dataset = SourceDataset("PhAlkEthOH_openff", append_property=True)
+        dataset = SourceDataset(
+            name=self.dataset_name,
+            append_property=True,
+            local_db_dir=self.local_cache_dir,
+        )
 
         for filename, dataset_name in zip(filenames, dataset_names):
             input_file_name = f"{local_path_dir}/{filename}"
@@ -257,11 +248,11 @@ class PhAlkEthOHCuration(DatasetCuration):
             # first read in molecules from entry
             with SqliteDict(
                 input_file_name, tablename="entry", autocommit=False
-            ) as spice_db:
+            ) as ph_db:
                 logger.debug(f"Processing {filename} entries.")
                 for key in tqdm(non_error_keys):
 
-                    val = spice_db[key].dict()
+                    val = ph_db[key].dict()
                     # name = key.split("-")[0]
                     # I've encountered a few instances where the record name is not sufficiently unique
                     # (saturated vs unsaturated ring); appending the chemical formula should make it unique
@@ -270,6 +261,7 @@ class PhAlkEthOHCuration(DatasetCuration):
                     # these properties only need to be added once
                     # so we need to check if
                     if not name in dataset.records.keys():
+                        dataset.create_record(name)
                         source = MetaData(
                             name="source", value=input_file_name.replace(".sqlite", "")
                         )
@@ -304,168 +296,131 @@ class PhAlkEthOHCuration(DatasetCuration):
 
             with SqliteDict(
                 input_file_name, tablename="default", autocommit=False
-            ) as spice_db:
+            ) as ph_db:
                 logger.debug(f"Processing {filename} default spec.")
 
                 for key in tqdm(non_error_keys):
                     # name = key.split("-")[0]
-                    trajectory = spice_db[key][1]
+                    trajectory = ph_db[key][1]
 
-                    if final_conformer_only:
-                        trajectory = [trajectory[-1]]
+                    name = f'{key[: key.rfind("-")]}_{trajectory[0][0]["molecule_"]["name"]}'
+                    record = dataset.get_record(name)
+
                     for state in trajectory:
-                        add_record = True
                         properties, config = state
                         name = (
                             f'{key[: key.rfind("-")]}_{properties["molecule_"]["name"]}'
                         )
-                        smiles = (
-                            dataset.records[name]
-                            .meta_data[
-                                "canonical_isomeric_explicit_hydrogen_mapped_smiles"
-                            ]
-                            .value
-                        )
+                        # record = dataset.get_record(name)
+                        smiles = record.meta_data[
+                            "canonical_isomeric_explicit_hydrogen_mapped_smiles"
+                        ].value
 
                         total_charge_temp = self._calculate_total_charge(smiles)
 
-                        # if set, let us see if the configuration has a force that exceeds the maximum
-                        if max_force is not None:
-                            force_magnitude = (
-                                np.abs(
-                                    properties["properties"]["current gradient"]
-                                    + properties["properties"][
-                                        "dispersion correction gradient"
+                        total_charge = TotalCharge(
+                            value=np.array(total_charge_temp.m).reshape(1, 1),
+                            units=total_charge_temp.u,
+                        )
+
+                        positions = Positions(
+                            value=config.reshape(1, -1, 3), units=unit.bohr
+                        )
+
+                        # Note need to typecast here because of a bug in the
+                        # qcarchive entry: see issue: https://github.com/MolSSI/QCFractal/issues/766
+                        dispersion_correction_energy = Energies(
+                            name="dispersion_correction_energy",
+                            value=np.array(
+                                float(
+                                    properties["properties"][
+                                        "dispersion correction energy"
                                     ]
                                 )
-                                * unit.hartree
-                                / unit.bohr
-                            )
-                            if np.any(force_magnitude > max_force):
-                                add_record = False
+                            ).reshape(1, 1),
+                            units=unit.hartree,
+                        )
 
-                        if add_record:
-                            total_charge = TotalCharge(
-                                value=np.array(total_charge_temp.m).reshape(1, 1),
-                                units=total_charge_temp.u,
-                            )
-                            dataset.add_property(name, total_charge)
+                        dft_total_energy = Energies(
+                            name="dft_total_energy",
+                            value=np.array(
+                                properties["properties"]["current energy"]
+                            ).reshape(1, 1)
+                            + dispersion_correction_energy.value,
+                            units=unit.hartree,
+                        )
 
-                            positions = Positions(
-                                value=config.reshape(1, -1, 3), units=unit.bohr
-                            )
-                            dataset.add_property(name, positions)
+                        dispersion_correction_gradient = Forces(
+                            name="dispersion_correction_gradient",
+                            value=np.array(
+                                properties["properties"][
+                                    "dispersion correction gradient"
+                                ]
+                            ).reshape(1, -1, 3),
+                            units=unit.hartree / unit.bohr,
+                        )
 
-                            # Note need to typecast here because of a bug in the
-                            # qcarchive entry: see issue: https://github.com/MolSSI/QCFractal/issues/766
-                            dispersion_correction_energy = Energies(
-                                name="dispersion_correction_energy",
-                                value=np.array(
-                                    float(
-                                        properties["properties"][
-                                            "dispersion correction energy"
-                                        ]
-                                    )
-                                ).reshape(1, 1),
-                                units=unit.hartree,
-                            )
-                            dataset.add_property(name, dispersion_correction_energy)
+                        dispersion_correction_force = Forces(
+                            name="dispersion_correction_force",
+                            value=-dispersion_correction_gradient.value,
+                            units=unit.hartree / unit.bohr,
+                        )
 
-                            dft_total_energy = Energies(
-                                name="dft_total_energy",
-                                value=np.array(
-                                    properties["properties"]["current energy"]
-                                ).reshape(1, 1)
-                                + dispersion_correction_energy.value,
-                                units=unit.hartree,
-                            )
-                            dataset.add_property(name, dft_total_energy)
+                        dft_total_gradient = Forces(
+                            name="dft_total_gradient",
+                            value=np.array(
+                                properties["properties"]["current gradient"]
+                            ).reshape(1, -1, 3)
+                            + dispersion_correction_gradient.value,
+                            units=unit.hartree / unit.bohr,
+                        )
 
-                            dispersion_correction_gradient = Forces(
-                                name="dispersion_correction_gradient",
-                                value=np.array(
-                                    properties["properties"][
-                                        "dispersion correction gradient"
-                                    ]
-                                ).reshape(1, -1, 3),
-                                units=unit.hartree / unit.bohr,
-                            )
-                            dataset.add_property(name, dispersion_correction_gradient)
+                        dft_total_force = Forces(
+                            name="dft_total_force",
+                            value=-dft_total_gradient.value,
+                            units=unit.hartree / unit.bohr,
+                        )
 
-                            dispersion_correction_force = Forces(
-                                name="dispersion_correction_force",
-                                value=-dispersion_correction_gradient.value,
-                                units=unit.hartree / unit.bohr,
-                            )
-                            dataset.add_property(name, dispersion_correction_force)
-
-                            dft_total_gradient = Forces(
-                                name="dft_total_gradient",
-                                value=np.array(
-                                    properties["properties"]["current gradient"]
-                                ).reshape(1, -1, 3)
-                                + dispersion_correction_gradient.value,
-                                units=unit.hartree / unit.bohr,
-                            )
-                            dataset.add_property(name, dft_total_gradient)
-
-                            dft_total_force = Forces(
-                                name="dft_total_force",
-                                value=-dft_total_gradient.value,
-                                units=unit.hartree / unit.bohr,
-                            )
-                            dataset.add_property(name, dft_total_force)
-
-                            scf_dipole = DipoleMoment(
-                                name="scf_dipole",
-                                value=np.array(
-                                    properties["properties"]["scf dipole"]
-                                ).reshape(1, 3),
-                                units=unit.elementary_charge * unit.bohr,
-                            )
-                            dataset.add_property(name, scf_dipole)
-        dataset.validate()
-        if total_conformers is not None or max_conformers_per_record is not None:
-            conformers_count = 0
-            dataset_restricted = SourceDataset("PhAlkEthOH_openff")
-            for key in dataset.records.keys():
-                if total_conformers is not None:
-                    if conformers_count >= total_conformers:
-                        break
-                n_conformers = dataset.records[key].n_configs
-
-                if max_conformers_per_record is not None:
-                    n_conformers = min(n_conformers, max_conformers_per_record)
-
-                if total_conformers is not None:
-                    n_conformers = min(
-                        n_conformers, total_conformers - conformers_count
-                    )
-                record_temp = dataset.slice_record(key, 0, n_conformers)
-                dataset_restricted.add_record(record_temp)
-
-                conformers_count += n_conformers
-            # if any of the records have no configurations, remove them
-            for key in dataset_restricted.records.keys():
-                if dataset_restricted.records[key].n_configs == 0:
-                    dataset_restricted.remove_record(key)
-            return dataset_restricted
-        # if any of the records have no configurations, remove them
-
-        for key in dataset.records.keys():
-            if dataset.records[key].n_configs == 0:
-                dataset.remove_record(key)
-
+                        scf_dipole = DipoleMomentPerSystem(
+                            name="scf_dipole",
+                            value=np.array(
+                                properties["properties"]["scf dipole"]
+                            ).reshape(1, 3),
+                            units=unit.elementary_charge * unit.bohr,
+                        )
+                        record.add_properties(
+                            [
+                                total_charge,
+                                positions,
+                                dispersion_correction_energy,
+                                dft_total_energy,
+                                dispersion_correction_gradient,
+                                dispersion_correction_force,
+                                dft_total_gradient,
+                                dft_total_force,
+                                scf_dipole,
+                            ],
+                        )
+                        # dataset.add_properties(
+                        #     name,
+                        #     [
+                        #         total_charge,
+                        #         positions,
+                        #         dispersion_correction_energy,
+                        #         dft_total_energy,
+                        #         dispersion_correction_gradient,
+                        #         dispersion_correction_force,
+                        #         dft_total_gradient,
+                        #         dft_total_force,
+                        #         scf_dipole,
+                        #     ],
+                        # )
+                    dataset.update_record(record)
         return dataset
 
     def process(
         self,
         force_download: bool = False,
-        max_records: Optional[int] = None,
-        max_conformers_per_record: Optional[int] = None,
-        total_conformers: Optional[int] = None,
-        max_force: Optional[unit.Quantity] = None,
-        final_conformer_only=None,
         n_threads=2,
     ) -> None:
         """
@@ -476,25 +431,11 @@ class PhAlkEthOHCuration(DatasetCuration):
         force_download: bool, optional, default=False
             If the raw data_file is present in the local_cache_dir, the local copy will be used.
             If True, this will force the software to download the data again, even if present.
-        max_records: int, optional, default=None
-            If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
-            Can be used in conjunction with max_conformers_per_record and total_conformers.
-        max_conformers_per_record: int, optional, default=None
-            If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
-            Can be used in conjunction with max_records and total_conformers.
-        total_conformers: int, optional, default=None
-            If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
-            Can be used in conjunction with max_records and max_conformers_per_record.
-        max_force: Optional[float], optional, default=None
-            If set this any confirugrations with a force that exceeds this value will be excluded.
-        final_conformer_only: Optional[bool], optional, default=None
-            If set to True, only the final conformer of each record will be processed.
         n_threads, int, default=2
             Number of concurrent threads for retrieving data from QCArchive
         Examples
         --------
-        >>> phalkethoh_openff_data = PhAlkEthOHCuration(hdf5_file_name='phalkethoh_openff_dataset.hdf5',
-        >>>                             local_cache_dir='~/datasets/phalkethoh_openff_dataset')
+        >>> phalkethoh_openff_data = PhAlkEthOHCuration(local_cache_dir='~/datasets/phalkethoh_openff_dataset')
         >>> phalkethoh_openff_data.process()
 
         """
@@ -541,7 +482,6 @@ class PhAlkEthOHCuration(DatasetCuration):
                                 local_database_name=local_database_name,
                                 local_path_dir=self.local_cache_dir,
                                 force_download=force_download,
-                                max_records=max_records,
                                 pbar=pbar,
                             )
                         )
@@ -552,12 +492,4 @@ class PhAlkEthOHCuration(DatasetCuration):
             self.local_cache_dir,
             local_database_names,
             dataset_names,
-            max_conformers_per_record=max_conformers_per_record,
-            total_conformers=total_conformers,
-            max_force=max_force,
-            final_conformer_only=final_conformer_only,
-        )
-
-        self.dataset.to_hdf5(
-            file_name=self.hdf5_file_name, file_path=self.output_file_dir
         )

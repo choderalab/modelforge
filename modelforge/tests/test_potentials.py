@@ -520,20 +520,20 @@ def test_forward_pass_with_all_datasets(
     # setup dataset
     # use a subset of the SPICE2 dataset for ANI2x
     if dataset_name.lower().startswith("spice"):
+        version = "nc_1000_v0_HCNOFClS"
+    elif dataset_name.lower() == "tmqm_xtb":
         print("using subset")
-        dataset = datamodule_factory(
-            dataset_name=dataset_name,
-            version_select="nc_1000_v0_HCNOFClS",
-            local_cache_dir=str(prep_temp_dir),
-        )
+        version = "nc_1000_v1"
     else:
-        dataset = datamodule_factory(
-            dataset_name=dataset_name,
-            local_cache_dir=str(prep_temp_dir),
-            version_select="nc_1000_v0",
-        )
-    if dataset_name.lower() == "tmqm" and potential_name.lower() == "ani2x":
-        pytest.skip("Ani2x cannot be trained with the TMQM dataset")
+        version = "nc_1000_v0"
+
+    dataset = datamodule_factory(
+        dataset_name=dataset_name,
+        local_cache_dir=str(prep_temp_dir),
+        version_select=version,
+    )
+    if dataset_name.lower().startswith("tmqm") and potential_name.lower() == "ani2x":
+        pytest.skip("Ani2x cannot be trained with the TMQM/TMQM-xtb dataset")
 
     dataset_statistic = toml.load(dataset.dataset_statistic_filename)
     train_dataloader = dataset.train_dataloader()

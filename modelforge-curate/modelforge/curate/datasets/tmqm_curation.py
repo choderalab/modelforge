@@ -1,5 +1,17 @@
-from modelforge.curate.curate import *
+from modelforge.curate import Record, SourceDataset
 from modelforge.curate.datasets.curation_baseclass import DatasetCuration
+from modelforge.curate.properties import (
+    AtomicNumbers,
+    Positions,
+    Energies,
+    Forces,
+    PartialCharges,
+    TotalCharge,
+    MetaData,
+    DipoleMomentScalarPerSystem,
+    SpinMultiplicities,
+)
+
 from modelforge.utils.units import chem_context
 import numpy as np
 
@@ -12,10 +24,14 @@ class tmQMCuration(DatasetCuration):
     """
     Routines to fetch and process the transition metal quantum mechanics (tmQM) dataset into a curated hdf5 file.
 
-    The tmQM dataset contains the geometries and properties of 86,665 mononuclear complexes extracted from the
+    The tmQM dataset contains the geometries and properties of 108,541  mononuclear complexes extracted from the
     Cambridge Structural Database, including Werner, bioinorganic, and organometallic complexes based on a large
     variety of organic ligands and 30 transition metals (the 3d, 4d, and 5d from groups 3 to 12).
     All complexes are closed-shell, with a formal charge in the range {+1, 0, −1}e
+
+    Note the original version of the dataset (marked old in the repo and described in the original paper)
+    contains 86,665 complexes. The new version of the dataset contains 108,541 complexes by running the same criteria
+    on a newer version of the CSD. The new version of the dataset is the one used in this curation.
 
     Citation:
 
@@ -30,21 +46,16 @@ class tmQMCuration(DatasetCuration):
 
     Parameters
     ----------
-    hdf5_file_name: str, required
-        Name of the hdf5 file that will be generated.
-    output_file_dir: str, optional, default='./'
-        Location to write the output hdf5 file.
-    local_cache_dir: str, optional, default='./qm9_datafiles'
+    local_cache_dir: str, optional, default='./'
         Location to save downloaded dataset.
-    convert_units: bool, optional, default=True
-        Convert from [e.g., angstrom, bohr, hartree] (i.e., source units)
-        to [nanometer, kJ/mol] (i.e., target units)
+    version_select: str, optional, default='latest'
+        Version of the dataset to use as defined in the associated yaml file.
 
     Examples
     --------
-    >>> tmQM_data = tmQMCuration(hdf5_file_name='tmQM_dataset.hdf5', local_cache_dir='~/datasets/tmQM_dataset')
+    >>> tmQM_data = tmQMCuration(local_cache_dir='~/datasets/tmQM_dataset')
     >>> tmQM_data.process()
-
+    >>> tmQM_data.to_hdf5(hdf5_file_name='tmQM_dataset.hdf5', output_file_dir='~/datasets/hdf5_files')
 
     """
 
@@ -132,9 +143,6 @@ class tmQMCuration(DatasetCuration):
     def _process_downloaded(
         self,
         local_path_dir: str,
-        max_records: Optional[int] = None,
-        max_conformers_per_record: Optional[int] = None,
-        total_conformers: Optional[int] = None,
         xyz_files: List[str] = None,
         q_files: List[str] = None,
         BO_files: List[str] = None,
@@ -146,16 +154,7 @@ class tmQMCuration(DatasetCuration):
         Parameters
         ----------
         local_path_dir: str, required
-            Path to the directory that contains the tar.bz2 file.
-        max_records: int, optional, default=None
-            If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
-            Can be used in conjunction with umax_conformers_per_record and total_conformers.
-        max_conformers_per_record: int, optional, default=None
-            If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
-            Can be used in conjunction with max_records and total_conformers.
-        total_conformers: int, optional, default=None
-            If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
-            Can be used in conjunction with max_records and max_conformers_per_record.
+            Path to the directory that contains the downloaded dataset.
         xyz_files: List[str], optional, default=None
             List of xyz files in the directory.
         q_files: List[str], optional, default=None
@@ -175,7 +174,9 @@ class tmQMCuration(DatasetCuration):
         from modelforge.dataset.utils import _ATOMIC_ELEMENT_TO_NUMBER
         from modelforge.utils.misc import str_to_float
 
-        dataset = SourceDataset("tmqm")
+        dataset = SourceDataset(
+            name=self.dataset_name, local_db_dir=self.local_cache_dir
+        )
 
         # aggregate the snapshot contents into a list
         snapshots = []
@@ -217,7 +218,7 @@ class tmQMCuration(DatasetCuration):
 
             # end of file, now parse the inputs
             record_name = properties["CSD_code"]
-            dataset.create_record(record_name=record_name)
+            dataset.create_record(name=record_name)
 
             positions = Positions(
                 value=np.array(geometry).reshape(1, -1, 3), units=unit.angstrom
@@ -240,7 +241,7 @@ class tmQMCuration(DatasetCuration):
                 name="metal_n_ligands", value=np.array(properties["MND"])
             )
             dataset.add_properties(
-                record_name=record_name,
+                name=record_name,
                 properties=[
                     positions,
                     total_charge,
@@ -275,9 +276,7 @@ class tmQMCuration(DatasetCuration):
             partial_charges = PartialCharges(
                 value=np.array(charges).reshape(1, -1, 1), units=unit.elementary_charge
             )
-            dataset.add_properties(
-                record_name=record_name, properties=[partial_charges]
-            )
+            dataset.add_property(name=record_name, property=partial_charges)
 
         columns = []
         csv_temp_dict = {}
@@ -286,7 +285,9 @@ class tmQMCuration(DatasetCuration):
         with open(csv_input_file) as csv_file:
             csv_reader = csv.reader(csv_file, delimiter=";")
             line_count = 0
-            for row in tqdm(csv_reader):
+            for row in tqdm(
+                csv_reader, desc="Processing csv file", total=len(snapshot_charges)
+            ):
                 if line_count == 0:
                     columns = row
                     line_count += 1
@@ -318,14 +319,14 @@ class tmQMCuration(DatasetCuration):
                         units=unit.hartree,
                     )
 
-                    dipole_moment_magnitude = DipoleMomentScalar(
+                    dipole_moment_magnitude = DipoleMomentScalarPerSystem(
                         name="dipole_moment_magnitude",
                         value=np.array(float(temp_dict["Dipole_M"])).reshape(1, 1),
                         units=unit.debye,
                     )
 
                     dataset.add_properties(
-                        record_name=record_name,
+                        name=record_name,
                         properties=[
                             electronic_energy,
                             dispersion_energy,
@@ -334,16 +335,16 @@ class tmQMCuration(DatasetCuration):
                         ],
                     )
 
-                    record_temp = dataset.get_record(record_name)
+                    record_temp = dataset.get_record(name=record_name)
 
-                    dipole_moment_computed_scaled = self._compute_dipole_moment(
+                    dipole_moment_computed_scaled = self.compute_dipole_moment(
                         atomic_numbers=record_temp.atomic_numbers,
                         partial_charges=record_temp.per_atom["partial_charges"],
                         positions=record_temp.per_atom["positions"],
                         dipole_moment_scalar=dipole_moment_magnitude,
                     )
                     dipole_moment_computed_scaled.name = "dipole_moment_computed_scaled"
-                    dipole_moment_computed = self._compute_dipole_moment(
+                    dipole_moment_computed = self.compute_dipole_moment(
                         atomic_numbers=record_temp.atomic_numbers,
                         partial_charges=record_temp.per_atom["partial_charges"],
                         positions=record_temp.per_atom["positions"],
@@ -351,7 +352,7 @@ class tmQMCuration(DatasetCuration):
                     dipole_moment_computed.name = "dipole_moment_computed"
 
                     dataset.add_properties(
-                        record_name=record_name,
+                        name=record_name,
                         properties=[
                             dipole_moment_computed,
                             dipole_moment_computed_scaled,
@@ -380,7 +381,7 @@ class tmQMCuration(DatasetCuration):
                     )
 
                     dataset.add_properties(
-                        record_name=record_name,
+                        name=record_name,
                         properties=[
                             metal_center_charge,
                             energy_of_lumo,
@@ -390,27 +391,11 @@ class tmQMCuration(DatasetCuration):
                     )
                     line_count += 1
 
-        if max_records is not None:
-            n_max = max_records
-        elif total_conformers is not None:
-            n_max = total_conformers
-        else:
-            return dataset
-
-        dataset_trimmed = SourceDataset("tmqm")
-        keys = list(dataset.records.keys())
-        for key in keys[0:n_max]:
-            record = dataset.get_record(record_name=key)
-            dataset_trimmed.add_record(record)
-
-        return dataset_trimmed
+        return dataset
 
     def process(
         self,
         force_download: bool = False,
-        max_records: Optional[int] = None,
-        max_conformers_per_record: Optional[int] = None,
-        total_conformers: Optional[int] = None,
     ) -> None:
         """
         Downloads the dataset, extracts relevant information, and writes an hdf5 file.
@@ -420,29 +405,13 @@ class tmQMCuration(DatasetCuration):
         force_download: bool, optional, default=False
             If the raw data_file is present in the local_cache_dir, the local copy will be used.
             If True, this will force the software to download the data again, even if present.
-        max_records: int, optional, default=None
-            If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
-            Can be used in conjunction with max_conformers_per_record and total_conformers.
-        max_conformers_per_record: int, optional, default=None
-            If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
-            Can be used in conjunction with max_records and total_conformers.
-        total_conformers: int, optional, default=None
-            If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
-            Can be used in conjunction with max_records and max_conformers_per_record.
-
-        Note for qm9, only a single conformer is present per record, so max_records and total_conformers behave the same way,
-        and max_conformers_per_record does not alter the behavior (i.e., it is always 1).
 
         Examples
         --------
-        >>> tmQM_data = tmQMCuration(hdf5_file_name='tmQM_dataset.hdf5', local_cache_dir='~/datasets/tmQM_dataset')
+        >>> tmQM_data = tmQMCuration(ocal_cache_dir='~/datasets/tmQM_dataset')
         >>> tmQM_data.process()
 
         """
-        if max_records is not None and total_conformers is not None:
-            raise ValueError(
-                "max_records and total_conformers cannot be set at the same time."
-            )
 
         from modelforge.utils.remote import download_from_url
 
@@ -506,16 +475,8 @@ class tmQMCuration(DatasetCuration):
 
         self.dataset = self._process_downloaded(
             f"{self.local_cache_dir}/tmqm_files/{self.extracted_filepath}/",
-            max_records,
-            max_conformers_per_record,
-            total_conformers,
             xyz_files,
             q_file,
             BO_files,
             csv_file,
-        )
-
-        # generate the hdf5 file
-        self.dataset.to_hdf5(
-            file_path=self.output_file_dir, file_name=self.hdf5_file_name
         )

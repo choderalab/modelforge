@@ -1,4 +1,5 @@
-from modelforge.curate.curate import *
+from modelforge.curate import Record, SourceDataset
+from modelforge.curate.properties import AtomicNumbers, Positions, Energies, Forces
 from modelforge.curate.datasets.curation_baseclass import DatasetCuration
 
 from typing import Optional
@@ -24,18 +25,14 @@ class ANI2xCuration(DatasetCuration):
 
     Parameters
     ----------
-    hdf5_file_name, str, required
-        name of the hdf5 file generated for the ANI-1x dataset
-    output_file_dir: str, optional, default='./'
-        Path to write the output hdf5 files.
     local_cache_dir: str, optional, default='./AN1_dataset'
         Location to save downloaded dataset.
 
     Examples
     --------
-    >>> ani2_data = ANI2xCuration(hdf5_file_name='ani2x_dataset.hdf5',
-    >>>                             local_cache_dir='~/datasets/ani2x_dataset')
+    >>> ani2_data = ANI2xCuration(local_cache_dir='~/datasets/ani2x_dataset')
     >>> ani2_data.process()
+    >>> ani2_data.to_hdf5(output_file_dir='~/datasets/ani2x_dataset', hdf5_file_name='ani2x_dataset.hdf5')
 
     """
 
@@ -79,9 +76,6 @@ class ANI2xCuration(DatasetCuration):
         self,
         local_path_dir: str,
         name: str,
-        max_records: Optional[int] = None,
-        max_conformers_per_record: Optional[int] = None,
-        total_conformers: Optional[int] = None,
     ):
         """
         Processes a downloaded dataset: extracts relevant information.
@@ -92,15 +86,6 @@ class ANI2xCuration(DatasetCuration):
             Path to the directory that contains the raw hdf5 datafile
         name: str, required
             Name of the raw hdf5 file,
-        max_records: int, optional, default=None
-            If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
-            Can be used in conjunction with max_conformers_per_record.
-        max_conformers_per_record: int, optional, default=None
-            If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
-            Can be used in conjunction with max_records or total_conformers.
-        total_conformers: int, optional, default=None
-            If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
-            Can be used in conjunction with  max_conformers_per_record.
 
 
         Examples
@@ -114,7 +99,9 @@ class ANI2xCuration(DatasetCuration):
 
         conformers_counter = 0
 
-        dataset = SourceDataset("ani2x")
+        dataset = SourceDataset(
+            name=self.dataset_name, local_db_dir=self.local_cache_dir
+        )
         with h5py.File(input_file_name, "r") as hf:
             #  The ani2x hdf5 file groups molecules by number of atoms
             # we need to break up each of these groups into individual molecules
@@ -155,23 +142,8 @@ class ANI2xCuration(DatasetCuration):
                         molecules[molecule_name] = [i]
                         last = species[i]
 
-                if max_records is None:
-                    n_max = len(molecules)
-                else:
-                    n_max = min(max_records, len(molecules))
-                    max_records -= n_max
+                for molecule_name in tqdm([key for key in molecules.keys()]):
 
-                if n_max == 0:
-                    break
-
-                for molecule_name in tqdm(
-                    ([key for key in molecules.keys()][0:n_max]), total=n_max
-                ):
-                    # stop processing if we have reached the total number of conformers
-
-                    if total_conformers is not None:
-                        if conformers_counter >= total_conformers:
-                            break
                     record_temp = Record(name=molecule_name)
 
                     base_index = molecules[molecule_name][0]
@@ -183,17 +155,9 @@ class ANI2xCuration(DatasetCuration):
                     record_temp.add_property(atomic_numbers)
 
                     conformers_per_molecule = len(molecules[molecule_name])
-                    if max_conformers_per_record is not None:
-                        conformers_per_molecule = min(
-                            conformers_per_molecule, max_conformers_per_record
-                        )
-                    if total_conformers is not None:
-                        conformers_per_molecule = min(
-                            conformers_per_molecule,
-                            total_conformers - conformers_counter,
-                        )
+
                     positions = Positions(
-                        value=coordinates[indices][0:conformers_per_molecule],
+                        value=coordinates[indices],
                         units=unit.angstrom,
                     )
                     record_temp.add_property(positions)
@@ -207,7 +171,7 @@ class ANI2xCuration(DatasetCuration):
                     record_temp.add_property(energies_mod)
 
                     forces_mod = Forces(
-                        value=forces[indices][0:conformers_per_molecule],
+                        value=forces[indices],
                         units=unit.hartree / unit.angstrom,
                     )
 
@@ -221,9 +185,6 @@ class ANI2xCuration(DatasetCuration):
     def process(
         self,
         force_download: bool = False,
-        max_records: Optional[int] = None,
-        max_conformers_per_record: Optional[int] = None,
-        total_conformers: Optional[int] = None,
     ) -> None:
         """
         Downloads the dataset, extracts relevant information, and writes an hdf5 file.
@@ -233,28 +194,15 @@ class ANI2xCuration(DatasetCuration):
         force_download: bool, optional, default=False
             If the raw data_file is present in the local_cache_dir, the local copy will be used.
             If True, this will force the software to download the data again, even if present.
-        max_records: int, optional, default=None
-            If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
-            Can be used in conjunction with max_conformers_per_record.
-        max_conformers_per_record: int, optional, default=None
-            If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
-            Can be used in conjunction with max_records or total_conformers.
-        total_conformers: int, optional, default=None
-            If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
-            Can be used in conjunction with  max_conformers_per_record.
+
 
 
         Examples
         --------
-        >>> ani2_data = ANI2xCuration(hdf5_file_name='ani2x_dataset.hdf5',
-        >>>                             local_cache_dir='~/datasets/ani2x_dataset')
+        >>> ani2_data = ANI2xCuration(local_cache_dir='~/datasets/ani2x_dataset')
         >>> ani2_data.process()
 
         """
-        if max_records is not None and total_conformers is not None:
-            raise Exception(
-                "max_records and total_conformers cannot be set at the same time."
-            )
 
         from modelforge.utils.remote import download_from_url
 
@@ -287,11 +235,4 @@ class ANI2xCuration(DatasetCuration):
         self.dataset = self._process_downloaded(
             f"{self.local_cache_dir}/final_h5/",
             hdf5_filename,
-            max_records,
-            max_conformers_per_record,
-            total_conformers,
-        )
-
-        self.dataset.to_hdf5(
-            file_path=self.output_file_dir, file_name=self.hdf5_file_name
         )

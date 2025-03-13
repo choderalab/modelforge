@@ -33,6 +33,8 @@ dependencies:
 
   # Docs
   - sphinx_rtd_theme
+  - nbsphinx
+  - ipython
 
   - pip:
       - jax
@@ -41,3 +43,4 @@ dependencies:
       #- "ray[data,train,tune,serve]"
       - git+https://github.com/ArnNag/sake.git@nanometer
       - torchviz2
+      - sphinx-collections

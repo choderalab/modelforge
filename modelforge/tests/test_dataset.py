@@ -104,6 +104,8 @@ def test_dataset_basic_operations():
 def test_get_properties(dataset_name, single_batch_with_batchsize, prep_temp_dir):
 
     version = "nc_1000_v0"
+    if dataset_name.lower() == "tmqm_xtb":
+        version = "nc_1000_v1"
     batch = single_batch_with_batchsize(
         batch_size=16,
         dataset_name=dataset_name,
@@ -116,9 +118,13 @@ def test_get_properties(dataset_name, single_batch_with_batchsize, prep_temp_dir
 def test_different_properties_of_interest(dataset_name, dataset_factory, prep_temp_dir):
     local_cache_dir = str(prep_temp_dir) + "/data_test"
 
+    version = "nc_1000_v0"
+    if dataset_name.lower() == "tmqm_xtb":
+        version = "nc_1000_v1"
+
     data = _ImplementedDatasets.get_dataset_class(
         dataset_name,
-    )(version_select="nc_1000_v0", local_cache_dir=local_cache_dir)
+    )(version_select=version, local_cache_dir=local_cache_dir)
     if dataset_name == "QM9":
         assert data.properties_of_interest == [
             "geometry",
@@ -228,9 +234,28 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
             "geometry",
             "atomic_numbers",
         ]
+    elif dataset_name == "tmqm-xtb":
+        assert data.properties_of_interest == [
+            "positions",
+            "atomic_numbers",
+            "total_charge",
+            "forces",
+            "dipole_moment_per_system",
+            "energies",
+            "partial_charges",
+        ]
 
+        data.properties_of_interest = ["energies", "positions", "atomic_numbers"]
+
+        assert data.properties_of_interest == [
+            "energies",
+            "positions",
+            "atomic_numbers",
+        ]
     dataset = dataset_factory(
-        dataset_name=dataset_name, local_cache_dir=local_cache_dir
+        dataset_name=dataset_name,
+        local_cache_dir=local_cache_dir,
+        version_select=version,
     )
 
     raw_data_item = dataset[0]
@@ -248,9 +273,12 @@ def test_file_existence_after_initialization(
     import contextlib
 
     local_cache_dir = str(prep_temp_dir) + "/data_test"
+    version = "nc_1000_v0"
+    if dataset_name.lower() == "tmqm_xtb":
+        version = "nc_1000_v1"
 
     data = _ImplementedDatasets.get_dataset_class(dataset_name)(
-        local_cache_dir=local_cache_dir, version_select="nc_1000_v0"
+        local_cache_dir=local_cache_dir, version_select=version
     )
 
     with contextlib.suppress(FileNotFoundError):
@@ -415,6 +443,7 @@ def test_different_scenarios_of_file_availability(
     # this will download the .gz, the .hdf5 and the .npz files
     dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
     # we initialize this so that we have the correct parameters to compare against
+
     data = _ImplementedDatasets.get_dataset_class(dataset_name)(
         version_select="nc_1000_v0", local_cache_dir=local_cache_dir
     )
@@ -486,11 +515,15 @@ def test_data_item_format_of_datamodule(
 
     local_cache_dir = str(prep_temp_dir)
 
+    version = "nc_1000_v0"
+    if dataset_name.lower() == "tmqm_xtb":
+        version = "nc_1000_v1"
+
     dm = datamodule_factory(
         dataset_name=dataset_name,
         batch_size=512,
         local_cache_dir=local_cache_dir,
-        version_select="nc_1000_v0",
+        version_select=version,
     )
 
     raw_data_item = dm.torch_dataset[0]
@@ -513,10 +546,14 @@ def test_removal_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir)
     # test the self energy calculation on the QM9 dataset
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
+    version = "nc_1000_v0"
+    if dataset_name.lower() == "tmqm_xtb":
+        version = "nc_1000_v1"
+
     # prepare reference value
     dm = datamodule_factory(
         dataset_name=dataset_name,
-        version_select="nc_1000_v0",
+        version_select=version,
         batch_size=512,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         remove_self_energies=False,
@@ -531,7 +568,7 @@ def test_removal_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir)
         dataset_name=dataset_name,
         batch_size=512,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-        version_select="nc_1000_v0",
+        version_select=version,
         remove_self_energies=True,
         local_cache_dir=str(prep_temp_dir),
     )
@@ -655,10 +692,14 @@ def test_dataset_neighborlist(
 def test_dataset_generation(dataset_name, datamodule_factory, prep_temp_dir):
     """Test the splitting of the dataset."""
 
+    version = "nc_1000_v0"
+    if dataset_name.lower() == "tmqm_xtb":
+        version = "nc_1000_v1"
+
     dataset = datamodule_factory(
         dataset_name=dataset_name,
         local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
+        version_select=version,
     )
     train_dataloader = dataset.train_dataloader()
     val_dataloader = dataset.val_dataloader()
@@ -825,9 +866,13 @@ def test_numpy_dataset_assignment(dataset_name, prep_temp_dir):
     """
     from modelforge.dataset import _ImplementedDatasets
 
+    version = "nc_1000_v0"
+    if dataset_name.lower() == "tmqm_xtb":
+        version = "nc_1000_v1"
+
     factory = DatasetFactory()
     data = _ImplementedDatasets.get_dataset_class(dataset_name)(
-        version_select="nc_1000_v0", local_cache_dir=str(prep_temp_dir)
+        version_select=version, local_cache_dir=str(prep_temp_dir)
     )
     factory._load_or_process_data(data)
 
@@ -1231,14 +1276,16 @@ def test_element_filter(dataset_name, prep_temp_dir):
             [12],
         ]
     )
-
+    version = "nc_1000_v0"
+    if dataset_name.lower() == "tmqm_xtb":
+        version = "nc_1000_v1"
     # positive tests
 
     # Case 0: Include any system
     data = _ImplementedDatasets.get_dataset_class(
         dataset_name,
     )(
-        version_select="nc_1000_v0",
+        version_select=version,
         local_cache_dir=local_cache_dir,
         element_filter=[],
     )
@@ -1248,7 +1295,7 @@ def test_element_filter(dataset_name, prep_temp_dir):
     data = _ImplementedDatasets.get_dataset_class(
         dataset_name,
     )(
-        version_select="nc_1000_v0",
+        version_select=version,
         local_cache_dir=local_cache_dir,
         element_filter=[(1,)],
     )
@@ -1258,7 +1305,7 @@ def test_element_filter(dataset_name, prep_temp_dir):
     data = _ImplementedDatasets.get_dataset_class(
         dataset_name,
     )(
-        version_select="nc_1000_v0",
+        version_select=version,
         local_cache_dir=local_cache_dir,
         element_filter=[(1, 2, 3)],
     )
@@ -1269,7 +1316,7 @@ def test_element_filter(dataset_name, prep_temp_dir):
     data = _ImplementedDatasets.get_dataset_class(
         dataset_name,
     )(
-        version_select="nc_1000_v0",
+        version_select=version,
         local_cache_dir=local_cache_dir,
         element_filter=[(1, 2), (3, 4), (5, 6)],
     )
@@ -1280,7 +1327,7 @@ def test_element_filter(dataset_name, prep_temp_dir):
     data = _ImplementedDatasets.get_dataset_class(
         dataset_name,
     )(
-        version_select="nc_1000_v0",
+        version_select=version,
         local_cache_dir=local_cache_dir,
         element_filter=[(1, 2), (3, -15)],
     )
@@ -1290,7 +1337,7 @@ def test_element_filter(dataset_name, prep_temp_dir):
     data = _ImplementedDatasets.get_dataset_class(
         dataset_name,
     )(
-        version_select="nc_1000_v0",
+        version_select=version,
         local_cache_dir=local_cache_dir,
         element_filter=[(1, 2), (-3,)],
     )
@@ -1298,7 +1345,7 @@ def test_element_filter(dataset_name, prep_temp_dir):
     data = _ImplementedDatasets.get_dataset_class(
         dataset_name,
     )(
-        version_select="nc_1000_v0",
+        version_select=version,
         local_cache_dir=local_cache_dir,
         element_filter=[(-3,), (1, 2)],
     )
@@ -1310,7 +1357,7 @@ def test_element_filter(dataset_name, prep_temp_dir):
     data = _ImplementedDatasets.get_dataset_class(
         dataset_name,
     )(
-        version_select="nc_1000_v0",
+        version_select=version,
         local_cache_dir=local_cache_dir,
         element_filter=[(-1,)],
     )
@@ -1321,7 +1368,7 @@ def test_element_filter(dataset_name, prep_temp_dir):
         data = _ImplementedDatasets.get_dataset_class(
             dataset_name,
         )(
-            version_select="nc_1000_v0",
+            version_select=version,
             local_cache_dir=local_cache_dir,
             element_filter=[(0, 2), (3, -15)],
         )
@@ -1337,7 +1384,7 @@ def test_element_filter(dataset_name, prep_temp_dir):
         data = _ImplementedDatasets.get_dataset_class(
             dataset_name,
         )(
-            version_select="nc_1000_v0",
+            version_select=version,
             local_cache_dir=local_cache_dir,
             element_filter=[(1, "Hydrogen"), (3, -15)],
         )

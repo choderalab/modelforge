@@ -21,68 +21,12 @@ This will generate separate HDF5 files for:
 """
 
 
-def tmqm_wrapper(
-    hdf5_file_name: str,
-    output_file_dir: str,
-    local_cache_dir: str,
-    force_download: bool = False,
-    version_select: str = "latest",
-    max_records=None,
-    max_conformers_per_record=None,
-    total_conformers=None,
-):
-    """
-    This instantiates and calls the tmQMCuration class to generate the hdf5 file for the tmQM dataset.
-
-    Parameters
-    ----------
-    hdf5_file_name: str, required
-        Name of the hdf5 file that will be generated.
-    output_file_dir: str, required
-        Directory where the hdf5 file will be saved.
-    local_cache_dir: str, required
-        Directory where the intermediate data will be saved; in this case it will be tarred file downloaded
-        from figshare and the expanded archive that contains xyz files for each molecule in the dataset.
-    force_download: bool, optional, default=False
-        If False, we will use the tarred file that exists in the local_cache_dir (if it exists);
-        If True, the tarred file will be downloaded, even if it exists locally.
-    version_select: str, optional, default="latest"
-        The version of the dataset to use as defined in the associated yaml file.
-        If "latest", the most recent version will be used.
-    max_records: int, optional, default=None
-        The maximum number of records to process.
-    max_conformers_per_record: int, optional, default=None
-        The maximum number of conformers to process for each record.
-    total_conformers: int, optional, default=None
-        The total number of conformers to process.
-
-
-    """
-    from modelforge.curate.datasets.tmqm_curation import tmQMCuration
-
-    tmqm = tmQMCuration(
-        hdf5_file_name=hdf5_file_name,
-        output_file_dir=output_file_dir,
-        local_cache_dir=local_cache_dir,
-        version_select=version_select,
-    )
-
-    tmqm.process(
-        force_download=force_download,
-        max_records=max_records,
-        max_conformers_per_record=max_conformers_per_record,
-        total_conformers=total_conformers,
-    )
-    print(f"Total records: {tmqm.total_records()}")
-    print(f"Total configs: {tmqm.total_configs()}")
-
-
 def main():
     # define the location where to store and output the files
     import os
 
     local_prefix = os.path.expanduser("~/mf_datasets")
-    output_file_dir = f"{local_prefix}/hdf5_files"
+    output_file_dir = f"{local_prefix}/hdf5_files/tmqm"
     local_cache_dir = f"{local_prefix}/tmqm_dataset"
 
     # We'll want to provide some simple means of versioning
@@ -91,29 +35,163 @@ def main():
     version_out = "1.0"
     # version of the dataset to curate
     version_select = f"v_{version}"
-    # Curate the test dataset with 1000 total conformers
-    hdf5_file_name = f"tmqm_dataset_v{version_out}_ntc_1000.hdf5"
 
-    tmqm_wrapper(
-        hdf5_file_name,
-        output_file_dir,
-        local_cache_dir,
-        force_download=False,
+    force_download = False
+    from modelforge.curate.datasets.tmqm_curation import tmQMCuration
+
+    tmqm = tmQMCuration(
+        dataset_name="tmqm",
+        local_cache_dir=local_cache_dir,
         version_select=version_select,
-        max_conformers_per_record=1,  # there is only one conformer per molecule in the tmqm dataset
-        total_conformers=1000,
     )
 
-    # Curates the full dataset
+    tmqm.process(
+        force_download=force_download,
+    )
+
+    # curate the full dataset
     hdf5_file_name = f"tmqm_dataset_v{version_out}.hdf5"
 
-    tmqm_wrapper(
-        hdf5_file_name,
-        output_file_dir,
-        local_cache_dir,
-        force_download=False,
-        version_select=version_select,
+    total_records, total_configs = tmqm.to_hdf5(
+        hdf5_file_name=hdf5_file_name, output_file_dir=output_file_dir
     )
+
+    print("full dataset")
+    print(f"Total records: {total_records}")
+    print(f"Total configs: {total_configs}")
+
+    # Curate the test dataset with 1000 total configurations
+    # only a single config per record
+    hdf5_file_name = f"tmqm_dataset_v{version_out}_ntc_1000.hdf5"
+
+    total_records, total_configs = tmqm.to_hdf5(
+        hdf5_file_name=hdf5_file_name,
+        output_file_dir=output_file_dir,
+        total_configurations=1000,
+    )
+
+    print(" 1000 configuration subset")
+    print(f"Total records: {total_records}")
+    print(f"Total configs: {total_configs}")
+
+    # create a dataset with a subset of elements
+    # limit to only organics C, H, P, S, O, N, F, Cl, Br
+    # only include transition metals Pd, Zn, Fe, Cu
+
+    total_records, total_configs = tmqm.to_hdf5(
+        hdf5_file_name=f"tmqm_dataset_PdZnFeCu_CHPSONFClBr_v{version_out}.hdf5",
+        output_file_dir=output_file_dir,
+        atomic_species_to_limit=[
+            "Pd",
+            "Zn",
+            "Fe",
+            "Cu",
+            "C",
+            "H",
+            "P",
+            "S",
+            "O",
+            "N",
+            "F",
+            "Cl",
+            "Br",
+        ],
+    )
+
+    print("Primary transition metals subset")
+    print(f"Total records: {total_records}")
+    print(f"Total configs: {total_configs}")
+
+    # same dataset but with only 1000 total_configurations
+
+    total_records, total_configs = tmqm.to_hdf5(
+        hdf5_file_name=f"tmqm_dataset_PdZnFeCu_CHPSONFClBr_v{version_out}_ntc_1000.hdf5",
+        output_file_dir=output_file_dir,
+        atomic_species_to_limit=[
+            "Pd",
+            "Zn",
+            "Fe",
+            "Cu",
+            "C",
+            "H",
+            "P",
+            "S",
+            "O",
+            "N",
+            "F",
+            "Cl",
+            "Br",
+        ],
+        total_configurations=1000,
+    )
+
+    print("Primary transition metals 1000 configuration subset")
+    print(f"Total records: {total_records}")
+    print(f"Total configs: {total_configs}")
+
+    # create a dataset with a second subset of transition metals
+    # Pd, Zn, Fe, Cu, Ni, Pt, Ir, Rh, Cr, Ag and the same organic elements as above
+
+    total_records, total_configs = tmqm.to_hdf5(
+        hdf5_file_name=f"tmqm_dataset_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr_v{version_out}.hdf5",
+        output_file_dir=output_file_dir,
+        atomic_species_to_limit=[
+            "Pd",
+            "Zn",
+            "Fe",
+            "Cu",
+            "Ni",
+            "Pt",
+            "Ir",
+            "Rh",
+            "Cr",
+            "Ag",
+            "C",
+            "H",
+            "P",
+            "S",
+            "O",
+            "N",
+            "F",
+            "Cl",
+            "Br",
+        ],
+    )
+    print("Primary + second transition metals subset")
+    print(f"Total records: {total_records}")
+    print(f"Total configs: {total_configs}")
+
+    # same dataset but with only 1000 total_configurations total
+    total_records, total_configs = tmqm.to_hdf5(
+        hdf5_file_name=f"tmqm_dataset_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr_v{version_out}.hdf5",
+        output_file_dir=output_file_dir,
+        atomic_species_to_limit=[
+            "Pd",
+            "Zn",
+            "Fe",
+            "Cu",
+            "Ni",
+            "Pt",
+            "Ir",
+            "Rh",
+            "Cr",
+            "Ag",
+            "C",
+            "H",
+            "P",
+            "S",
+            "O",
+            "N",
+            "F",
+            "Cl",
+            "Br",
+        ],
+        total_configurations=1000,
+    )
+
+    print("Primary + second transition metals 1000 configuration subset")
+    print(f"Total records: {total_records}")
+    print(f"Total configs: {total_configs}")
 
 
 if __name__ == "__main__":

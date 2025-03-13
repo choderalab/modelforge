@@ -164,9 +164,9 @@ def ungzip_file(input_path_dir: str, file_name: str, output_path_dir: str) -> No
     import shutil
 
     assert file_name.endswith(".gz")
-    outpufile_name = file_name.split(".gz")[0]
+    outputfile_name = file_name.split(".gz")[0]
     with gzip.open(f"{input_path_dir}/{file_name}", "rb") as f_in:
-        with open(f"{output_path_dir}/{outpufile_name}", "wb") as f_out:
+        with open(f"{output_path_dir}/{outputfile_name}", "wb") as f_out:
             shutil.copyfileobj(f_in, f_out)
 
 

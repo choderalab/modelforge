@@ -1,4 +1,4 @@
-name: CI
+name: CI_modelforge_curate
 
 on:
   # GitHub has started calling new repo's first branch "main" https://github.com/github/renaming
@@ -81,7 +81,7 @@ jobs:
       - name: Run tests
         # conda setup requires this special shell
         run: |
-          pytest -n ${{matrix.n_procs}} --dist loadgroup -v --cov=modelforge --cov-report=xml --color=yes --durations=50 modelforge/tests/
+          pytest -n ${{matrix.n_procs}} --dist loadgroup -v --cov=modelforge-curate --cov-report=xml --color=yes --durations=50 modelforge-curate/modelforge/curate/tests/
 
       - name: CodeCov
         uses: codecov/codecov-action@v4

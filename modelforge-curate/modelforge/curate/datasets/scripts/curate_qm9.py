@@ -17,68 +17,12 @@ DOI for dataset: 10.6084/m9.figshare.c.978904.v5
 """
 
 
-def qm9_wrapper(
-    hdf5_file_name: str,
-    output_file_dir: str,
-    local_cache_dir: str,
-    force_download: bool = False,
-    version_select: str = "latest",
-    max_records=None,
-    max_conformers_per_record=None,
-    total_conformers=None,
-):
-    """
-    This instantiates and calls the QM9Curation class to generate the hdf5 file for the QM9 dataset.
-
-    Parameters
-    ----------
-    hdf5_file_name: str, required
-        Name of the hdf5 file that will be generated.
-    output_file_dir: str, required
-        Directory where the hdf5 file will be saved.
-    local_cache_dir: str, required
-        Directory where the intermediate data will be saved; in this case it will be tarred file downloaded
-        from figshare and the expanded archive that contains xyz files for each molecule in the dataset.
-    force_download: bool, optional, default=False
-        If False, we will use the tarred file that exists in the local_cache_dir (if it exists);
-        If True, the tarred file will be downloaded, even if it exists locally.
-    version_select: str, optional, default="latest"
-        The version of the dataset to use as defined in the associated yaml file.
-        If "latest", the most recent version will be used.
-    max_records: int, optional, default=None
-        The maximum number of records to process.
-    max_conformers_per_record: int, optional, default=None
-        The maximum number of conformers to process for each record.
-    total_conformers: int, optional, default=None
-        The total number of conformers to process.
-
-
-    """
-    from modelforge.curate.datasets.qm9_curation import QM9Curation
-
-    qm9 = QM9Curation(
-        hdf5_file_name=hdf5_file_name,
-        output_file_dir=output_file_dir,
-        local_cache_dir=local_cache_dir,
-        version_select=version_select,
-    )
-
-    qm9.process(
-        force_download=force_download,
-        max_records=max_records,
-        max_conformers_per_record=max_conformers_per_record,
-        total_conformers=total_conformers,
-    )
-    print(f"Total records: {qm9.total_records()}")
-    print(f"Total configurations: {qm9.total_configs()}")
-
-
 def main():
     # define the location where to store and output the files
     import os
 
     local_prefix = os.path.expanduser("~/mf_datasets")
-    output_file_dir = f"{local_prefix}/hdf5_files"
+    output_file_dir = f"{local_prefix}/hdf5_files/qm9_dataset"
     local_cache_dir = f"{local_prefix}/qm9_dataset"
 
     # We'll want to provide some simple means of versioning
@@ -87,28 +31,37 @@ def main():
     # version of the dataset to curate
     version_select = f"v_0"
     # Curate the test dataset with 1000 total conformers
-    hdf5_file_name = f"qm9_dataset_v{version}_ntc_1000.hdf5"
+    from modelforge.curate.datasets.qm9_curation import QM9Curation
 
-    qm9_wrapper(
-        hdf5_file_name,
-        output_file_dir,
-        local_cache_dir,
-        force_download=False,
+    qm9_dataset = QM9Curation(
+        dataset_name="qm9",
+        local_cache_dir=local_cache_dir,
         version_select=version_select,
-        max_conformers_per_record=1,  # there is only one conformer per molecule in the QM9 dataset
-        total_conformers=1000,
     )
+    qm9_dataset.process(force_download=False)
 
     # Curates the full dataset
     hdf5_file_name = f"qm9_dataset_v{version}.hdf5"
 
-    qm9_wrapper(
-        hdf5_file_name,
-        output_file_dir,
-        local_cache_dir,
-        force_download=False,
-        version_select=version_select,
+    n_total_records, n_total_configs = qm9_dataset.to_hdf5(
+        hdf5_file_name=hdf5_file_name, output_file_dir=output_file_dir
     )
+    print("full dataset")
+    print(f"Total records: {n_total_records}")
+    print(f"Total configs: {n_total_configs}")
+
+    # Curates the test dataset with 1000 total conformers
+    # only a single config per record
+
+    hdf5_file_name = f"qm9_dataset_v{version}_ntc_1000.hdf5"
+    n_total_records, n_total_configs = qm9_dataset.to_hdf5(
+        hdf5_file_name=hdf5_file_name,
+        output_file_dir=output_file_dir,
+        total_configurations=1000,
+    )
+    print(" 1000 configuration subset")
+    print(f"Total records: {n_total_records}")
+    print(f"Total configs: {n_total_configs}")
 
 
 if __name__ == "__main__":

@@ -4,7 +4,8 @@ Utility functions for neural network potentials.
 
 import math
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Callable, Optional, Dict
+
 
 import torch
 import torch.nn as nn
@@ -215,11 +216,6 @@ class DenseWithCustomDist(nn.Linear):
         return self.activation_function(y)
 
 
-from typing import Dict
-
-from openff.units import unit
-
-
 class ShiftedSoftplus(nn.Module):
     def __init__(self):
         super().__init__()
@@ -303,11 +299,8 @@ def pair_list(
     return pair_indices.to(device)
 
 
-from openff.units import unit
-
-
 def convert_str_to_unit_in_dataset_statistics(
-    dataset_statistic: Dict[str, Dict[str, str]]
+    dataset_statistic: Dict[str, Dict[str, str]],
 ) -> Dict[str, Dict[str, unit.Quantity]]:
     for key, value in dataset_statistic.items():
         for sub_key, sub_value in value.items():
@@ -316,9 +309,8 @@ def convert_str_to_unit_in_dataset_statistics(
 
 
 def remove_units_from_dataset_statistics(
-    dataset_statistic: Dict[str, Dict[str, unit.Quantity]]
+    dataset_statistic: Dict[str, Dict[str, unit.Quantity]],
 ) -> Dict[str, Dict[str, float]]:
-    from openff.units import unit
 
     from modelforge.utils.units import chem_context
 
@@ -339,6 +331,7 @@ def read_dataset_statistics(
 
     # read file
     dataset_statistic = toml.load(dataset_statistic_filename)
+
     # convert to float (to kJ/mol and then strip the units)
     # dataset statistic is a Dict[str, Dict[str, unit.Quantity]], we need to strip the units
     if remove_units:
@@ -354,6 +347,7 @@ def scatter_softmax(
     dim_size: int,
 ) -> torch.Tensor:
     """
+
     Computes the softmax operation over values in the `src` tensor that share indices specified in the `index` tensor
     along a given axis `dim`.
 
@@ -381,6 +375,7 @@ def scatter_softmax(
     -------
     Tensor
         A tensor where the softmax operation has been applied along the specified dimension.
+
 
     Notes
     -----

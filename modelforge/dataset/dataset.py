@@ -1024,6 +1024,7 @@ class DataModule(pl.LightningDataModule):
             f"{self.local_cache_dir}/{self.name}_{self.version_select}_processed.pt"
         )
         self.lock_file = f"{self.cache_processed_dataset_filename}.lockfile"
+        self.torch_dataset = None
 
     def transfer_batch_to_device(self, batch, device, dataloader_idx):
         # move all tensors  to the device
@@ -1126,6 +1127,7 @@ class DataModule(pl.LightningDataModule):
 
         # Save processed dataset and statistics for later use in setup
         self._cache_dataset(torch_dataset)
+        self.torch_dataset = torch_dataset
 
     def _log_dataset_statistic(self, dataset_statistic):
         """Save the dataset statistics to a file with units"""
@@ -1220,7 +1222,11 @@ class DataModule(pl.LightningDataModule):
     def setup(self, stage: Optional[str] = None) -> None:
         """Sets up datasets for the train, validation, and test stages based on the stage argument."""
 
-        self.torch_dataset = torch.load(self.cache_processed_dataset_filename)
+        if self.torch_dataset is None:
+            self.torch_dataset = torch.load(
+                self.cache_processed_dataset_filename, weights_only=False
+            )
+
         (
             self.train_dataset,
             self.val_dataset,
@@ -1557,7 +1563,7 @@ def single_batch(
 def initialize_dataset(
     dataset_name: str,
     local_cache_dir: str,
-    versions_select: str = "nc_1000_v0",
+    version_select: str = "nc_1000_v0",
     force_download: bool = False,
 ) -> DataModule:
     """
@@ -1568,7 +1574,7 @@ def initialize_dataset(
     factory = DatasetFactory()
     data = _ImplementedDatasets.get_dataset_class(dataset_name)(
         local_cache_dir=local_cache_dir,
-        version_select=versions_select,
+        version_select=version_select,
         force_download=force_download,
     )
     dataset = factory.create_dataset(data)

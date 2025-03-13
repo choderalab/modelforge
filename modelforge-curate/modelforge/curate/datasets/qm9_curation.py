@@ -1,4 +1,14 @@
-from modelforge.curate.curate import *
+from modelforge.curate import Record, SourceDataset
+from modelforge.curate.properties import (
+    AtomicNumbers,
+    DipoleMomentScalarPerSystem,
+    Energies,
+    MetaData,
+    PropertyBaseModel,
+    PartialCharges,
+    Polarizability,
+    Positions,
+)
 from modelforge.curate.datasets.curation_baseclass import DatasetCuration
 
 import numpy as np
@@ -24,19 +34,14 @@ class QM9Curation(DatasetCuration):
 
         Parameters
         ----------
-        hdf5_file_name: str, required
-            Name of the hdf5 file that will be generated.
-        output_file_dir: str, optional, default='./'
-            Location to write the output hdf5 file.
-        local_cache_dir: str, optional, default='./qm9_datafiles'
+        local_cache_dir: str, optional, default='./'
             Location to save downloaded dataset.
 
         Examples
         --------
-        >>> qm9_data = QM9Curation(hdf5_file_name='qm9_dataset.hdf5',
-        >>>                         output_file_dir='~/mf_datasets/hdf5_files',
-        >>>                         local_cache_dir='~/mf_datasets/qm9_dataset')
+        >>> qm9_data = QM9Curation(local_cache_dir='~/mf_datasets/qm9_dataset')
         >>> qm9_data.process()
+        >>> qm9_data.to_hd5(hdf5_file_name='qm9_dataset.hdf5', output_file_dir='~/datasets/hdf5_files')
 
     """
 
@@ -264,12 +269,12 @@ class QM9Curation(DatasetCuration):
                 value=np.array(properties["isotropic_polarizability"]).reshape(1, 1),
                 units="angstrom^3",
             )
-            dipole_moment_scalar = DipoleMomentScalar(
+            dipole_moment_scalar = DipoleMomentScalarPerSystem(
                 value=np.array(properties["dipole_moment"]).reshape(1, 1),
                 units="debye",
             )
 
-            dipole_moment = self._compute_dipole_moment(
+            dipole_moment = self.compute_dipole_moment(
                 atomic_numbers=atomic_numbers,
                 partial_charges=partial_charges,
                 positions=positions,
@@ -315,7 +320,7 @@ class QM9Curation(DatasetCuration):
                 units=unit.hartree,
             )
 
-            rotational_constants = RecordProperty(
+            rotational_constants = PropertyBaseModel(
                 name="rotational_constants",
                 value=np.array(
                     [
@@ -329,21 +334,21 @@ class QM9Curation(DatasetCuration):
                 classification="per_system",
             )
 
-            harmonic_vibrational_frequencies = RecordProperty(
+            harmonic_vibrational_frequencies = PropertyBaseModel(
                 name="harmonic_vibrational_frequencies",
                 value=np.array(hvf).reshape(1, -1),
                 units=unit.cm**-1,
                 property_type="wavenumber",
                 classification="per_system",
             )
-            electronic_spatial_extent = RecordProperty(
+            electronic_spatial_extent = PropertyBaseModel(
                 name="electronic_spatial_extent",
                 value=np.array(properties["electronic_spatial_extent"]).reshape(1, 1),
                 units="angstrom^2",
                 property_type="area",
                 classification="per_system",
             )
-            heat_capacity_at_298K = RecordProperty(
+            heat_capacity_at_298K = PropertyBaseModel(
                 name="heat_capacity_at_298.15K",
                 value=np.array(properties["heat_capacity_at_298.15K"]).reshape(1, 1),
                 units=unit.calorie_per_mole / unit.kelvin,
@@ -377,9 +382,6 @@ class QM9Curation(DatasetCuration):
     def _process_downloaded(
         self,
         local_path_dir: str,
-        max_records: Optional[int] = None,
-        max_conformers_per_record: Optional[int] = None,
-        total_conformers: Optional[int] = None,
     ) -> SourceDataset:
         """
         Processes a downloaded dataset: extracts relevant information into a list of dicts.
@@ -388,15 +390,6 @@ class QM9Curation(DatasetCuration):
         ----------
         local_path_dir: str, required
             Path to the directory that contains the tar.bz2 file.
-        max_records: int, optional, default=None
-            If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
-            Can be used in conjunction with umax_conformers_per_record and total_conformers.
-        max_conformers_per_record: int, optional, default=None
-            If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
-            Can be used in conjunction with max_records and total_conformers.
-        total_conformers: int, optional, default=None
-            If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
-            Can be used in conjunction with max_records and max_conformers_per_record.
 
 
         Examples
@@ -409,37 +402,12 @@ class QM9Curation(DatasetCuration):
         # list the files in the directory to examine
         files = list_files(directory=local_path_dir, extension=".xyz")
 
-        # qm9 only has a single conformer in it, so unit_test_max_records and unit_testing_max_conformers_per_record behave the same way
-
-        if max_records is None and total_conformers is None:
-            n_max = len(files)
-        elif max_records is not None and total_conformers is None:
-            if max_records > len(files):
-                n_max = len(files)
-                logger.warning(
-                    f"max_records ({max_records})is greater than the number of records in the dataset {len(files)}. Using {len(files)}."
-                )
-            else:
-                n_max = max_records
-        elif max_records is None and total_conformers is not None:
-            if total_conformers > len(files):
-                n_max = len(files)
-                logger.warning(
-                    f"total_conformers ({total_conformers}) is greater than the number of records in the dataset {len(files)}. Using {len(files)}."
-                )
-            else:
-                n_max = total_conformers
-
         # we do not need to do anything check unit_testing_max_conformers_per_record because qm9 only has a single conformer per record
-        if max_conformers_per_record is not None:
-            logger.warning(
-                "max_conformers_per_record is not used for QM9 dataset as there is only one conformer per record. Using a value of 1"
-            )
 
-        dataset = SourceDataset("qm9")
-        for i, file in enumerate(
-            tqdm(files[0:n_max], desc="processing", total=len(files))
-        ):
+        dataset = SourceDataset(
+            name=self.dataset_name, local_db_dir=self.local_cache_dir
+        )
+        for i, file in enumerate(tqdm(files, desc="processing", total=len(files))):
             record_temp = self._parse_xyzfile(f"{local_path_dir}/{file}")
             dataset.add_record(record_temp)
 
@@ -448,9 +416,6 @@ class QM9Curation(DatasetCuration):
     def process(
         self,
         force_download: bool = False,
-        max_records: Optional[int] = None,
-        max_conformers_per_record: Optional[int] = None,
-        total_conformers: Optional[int] = None,
     ) -> None:
         """
         Downloads the dataset, extracts relevant information, and writes an hdf5 file.
@@ -460,29 +425,13 @@ class QM9Curation(DatasetCuration):
         force_download: bool, optional, default=False
             If the raw data_file is present in the local_cache_dir, the local copy will be used.
             If True, this will force the software to download the data again, even if present.
-        max_records: int, optional, default=None
-            If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
-            Can be used in conjunction with max_conformers_per_record and total_conformers.
-        max_conformers_per_record: int, optional, default=None
-            If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
-            Can be used in conjunction with max_records and total_conformers.
-        total_conformers: int, optional, default=None
-            If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
-            Can be used in conjunction with max_records and max_conformers_per_record.
-
-        Note for qm9, only a single conformer is present per record, so max_records and total_conformers behave the same way,
-        and max_conformers_per_record does not alter the behavior (i.e., it is always 1).
 
         Examples
         --------
-        >>> qm9_data = QM9Curation(hdf5_file_name='qm9_dataset.hdf5', local_cache_dir='~/datasets/qm9_dataset')
+        >>> qm9_data = QM9Curation(local_cache_dir='~/datasets/qm9_dataset')
         >>> qm9_data.process()
 
         """
-        if max_records is not None and total_conformers is not None:
-            raise ValueError(
-                "max_records and total_conformers cannot be set at the same time."
-            )
 
         from modelforge.utils.remote import download_from_url
 
@@ -512,11 +461,4 @@ class QM9Curation(DatasetCuration):
 
         self.dataset = self._process_downloaded(
             f"{self.local_cache_dir}/qm9_xyz_files",
-            max_records,
-            max_conformers_per_record,
-            total_conformers,
-        )
-
-        self.dataset.to_hdf5(
-            file_path=self.output_file_dir, file_name=self.hdf5_file_name
         )

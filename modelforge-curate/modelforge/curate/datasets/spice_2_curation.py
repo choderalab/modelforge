@@ -1,6 +1,20 @@
-from modelforge.curate.curate import *
+from modelforge.curate import Record, SourceDataset
 from modelforge.curate.datasets.curation_baseclass import DatasetCuration
-
+from modelforge.curate.properties import (
+    AtomicNumbers,
+    Positions,
+    Energies,
+    Forces,
+    PartialCharges,
+    TotalCharge,
+    MetaData,
+    DipoleMomentPerAtom,
+    DipoleMomentPerSystem,
+    QuadrupoleMomentPerAtom,
+    QuadrupoleMomentPerSystem,
+    OctupoleMomentPerAtom,
+    BondOrders,
+)
 from typing import Optional
 from loguru import logger
 from openff.units import unit
@@ -28,18 +42,14 @@ class SPICE2Curation(DatasetCuration):
 
     Parameters
     ----------
-    hdf5_file_name, str, required
-        name of the hdf5 file generated for the SPICE dataset
-    output_file_dir: str, optional, default='./'
-        Path to write the output hdf5 files.
-    local_cache_dir: str, optional, default='./spice_dataset'
+    local_cache_dir: str, optional, default='./'
         Location to save downloaded dataset.
 
     Examples
     --------
-    >>> spice_2_data = SPICE2Curation(hdf5_file_name='spice_2_dataset.hdf5',
-    >>>                             local_cache_dir='~/datasets/spice_2_dataset')
+    >>> spice_2_data = SPICE2Curation(local_cache_dir='~/datasets/spice_2_dataset')
     >>> spice_2_data.process()
+    >>> spice_2_data.to_hdf5(hdf5_file_name='spice2_dataset.hdf5', output_file_dir='~/datasets/hdf5_files')
 
     """
 
@@ -98,9 +108,6 @@ class SPICE2Curation(DatasetCuration):
         self,
         local_path_dir: str,
         name: str,
-        max_records: Optional[int] = None,
-        max_conformers_per_record: Optional[int] = None,
-        total_conformers: Optional[int] = None,
         atomic_numbers_to_limit: Optional[list] = None,
     ):
         """
@@ -133,25 +140,15 @@ class SPICE2Curation(DatasetCuration):
 
         input_file_name = f"{local_path_dir}/{name}"
 
-        need_to_reshape = {"formation_energy": True, "dft_total_energy": True}
-
-        dataset = SourceDataset("spice2")
+        dataset = SourceDataset(
+            name=self.dataset_name, local_db_dir=self.local_cache_dir
+        )
 
         with OpenWithLock(f"{input_file_name}.lockfile", "w") as lockfile:
             with h5py.File(input_file_name, "r") as hf:
                 names = list(hf.keys())
-                if max_records is None:
-                    n_max = len(names)
-                elif max_records is not None:
-                    n_max = max_records
 
-                conformers_counter = 0
-
-                for i, name in tqdm(enumerate(names[0:n_max]), total=n_max):
-                    if total_conformers is not None:
-                        if conformers_counter >= total_conformers:
-                            break
-
+                for name in tqdm(names, desc="Processing records"):
                     # Extract the total number of conformations for a given molecule
                     conformers_per_record = hf[name]["conformations"].shape[0]
 
@@ -160,9 +157,6 @@ class SPICE2Curation(DatasetCuration):
 
                         record_temp = Record(name=name)
                         keys_list = list(hf[name].keys())
-
-                        # temp dictionary for ANI-1x and ANI-1ccx data
-                        ds_temp = {}
 
                         smiles = MetaData(
                             name="smiles",
@@ -174,21 +168,10 @@ class SPICE2Curation(DatasetCuration):
                             value=hf[name]["atomic_numbers"][()].reshape(-1, 1),
                         )
                         record_temp.add_property(atomic_numbers)
-                        if max_conformers_per_record is not None:
-                            conformers_per_record = min(
-                                conformers_per_record,
-                                max_conformers_per_record,
-                            )
-                        if total_conformers is not None:
-                            conformers_per_record = min(
-                                conformers_per_record,
-                                total_conformers - conformers_counter,
-                            )
+                        n_atoms = atomic_numbers.n_atoms
 
                         positions = Positions(
-                            value=hf[name]["conformations"][()][
-                                0:conformers_per_record
-                            ],
+                            value=hf[name]["conformations"][()],
                             units=hf[name]["conformations"].attrs["units"],
                         )
                         record_temp.add_property(positions)
@@ -203,90 +186,79 @@ class SPICE2Curation(DatasetCuration):
                         record_temp.add_property(total_charge)
                         dft_total_energy = Energies(
                             name="dft_total_energy",
-                            value=hf[name]["dft_total_energy"][()].reshape(-1, 1)[
-                                0:conformers_per_record
-                            ],
+                            value=hf[name]["dft_total_energy"][()].reshape(-1, 1),
                             units=hf[name]["dft_total_energy"].attrs["units"],
                         )
                         record_temp.add_property(dft_total_energy)
                         dft_total_force = Forces(
                             name="dft_total_force",
-                            value=-hf[name]["dft_total_gradient"][()][
-                                0:conformers_per_record
-                            ],
+                            value=-hf[name]["dft_total_gradient"][()],
                             units=hf[name]["dft_total_gradient"].attrs["units"],
                         )
                         record_temp.add_property(dft_total_force)
                         formation_energy = Energies(
                             name="formation_energy",
-                            value=hf[name]["formation_energy"][()].reshape(-1, 1)[
-                                0:conformers_per_record
-                            ],
+                            value=hf[name]["formation_energy"][()].reshape(-1, 1),
                             units=hf[name]["formation_energy"].attrs["units"],
                         )
                         record_temp.add_property(formation_energy)
                         if "mbis_charges" in keys_list:
                             mbis_charges = PartialCharges(
                                 name="mbis_charges",
-                                value=hf[name]["mbis_charges"][()][
-                                    0:conformers_per_record
-                                ],
+                                value=hf[name]["mbis_charges"][()],
                                 units=hf[name]["mbis_charges"].attrs["units"],
                             )
                             record_temp.add_property(mbis_charges)
+                        # mbis_dipoles, mbis_quadrupoles, mbis_octupoles are per_atom properties
+
                         if "mbis_dipoles" in keys_list:
-                            mbis_dipoles = DipoleMoment(
+                            mbis_dipoles = DipoleMomentPerAtom(
                                 name="mbis_dipoles",
-                                value=hf[name]["mbis_dipoles"][()].reshape(-1, 3)[
-                                    0:conformers_per_record
-                                ],
+                                value=hf[name]["mbis_dipoles"][()],
                                 units=hf[name]["mbis_dipoles"].attrs["units"],
                             )
                             record_temp.add_property(mbis_dipoles)
                         if "mbis_quadrupoles" in keys_list:
-                            mbis_quadrupoles = QuadrupoleMoment(
+                            mbis_quadrupoles = QuadrupoleMomentPerAtom(
                                 name="mbis_quadrupoles",
-                                value=hf[name]["mbis_quadrupoles"][()][
-                                    0:conformers_per_record
-                                ],
+                                value=hf[name]["mbis_quadrupoles"][()],
                                 units=hf[name]["mbis_quadrupoles"].attrs["units"],
                             )
                             record_temp.add_property(mbis_quadrupoles)
                         if "mbis_octupoles" in keys_list:
-                            mbis_octupoles = OctupoleMoment(
+                            mbis_octupoles = OctupoleMomentPerAtom(
                                 name="mbis_octupoles",
-                                value=hf[name]["mbis_octupoles"][()][
-                                    0:conformers_per_record
-                                ],
+                                value=hf[name]["mbis_octupoles"][()],
                                 units=hf[name]["mbis_octupoles"].attrs["units"],
                             )
                             record_temp.add_property(mbis_octupoles)
-                        scf_dipole = DipoleMoment(
+                        # scf dipole and scf quadrupole are per_system properties
+                        scf_dipole = DipoleMomentPerSystem(
                             name="scf_dipole",
-                            value=hf[name]["scf_dipole"][()][0:conformers_per_record],
+                            value=hf[name]["scf_dipole"][()],
                             units=hf[name]["scf_dipole"].attrs["units"],
                         )
                         record_temp.add_property(scf_dipole)
-                        scf_quadrupole = QuadrupoleMoment(
+                        scf_quadrupole = QuadrupoleMomentPerSystem(
                             name="scf_quadrupole",
-                            value=hf[name]["scf_quadrupole"][()][
-                                0:conformers_per_record
-                            ],
+                            value=hf[name]["scf_quadrupole"][()],
                             units=hf[name]["scf_quadrupole"].attrs["units"],
                         )
                         record_temp.add_property(scf_quadrupole)
 
-                        # check if the record contains only the elements we are interested in
-                        # if this has been defined
-                        add_to_record = True
-                        if atomic_numbers_to_limit is not None:
-                            add_to_record = set(
-                                atomic_numbers.value.flatten()
-                            ).issubset(atomic_numbers_to_limit)
+                        mayer_indices = BondOrders(
+                            name="mayer_indices",
+                            value=hf[name]["mayer_indices"][()],
+                        )
+                        record_temp.add_property(mayer_indices)
 
-                        if add_to_record:
-                            dataset.add_record(record_temp)
-                            conformers_counter += conformers_per_record
+                        wiberg_lowdin_indices = BondOrders(
+                            name="wiberg_lowdin_indices",
+                            value=hf[name]["wiberg_lowdin_indices"][()],
+                        )
+                        record_temp.add_property(wiberg_lowdin_indices)
+
+                        dataset.add_record(record_temp)
 
         return dataset
         # From documentation: By default, objects inside group are iterated in alphanumeric order.
@@ -298,10 +270,6 @@ class SPICE2Curation(DatasetCuration):
     def process(
         self,
         force_download: bool = False,
-        max_records: Optional[int] = None,
-        max_conformers_per_record: Optional[int] = None,
-        total_conformers: Optional[int] = None,
-        limit_atomic_species: Optional[list] = None,
     ) -> None:
         """
         Downloads the dataset, extracts relevant information, and writes an hdf5 file.
@@ -311,30 +279,15 @@ class SPICE2Curation(DatasetCuration):
         force_download: bool, optional, default=False
             If the raw data_file is present in the local_cache_dir, the local copy will be used.
             If True, this will force the software to download the data again, even if present.
-        max_records: int, optional, default=None
-            If set to an integer, 'n_r', the routine will only process the first 'n_r' records, useful for unit tests.
-            Can be used in conjunction with max_conformers_per_record.
-        max_conformers_per_record: int, optional, default=None
-            If set to an integer, 'n_c', the routine will only process the first 'n_c' conformers per record, useful for unit tests.
-            Can be used in conjunction with max_records or total_conformers.
-        total_conformers: int, optional, default=None
-            If set to an integer, 'n_t', the routine will only process the first 'n_t' conformers in total, useful for unit tests.
-            Can be used in conjunction with  max_conformers_per_record.
-        limit_atomic_species: list, optional, default=None
-            If set to a list of element symbols, records that contain any elements not in this list will be ignored.
 
 
         Examples
         --------
-        >>> spice_2_data = SPICE2Curation(hdf5_file_name='spice_2_dataset.hdf5',
-        >>>                             local_cache_dir='~/datasets/spice_2_dataset')
+        >>> spice_2_data = SPICE2Curation(local_cache_dir='~/datasets/spice_2_dataset')
         >>> spice_2_data.process()
 
         """
-        if max_records is not None and total_conformers is not None:
-            raise ValueError(
-                "max_records and total_conformers cannot be set at the same time."
-            )
+
         from modelforge.utils.remote import download_from_url
 
         url = self.dataset_download_url
@@ -349,28 +302,9 @@ class SPICE2Curation(DatasetCuration):
             force_download=force_download,
         )
 
-        if limit_atomic_species is not None:
-            self.atomic_numbers_to_limit = []
-            from openff.units import elements
-
-            for symbol in limit_atomic_species:
-                for num, sym in elements.SYMBOLS.items():
-                    if sym == symbol:
-                        self.atomic_numbers_to_limit.append(num)
-        else:
-            self.atomic_numbers_to_limit = None
-
         # process the rest of the dataset
 
         self.dataset = self._process_downloaded(
             self.local_cache_dir,
             self.dataset_filename,
-            max_records,
-            max_conformers_per_record,
-            total_conformers,
-            self.atomic_numbers_to_limit,
-        )
-
-        self.dataset.to_hdf5(
-            file_name=self.hdf5_file_name, file_path=self.output_file_dir
         )

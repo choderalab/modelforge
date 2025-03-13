@@ -18,17 +18,15 @@ import sys
 
 sys.path.insert(0, os.path.abspath(".."))
 
-import modelforge
-
 
 # -- Project information -----------------------------------------------------
 
 project = "modelforge"
 copyright = (
-    "2024, Chodera Lab. Project structure based on the "
+    "2025, Chodera Lab. Project structure based on the "
     "Computational Molecular Science Python Cookiecutter version 1.1"
 )
-author = "Marcus Wieder"
+author = "Marcus Wieder, Christopher Iacovella, and the Chodera Lab"
 
 # The short X.Y version
 version = ""
@@ -54,7 +52,18 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.extlinks",
     "sphinx.ext.autosectionlabel",
+    "nbsphinx",
+    "sphinxcontrib.collections",
 ]
+
+collections = {
+    "notebooks": {
+        "driver": "copy_folder",
+        "source": "../modelforge-curate/modelforge/curate/examples",
+        "target": "notebooks",
+        "ignore": [".sqlite", ".db", ".py"],
+    }
+}
 
 autosummary_generate = True
 napoleon_google_docstring = False

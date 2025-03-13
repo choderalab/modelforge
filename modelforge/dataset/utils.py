@@ -190,13 +190,15 @@ def _calculate_self_energies(torch_dataset, collate_fn) -> Dict[str, unit.Quanti
     # Initialize variables to hold data for regression
     batch_size = 64
     # Determine the size of the counts tensor
-    num_molecules = torch_dataset.number_of_records
+    # note this is actually the total number of configurations, not just number of molecules
+    num_configs = torch_dataset.length
     # Determine up to which Z we detect elements
     maximum_atomic_number = 100
     # Initialize the counts tensor
-    counts = torch.zeros(num_molecules, maximum_atomic_number + 1, dtype=torch.int16)
+    counts = torch.zeros(num_configs, maximum_atomic_number + 1, dtype=torch.int16)
     # save energies in list
-    energy_array = torch.zeros(torch_dataset.number_of_records, dtype=torch.float64)
+    energy_array = torch.zeros(torch_dataset.length, dtype=torch.float64)
+
     # for filling in the element count matrix
     molecule_counter = 0
     # counter for saving energy values
@@ -212,9 +214,9 @@ def _calculate_self_energies(torch_dataset, collate_fn) -> Dict[str, unit.Quanti
             batch.nnp_input.atomic_numbers.squeeze(-1).to(torch.int64),
             batch.nnp_input.atomic_subsystem_indices.to(torch.int16),
         )
-
         # Update the energy array and unique atomic numbers set
         batch_size = energies.size(0)
+
         energy_array[current_index : current_index + batch_size] = energies.squeeze()
         current_index += batch_size
         unique_atomic_numbers |= set(atomic_numbers.tolist())

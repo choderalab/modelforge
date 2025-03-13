@@ -1563,7 +1563,7 @@ def single_batch(
 def initialize_dataset(
     dataset_name: str,
     local_cache_dir: str,
-    versions_select: str = "nc_1000_v0",
+    version_select: str = "nc_1000_v0",
     force_download: bool = False,
 ) -> DataModule:
     """
@@ -1574,7 +1574,7 @@ def initialize_dataset(
     factory = DatasetFactory()
     data = _ImplementedDatasets.get_dataset_class(dataset_name)(
         local_cache_dir=local_cache_dir,
-        version_select=versions_select,
+        version_select=version_select,
         force_download=force_download,
     )
     dataset = factory.create_dataset(data)

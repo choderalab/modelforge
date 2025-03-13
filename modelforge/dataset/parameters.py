@@ -37,6 +37,7 @@ class DataSetName(CaseInsensitiveEnum):
     SPICE1_OPENFF = "SPICE1_OPENFF"
     PHALKETHOH = "PhAlkEthOH"
     TMQM = "tmQM"
+    TMQM_XTB = "TMQM_XTB"
 
 
 class PropertiesDefinition(ParametersBase):

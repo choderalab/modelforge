@@ -1,6 +1,6 @@
 dataset: tmqm_xtb
 latest: PdZnFeCuNiPtIrRhCrAg_T100K_v1
-latest_test: PdZnFeCu_T100K_ntc_1000_v1
+latest_test: nc_1000_v1
 PdZnFeCuNiPtIrRhCrAg_T100K_v1:
   version: 1
   doi:  10.5281/zenodo.15015031
@@ -29,7 +29,7 @@ PdZnFeCu_T100K_v1:
     md5: null
     name: tmqm_xtb_dataset_PdZnFeCu_T100K_v1.npz
   url: https://zenodo.org/records/15015000/files/tmqm_xtb_dataset_PdZnFeCu_T100_v1.0.hdf5.gz
-PdZnFeCu_T100K_ntc_1000_v1:
+nc_1000_v1:
   version: 1
   doi:    10.5281/zenodo.15015505
   gz_data_file:

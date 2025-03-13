@@ -1,0 +1,45 @@
+dataset: tmqm_xtb
+latest: PdZnFeCuNiPtIrRhCrAg_T100K_v1
+latest_test: PdZnFeCu_T100K_ntc_1000_v1
+PdZnFeCuNiPtIrRhCrAg_T100K_v1:
+  version: 1
+  doi:  10.5281/zenodo.15015031
+  gz_data_file:
+    length: 1688599844
+    md5: 6abf90a2c524ff1e328f2d6a38e8bfe2
+    name: tmqm_xtb_dataset_PdZnFeCuNiPtIrRhCrAg_T100K_v1.hdf5.gz
+  hdf5_data_file:
+    md5: ad5fedb704a3f9dc356ed3912b41e542
+    name: tmqm_xtb_dataset_PdZnFeCuNiPtIrRhCrAg_T100K_v1.hdf5
+  processed_data_file:
+    md5: null
+    name: tmqm_xtb_dataset_PdZnFeCuNiPtIrRhCrAg_T100K_v1.npz
+  url: https://zenodo.org/records/15015031/files/tmqm_xtb_dataset_PdZnFeCuNiPtIrCrAg_T100_v1.0.hdf5.gz
+PdZnFeCu_T100K_v1:
+  version: 1
+  doi:   10.5281/zenodo.15015000
+  gz_data_file:
+    length: 765896627
+    md5: 51f886ee59d8792ab66daa2986444425
+    name: tmqm_xtb_dataset_PdZnFeCu_T100K_v1.hdf5.gz
+  hdf5_data_file:
+    md5: 64326b6d5df143ab5bda46c1b24374a7
+    name: tmqm_xtb_dataset_PdZnFeCu_T100K_v1.hdf5
+  processed_data_file:
+    md5: null
+    name: tmqm_xtb_dataset_PdZnFeCu_T100K_v1.npz
+  url: https://zenodo.org/records/15015000/files/tmqm_xtb_dataset_PdZnFeCu_T100_v1.0.hdf5.gz
+PdZnFeCu_T100K_ntc_1000_v1:
+  version: 1
+  doi:    10.5281/zenodo.15015505
+  gz_data_file:
+    length: 3501677
+    md5: 9a299fb3244e2f843f290cbe54b50978
+    name: tmqm_xtb_dataset_PdZnFeCu_T100K_ntc_1000_v1.hdf5.gz
+  hdf5_data_file:
+    md5: 1f0de26ee54c70028f99312a19a2bee6
+    name: mqm_xtb_dataset_PdZnFeCu_T100K_ntc_1000_v1.hdf5
+  processed_data_file:
+    md5: null
+    name: mqm_xtb_dataset_PdZnFeCu_T100K_ntc_1000_v1.npz
+  url: https://zenodo.org/records/15015505/files/tmqm_xtb_dataset_PdZnFeCu_T100_ntc_1000_v1.0.hdf5.gz

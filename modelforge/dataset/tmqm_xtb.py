@@ -7,17 +7,20 @@ from typing import List
 from .dataset import HDF5Dataset
 
 
-class tmQMDataset(HDF5Dataset):
+class tmQMXTBDataset(HDF5Dataset):
     """
-    Data class for handling tmQM dataset.
+    Data class for handling tmQM-xtb dataset.
 
-    This class provides utilities for processing and interacting with tmQM data stored in HDF5 format.
+    This class provides utilities for processing and interacting with tmQM-xtb data stored in HDF5 format.
+    The tmQM-xtb dataset, uses the tmQM dataset as a reference point, peforming GFN2-xTB-based MD simulations to
+    provide additional configurations.
 
-    The tmQM dataset contains the geometries and properties of 86,665 mononuclear complexes extracted from the
+    The originalal tmQM dataset contains the geometries and properties of mononuclear complexes extracted from the
     Cambridge Structural Database, including Werner, bioinorganic, and organometallic complexes based on a large
     variety of organic ligands and 30 transition metals (the 3d, 4d, and 5d from groups 3 to 12).
     All complexes are closed-shell, with a formal charge in the range {+1, 0, −1}e
 
+    :
     Original Citation:
 
     David Balcells and Bastian Bjerkem Skjelstad,
@@ -43,7 +46,7 @@ class tmQMDataset(HDF5Dataset):
 
     Examples
     --------
-    >>> data = tmQMDataset()
+    >>> data = tmQMXTBDataset()
     >>> data._download()
     """
 
@@ -53,47 +56,36 @@ class tmQMDataset(HDF5Dataset):
         atomic_numbers="atomic_numbers",
         positions="geometry",
         E="total_energy",
-        dipole_moment="dipole_moment_computed",
+        F="forces",
+        dipole_moment="dipole_moment_per_system",
         total_charge="total_charge",
     )
 
     # for simplicity, commenting out those properties that are cannot be used in our current implementation
     _available_properties = [
-        "geometry",
+        "positions",
         "atomic_numbers",
         "total_charge",
+        "forces",
+        "dipole_moment_per_system",
+        "energies",
         "partial_charges",
-        # "metal_center_charge",
-        "dipole_moment_computed",
-        "dipole_moment_computed_scaled",
-        "total_energy",
-        "electronic_energy",
-        "dispersion_energy",
-        "energy_of_homo",
-        "energy_of_lumo",
-        "homo_lumo_gap",
-        # "dipole_moment_magnitude",
-        # "polarizability",
-    ]  # All properties within the datafile, aside from SMILES/inchi.
+        # "spin_multiplicities",
+    ]
 
     _available_properties_association = {
-        "geometry": "positions",
+        "positions": "positions",
         "atomic_numbers": "atomic_numbers",
         "total_charge": "total_charge",
-        "dipole_moment_computed": "dipole_moment",
-        "dipole_moment_computed_scaled": "dipole_moment",
-        "total_energy": "E",
-        "electronic_energy": "E",
-        "dispersion_energy": "E",
-        "energy_of_homo": "E",
-        "energy_of_lumo": "E",
-        "homo_lumo_gap": "E",
+        "dipole_moment_per_system": "dipole_moment",
+        "energies": "E",
+        "forces": "F",
         "partial_charges": "total_charge",  # note this isn't interchangeable with partial charge but has the same units
     }
 
     def __init__(
         self,
-        dataset_name: str = "tmQM",
+        dataset_name: str = "tmQM-xtb",
         version_select: str = "latest",
         local_cache_dir: str = ".",
         force_download: bool = False,
@@ -120,8 +112,8 @@ class tmQMDataset(HDF5Dataset):
             previously downloaded files, if available; by default False.
         Examples
         --------
-        >>> data = tmQMDataset()  # Default dataset
-        >>> test_data = tmQMDataset(version_select="latest_test"))  # Testing subset
+        >>> data = QM9Dataset()  # Default dataset
+        >>> test_data = QM9Dataset(version_select="latest_test"))  # Testing subset
         """
 
         _default_properties_of_interest = [
@@ -144,13 +136,13 @@ class tmQMDataset(HDF5Dataset):
         from modelforge.dataset import yaml_files
         import yaml
 
-        yaml_file = resources.files(yaml_files) / "tmqm.yaml"
+        yaml_file = resources.files(yaml_files) / "tmqm_xtb.yaml"
         logger.debug(f"Loading config data from {yaml_file}")
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)
 
         # make sure we have the correct yaml file
-        assert data_inputs["dataset"] == "tmqm"
+        assert data_inputs["dataset"] == "tmqm_xtb"
 
         if self.version_select == "latest":
             # in the yaml file, the entry latest will define the name of the version to use

@@ -11,6 +11,7 @@ from modelforge.curate.properties import (
     DipoleMomentPerSystem,
     SpinMultiplicities,
 )
+from modelforge.dataset.utils import _ATOMIC_NUMBER_TO_ELEMENT
 
 from modelforge.utils.units import chem_context
 import numpy as np
@@ -122,6 +123,7 @@ class tmQMXTBCuration(DatasetCuration):
         self,
         local_path_dir: str,
         hdf5_file_name: str,
+        cutoff: Optional[unit.Quantity] = None,
     ):
         """
         Processes a downloaded dataset: extracts relevant information into a list of dicts.
@@ -132,6 +134,8 @@ class tmQMXTBCuration(DatasetCuration):
             Path to the directory that contains the .hd5f file.
         hdf5_file_name: str, required
             Name of the hdf5 file that will be read
+        cutoff: unit.Quantity, optional, default=None
+            The cutoff value for the relative change in bond length to filter out problematic configurations.
 
 
 
@@ -211,13 +215,78 @@ class tmQMXTBCuration(DatasetCuration):
                         name="stoichiometry",
                         value=f[key]["stoichiometry"][()].decode("utf-8"),
                     )
-                    dataset.add_record(record)
+                    record.add_property(metadata)
+
+                    if cutoff is not None:
+                        bonds = self._infer_bonds(record)
+                        max_bond_delta = self._calculate_max_bond_length_change(
+                            record, bonds
+                        )
+                        configs_to_include = []
+                        for index, delta in enumerate(max_bond_delta):
+                            if delta * unit.angstrom <= cutoff:
+                                configs_to_include.append(index)
+                        record_new = record.remove_configs(configs_to_include)
+                        dataset.add_record(record_new)
+                    else:
+                        dataset.add_record(record)
 
             return dataset
 
+    def _calculate_max_bond_length_change(self, record: Record, bonds) -> list:
+        max_changes = []
+        for i in range(1, record.n_configs):
+            changes_temp = [0]
+
+            for bond in bonds:
+                d1 = record.per_atom["positions"].value[0][bond[0]]
+                d2 = record.per_atom["positions"].value[0][bond[1]]
+                initial_distance = np.linalg.norm(d1 - d2)
+
+                d1 = record.per_atom["positions"].value[i][bond[0]]
+                d2 = record.per_atom["positions"].value[i][bond[1]]
+                distance = np.linalg.norm(d1 - d2)
+                changes_temp.append(np.abs(distance - initial_distance))
+            max_changes.append(np.max(changes_temp))
+        return max_changes
+
+    def _infer_bonds(self, record: Record) -> List[List[int]]:
+        from rdkit import Chem
+        from rdkit.Geometry import Point3D
+        from modelforge.dataset.utils import _ATOMIC_NUMBER_TO_ELEMENT
+
+        mol = Chem.RWMol()
+        atomic_numbers = record.atomic_numbers.value.reshape(-1)
+        for i in range(atomic_numbers.shape[0]):
+            atom = Chem.Atom(_ATOMIC_NUMBER_TO_ELEMENT[atomic_numbers[i]])
+            mol.AddAtom(atom)
+
+        conf = Chem.Conformer()
+        initial_positions = (
+            record.per_atom["positions"].value[0] * record.per_atom["positions"].units
+        )
+
+        # convert to angstroms for RDKIT
+        initial_positions = initial_positions.to(unit.angstrom).magnitude
+        for i in range(initial_positions.shape[0]):
+            conf.SetAtomPosition(
+                i,
+                Point3D(
+                    initial_positions[i][0],
+                    initial_positions[i][1],
+                    initial_positions[i][2],
+                ),
+            )
+        mol.AddConformer(conf)
+        from rdkit.Chem import rdDetermineBonds
+
+        rdDetermineBonds.DetermineConnectivity(mol)
+        bonds = [[b.GetBeginAtomIdx(), b.GetEndAtomIdx()] for b in mol.GetBonds()]
+
+        return bonds
+
     def process(
-        self,
-        force_download: bool = False,
+        self, force_download: bool = False, cutoff: Optional[unit.Quantity] = None
     ) -> None:
         """
         Downloads the dataset, extracts relevant information, and writes an hdf5 file.
@@ -227,6 +296,8 @@ class tmQMXTBCuration(DatasetCuration):
         force_download: bool, optional, default=False
             If the raw data_file is present in the local_cache_dir, the local copy will be used.
             If True, this will force the software to download the data again, even if present.
+        cutoff: unit.Quantity, optional, default=None
+            The cutoff value for the relative change in bond length to filter out problematic configurations.
 
 
 
@@ -262,6 +333,10 @@ class tmQMXTBCuration(DatasetCuration):
             output_path_dir=f"{self.local_cache_dir}",
         )
         unzipped_file_name = self.dataset_filename.replace(".gz", "")
+
+        if cutoff is not None:
+            assert cutoff.is_compatible_with(unit.angstrom)
+
         self.dataset = self._process_downloaded(
-            f"{self.local_cache_dir}", unzipped_file_name
+            f"{self.local_cache_dir}", unzipped_file_name, cutoff=cutoff
         )

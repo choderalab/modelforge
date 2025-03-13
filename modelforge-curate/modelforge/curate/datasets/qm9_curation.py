@@ -428,7 +428,7 @@ class QM9Curation(DatasetCuration):
 
         Examples
         --------
-        >>> qm9_data = QM9Curation(ocal_cache_dir='~/datasets/qm9_dataset')
+        >>> qm9_data = QM9Curation(local_cache_dir='~/datasets/qm9_dataset')
         >>> qm9_data.process()
 
         """

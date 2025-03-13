@@ -181,6 +181,23 @@ class Record:
             if np.max(force_magnitude) <= max_force:
                 indices_to_include.append(i)
 
+        return self.remove_configs(indices_to_include)
+
+    def remove_configs(self, indices_to_include: List[int]):
+        """
+        Remove configurations not in the indices_to_include list
+
+        Parameters
+        ----------
+        indices_to_include: List[int]
+            List of indices to keep in the record.
+
+        Returns
+        -------
+        Record: Copy of the record with configurations removed.
+
+        """
+
         new_record = copy.deepcopy(self)
         for key, value in self.per_atom.items():
             new_record.per_atom[key].value = value.value[indices_to_include]

@@ -1,9 +1,15 @@
 dataset_name: tmqm_xtb
-latest: v_1_400K
-v_1_400K:
+latest: v1_100K
+v1_400K:
   version: 1
   dataset_download_url: https://zenodo.org/records/14919908/files/tmqm_dataset_xtb_v1.hdf5.gz
   dataset_md5_checksum:  8c599df8cf52484a470955638ae839a8
   dataset_length: 3999410141
-  dataset_filename: tmqm_xtb_400K_v1.hdf5.gz
+  dataset_filename: tmqm_xtb_raw_400K_v1.hdf5.gz
 
+v1_100K:
+  version: 1
+  dataset_download_url: https://zenodo.org/records/14920177/files/tmqm_dataset_xtb_T100_raw_v1.hdf5.gz
+  dataset_md5_checksum:  297defb3844a40d9e11a0cf6513a064e
+  dataset_length: 3989131489
+  dataset_filename: tmqm_xtb_raw_100K_v1.hdf5.gz

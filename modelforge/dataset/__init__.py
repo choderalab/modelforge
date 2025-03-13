@@ -8,6 +8,7 @@ from .spice2 import SPICE2Dataset
 from .spice1openff import SPICE1OpenFFDataset
 from .phalkethoh import PhAlkEthOHDataset
 from .tmqm import tmQMDataset
+from .tmqm_xtb import tmQMXTBDataset
 from .dataset import DatasetFactory, DataModule
 from enum import Enum
 
@@ -21,6 +22,7 @@ class _ImplementedDatasets(Enum):
     SPICE1_OPENFF = SPICE1OpenFFDataset
     PHALKETHOH = PhAlkEthOHDataset
     TMQM = tmQMDataset
+    TMQM_XTB = tmQMXTBDataset
 
     @classmethod
     def get_dataset_class(cls, dataset_name: str):

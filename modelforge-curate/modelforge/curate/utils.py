@@ -2,7 +2,7 @@ from typing_extensions import Annotated
 from pydantic import BeforeValidator, PlainSerializer
 
 import numpy as np
-from typing import Union
+from typing import Union, List
 from openff.units import unit
 
 __all__ = ["NdArray"]

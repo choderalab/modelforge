@@ -71,130 +71,130 @@ def main():
         version_select=version_select,
     )
 
-    tmqm_xtb.load_from_db(local_cache_dir, "tmqm_xtb.sqlite")
-    # tmqm_xtb.process(force_download=False)
-    # tmqm_xtb.process(force_download=False, cutoff=0.1 * unit.angstrom)
+    # tmqm_xtb.load_from_db(local_cache_dir, "tmqm_xtb.sqlite")
+    tmqm_xtb.process(force_download=False)
+    tmqm_xtb.process(force_download=False, cutoff=0.1 * unit.angstrom)
 
-    # # curate the fill dataset:
-    # hdf5_file_name = f"tmqm_xtb_dataset_T100_v{version_out}.hdf5"
-    #
-    # total_records, total_configs = tmqm_xtb.to_hdf5(
-    #     hdf5_file_name=hdf5_file_name, output_file_dir=output_file_dir
-    # )
-    #
-    # print("full dataset")
-    # print(f"Total records: {total_records}")
-    # print(f"Total configs: {total_configs}")
-    #
-    # # Curate the test dataset with 1000 total conformers
-    # # only a single config per record
-    # hdf5_file_name = f"tmqm_xtb_dataset_T100_v{version_out}_ntc_1000.hdf5"
-    #
-    # total_records, total_configs = tmqm_xtb.to_hdf5(
-    #     hdf5_file_name=hdf5_file_name,
-    #     output_file_dir=output_file_dir,
-    #     total_configurations=1000,
-    #     max_configurations_per_record=10,
-    # )
-    #
-    # print(" 1000 configuration subset")
-    # print(f"Total records: {total_records}")
-    # print(f"Total configs: {total_configs}")
-    #
-    # #
-    # # Curate the test limited to transition metals Pd, Zn, Fe, Cu and
-    # # organics C, H, P, S, O, N, F, Cl, Br
-    #
-    # hdf5_file_name = f"tmqm_xtb_dataset_PdZnFeCu_T100_v{version_out}.hdf5"
-    #
-    # atomic_species_to_limit = [
-    #     "Pd",
-    #     "Zn",
-    #     "Fe",
-    #     "Cu",
-    #     "C",
-    #     "H",
-    #     "P",
-    #     "S",
-    #     "O",
-    #     "N",
-    #     "F",
-    #     "Cl",
-    #     "Br",
-    # ]
-    # total_records, total_configs = tmqm_xtb.to_hdf5(
-    #     hdf5_file_name=hdf5_file_name,
-    #     output_file_dir=output_file_dir,
-    #     atomic_species_to_limit=atomic_species_to_limit,
-    # )
-    #
-    # print("primary configuration subset")
-    # print(f"Total records: {total_records}")
-    # print(f"Total configs: {total_configs}")
-    #
-    # # Curate the test limited to transition metals Pd, Zn, Fe, Cu, Ni, Pt, Ir, Rh, Cr, Ag and
-    # # organics C, H, P, S, O, N, F, Cl, Br
-    #
-    # hdf5_file_name = f"tmqm_xtb_dataset_PdZnFeCuNiPtIrCrAg_T100_v{version_out}.hdf5"
-    #
-    # atomic_species_to_limit = [
-    #     "Pd",
-    #     "Zn",
-    #     "Fe",
-    #     "Cu",
-    #     "Ni",
-    #     "Pt",
-    #     "Ir",
-    #     "Rh",
-    #     "Cr",
-    #     "Ag",
-    #     "C",
-    #     "H",
-    #     "P",
-    #     "S",
-    #     "O",
-    #     "N",
-    #     "F",
-    #     "Cl",
-    #     "Br",
-    # ]
-    # total_records, total_configs = tmqm_xtb.to_hdf5(
-    #     hdf5_file_name=hdf5_file_name,
-    #     output_file_dir=output_file_dir,
-    #     atomic_species_to_limit=atomic_species_to_limit,
-    # )
-    #
-    # print("primary configuration subset")
-    # print(f"Total records: {total_records}")
-    # print(f"Total configs: {total_configs}")
+    # curate the fill dataset:
+    hdf5_file_name = f"tmqm_xtb_dataset_T100_v{version_out}.hdf5"
 
-    # # 1000 configurations test set
-    # hdf5_file_name = f"tmqm_xtb_dataset_PdZnFeCu_T100_ntc_1000_v{version_out}.hdf5"
-    # atomic_species_to_limit = [
-    #     "Pd",
-    #     "Zn",
-    #     "Fe",
-    #     "Cu",
-    #     "C",
-    #     "H",
-    #     "P",
-    #     "S",
-    #     "O",
-    #     "N",
-    #     "F",
-    #     "Cl",
-    #     "Br",
-    # ]
-    # total_records, total_configs = tmqm_xtb.to_hdf5(
-    #     hdf5_file_name=hdf5_file_name,
-    #     output_file_dir=output_file_dir,
-    #     atomic_species_to_limit=atomic_species_to_limit,
-    #     total_configurations=1000,
-    # )
+    total_records, total_configs = tmqm_xtb.to_hdf5(
+        hdf5_file_name=hdf5_file_name, output_file_dir=output_file_dir
+    )
+
+    print("full dataset")
+    print(f"Total records: {total_records}")
+    print(f"Total configs: {total_configs}")
+
+    # Curate the test dataset with 1000 total conformers
+    # only a single config per record
+    hdf5_file_name = f"tmqm_xtb_dataset_T100_v{version_out}_ntc_1000.hdf5"
+
+    total_records, total_configs = tmqm_xtb.to_hdf5(
+        hdf5_file_name=hdf5_file_name,
+        output_file_dir=output_file_dir,
+        total_configurations=1000,
+        max_configurations_per_record=10,
+    )
+
+    print(" 1000 configuration subset")
+    print(f"Total records: {total_records}")
+    print(f"Total configs: {total_configs}")
+
     #
-    # print("primary configuration subset")
-    # print(f"Total records: {total_records}")
-    # print(f"Total configs: {total_configs}")
+    # Curate the test limited to transition metals Pd, Zn, Fe, Cu and
+    # organics C, H, P, S, O, N, F, Cl, Br
+
+    hdf5_file_name = f"tmqm_xtb_dataset_PdZnFeCu_T100_v{version_out}.hdf5"
+
+    atomic_species_to_limit = [
+        "Pd",
+        "Zn",
+        "Fe",
+        "Cu",
+        "C",
+        "H",
+        "P",
+        "S",
+        "O",
+        "N",
+        "F",
+        "Cl",
+        "Br",
+    ]
+    total_records, total_configs = tmqm_xtb.to_hdf5(
+        hdf5_file_name=hdf5_file_name,
+        output_file_dir=output_file_dir,
+        atomic_species_to_limit=atomic_species_to_limit,
+    )
+
+    print("primary configuration subset")
+    print(f"Total records: {total_records}")
+    print(f"Total configs: {total_configs}")
+
+    # Curate the test limited to transition metals Pd, Zn, Fe, Cu, Ni, Pt, Ir, Rh, Cr, Ag and
+    # organics C, H, P, S, O, N, F, Cl, Br
+
+    hdf5_file_name = f"tmqm_xtb_dataset_PdZnFeCuNiPtIrCrAg_T100_v{version_out}.hdf5"
+
+    atomic_species_to_limit = [
+        "Pd",
+        "Zn",
+        "Fe",
+        "Cu",
+        "Ni",
+        "Pt",
+        "Ir",
+        "Rh",
+        "Cr",
+        "Ag",
+        "C",
+        "H",
+        "P",
+        "S",
+        "O",
+        "N",
+        "F",
+        "Cl",
+        "Br",
+    ]
+    total_records, total_configs = tmqm_xtb.to_hdf5(
+        hdf5_file_name=hdf5_file_name,
+        output_file_dir=output_file_dir,
+        atomic_species_to_limit=atomic_species_to_limit,
+    )
+
+    print("primary configuration subset")
+    print(f"Total records: {total_records}")
+    print(f"Total configs: {total_configs}")
+
+    # 1000 configurations test set
+    hdf5_file_name = f"tmqm_xtb_dataset_PdZnFeCu_T100_ntc_1000_v{version_out}.hdf5"
+    atomic_species_to_limit = [
+        "Pd",
+        "Zn",
+        "Fe",
+        "Cu",
+        "C",
+        "H",
+        "P",
+        "S",
+        "O",
+        "N",
+        "F",
+        "Cl",
+        "Br",
+    ]
+    total_records, total_configs = tmqm_xtb.to_hdf5(
+        hdf5_file_name=hdf5_file_name,
+        output_file_dir=output_file_dir,
+        atomic_species_to_limit=atomic_species_to_limit,
+        total_configurations=1000,
+    )
+
+    print("primary configuration subset")
+    print(f"Total records: {total_records}")
+    print(f"Total configs: {total_configs}")
 
     # 1000 configurations test set
     hdf5_file_name = f"tmqm_xtb_dataset_PdZnFeCu_T100_first_v{version_out}.hdf5"

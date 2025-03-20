@@ -1024,3 +1024,80 @@ class SourceDataset:
         hdf5_checksum = calculate_md5_checksum(file_path=file_path, file_name=file_name)
 
         return hdf5_checksum
+
+
+def create_dataset_from_hdf5(
+    hdf5_filename: str,
+    dataset_name: str,
+    dataset_local_db_dir: str = "./",
+    dataset_local_db_name: str = None,
+    append_property: bool = False,
+):
+    """
+    Create a dataset from an HDF5 file.
+
+    Parameters
+    ----------
+    hdf5_filename: str
+        Name of the HDF5 file to read.
+    dataset_name: str
+        Name of the dataset to create.
+    dataset_local_db_dir: str, optional, default="./"
+        Directory to store the local database.
+    dataset_local_db_name: str, optional, default=None
+        Name of the local database.
+    append_property: bool, optional, default=False
+        Set to True to append properties to existing properties in a record.
+        If False, an error will be raised if a property with the same name is added to a record.
+
+    Returns
+    -------
+    SourceDataset
+        Instance of the SourceDataset class.
+    """
+    import h5py
+    from tqdm import tqdm
+    from modelforge.curate.properties import PropertyBaseModel
+
+    dataset = SourceDataset(
+        name=dataset_name,
+        local_db_dir=dataset_local_db_dir,
+        local_db_name=dataset_local_db_name,
+        append_property=append_property,
+    )
+
+    with h5py.File(hdf5_filename, "r") as f:
+        keys = list(f.keys())
+
+        for key in tqdm(keys):
+
+            record = Record(name=key)
+            n_configs = 0
+            properties_keys = f[key].keys()
+            for pk in properties_keys:
+                if pk == "n_configs":
+                    n_configs = f[key][pk][()]
+                else:
+                    property_type = f[key][pk].attrs["property_type"]
+                    property_classification = f[key][pk].attrs["format"]
+                    if "u" in f[key][pk].attrs.keys():
+                        unit_str = f[key][pk].attrs["u"]
+                    else:
+                        unit_str = "dimensionless"
+                    value = f[key][pk][()]
+                    if type(value) is bytes:
+                        value = f[key][pk][()].decode("utf-8")
+
+                    property = PropertyBaseModel(
+                        name=pk,
+                        value=value,
+                        units=unit_str,
+                        property_type=property_type,
+                        classification=property_classification,
+                    )
+
+                    record.add_property(property)
+            assert n_configs == record.n_configs
+            dataset.add_record(record)
+
+        return dataset

@@ -223,6 +223,10 @@ class tmQMXTBCuration(DatasetCuration):
                         bonds = infer_bonds(record)
                         max_bond_delta = calculate_max_bond_length_change(record, bonds)
                         configs_to_include = []
+                        if len(max_bond_delta) != record.n_configs:
+                            raise ValueError(
+                                "Number of  max bond lengths does not match number of configurations"
+                            )
                         for index, delta in enumerate(max_bond_delta):
                             if delta <= cutoff:
                                 configs_to_include.append(index)

@@ -523,7 +523,7 @@ class Record:
                     ),
                 )
             mol.AddConformer(conf)
-            if ii == 0 and infer_bonds:
+            if infer_bonds:
                 from rdkit.Chem import rdDetermineBonds
 
                 rdDetermineBonds.DetermineConnectivity(mol)
@@ -677,7 +677,7 @@ def calculate_max_bond_length_change(
     max_changes.append(0.0 * record.per_atom[positions_key].units)
 
     for i in range(1, record.n_configs):
-        changes_temp = [0]
+        changes_temp = []
 
         for b, bond in enumerate(bonds):
 

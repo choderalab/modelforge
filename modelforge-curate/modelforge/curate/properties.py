@@ -97,7 +97,7 @@ class PropertyBaseModel(BaseModel):
     """
 
     name: str
-    value: NdArray
+    value: Union[NdArray, List, str, int, float]
     units: unit.Unit
     classification: PropertyClassification
     property_type: PropertyType

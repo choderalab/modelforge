@@ -61,7 +61,7 @@ def main():
 
     # We'll want to provide some simple means of versioning
     # if we make updates to either the underlying dataset, curation modules, or parameters given to the code
-    version_out = "1.0"
+    version_out = "1.1"
     # version of the dataset to curate
     version_select = "v1_100K"
 
@@ -71,9 +71,11 @@ def main():
         version_select=version_select,
     )
 
+    cutoff = 0.15 * unit.angstrom
+
     # tmqm_xtb.load_from_db(local_cache_dir, "tmqm_xtb.sqlite")
     tmqm_xtb.process(force_download=False)
-    tmqm_xtb.process(force_download=False, cutoff=0.1 * unit.angstrom)
+    tmqm_xtb.process(force_download=False, cutoff=cutoff)
 
     # curate the fill dataset:
     hdf5_file_name = f"tmqm_xtb_dataset_T100_v{version_out}.hdf5"

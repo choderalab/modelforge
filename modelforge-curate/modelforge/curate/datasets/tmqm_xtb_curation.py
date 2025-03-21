@@ -237,58 +237,6 @@ class tmQMXTBCuration(DatasetCuration):
 
             return dataset
 
-    # def _calculate_max_bond_length_change(self, record: Record, bonds) -> list:
-    #     max_changes = []
-    #     for i in range(1, record.n_configs):
-    #         changes_temp = [0]
-    #
-    #         for bond in bonds:
-    #             d1 = record.per_atom["positions"].value[0][bond[0]]
-    #             d2 = record.per_atom["positions"].value[0][bond[1]]
-    #             initial_distance = np.linalg.norm(d1 - d2)
-    #
-    #             d1 = record.per_atom["positions"].value[i][bond[0]]
-    #             d2 = record.per_atom["positions"].value[i][bond[1]]
-    #             distance = np.linalg.norm(d1 - d2)
-    #             changes_temp.append(np.abs(distance - initial_distance))
-    #         max_changes.append(np.max(changes_temp))
-    #     return max_changes
-    #
-    # def _infer_bonds(self, record: Record) -> List[List[int]]:
-    #     from rdkit import Chem
-    #     from rdkit.Geometry import Point3D
-    #     from modelforge.dataset.utils import _ATOMIC_NUMBER_TO_ELEMENT
-    #
-    #     mol = Chem.RWMol()
-    #     atomic_numbers = record.atomic_numbers.value.reshape(-1)
-    #     for i in range(atomic_numbers.shape[0]):
-    #         atom = Chem.Atom(_ATOMIC_NUMBER_TO_ELEMENT[atomic_numbers[i]])
-    #         mol.AddAtom(atom)
-    #
-    #     conf = Chem.Conformer()
-    #     initial_positions = (
-    #         record.per_atom["positions"].value[0] * record.per_atom["positions"].units
-    #     )
-    #
-    #     # convert to angstroms for RDKIT
-    #     initial_positions = initial_positions.to(unit.angstrom).magnitude
-    #     for i in range(initial_positions.shape[0]):
-    #         conf.SetAtomPosition(
-    #             i,
-    #             Point3D(
-    #                 initial_positions[i][0],
-    #                 initial_positions[i][1],
-    #                 initial_positions[i][2],
-    #             ),
-    #         )
-    #     mol.AddConformer(conf)
-    #     from rdkit.Chem import rdDetermineBonds
-    #
-    #     rdDetermineBonds.DetermineConnectivity(mol)
-    #     bonds = [[b.GetBeginAtomIdx(), b.GetEndAtomIdx()] for b in mol.GetBonds()]
-    #
-    #     return bonds
-
     def process(
         self, force_download: bool = False, cutoff: Optional[unit.Quantity] = None
     ) -> None:

@@ -181,6 +181,27 @@ class PropertyBaseModel(BaseModel):
             return self.value.shape[0]
         return None
 
+    def convert_units(self, units=Union[unit.Unit, str]):
+        """
+        Applies unit conversion to the property value and updates units attribute.
+
+        Parameters
+        ----------
+        units : unit.Unit or str
+            The units to convert the property value to. This can be a unit.Unit  or a string representation of the unit.
+        """
+
+        if self.classification != "meta_data":
+            if not units.is_compatible_with(
+                GlobalUnitSystem.get_units(self.property_type), "chem"
+            ):
+                raise ValueError(
+                    f"Unit {units} of {self.name} are not compatible with the property type {self.property_type}.\n"
+                )
+
+        self.value = (self.value * self.units).to(units, "chem").m
+        self.units = _convert_unit_str_to_unit_unit(units)
+
 
 class Positions(PropertyBaseModel):
     """

@@ -641,6 +641,23 @@ class Record:
                 f"Property with key {property_key} not found in record {self.name}"
             )
 
+    def convert_to_global_unit_system(self):
+        """
+        Convert all properties to the global unit system inplace
+        Note, this only applies to per_atom and per_system properties, not metadata
+
+        """
+
+        for key, value in self.per_atom.items():
+            property_type = self.per_atom[key].property_type
+            target_units = GlobalUnitSystem.get_units(property_type)
+            self.per_atom[key].convert_units(target_units)
+
+        for key, value in self.per_system.items():
+            property_type = self.per_system[key].property_type
+            target_units = GlobalUnitSystem.get_units(property_type)
+            self.per_system[key].convert_units(target_units)
+
 
 def calculate_max_bond_length_change(
     record: Record, bonds: List[List[int]], positions_key: str = "positions"

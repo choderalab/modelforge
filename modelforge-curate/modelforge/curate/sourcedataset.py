@@ -1025,6 +1025,21 @@ class SourceDataset:
 
         return hdf5_checksum
 
+    def convert_to_global_unit_system(self):
+        """Convert all properties in the dataset to the global unit system.
+
+        Note metadata will not be converted.
+        """
+
+        for record_name in self.records.keys():
+            with SqliteDict(
+                f"{self.local_db_dir}/{self.local_db_name}",
+                autocommit=True,
+            ) as db:
+                record = db[record_name]
+                record.convert_to_global_unit_system()
+                db[record_name] = record
+
 
 def create_dataset_from_hdf5(
     hdf5_filename: str,

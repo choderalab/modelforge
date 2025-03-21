@@ -765,7 +765,7 @@ def test_write_hdf5(prep_temp_dir):
     )
     new_dataset.create_record("mol1")
     positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
-    energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
+    energies = Energies(value=np.array([[0.1]]), units=unit.kilojoule_per_mole)
     atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
     meta_data = MetaData(name="smiles", value="[CH]")
 
@@ -864,6 +864,28 @@ def test_write_hdf5(prep_temp_dir):
         assert data["total_configurations"] == new_dataset.total_configs()
         assert data["md5_checksum"] == checksum
         assert data["filename"] == "test_dataset.hdf5"
+
+    # test that we can read the dataset back in
+
+    from modelforge.curate.sourcedataset import create_dataset_from_hdf5
+
+    new_dataset_read = create_dataset_from_hdf5(
+        hdf5_filename=str(prep_temp_dir / "test_dataset.hdf5"),
+        dataset_name="test_read_data",
+        dataset_local_db_dir=str(prep_temp_dir),
+    )
+
+    assert new_dataset_read.total_records() == 3
+    record_mo1 = new_dataset_read.get_record("mol1")
+    assert record_mo1.n_configs == 1
+    assert record_mo1.n_atoms == 2
+    assert np.all(
+        record_mo1.per_atom["positions"].value
+        == np.array([[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]])
+    )
+    assert np.all(record_mo1.per_system["energies"].value == np.array([[0.1]]))
+    assert np.all(record_mo1.atomic_numbers.value == np.array([[1], [6]]))
+    assert record_mo1.meta_data["smiles"].value == "[CH]"
 
 
 def test_dataset_validation(prep_temp_dir):

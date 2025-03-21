@@ -100,6 +100,23 @@ def test_dataset_create_record(prep_temp_dir):
         new_dataset.add_records([record6, record7])
 
 
+def test_convert_record_units():
+    record = Record(name="mol1")
+    positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="angstrom")
+    energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
+    atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
+    record.add_properties([positions, energies, atomic_numbers])
+
+    record.convert_to_global_unit_system()
+    assert record.get_property("positions").units == "nanometer"
+    assert np.allclose(
+        record.get_property("positions").value,
+        np.array([[[0.1, 0.1, 0.1], [0.2, 0.2, 0.2]]]),
+    )
+    assert record.get_property("energies").units == "kilojoule_per_mole"
+    assert np.allclose(record.get_property("energies").value, np.array([[262.5499639]]))
+
+
 def test_add_properties_to_records_directly(prep_temp_dir):
     record = Record(name="mol1")
 
@@ -591,6 +608,28 @@ def test_add_properties(prep_temp_dir):
 
     with pytest.raises(ValueError):
         new_dataset.add_properties("mol1", [atomic_numbers])
+
+
+def test_convert_dataset_to_global_unit_system(prep_temp_dir):
+    new_dataset = SourceDataset(
+        "test_dataset4",
+        local_db_dir=str(prep_temp_dir),
+        local_db_name="test_dataset4.sqlite",
+    )
+    new_dataset.create_record("mol1")
+    positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="angstrom")
+    energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
+    atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
+    meta_data = MetaData(name="smiles", value="[CH]")
+
+    new_dataset.add_properties("mol1", [positions, energies, atomic_numbers, meta_data])
+    # test unit conversion
+    new_dataset.convert_to_global_unit_system()
+    assert new_dataset.get_record("mol1").get_property("positions").units == "nanometer"
+    assert (
+        new_dataset.get_record("mol1").get_property("energies").units
+        == "kilojoule_per_mole"
+    )
 
 
 def test_slicing_properties(prep_temp_dir):

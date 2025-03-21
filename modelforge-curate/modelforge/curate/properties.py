@@ -18,6 +18,7 @@ from modelforge.curate.utils import (
     _convert_list_to_ndarray,
     _convert_unit_str_to_unit_unit,
 )
+from loguru import logger as log
 
 from openff.units import unit
 from modelforge.curate.units import GlobalUnitSystem, chem_context
@@ -191,7 +192,12 @@ class PropertyBaseModel(BaseModel):
             The units to convert the property value to. This can be a unit.Unit  or a string representation of the unit.
         """
 
-        if self.classification != "meta_data":
+        if self.classification == "meta_data":
+            if self.units != unit.dimensionless:
+                log.info(
+                    f"{self.name} has units {self.units}, but is MetaData and will not be converted."
+                )
+        elif self.classification != "atomic_numbers":
             if not units.is_compatible_with(
                 GlobalUnitSystem.get_units(self.property_type), "chem"
             ):
@@ -199,8 +205,8 @@ class PropertyBaseModel(BaseModel):
                     f"Unit {units} of {self.name} are not compatible with the property type {self.property_type}.\n"
                 )
 
-        self.value = (self.value * self.units).to(units, "chem").m
-        self.units = _convert_unit_str_to_unit_unit(units)
+            self.value = (self.value * self.units).to(units, "chem").m
+            self.units = _convert_unit_str_to_unit_unit(units)
 
 
 class Positions(PropertyBaseModel):

@@ -99,6 +99,12 @@ def test_dataset_create_record(prep_temp_dir):
     with pytest.raises(ValueError):
         new_dataset.add_records([record6, record7])
 
+    # test adding somethign that is not a record
+    with pytest.raises(ValueError):
+        new_dataset.add_records([1, 2, 3])
+    with pytest.raises(ValueError):
+        new_dataset.add_record(1)
+
 
 def test_convert_record_units():
     record = Record(name="mol1")

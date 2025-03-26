@@ -151,6 +151,9 @@ class PropertyBaseModel(BaseModel):
 
     # check compatibility of units with the property type
     # this uses the GlobalUnitSystem to get the expected units for the property type
+    # note we need to set the "chem" context for the unit compatibility
+    # to ensure that we can convert between units like hartree (energy)
+    # and kJ/mol (energy per substance).
     @model_validator(mode="after")
     def _check_unit_type(self) -> Self:
 

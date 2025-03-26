@@ -163,6 +163,10 @@ class SourceDataset:
         -------
 
         """
+
+        if not isinstance(record, Record):
+            raise ValueError("Input must be an instance of the Record class")
+
         if record.name in self.records.keys():
             log.warning(
                 f"Record with name {record.name} already exists in the dataset."
@@ -193,6 +197,9 @@ class SourceDataset:
         -------
 
         """
+        if not all([isinstance(record, Record) for record in records]):
+            raise ValueError("Input must be a list of instances of the Record class")
+
         with SqliteDict(
             f"{self.local_db_dir}/{self.local_db_name}",
             autocommit=True,

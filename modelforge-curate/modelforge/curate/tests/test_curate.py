@@ -99,6 +99,29 @@ def test_dataset_create_record(prep_temp_dir):
     with pytest.raises(ValueError):
         new_dataset.add_records([record6, record7])
 
+    # test adding somethign that is not a record
+    with pytest.raises(ValueError):
+        new_dataset.add_records([1, 2, 3])
+    with pytest.raises(ValueError):
+        new_dataset.add_record(1)
+
+
+def test_convert_record_units():
+    record = Record(name="mol1")
+    positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="angstrom")
+    energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
+    atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
+    record.add_properties([positions, energies, atomic_numbers])
+
+    record.convert_to_global_unit_system()
+    assert record.get_property("positions").units == "nanometer"
+    assert np.allclose(
+        record.get_property("positions").value,
+        np.array([[[0.1, 0.1, 0.1], [0.2, 0.2, 0.2]]]),
+    )
+    assert record.get_property("energies").units == "kilojoule_per_mole"
+    assert np.allclose(record.get_property("energies").value, np.array([[262.5499639]]))
+
 
 def test_add_properties_to_records_directly(prep_temp_dir):
     record = Record(name="mol1")
@@ -121,8 +144,21 @@ def test_add_properties_to_records_directly(prep_temp_dir):
     assert record._validate_n_atoms() == True
     assert record._validate_n_configs() == True
 
+    assert "positions" in record.keys()
+    assert "energies" in record.keys()
+    assert "smiles" in record.keys()
+    assert "atomic_numbers" in record.keys()
+
     with pytest.raises(ValueError):
         record.add_property(property=positions)
+
+    # test return of keys where we dont' add atomic numbers
+    record = Record(name="mol1_no_atom")
+    record.add_properties([positions, energies, meta_data])
+    assert "positions" in record.keys()
+    assert "energies" in record.keys()
+    assert "smiles" in record.keys()
+    assert "atomic_numbers" not in record.keys()
 
     record = Record(name="mol1", append_property=True)
     record.add_property(property=atomic_numbers)
@@ -191,6 +227,171 @@ def test_record_failures():
             units="nanometer",
         )
         record.add_property(positions)
+
+
+def test_record_to_rdkit():
+    record = Record(name="mol1")
+
+    positions = Positions(
+        value=[[[1.0, 1.0, 1.0], [1.1, 1.0, 1.0]], [[2.1, 1.0, 1.0], [2.0, 1.0, 1.0]]],
+        units="nanometer",
+    )
+    energies = Energies(value=np.array([[0.1], [0.2]]), units=unit.hartree)
+    atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
+    meta_data = MetaData(name="smiles", value="[CH]")
+
+    record.add_properties([positions, energies, atomic_numbers, meta_data])
+
+    rdkit_mol = record.to_rdkit()
+    assert rdkit_mol.GetNumAtoms() == 2
+    assert rdkit_mol.GetNumConformers() == 2
+    print(rdkit_mol.GetConformer(0).GetAtomPosition(0))
+    assert np.allclose(
+        np.array(rdkit_mol.GetConformer(0).GetAtomPosition(0)),
+        np.array([10.0, 10.0, 10.0]),
+    )
+    assert np.allclose(
+        np.array(rdkit_mol.GetConformer(0).GetAtomPosition(1)),
+        np.array([11.0, 10.0, 10.0]),
+    )
+    assert np.allclose(
+        np.array(rdkit_mol.GetConformer(1).GetAtomPosition(0)),
+        np.array([21.0, 10.0, 10.0]),
+    )
+    assert np.allclose(
+        np.array(rdkit_mol.GetConformer(1).GetAtomPosition(1)),
+        np.array([20.0, 10.0, 10.0]),
+    )
+
+    assert rdkit_mol.GetNumBonds() == 1
+
+    rdkit_mol = record.to_rdkit(infer_bonds=False)
+    assert rdkit_mol.GetNumBonds() == 0
+
+    # test that we can't convert to rdkit if we don't have positions
+    record = Record(name="mol1")
+    record.add_properties([energies, atomic_numbers, meta_data])
+    with pytest.raises(ValueError):
+        record.to_rdkit()
+
+    # we cannot convert without atomic numbers
+    record = Record(name="mol1")
+    record.add_properties([positions, energies, meta_data])
+    with pytest.raises(ValueError):
+        record.to_rdkit()
+
+
+def test_record_remove_property():
+    record = Record(name="mol1")
+    atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
+    positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
+    energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
+    meta_data = MetaData(name="smiles", value="[CH]")
+    record.add_properties([positions, energies, atomic_numbers, meta_data])
+
+    record.remove_property("positions")
+    assert "positions" not in record.keys()
+    assert "positions" not in record.per_atom.keys()
+    record.remove_property("energies")
+    assert "energies" not in record.keys()
+    assert "energies" not in record.per_system.keys()
+
+    record.remove_property("smiles")
+    assert "smiles" not in record.keys()
+    assert "smiles" not in record.meta_data.keys()
+
+    record.remove_property("atomic_numbers")
+    assert "atomic_numbers" not in record.keys()
+    assert record.atomic_numbers is None
+
+    with pytest.raises(ValueError):
+        record.remove_property("positions")
+
+
+def test_get_property():
+    record = Record(name="mol1")
+    atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
+    positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
+    energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
+    meta_data = MetaData(name="smiles", value="[CH]")
+
+    record.add_properties([positions, energies, atomic_numbers, meta_data])
+
+    pos = record.get_property("positions")
+    assert np.all(pos.value == positions.value)
+    assert pos.units == positions.units
+    assert pos.name == positions.name
+
+    atomic = record.get_property("atomic_numbers")
+    assert np.all(atomic.value == atomic_numbers.value)
+    assert atomic.units == atomic_numbers.units
+    assert atomic.name == atomic_numbers.name
+
+    en = record.get_property("energies")
+    assert np.all(en.value == energies.value)
+    assert en.units == energies.units
+    assert en.name == energies.name
+
+    smiles = record.get_property("smiles")
+    assert smiles.value == meta_data.value
+    assert smiles.units == meta_data.units
+    assert smiles.name == meta_data.name
+
+    with pytest.raises(ValueError):
+        record.get_property("non_existent")
+
+
+def test_get_property_value():
+    record = Record(name="mol1")
+    atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
+    positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
+    energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
+    meta_data = MetaData(name="smiles", value="[CH]")
+
+    record.add_properties([positions, energies, atomic_numbers, meta_data])
+
+    pos = record.get_property_value("positions")
+    assert np.all(pos.m == positions.value)
+    assert pos.units == positions.units
+
+    en = record.get_property_value("energies")
+    assert np.all(en.m == energies.value)
+    assert en.units == energies.units
+
+    atomic = record.get_property_value("atomic_numbers")
+    assert np.all(atomic == atomic_numbers.value)
+
+    smiles = record.get_property_value("smiles")
+    assert smiles == meta_data.value
+
+    with pytest.raises(ValueError):
+        record.get_property_value("non_existent")
+
+
+def test_infer_bonds_and_length():
+    from modelforge.curate.record import infer_bonds, calculate_max_bond_length_change
+
+    record = Record(name="mol1")
+    atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
+    positions = Positions(
+        value=[[[1.0, 1.0, 1.0], [1.1, 1.0, 1.0]], [[2.2, 1.0, 1.0], [2.0, 1.0, 1.0]]],
+        units="nanometer",
+    )
+    energies = Energies(value=np.array([[0.1], [0.2]]), units=unit.hartree)
+
+    record.add_properties([positions, energies, atomic_numbers])
+
+    bonds = infer_bonds(record)
+
+    assert len(bonds) == 1
+    assert bonds[0][0] in [1, 0]
+    assert bonds[0][1] in [1, 0]
+
+    max_changes = calculate_max_bond_length_change(record, bonds=bonds)
+    assert len(max_changes) == 2
+
+    assert np.allclose(max_changes[0].m, 0)
+    assert np.allclose(max_changes[1].m, 0.1)
 
 
 def test_record_repr(capsys):
@@ -415,6 +616,28 @@ def test_add_properties(prep_temp_dir):
         new_dataset.add_properties("mol1", [atomic_numbers])
 
 
+def test_convert_dataset_to_global_unit_system(prep_temp_dir):
+    new_dataset = SourceDataset(
+        "test_dataset4",
+        local_db_dir=str(prep_temp_dir),
+        local_db_name="test_dataset4.sqlite",
+    )
+    new_dataset.create_record("mol1")
+    positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="angstrom")
+    energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
+    atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
+    meta_data = MetaData(name="smiles", value="[CH]")
+
+    new_dataset.add_properties("mol1", [positions, energies, atomic_numbers, meta_data])
+    # test unit conversion
+    new_dataset.convert_to_global_unit_system()
+    assert new_dataset.get_record("mol1").get_property("positions").units == "nanometer"
+    assert (
+        new_dataset.get_record("mol1").get_property("energies").units
+        == "kilojoule_per_mole"
+    )
+
+
 def test_slicing_properties(prep_temp_dir):
     record = Record(name="mol1")
 
@@ -492,6 +715,8 @@ def test_counting_records(prep_temp_dir):
     assert new_dataset.total_configs() == 5
 
     new_dataset.validate_records()
+
+    assert new_dataset.keys() == ["mol1", "mol2", "mol3", "mol4"]
 
 
 def test_append_properties(prep_temp_dir):
@@ -585,7 +810,7 @@ def test_write_hdf5(prep_temp_dir):
     )
     new_dataset.create_record("mol1")
     positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
-    energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
+    energies = Energies(value=np.array([[0.1]]), units=unit.kilojoule_per_mole)
     atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
     meta_data = MetaData(name="smiles", value="[CH]")
 
@@ -684,6 +909,28 @@ def test_write_hdf5(prep_temp_dir):
         assert data["total_configurations"] == new_dataset.total_configs()
         assert data["md5_checksum"] == checksum
         assert data["filename"] == "test_dataset.hdf5"
+
+    # test that we can read the dataset back in
+
+    from modelforge.curate.sourcedataset import create_dataset_from_hdf5
+
+    new_dataset_read = create_dataset_from_hdf5(
+        hdf5_filename=str(prep_temp_dir / "test_dataset.hdf5"),
+        dataset_name="test_read_data",
+        dataset_local_db_dir=str(prep_temp_dir),
+    )
+
+    assert new_dataset_read.total_records() == 3
+    record_mo1 = new_dataset_read.get_record("mol1")
+    assert record_mo1.n_configs == 1
+    assert record_mo1.n_atoms == 2
+    assert np.all(
+        record_mo1.per_atom["positions"].value
+        == np.array([[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]])
+    )
+    assert np.all(record_mo1.per_system["energies"].value == np.array([[0.1]]))
+    assert np.all(record_mo1.atomic_numbers.value == np.array([[1], [6]]))
+    assert record_mo1.meta_data["smiles"].value == "[CH]"
 
 
 def test_dataset_validation(prep_temp_dir):

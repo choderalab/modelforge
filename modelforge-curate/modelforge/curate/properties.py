@@ -18,6 +18,7 @@ from modelforge.curate.utils import (
     _convert_list_to_ndarray,
     _convert_unit_str_to_unit_unit,
 )
+from loguru import logger as log
 
 from openff.units import unit
 from modelforge.curate.units import GlobalUnitSystem, chem_context
@@ -97,7 +98,7 @@ class PropertyBaseModel(BaseModel):
     """
 
     name: str
-    value: NdArray
+    value: Union[NdArray, List, str, int, float]
     units: unit.Unit
     classification: PropertyClassification
     property_type: PropertyType
@@ -150,6 +151,9 @@ class PropertyBaseModel(BaseModel):
 
     # check compatibility of units with the property type
     # this uses the GlobalUnitSystem to get the expected units for the property type
+    # note we need to set the "chem" context for the unit compatibility
+    # to ensure that we can convert between units like hartree (energy)
+    # and kJ/mol (energy per substance).
     @model_validator(mode="after")
     def _check_unit_type(self) -> Self:
 
@@ -180,6 +184,32 @@ class PropertyBaseModel(BaseModel):
         elif self.classification == PropertyClassification.atomic_numbers:
             return self.value.shape[0]
         return None
+
+    def convert_units(self, units=Union[unit.Unit, str]):
+        """
+        Applies unit conversion to the property value and updates units attribute.
+
+        Parameters
+        ----------
+        units : unit.Unit or str
+            The units to convert the property value to. This can be a unit.Unit  or a string representation of the unit.
+        """
+
+        if self.classification == "meta_data":
+            if self.units != unit.dimensionless:
+                log.info(
+                    f"{self.name} has units {self.units}, but is MetaData and will not be converted."
+                )
+        elif self.classification != "atomic_numbers":
+            if not units.is_compatible_with(
+                GlobalUnitSystem.get_units(self.property_type), "chem"
+            ):
+                raise ValueError(
+                    f"Unit {units} of {self.name} are not compatible with the property type {self.property_type}.\n"
+                )
+
+            self.value = (self.value * self.units).to(units, "chem").m
+            self.units = _convert_unit_str_to_unit_unit(units)
 
 
 class Positions(PropertyBaseModel):

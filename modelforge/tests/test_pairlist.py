@@ -238,6 +238,23 @@ def test_neighborlists_for_dimer():
     assert nlist_train_output.r_ij.shape == (1, 3)
     assert nlist_train_output.d_ij.shape == (1, 1)
 
+    nlist_inf = NeighborlistForInference(
+        cutoff=0.51,
+        only_unique_pairs=False,
+        displacement_function=OrthogonalDisplacementFunction(),
+    )
+
+    nlist_inf_output = nlist_inf.forward(test_system)
+    assert nlist_inf_output.pair_indices.shape == (2, 2)
+    assert nlist_inf_output.r_ij.shape == (2, 3)
+    assert nlist_inf_output.d_ij.shape == (2, 1)
+
+    nlist_train = NeighborListForTraining(cutoff=0.51, only_unique_pairs=False)
+    nlist_train_output = nlist_train.forward(test_system)
+    assert nlist_train_output.pair_indices.shape == (2, 2)
+    assert nlist_train_output.r_ij.shape == (2, 3)
+    assert nlist_train_output.d_ij.shape == (2, 1)
+
 
 def test_pairlist_precomputation():
     import numpy as np

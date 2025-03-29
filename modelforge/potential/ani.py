@@ -814,6 +814,12 @@ class ANI2xCore(torch.nn.Module):
             The calculated per-atom properties and the scalar representation of AEVs.
         """
 
+        # print(pairlist_output.r_ij)
+        # print(pairlist_output.d_ij)
+        # print(data.atomic_numbers)
+        # print(data.positions)
+        # print(data.atomic_subsystem_indices)
+
         # Compute AEVs (atomic environment vectors)
         representation = self.ani_representation_module(
             data, pairlist_output, atom_index

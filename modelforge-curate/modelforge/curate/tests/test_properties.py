@@ -61,6 +61,16 @@ def test_initialize_positions():
             property_type="energy",
         )
 
+    # test unit conversion
+    positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="angstrom")
+    positions.convert_units(unit.nanometer)
+    assert positions.units == unit.nanometer
+    assert np.allclose(positions.value, np.array([[[0.1, 0.1, 0.1], [0.2, 0.2, 0.2]]]))
+
+    # test unit conversion failure
+    with pytest.raises(ValueError):
+        positions.convert_units(unit.kilojoule_per_mole)
+
 
 def test_initialize_energies():
     energies = Energies(value=np.array([[0.1], [0.3]]), units=unit.hartree)
@@ -100,6 +110,16 @@ def test_initialize_energies():
         energies = Energies(
             value=np.array([[0.1], [0.3]]), units=unit.hartree, property_type="length"
         )
+    # test unit conversion of per_system quantity
+
+    energies = Energies(value=np.array([[0.1], [0.3]]), units=unit.hartree)
+    energies.convert_units(unit.kilojoule_per_mole)
+    assert energies.units == unit.kilojoule_per_mole
+    assert np.allclose(energies.value, np.array([[262.55002], [787.65006]]))
+
+    # test unit conversion failure
+    with pytest.raises(ValueError):
+        energies.convert_units(unit.nanometer)
 
 
 def test_initialize_atomic_numbers():
@@ -135,6 +155,21 @@ def test_initialize_atomic_numbers():
         atomic_numbers = AtomicNumbers(
             value=np.array([[1], [6]]), units=unit.nanometer, property_type="energy"
         )
+
+
+def test_initialize_metadata_with_units():
+
+    meta_data = MetaData(name="temperature", value=300, units=unit.kelvin)
+    assert meta_data.name == "temperature"
+    assert meta_data.value == 300
+    assert meta_data.units == unit.kelvin
+    assert meta_data.classification == "meta_data"
+
+    # test that unit conversion does nothing
+    # as metadata values will not be converted as it is not used directly in training.
+
+    meta_data.convert_units(unit.celsius)
+    assert meta_data.units == unit.kelvin
 
 
 def test_initialize_meta_data():

@@ -7,11 +7,11 @@ from modelforge.curate.properties import (
     Energies,
     AtomicNumbers,
 )
+from modelforge.curate.record import Record
 
 from openff.units import unit
 
 import numpy as np
-import copy
 import os
 from typing import Union, List, Type, Optional
 
@@ -19,439 +19,6 @@ from typing_extensions import Self
 
 from loguru import logger as log
 from sqlitedict import SqliteDict
-
-
-class Record:
-    def __init__(self, name: str, append_property: bool = False):
-
-        assert isinstance(name, str)
-        self.name = name
-        self.per_atom = {}
-        self.per_system = {}
-        self.meta_data = {}
-        self.atomic_numbers = None
-        self._n_atoms = -1
-        self._n_configs = -1
-        self.append_property = append_property
-
-    def __repr__(self):
-
-        output_string = f"name: {self.name}\n"
-        if self.n_atoms == -1:
-            output_string += f"* n_atoms: cannot be determined, see warnings log\n"
-        else:
-            output_string += f"* n_atoms: {self.n_atoms}\n"
-        if self.n_configs == -1:
-            output_string += f"* n_configs: cannot be determined, see warnings log\n"
-        else:
-            output_string += f"* n_configs: {self.n_configs}\n"
-        output_string += "* atomic_numbers:\n"
-        output_string += f" -  {self.atomic_numbers}\n"
-        output_string += f"* per-atom properties: ({list(self.per_atom.keys())}):\n"
-        for key, value in self.per_atom.items():
-            output_string += f" -  {value}\n"
-        output_string += f"* per-system properties: ({list(self.per_system.keys())}):\n"
-        for key, value in self.per_system.items():
-            output_string += f" -  {value}\n"
-        output_string += f"* meta_data: ({list(self.meta_data.keys())})\n"
-        for key, value in self.meta_data.items():
-            output_string += f" -  {value}\n"
-        return output_string
-
-    @property
-    def n_atoms(self):
-        """
-        Get the number of atoms in the record
-
-        Returns
-        -------
-            int: number of atoms in the record
-        """
-        # the validate function will set self._n_atoms to -1 if the number of atoms cannot be determined
-        # or if the number of atoms is inconsistent between properties
-        # otherwise will set it to the value from the atomic_numbers
-        self._validate_n_atoms()
-        return self._n_atoms
-
-    @property
-    def n_configs(self):
-        """
-        Get the number of configurations in the record
-
-        Returns
-        -------
-            int: number of configurations in the record
-        """
-
-        # the validate function will set self._n_configs to -1 if the number of configurations cannot be determined
-        # or if the number of configurations is inconsistent between properties.
-        # will set it to the value from the properties otherwise
-        self._validate_n_configs()
-        return self._n_configs
-
-    def slice_record(self, min: int = 0, max: int = -1) -> Self:
-        """
-        Slice the record to only include a subset of configs
-
-        Slicing occurs on all per_atom and per_system properties
-
-        Parameters
-        ----------
-        min: int
-            Starting index for slicing.
-        max: int
-            ending index for slicing.
-
-        Returns
-        -------
-            Record: Slice record.
-        """
-        new_record = copy.deepcopy(self)
-        for key, value in self.per_atom.items():
-            new_record.per_atom[key].value = value.value[min:max]
-        for key, value in self.per_system.items():
-            new_record.per_system[key].value = value.value[min:max]
-
-        return new_record
-
-    def contains_atomic_numbers(self, atomic_numbers_of_interest: np.ndarray) -> bool:
-        """
-        Check if the atomic numbers in the record are a subset of the input.
-
-        Parameters
-        ----------
-        atomic_numbers_of_interest: np.ndarray
-            Array of atomic numbers to check against.
-
-        Returns
-        -------
-            bool: True if the atomic numbers are contained within the input, False otherwise.
-        """
-
-        if self.atomic_numbers is None:
-            log.warning(
-                f"No atomic numbers set for record {self.name}. Cannot compare."
-            )
-            raise ValueError(
-                f"No atomic numbers set for record {self.name}. Cannot compare."
-            )
-        status = set(self.atomic_numbers.value.flatten()).issubset(
-            atomic_numbers_of_interest
-        )
-
-        return status
-
-    def remove_high_force_configs(
-        self, max_force: unit.Quantity, force_key: str = "forces"
-    ):
-        """
-        Remove configurations with forces greater than the max_force
-
-        Parameters
-        ----------
-        max_force, unit.Quantity
-            Maximum force to allow in the record.
-        force_key: str, optional, default="forces"
-            Name of the property to use for filtering.
-
-        Returns
-        -------
-        record: Record
-            Copy of the Record with configurations removed.
-        """
-
-        if force_key not in self.per_atom.keys():
-            log.warning(f"Force key {force_key} not found in record {self.name}.")
-
-            raise ValueError(f"Force key {force_key} not found in record {self.name}.")
-
-        if self.per_atom[force_key].property_type != "force":
-            log.warning(f"Property {force_key} is not a force property.")
-
-            raise ValueError(f"Property {force_key} is not a force property.")
-        assert isinstance(max_force, unit.Quantity)
-
-        # get the indices of the configurations that have forces less than the max_force
-        indices_to_include = []
-        for i in range(self.n_configs):
-            force_magnitude = (
-                np.abs(self.per_atom[force_key].value[i])
-                * self.per_atom[force_key].units
-            )
-            if np.max(force_magnitude) <= max_force:
-                indices_to_include.append(i)
-
-        return self.remove_configs(indices_to_include)
-
-    def remove_configs(self, indices_to_include: List[int]):
-        """
-        Remove configurations not in the indices_to_include list
-
-        Parameters
-        ----------
-        indices_to_include: List[int]
-            List of indices to keep in the record.
-
-        Returns
-        -------
-        Record: Copy of the record with configurations removed.
-
-        """
-
-        new_record = copy.deepcopy(self)
-        for key, value in self.per_atom.items():
-            new_record.per_atom[key].value = value.value[indices_to_include]
-        for key, value in self.per_system.items():
-            new_record.per_system[key].value = value.value[indices_to_include]
-
-        return new_record
-
-    def to_dict(self):
-        """
-        Convert the record to a dictionary
-
-        Returns
-        -------
-            dict: dictionary representation of the record
-        """
-        return {
-            "name": self.name,
-            "n_atoms": self.n_atoms,
-            "n_configs": self.n_configs,
-            "atomic_numbers": self.atomic_numbers,
-            "per_atom": self.per_atom,
-            "per_system": self.per_system,
-            "meta_data": self.meta_data,
-        }
-
-    def _validate_n_atoms(self):
-        """
-        Validate the number of atoms in the record by checking that all per_atom properties have the same number of atoms as the atomic numbers.
-
-        Returns
-        -------
-            bool: True if the number of atoms is defined and consistent, False otherwise.
-        """
-        self._n_atoms = -1
-        if self.atomic_numbers is not None:
-            for key, value in self.per_atom.items():
-                if value.n_atoms != self.atomic_numbers.n_atoms:
-                    log.warning(
-                        f"Number of atoms for property {key} in record {self.name} does not match the number of atoms in the atomic numbers."
-                    )
-                    return False
-        else:
-            log.warning(
-                f"No atomic numbers set for record {self.name}. Cannot validate number of atoms."
-            )
-            return False
-        self._n_atoms = self.atomic_numbers.n_atoms
-        return True
-
-    def _validate_n_configs(self):
-        """
-        Validate the number of configurations in the record by checking that all properties have the same number of configurations.
-
-        Returns
-        -------
-            bool: True if the number of configurations is defined and consistent, False otherwise.
-        """
-        n_configs = []
-        for key, value in self.per_atom.items():
-            n_configs.append(value.n_configs)
-        for key, value in self.per_system.items():
-            n_configs.append(value.n_configs)
-        if len(n_configs) != 0:
-            if all([n == n_configs[0] for n in n_configs]):
-                self._n_configs = n_configs[0]
-                return True
-            else:
-                self._n_configs = -1
-                log.warning(
-                    f"Number of configurations for properties in record {self.name} are not consistent."
-                )
-                for key, value in self.per_atom.items():
-                    log.warning(f" - {key} : {value.n_configs}")
-                for key, value in self.per_system.items():
-                    log.warning(f" - {key} : {value.n_configs}")
-                return False
-        else:
-            log.warning(
-                f"No properties found in record {self.name}. Cannot determine the number of configurations."
-            )
-            self._n_configs = -1
-            return False
-
-    def validate(self):
-        """
-        Validate the record to ensure that the number of atoms and configurations are consistent across all properties.
-
-        Returns
-        -------
-            True if the record validated, False otherwise.
-        """
-        if self._validate_n_atoms() and self._validate_n_configs():
-            return True
-        return False
-
-    def add_properties(self, properties: List[Type[PropertyBaseModel]]):
-        """
-        Add a list of properties to the record.
-
-        Parameters
-        ----------
-        properties: List[Type[PropertyBaseModel]]
-            List of properties to add to the record.
-        Returns
-        -------
-
-        """
-        for property in properties:
-            self.add_property(property)
-
-    def add_property(self, property: Type[PropertyBaseModel]):
-        """
-        Add a property to the record.
-
-        Parameters
-        ----------
-        property: Type[PropertyBaseModel]
-            Property to add to the record.
-        Returns
-        -------
-
-        """
-        if property.classification == PropertyClassification.atomic_numbers:
-            # we will not allow atomic numbers to be set twice
-            if self.atomic_numbers is not None:
-                raise ValueError(f"Atomic numbers already set for record {self.name}")
-
-            self.atomic_numbers = property.model_copy(deep=True)
-
-            # Note, the number of atoms will always be set by the atomic_numbers property.
-            # We will later validate that per_atom properties are consistent with this value later
-            # since we are not enforcing that atomic_numbers need to be set before any other property
-
-        elif property.classification == PropertyClassification.meta_data:
-            if property.name in self.meta_data.keys():
-                log.warning(
-                    f"Metadata with name {property.name} already exists in the record {self.name}."
-                )
-                raise ValueError(
-                    f"Metadata with name {property.name} already exists in the record {self.name}"
-                )
-
-            elif property.name in self.per_atom.keys():
-                raise ValueError(
-                    f"Property with name {property.name} already exists in the record {self.name}, but as a per_atom property."
-                )
-            elif property.name in self.per_system.keys():
-                raise ValueError(
-                    f"Property with name {property.name} already exists in the record {self.name}, but as a per_system property."
-                )
-            elif property.name == "atomic_numbers":
-                raise ValueError(
-                    f"The name atomic_numbers is reserved. Use AtomicNumbers to define them, not the MetaData class."
-                )
-            self.meta_data[property.name] = property.model_copy(deep=True)
-
-        elif property.classification == PropertyClassification.per_atom:
-            if property.name in self.per_system.keys():
-                raise ValueError(
-                    f"Property with name {property.name} already exists in the record {self.name}, but as a per_system property."
-                )
-            elif property.name in self.meta_data.keys():
-                raise ValueError(
-                    f"Property with name {property.name} already exists in the record {self.name}, but as a meta_data property."
-                )
-            elif property.name == "atomic_numbers":
-                raise ValueError(
-                    f"The name atomic_numbers is reserved. Use AtomicNumbers to define them."
-                )
-            elif property.name in self.per_atom.keys():
-                if self.append_property == False:
-                    error_msg = f"Property with name {property.name} already exists in the record {self.name}."
-                    error_msg += (
-                        f"Set append_property=True to append to the existing property."
-                    )
-                    raise ValueError(error_msg)
-                # if the property already exists, we will use vstack to add it to the existing array
-                # after first checking that the dimensions are consistent
-                # note we do not check shape[0], as that corresponds to the number of configurations
-                assert (
-                    self.per_atom[property.name].value.shape[1]
-                    == property.value.shape[1]
-                ), f"{self.name}: n_atoms of {property.name} does not: {property.value.shape[1]} != {self.per_atom[property.name].value.shape[1]}."
-                assert (
-                    self.per_atom[property.name].value.shape[2]
-                    == property.value.shape[2]
-                )
-                # In order to append to the array, everything needs to have the same units
-                # We will use the units of the first property that was added
-
-                temp_array = property.value
-                if property.units != self.per_atom[property.name].units:
-                    temp_array = (
-                        unit.Quantity(property.value, property.units)
-                        .to(
-                            self.per_atom[property.name].units,
-                            "chem",
-                        )
-                        .magnitude
-                    )
-                self.per_atom[property.name].value = np.vstack(
-                    (
-                        self.per_atom[property.name].value,
-                        temp_array,
-                    )
-                )
-
-            else:
-                self.per_atom[property.name] = property.model_copy(deep=True)
-        elif property.classification == PropertyClassification.per_system:
-            if property.name in self.per_atom.keys():
-                raise ValueError(
-                    f"Property with name {property.name} already exists in the record {self.name}, but as a per_atom property."
-                )
-            elif property.name in self.meta_data.keys():
-                raise ValueError(
-                    f"Property with name {property.name} already exists in the record {self.name}, but as a meta_data property."
-                )
-            elif property.name == "atomic_numbers":
-                raise ValueError(
-                    f"The name atomic_numbers is reserved. Use AtomicNumbers to define them."
-                )
-            elif property.name in self.per_system.keys():
-                if self.append_property == False:
-                    error_msg = f"Property with name {property.name} already exists in the record {self.name}."
-                    error_msg += (
-                        f"Set append_property=True to append to the existing property."
-                    )
-                    raise ValueError(error_msg)
-
-                assert (
-                    self.per_system[property.name].value.shape[1]
-                    == property.value.shape[1]
-                )
-                temp_array = property.value
-                if property.units != self.per_system[property.name].units:
-                    temp_array = (
-                        unit.Quantity(property.value, property.units)
-                        .to(
-                            self.per_system[property.name].units,
-                            "chem",
-                        )
-                        .magnitude
-                    )
-
-                self.per_system[property.name].value = np.vstack(
-                    (
-                        self.per_system[property.name].value,
-                        temp_array,
-                    )
-                )
-            else:
-                self.per_system[property.name] = property.model_copy(deep=True)
 
 
 class SourceDataset:
@@ -516,6 +83,16 @@ class SourceDataset:
                     keys = list(db.keys())
                     for key in keys:
                         self.records[key] = key
+
+    def keys(self):
+        """
+        Return the keys of the records in the dataset
+
+        Returns
+        -------
+        list: list of record keys
+        """
+        return list(self.records.keys())
 
     def total_records(self):
         """
@@ -586,6 +163,10 @@ class SourceDataset:
         -------
 
         """
+
+        if not isinstance(record, Record):
+            raise ValueError("Input must be an instance of the Record class")
+
         if record.name in self.records.keys():
             log.warning(
                 f"Record with name {record.name} already exists in the dataset."
@@ -616,6 +197,9 @@ class SourceDataset:
         -------
 
         """
+        if not all([isinstance(record, Record) for record in records]):
+            raise ValueError("Input must be a list of instances of the Record class")
+
         with SqliteDict(
             f"{self.local_db_dir}/{self.local_db_name}",
             autocommit=True,
@@ -1447,3 +1031,95 @@ class SourceDataset:
         hdf5_checksum = calculate_md5_checksum(file_path=file_path, file_name=file_name)
 
         return hdf5_checksum
+
+    def convert_to_global_unit_system(self):
+        """Convert all properties in the dataset to the global unit system.
+
+        Note metadata will not be converted.
+        """
+
+        for record_name in self.records.keys():
+            with SqliteDict(
+                f"{self.local_db_dir}/{self.local_db_name}",
+                autocommit=True,
+            ) as db:
+                record = db[record_name]
+                record.convert_to_global_unit_system()
+                db[record_name] = record
+
+
+def create_dataset_from_hdf5(
+    hdf5_filename: str,
+    dataset_name: str,
+    dataset_local_db_dir: str = "./",
+    dataset_local_db_name: str = None,
+    append_property: bool = False,
+):
+    """
+    Create a dataset from an HDF5 file.
+
+    Parameters
+    ----------
+    hdf5_filename: str
+        Name of the HDF5 file to read.
+    dataset_name: str
+        Name of the dataset to create.
+    dataset_local_db_dir: str, optional, default="./"
+        Directory to store the local database.
+    dataset_local_db_name: str, optional, default=None
+        Name of the local database.
+    append_property: bool, optional, default=False
+        Set to True to append properties to existing properties in a record.
+        If False, an error will be raised if a property with the same name is added to a record.
+
+    Returns
+    -------
+    SourceDataset
+        Instance of the SourceDataset class.
+    """
+    import h5py
+    from tqdm import tqdm
+    from modelforge.curate.properties import PropertyBaseModel
+
+    dataset = SourceDataset(
+        name=dataset_name,
+        local_db_dir=dataset_local_db_dir,
+        local_db_name=dataset_local_db_name,
+        append_property=append_property,
+    )
+
+    with h5py.File(hdf5_filename, "r") as f:
+        keys = list(f.keys())
+
+        for key in tqdm(keys):
+
+            record = Record(name=key)
+            n_configs = 0
+            properties_keys = f[key].keys()
+            for pk in properties_keys:
+                if pk == "n_configs":
+                    n_configs = f[key][pk][()]
+                else:
+                    property_type = f[key][pk].attrs["property_type"]
+                    property_classification = f[key][pk].attrs["format"]
+                    if "u" in f[key][pk].attrs.keys():
+                        unit_str = f[key][pk].attrs["u"]
+                    else:
+                        unit_str = "dimensionless"
+                    value = f[key][pk][()]
+                    if type(value) is bytes:
+                        value = f[key][pk][()].decode("utf-8")
+
+                    property = PropertyBaseModel(
+                        name=pk,
+                        value=value,
+                        units=unit_str,
+                        property_type=property_type,
+                        classification=property_classification,
+                    )
+
+                    record.add_property(property)
+            assert n_configs == record.n_configs
+            dataset.add_record(record)
+
+        return dataset

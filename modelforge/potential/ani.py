@@ -283,6 +283,7 @@ class ANIRepresentation(nn.Module):
             atom_index=atom_index,
             pairlist_output=pairlist_output,
         )
+
         processed_radial_feature_vector = postprocessed_radial_aev_and_additional_data[
             "radial_aev"
         ]
@@ -404,10 +405,10 @@ class ANIRepresentation(nn.Module):
         species = atom_index
         species12 = species[
             atom_index12
-        ]  # Shape [2, num_pairs], this is the pair index but now with optimzied indexing
+        ]  # Shape [2, num_pairs], this is the pair index but now with optimiZed indexing
 
         # What are we doing here? we generate an atomic environment vector with
-        # fixed dimensinos (nr_of_supported_elements, 16 (represents number of
+        # fixed dimensions (nr_of_supported_elements, 16 (represents number of
         # radial symmetry functions)) for each **element** per atom (in a pair)
 
         # this is a magic indexing function that works

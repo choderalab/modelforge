@@ -155,7 +155,7 @@ class AngularSymmetryFunction(nn.Module):
         Compute the angular subAEV terms of the center atom given neighbor
         pairs.
 
-        This correspond to equation (4) in the ANI paper. This function just
+        This corresponds to equation (4) in the ANI paper. This function just
         compute the terms. The sum in the equation is not computed.
 
         Parameters
@@ -175,7 +175,7 @@ class AngularSymmetryFunction(nn.Module):
         fcj12_prod = fcj12.prod(dim=0)  # Shape: (n_pairs,)
 
         # cos_angles: (n_pairs,)
-
+        # multiplied by 0.95  to prevent acos from returning NaN.
         cos_angles = 0.95 * torch.nn.functional.cosine_similarity(
             vectors12[0], vectors12[1], dim=-1
         )
@@ -214,8 +214,10 @@ class AngularSymmetryFunction(nn.Module):
 
         # Flatten the last two dimensions to get the final subAEV
         # ret: (n_pairs, ShfZ_size * ShfA_size)
-        ret = ret.reshape(distances12.size(dim=1), -1)
+        ret = ret.flatten(start_dim=1)
 
+        # The following fails when ret is empty; flatten  as used above, does not fail
+        # ret = ret.reshape(distances12.size(dim=1), -1)
         return ret
 
 

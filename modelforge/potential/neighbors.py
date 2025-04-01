@@ -432,7 +432,7 @@ class NeighborlistForInference(torch.nn.Module):
             positions[self.i_pairs], positions[self.j_pairs], box_vectors, is_periodic
         )
 
-        in_cutoff = (d_ij < self.cutoff_plus_skin).squeeze()
+        in_cutoff = (d_ij < self.cutoff_plus_skin).squeeze().reshape(-1)
         # self.nlist_i_pairs = self.i_pairs[in_cutoff]
         # self.nlist_j_pairs = self.j_pairs[in_cutoff]
 
@@ -562,7 +562,7 @@ class NeighborlistForInference(torch.nn.Module):
             data.box_vectors,
             data.is_periodic,
         )
-        in_cutoff = (d_ij <= self.cutoff).squeeze()
+        in_cutoff = (d_ij <= self.cutoff).squeeze().reshape(-1)
         total_pairs = in_cutoff.sum()
 
         if self.only_unique_pairs:
@@ -683,7 +683,7 @@ class NeighborlistForInference(torch.nn.Module):
             )
 
         # identify which pairs in the neighbor list are within the cutoff
-        in_cutoff = (d_ij <= self.cutoff).squeeze()
+        in_cutoff = (d_ij <= self.cutoff).squeeze().reshape(-1)
         total_pairs = in_cutoff.sum()
 
         # we can take advantage of the pairwise nature to just copy the unique pairs to non-unique pairs
@@ -824,7 +824,7 @@ class NeighborListForTraining(torch.nn.Module):
         r_ij = self.calculate_r_ij(pair_indices, positions)
         d_ij = self.calculate_d_ij(r_ij)
 
-        in_cutoff = (d_ij <= self.cutoff).squeeze()
+        in_cutoff = (d_ij <= self.cutoff).squeeze().reshape(-1)
         # Get the atom indices within the cutoff
         pair_indices_within_cutoff = pair_indices[:, in_cutoff]
 
@@ -876,7 +876,6 @@ class NeighborListForTraining(torch.nn.Module):
                 i_final_pairs = i_indices[unique_pairs_mask]
                 j_final_pairs = j_indices[unique_pairs_mask]
                 pair_list = torch.stack((i_final_pairs, j_final_pairs))
-
         pairlist_output = self._calculate_interacting_pairs(
             positions=positions,
             atomic_subsystem_indices=atomic_subsystem_indices,

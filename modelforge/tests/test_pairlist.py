@@ -193,6 +193,69 @@ def test_pairlist():
     assert not pair_indices.shape == neighbor_indices.shape
 
 
+def test_neighborlists_for_dimer():
+    import torch
+    from modelforge.utils.prop import NNPInput
+
+    atomic_numbers = torch.tensor([17, 17], dtype=torch.int32)
+    positions = torch.tensor(
+        [[0.0000e00, 0.0000e00, 1.0118e-01], [1.2391e-17, 0.0000e00, -1.0118e-01]]
+    )
+    atomic_subsystem_indices = torch.tensor([0, 0], dtype=torch.int32)
+    per_system_total_charge = torch.tensor([0], dtype=torch.int32)
+    pair_list = torch.tensor([[0, 1], [1, 0]], dtype=torch.int32)
+
+    test_system = NNPInput(
+        atomic_numbers=atomic_numbers,
+        positions=positions,
+        atomic_subsystem_indices=atomic_subsystem_indices,
+        per_system_total_charge=per_system_total_charge,
+        pair_list=pair_list,
+    )
+
+    from modelforge.potential.neighbors import (
+        NeighborListForTraining,
+        NeighborlistForInference,
+        OrthogonalDisplacementFunction,
+    )
+
+    nlist_inf = NeighborlistForInference(
+        cutoff=0.51,
+        only_unique_pairs=True,
+        displacement_function=OrthogonalDisplacementFunction(),
+    )
+
+    nlist_inf_output = nlist_inf.forward(test_system)
+    assert nlist_inf_output.pair_indices.shape == (2, 1)
+    assert nlist_inf_output.r_ij.shape == (1, 3)
+    assert nlist_inf_output.d_ij.shape == (1, 1)
+
+    nlist_train = NeighborListForTraining(cutoff=0.51, only_unique_pairs=True)
+
+    nlist_train_output = nlist_train.forward(test_system)
+
+    assert nlist_train_output.pair_indices.shape == (2, 1)
+    assert nlist_train_output.r_ij.shape == (1, 3)
+    assert nlist_train_output.d_ij.shape == (1, 1)
+
+    nlist_inf = NeighborlistForInference(
+        cutoff=0.51,
+        only_unique_pairs=False,
+        displacement_function=OrthogonalDisplacementFunction(),
+    )
+
+    nlist_inf_output = nlist_inf.forward(test_system)
+    assert nlist_inf_output.pair_indices.shape == (2, 2)
+    assert nlist_inf_output.r_ij.shape == (2, 3)
+    assert nlist_inf_output.d_ij.shape == (2, 1)
+
+    nlist_train = NeighborListForTraining(cutoff=0.51, only_unique_pairs=False)
+    nlist_train_output = nlist_train.forward(test_system)
+    assert nlist_train_output.pair_indices.shape == (2, 2)
+    assert nlist_train_output.r_ij.shape == (2, 3)
+    assert nlist_train_output.d_ij.shape == (2, 1)
+
+
 def test_pairlist_precomputation():
     import numpy as np
     import torch

@@ -263,7 +263,7 @@ def test_forward_and_backward(mode):
 
 
 def test_representation():
-    # Compare the reference radial symmetry function output against the the
+    # Compare the reference radial symmetry function output against the
     # implemented radial symmetry function
     import torch
     from modelforge.potential import (
@@ -300,3 +300,59 @@ def test_representation():
     # cutoff values
     reference_rsf = provide_reference_values_for_test_ani_test_compare_rsf()
     assert torch.allclose(calculated_rsf, reference_rsf, rtol=1e-4)
+
+
+def test_dimer_representation():
+    import torch
+    from modelforge.potential.ani import ANIRepresentation
+    from modelforge.potential.neighbors import NeighborListForTraining
+    from modelforge.utils.prop import NNPInput
+
+    # set up representation
+    angle_sections = 4
+    maximum_interaction_radius = 0.51
+    minimum_interaction_radius = 0.08
+    number_of_radial_basis_functions = 16
+    maximum_interaction_radius_for_angular_features = 0.35
+    minimum_interaction_radius_for_angular_features = 0.08
+    angular_dist_divisions = 8
+
+    representation = ANIRepresentation(
+        radial_max_distance=maximum_interaction_radius,
+        radial_min_distance=minimum_interaction_radius,
+        number_of_radial_basis_functions=number_of_radial_basis_functions,
+        maximum_interaction_radius_for_angular_features=maximum_interaction_radius_for_angular_features,
+        minimum_interaction_radius_for_angular_features=minimum_interaction_radius_for_angular_features,
+        angular_dist_divisions=angular_dist_divisions,
+        angle_sections=angle_sections,
+    )
+
+    # set up NNP input
+    atomic_numbers = torch.tensor([17, 17], dtype=torch.int32)
+    positions = torch.tensor(
+        [[0.0000e00, 0.0000e00, 1.0118e-01], [1.2391e-17, 0.0000e00, -1.0118e-01]]
+    )
+    atomic_subsystem_indices = torch.tensor([0, 0], dtype=torch.int32)
+    per_system_total_charge = torch.tensor([0], dtype=torch.int32)
+    pair_list = torch.tensor([[0, 1], [1, 0]], dtype=torch.int32)
+
+    dimer_system = NNPInput(
+        atomic_numbers=atomic_numbers,
+        positions=positions,
+        atomic_subsystem_indices=atomic_subsystem_indices,
+        per_system_total_charge=per_system_total_charge,
+        pair_list=pair_list,
+    )
+
+    # set up neighbor list
+    nlist = NeighborListForTraining(
+        cutoff=0.51,
+        only_unique_pairs=True,
+    )
+
+    nlist_output = nlist.forward(dimer_system)
+
+    representation_output = representation(
+        dimer_system, nlist_output, torch.tensor([6, 6])
+    )
+    assert representation_output.aevs.shape == (2, 1008)

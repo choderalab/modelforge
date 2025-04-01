@@ -283,6 +283,7 @@ class ANIRepresentation(nn.Module):
             atom_index=atom_index,
             pairlist_output=pairlist_output,
         )
+
         processed_radial_feature_vector = postprocessed_radial_aev_and_additional_data[
             "radial_aev"
         ]

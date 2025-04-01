@@ -263,7 +263,7 @@ def test_forward_and_backward(mode):
 
 
 def test_representation():
-    # Compare the reference radial symmetry function output against the the
+    # Compare the reference radial symmetry function output against the
     # implemented radial symmetry function
     import torch
     from modelforge.potential import (

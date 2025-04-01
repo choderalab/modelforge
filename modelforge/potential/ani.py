@@ -404,10 +404,10 @@ class ANIRepresentation(nn.Module):
         species = atom_index
         species12 = species[
             atom_index12
-        ]  # Shape [2, num_pairs], this is the pair index but now with optimzied indexing
+        ]  # Shape [2, num_pairs], this is the pair index but now with optimiZed indexing
 
         # What are we doing here? we generate an atomic environment vector with
-        # fixed dimensinos (nr_of_supported_elements, 16 (represents number of
+        # fixed dimensions (nr_of_supported_elements, 16 (represents number of
         # radial symmetry functions)) for each **element** per atom (in a pair)
 
         # this is a magic indexing function that works
@@ -813,12 +813,6 @@ class ANI2xCore(torch.nn.Module):
         Dict[str, torch.Tensor]
             The calculated per-atom properties and the scalar representation of AEVs.
         """
-
-        # print(pairlist_output.r_ij)
-        # print(pairlist_output.d_ij)
-        # print(data.atomic_numbers)
-        # print(data.positions)
-        # print(data.atomic_subsystem_indices)
 
         # Compute AEVs (atomic environment vectors)
         representation = self.ani_representation_module(

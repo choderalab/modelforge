@@ -709,10 +709,10 @@ class ZBLPotential(torch.nn.Module):
         # generate the radius_i and radius_j tensors based on the atomic numbers in the pairs
 
         radius_i = torch.tensor(
-            [self.radii[n] for n in atomic_number_i], dtype=torch.float32
+            [self.radii[int(n)] for n in atomic_number_i], dtype=torch.float32
         )
         radius_j = torch.tensor(
-            [self.radii[n] for n in atomic_number_j], dtype=torch.float32
+            [self.radii[int(n)] for n in atomic_number_j], dtype=torch.float32
         )
 
         # Compute the ZBL potential. 5.29e-2 is the Bohr radius in nm.  All other numbers are magic constants from the ZBL potential.
@@ -747,3 +747,5 @@ class ZBLPotential(torch.nn.Module):
             .scatter_add_(0, system_indices_of_pair.long().unsqueeze(1), energy)
             .detach()
         )
+
+        return data

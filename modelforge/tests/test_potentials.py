@@ -137,21 +137,102 @@ def convert_to_pytorch_if_needed(output, nnp_input, model):
 def test_electrostatics():
     from modelforge.potential.processing import CoulombPotential
 
-    e_elec = CoulombPotential(1.0)
-    per_atom_charge = torch.tensor([0.0, 0.0, 0.0, 0.0, 0.0])
-    # FIXME: this thest has to be implemented
+    e_elec = CoulombPotential(5.0)
 
+    # set up a minimal dict that would represent the core output for 2 non-interacting methane molecules
+    core_output_dict = {}
+    core_output_dict["atomic_subsystem_indices"] = torch.tensor(
+        [0, 0, 0, 0, 0, 1, 1, 1, 1, 1], dtype=torch.int32
+    )
+    core_output_dict["d_ij"] = torch.tensor(
+        [
+            [0.0126],
+            [0.1117],
+            [0.1051],
+            [0.1131],
+            [0.1084],
+            [0.1116],
+            [0.1174],
+            [0.1883],
+            [0.1862],
+            [0.1874],
+            [0.0126],
+            [0.1117],
+            [0.1051],
+            [0.1131],
+            [0.1084],
+            [0.1116],
+            [0.1174],
+            [0.1883],
+            [0.1862],
+            [0.1874],
+        ]
+    )
+    core_output_dict["pair_indices"] = torch.tensor(
+        [
+            [0, 0, 0, 0, 1, 1, 1, 2, 2, 3, 5, 5, 5, 5, 6, 6, 6, 7, 7, 8],
+            [1, 2, 3, 4, 2, 3, 4, 3, 4, 4, 6, 7, 8, 9, 7, 8, 9, 8, 9, 9],
+        ]
+    )
+    # nonsense charges, but summing up all the pairs will result in 2,
+    # so the output will be roughly 2*138.96, slightly less due to the
+    # multiplication by the cutoff function
+    core_output_dict["per_atom_charge"] = torch.tensor(
+        [
+            [1.0000],
+            [-1.0000],
+            [-1.0000],
+            [-1.0000],
+            [-1.0000],
+            [1.0000],
+            [-1.0000],
+            [-1.0000],
+            [-1.0000],
+            [-1.0000],
+        ]
+    )
+    core_output_dict["atomic_numbers"] = torch.tensor([6, 1, 1, 1, 1, 6, 1, 1, 1, 1])
 
-"""     
-pairlist =     PairListOutputs(
-pair_indices=torch.tensor([[0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4],
-                            [1,2,3,4,0,2,3,4,0,1,3,4,0,1,2,4,0,1,2,3]]),
-d_ij = torch.tensor([
+    output = e_elec(core_output_dict)
+
+    # check that the output is correct
+    assert output["electrostatic_energy"].shape == (2, 1)
+    assert torch.allclose(
+        output["electrostatic_energy"],
+        torch.tensor([[277.5938], [277.5938]]),
+        1e-4,
+        1e-4,
     )
 
-    pairwise_properties = {}
-    pairwise_properties["maximum_interaction_radius"] = 
- """
+    # this will effectively result in 0 when summing up the pairs
+    # this will be slightly off from 0 due to the cutoff function
+    core_output_dict["per_atom_charge"] = torch.tensor(
+        [
+            [1.5000],
+            [-1.0000],
+            [-1.0000],
+            [-1.0000],
+            [-1.0000],
+            [1.5000],
+            [-1.0000],
+            [-1.0000],
+            [-1.0000],
+            [-1.0000],
+        ]
+    )
+    output = e_elec(core_output_dict)
+
+    # check that the output is correct
+    assert output["electrostatic_energy"].shape == (2, 1)
+
+    assert torch.allclose(
+        output["electrostatic_energy"],
+        torch.tensor(
+            [[-0.4219], [-0.4219]],
+        ),
+        1e-4,
+        1e-4,
+    )
 
 
 @pytest.mark.parametrize(

@@ -528,6 +528,12 @@ class CoulombPotential(torch.nn.Module):
         pairwise Coulomb interactions between atoms, applying a cutoff function to
         handle long-range interactions.
 
+        this is based off the implementation in PhysNet:
+        PhysNet: A Neural Network for Predicting Energies, Forces, Dipole Moments, and Partial Charges
+        Oliver T. Unke and Markus Meuwly
+        Journal of Chemical Theory and Computation 2019 15 (6), 3678-3693
+        DOI: 10.1021/acs.jctc.9b00181
+
         Parameters
         ----------
         data : Dict[str, torch.Tensor]
@@ -542,7 +548,142 @@ class CoulombPotential(torch.nn.Module):
             The input data dictionary with an additional key 'long_range_electrostatic_energy'
             containing the computed long-range electrostatic energy.
         """
-        mol_indices = data["atomic_subsystem_indices"]
+        # todo:  need to add back in the multiple-cutoff neighborlist since we typically
+        # want to do a longer range cutoff for electrostatics
+        # this will ultimately just take an extra key for accessing the appropriate pair indices
+        idx_i, idx_j = data["pair_indices"]
+
+        # only unique paris
+        unique_pairs_mask = idx_i < idx_j
+        idx_i = idx_i[unique_pairs_mask]
+        idx_j = idx_j[unique_pairs_mask]
+
+        # since we will be working with pairs not individual atoms
+        # we need to map the atomic_subsystem_indices onto the pairs
+        # since pairs only exist between atoms on the same molecule
+        # we can just use one of the pair indices tensors
+        system_indices = data["atomic_subsystem_indices"]
+        system_indices_of_pair = system_indices[idx_i]
+
+        # mask pairwise properties
+        pairwise_distances = data["d_ij"][unique_pairs_mask]
+        # The per-atom charge tensor is expected to be of shape (N, 1) where N is the number of atoms
+        # we will squeeze it to make it easier to work with
+        per_atom_charge = data["per_atom_charge"].squeeze()
+
+        # Initialize the long-range electrostatic energy
+        # the shape should match the number of unique systems
+        num_unique_systems = torch.unique(system_indices)
+
+        electrostatic_energy = torch.zeros_like(
+            num_unique_systems, dtype=per_atom_charge.dtype
+        )
+
+        # Apply the cutoff function to pairwise distances
+        phi_2r = self.cutoff_function(2 * pairwise_distances)
+
+        chi_r = phi_2r * (1 / torch.sqrt(pairwise_distances**2 + 1)) + (
+            1 - phi_2r
+        ) * (1 / pairwise_distances)
+
+        # Compute the Coulomb interaction term
+        coulomb_interactions = (
+            per_atom_charge[idx_i] * per_atom_charge[idx_j]
+        ) * chi_r.squeeze()
+
+        # sum up the energy for pairs in the same molecule
+        data["electrostatic_energy"] = (
+            electrostatic_energy.scatter_add_(
+                0, system_indices_of_pair.long(), coulomb_interactions
+            )
+            * 138.96
+        ).unsqueeze(
+            1
+        )  # in kj/mol nm
+
+        return data
+
+
+class ZBLPotential(torch.nn.Module):
+    """
+    Computes the Ziegler-Biersack-Littmark (ZBL) potential for the pairs of atoms based off of
+    implementation by Peter Eastman:
+
+    https://github.com/openmm/nutmeg/blob/main/source/zbl_tensornet.py
+    """
+
+    def __init__(self):
+        """
+        Initializes the ZBL potential module.
+
+        Parameters
+        ----------
+
+        """
+        super().__init__()
+
+        # note, I think which source of radii should be toggleable
+        # since for some systems we will need more than what is provided from this source
+        # This maps atomic numbers to covalent radii.  The values are from https://doi.org/10.1063/1.1725697.
+        self.radii = {
+            1: 0.025,
+            3: 0.145,
+            4: 0.105,
+            5: 0.085,
+            6: 0.07,
+            7: 0.065,
+            8: 0.06,
+            9: 0.05,
+            11: 0.18,
+            12: 0.15,
+            13: 0.125,
+            14: 0.11,
+            15: 0.1,
+            16: 0.1,
+            17: 0.1,
+            19: 0.22,
+            20: 0.18,
+            21: 0.16,
+            22: 0.14,
+            23: 0.135,
+            24: 0.14,
+            25: 0.14,
+            26: 0.14,
+            27: 0.135,
+            28: 0.135,
+            29: 0.135,
+            30: 0.135,
+            31: 0.13,
+            32: 0.125,
+            33: 0.115,
+            34: 0.115,
+            35: 0.115,
+            37: 0.235,
+            38: 0.2,
+            39: 0.18,
+            40: 0.155,
+            41: 0.145,
+            42: 0.145,
+            43: 0.135,
+            44: 0.13,
+            45: 0.135,
+            46: 0.14,
+            47: 0.16,
+            48: 0.155,
+            49: 0.155,
+            50: 0.145,
+            51: 0.145,
+            52: 0.14,
+            53: 0.14,
+        }
+        # radius_map = torch.tensor(
+        #     [radii[n] for n in model_config.atomic_number_map], dtype=torch.float32
+        # )
+        # self.register_buffer("radius_map", radius_map)
+
+    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+
+        # first let us extract all the releveant data from the data dictionary
         idx_i, idx_j = data["pair_indices"]
 
         # only unique paris
@@ -552,26 +693,57 @@ class CoulombPotential(torch.nn.Module):
 
         # mask pairwise properties
         pairwise_distances = data["d_ij"][unique_pairs_mask]
-        per_atom_charge = data["per_atom_charge"]
 
-        # Initialize the long-range electrostatic energy
-        electrostatic_energy = torch.zeros_like(data["per_system_energy"])
+        atomic_numbers = data["atomic_numbers"]
 
-        # Apply the cutoff function to pairwise distances
-        phi_2r = self.cutoff_function(2 * pairwise_distances)
-        chi_r = phi_2r * (1 / torch.sqrt(pairwise_distances**2 + 1)) + (
-            1 - phi_2r
-        ) * (1 / pairwise_distances)
+        atomic_number_i = atomic_numbers[idx_i]
+        atomic_number_j = atomic_numbers[idx_j]
 
-        # Compute the Coulomb interaction term
-        coulomb_interactions = (per_atom_charge[idx_i] * per_atom_charge[idx_j]) * chi_r
+        # since we will be working with pairs not individual atoms
+        # we need to map the atomic_subsystem_indices onto the pairs
+        # since pairs only exist between atoms on the same molecule
+        # we can just use one of the pair indices tensors
+        system_indices = data["atomic_subsystem_indices"]
+        system_indices_of_pair = system_indices[idx_i]
 
-        # Sum over all interactions for each molecule
-        data["electrostatic_energy"] = (
-            electrostatic_energy.scatter_add_(
-                0, mol_indices.long().unsqueeze(1), coulomb_interactions
-            )
-            * 138.96
-        )  # in kj/mol nm
+        # generate the radius_i and radius_j tensors based on the atomic numbers in the pairs
 
-        return data
+        radius_i = torch.tensor(
+            [self.radii[n] for n in atomic_number_i], dtype=torch.float32
+        )
+        radius_j = torch.tensor(
+            [self.radii[n] for n in atomic_number_j], dtype=torch.float32
+        )
+
+        # Compute the ZBL potential. 5.29e-2 is the Bohr radius in nm.  All other numbers are magic constants from the ZBL potential.
+        # E^{ZBL}_{ij} & = \frac{1}{4\pi\epsilon_0} \frac{Z_i Z_j \,e^2}{r_{ij}} \phi(r_{ij}/a)+ S(r_{ij})
+        # a = \frac{0.46850}{Z_{i}^{0.23} + Z_{j}^{0.23}}
+        # phi(x) & =  0.18175e^{-3.19980x} + 0.50986e^{-0.94229x} + 0.28022e^{-0.40290x} + 0.02817e^{-0.20162x}
+        a = 0.8854 * 5.29177210903e-2 / (atomic_number_i**0.23 + atomic_number_j**0.23)
+        d = pairwise_distances / a
+
+        f = (
+            0.1818 * torch.exp(-3.2 * d)
+            + 0.5099 * torch.exp(-0.9423 * d)
+            + 0.2802 * torch.exp(-0.4029 * d)
+            + 0.02817 * torch.exp(-0.2016 * d)
+        )
+
+        phi_ji = torch.where(
+            pairwise_distances < radius_i + radius_j,
+            0.5
+            * (torch.cos(torch.pi * pairwise_distances / (radius_i + radius_j)) + 1),
+            torch.zeros_like(pairwise_distances),
+        )
+
+        f *= phi_ji
+        # Compute the energy.  The prefactor is 1/(4*pi*eps0) in kJ*nm/mol.
+        energy = (
+            f * 138.9354576 * atomic_number_i * atomic_number_j / pairwise_distances
+        )
+        # we need to scatter the energy to the correct molecules using the system_indices_of_pair
+        data["zbl_energy"] = (
+            torch.zeros_like(data["per_system_energy"])
+            .scatter_add_(0, system_indices_of_pair.long().unsqueeze(1), energy)
+            .detach()
+        )

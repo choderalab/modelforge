@@ -741,9 +741,15 @@ class ZBLPotential(torch.nn.Module):
         energy = (
             f * 138.9354576 * atomic_number_i * atomic_number_j / pairwise_distances
         )
+        # figure out the number of unique systems so we can initialize the zbl_energy
+        num_unique_systems = torch.unique(system_indices)
+        zbl_energy = torch.zeros_like(num_unique_systems, dtype=energy.dtype).reshape(
+            -1, 1
+        )
+
         # we need to scatter the energy to the correct molecules using the system_indices_of_pair
         data["zbl_energy"] = (
-            torch.zeros_like(data["per_system_energy"])
+            torch.zeros_like(zbl_energy)
             .scatter_add_(0, system_indices_of_pair.long().unsqueeze(1), energy)
             .detach()
         )

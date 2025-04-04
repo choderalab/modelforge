@@ -234,6 +234,38 @@ def test_electrostatics():
         1e-4,
     )
 
+    zbl = ZBLPotential()
+
+    zbl_output = zbl(core_output_dict)
+
+
+def test_zbl_potential():
+    from modelforge.potential.processing import ZBLPotential
+
+    # set up a minimal dict that would represent the core output for 5 C-C dimers at different separations
+
+    core_output_dict = {}
+    core_output_dict["atomic_subsystem_indices"] = torch.tensor(
+        [0, 0, 1, 1, 2, 2, 3, 3, 4, 4], dtype=torch.int32
+    )
+    core_output_dict["d_ij"] = torch.tensor(
+        [[0.001], [0.050], [0.100], [0.138], [0.500]]
+    )
+    core_output_dict["pair_indices"] = torch.tensor([[0, 2, 4, 6, 8], [1, 3, 5, 7, 9]])
+    core_output_dict["atomic_numbers"] = torch.tensor([6, 6, 6, 6, 6, 6, 6, 6, 6, 6])
+
+    zbl = ZBLPotential()
+    zbl_output = zbl(core_output_dict)
+    assert zbl_output["zbl_energy"].shape == (5, 1)
+    assert torch.allclose(
+        zbl_output["zbl_energy"],
+        torch.tensor(
+            [[4.6439e06], [8.2953e03], [2.7994e02], [2.2968e-01], [0.0000e00]]
+        ),
+        1e-4,
+        1e-4,
+    )
+
 
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()

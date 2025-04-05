@@ -686,7 +686,8 @@ class ZBLPotential(torch.nn.Module):
         # first let us extract all the releveant data from the data dictionary
         idx_i, idx_j = data["pair_indices"]
 
-        # only unique paris
+        # let us ensure we only consider  unique pairs
+        # this avoids having to know if the neighbor list used unique or non unique pairs
         unique_pairs_mask = idx_i < idx_j
         idx_i = idx_i[unique_pairs_mask]
         idx_j = idx_j[unique_pairs_mask]

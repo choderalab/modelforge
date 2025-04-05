@@ -234,10 +234,6 @@ def test_electrostatics():
         1e-4,
     )
 
-    zbl = ZBLPotential()
-
-    zbl_output = zbl(core_output_dict)
-
 
 def test_zbl_potential():
     from modelforge.potential.processing import ZBLPotential

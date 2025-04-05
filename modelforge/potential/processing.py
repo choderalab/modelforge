@@ -686,7 +686,7 @@ class ZBLPotential(torch.nn.Module):
         # first let us extract all the releveant data from the data dictionary
         idx_i, idx_j = data["pair_indices"]
 
-        # only unique paris
+        # only unique pairs
         unique_pairs_mask = idx_i < idx_j
         idx_i = idx_i[unique_pairs_mask]
         idx_j = idx_j[unique_pairs_mask]

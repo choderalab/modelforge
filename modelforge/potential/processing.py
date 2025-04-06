@@ -576,7 +576,9 @@ class CoulombPotential(torch.nn.Module):
         num_unique_systems = torch.unique(system_indices)
 
         electrostatic_energy = torch.zeros_like(
-            num_unique_systems, dtype=per_atom_charge.dtype
+            num_unique_systems,
+            dtype=per_atom_charge.dtype,
+            device=per_atom_charge.device,
         )
 
         # Apply the cutoff function to pairwise distances
@@ -710,10 +712,14 @@ class ZBLPotential(torch.nn.Module):
         # generate the radius_i and radius_j tensors based on the atomic numbers in the pairs
 
         radius_i = torch.tensor(
-            [self.radii[int(n)] for n in atomic_number_i], dtype=torch.float32
+            [self.radii[int(n)] for n in atomic_number_i],
+            dtype=torch.float32,
+            device=pairwise_distances.device,
         )
         radius_j = torch.tensor(
-            [self.radii[int(n)] for n in atomic_number_j], dtype=torch.float32
+            [self.radii[int(n)] for n in atomic_number_j],
+            dtype=torch.float32,
+            device=pairwise_distances.device,
         )
 
         # Compute the ZBL potential. 5.29e-2 is the Bohr radius in nm.  All other numbers are magic constants from the ZBL potential.

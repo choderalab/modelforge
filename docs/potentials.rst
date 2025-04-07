@@ -52,12 +52,11 @@ Additionally, the following models are currently under development and can be ex
 
 - SpookyNet
 - DimeNet
-- AimNet2
+- AimNet2 (available, but certain features still under development)
 
 Each potential currently implements the total energy prediction with per-atom
-forces within a given cutoff radius. The models can be trained on energies and
-forces. PaiNN and PhysNet can also predict partial charges and
-calculate long-range interactions using reaction fields or Coulomb potential.
+forces within a given cutoff radius. The models can be trained on energies and forces. PaiNN and PhysNet can also predict partial charges and
+calculate long-range interactions using a Coulomb potential.
 PaiNN can additionally use multipole expansions.
 
 Using TOML files to configure potentials
@@ -92,16 +91,43 @@ the parameters for the postprocessing operations. Explanation of fields in
 * `featurization.properties_to_featurize`: List of properties to featurize. Currently, must always include `atomic_number`. Other properties can be added to this list.
 * `featurization.atomic_number.maximum_atomic_number```: Maximum atomic number in the dataset.
 * `featurization.atomic_number.number_of_per_atom_features`: Number of features for each atom used for the embedding. This is the number of features that are used to represent each atom in the neural network.
-
+* `activation_function_parameter.activation_function_name`: Activation function used in the neural network.
 
 `postprocessing_parameter`:
-
-* `activation_function_name`: Activation function used in the neural network.
-* `normalize`: Whether to normalize energies for training. If this is set to true the mean and standard deviation of the energies are calculated and used to normalize the energies.
-* `from_atom_to_system_reduction`: Whether to reduce the per-atom properties to per-molecule properties.
-* `keep_per_atom_property`: If this is set to true the per-atom energies are returned as well.
+* `properties_to_process`: List of properties to process. Currently, must always include `per_atom_energy`. Other properties can be added to this list, so as 'per_atom_charge', 'electrostatic_potential' and 'zbl_potential'.
+* `per_atom_energy.normalize`: Whether to normalize energies for training. If this is set to true the mean and standard deviation of the energies are calculated and used to normalize the energies.
+* `per_atom_energy.from_atom_to_system_reduction`: Whether to reduce the per-atom properties to per-molecule properties.
+* `per_atom_energy.keep_per_atom_property`: If this is set to true the per-atom energies are returned as well.
+* `per_atom_charge.conserve`: Whether to conserve the total charge of the system if charges are predicted (i.e. 'per_atom_charge' is in the 'properties_to_process'. If this is set to true the total charge of the system is calculated and used to normalize the per-atom charges.
+*`per_atom_charge.conserve_strategy`: The strategy used to conserve the total charge of the system. Currently, only 'default' is implemented, which uses the default strategy.
+* `electrostatic_potential.electrostatic_strategy`: The strategy used to calculate the electrostatic potential. Currently, only 'coulomb' is implemented, which uses the Coulomb potential. Note, to use this option the `per_atom_charge` property must be included in the list of properties to process (as this relies upon the partial charges).
+* `electrostatic_potential.maximum_interaction_radius`: Cutoff radius for considering neighboring atoms for the electrostatic potential. Note: this may be different than the cutoff used for the core model.
+* `zbl_potential.calculate_zbl_potential`: This is a postprocessing operation that calculates the Ziegler-Biersack-Littmark (ZBL) potential. This is a very short-range potential that is used to prevent overlap of atoms.
 
 Default parameter files for each potential are available in `modelforge/tests/data/potential_defaults`. These files can be used as starting points for creating new potential configuration files.
+
+Example of how the postprocessing section in a .toml file that that calculates the coulomb potential and the ZBL potential:
+.. code-block:: toml
+
+    [potential.postprocessing_parameter]
+    properties_to_process = ['per_atom_energy', 'per_atom_charge', 'electrostatic_potential', 'zbl_potential']
+
+    [potential.postprocessing_parameter.per_atom_energy]
+    normalize = true
+    from_atom_to_system_reduction = true
+    keep_per_atom_property = true
+
+    [potential.postprocessing_parameter.per_atom_charge]
+    conserve = true
+    conserve_strategy= "default"
+
+    [potential.postprocessing_parameter.electrostatic_potential]
+    electrostatic_strategy = "coulomb"
+    maximum_interaction_radius = "10.0 angstrom"
+
+    [potential.postprocessing_parameter.zbl_potential]
+    calculate_zbl_potential = true
+
 
 
 .. note:: All parameters in the configuration files have units attached where applicable. Units within modelforge a represented using the `openff.units` package (https://docs.openforcefield.org/projects/units/en/stable/index.html), which is a wrapper around the `pint` package. Definition of units within the TOML files must unit names available in the `openff.units` package (https://github.com/openforcefield/openff-units/blob/main/openff/units/data/defaults.txt).

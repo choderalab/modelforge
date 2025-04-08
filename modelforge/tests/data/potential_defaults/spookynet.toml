@@ -1,0 +1,18 @@
+[potential]
+model_name = "SpookyNet"
+
+[potential.core_parameter]
+max_Z = 87
+number_of_atom_features = 64
+number_of_radial_basis_functions = 16
+cutoff = "5.291772105638412 angstrom" # 10 a0
+number_of_interaction_modules = 3
+number_of_residual_blocks = 1
+
+[potential.postprocessing_parameter]
+[potential.postprocessing_parameter.per_atom_energy]
+normalize = true
+from_atom_to_molecule_reduction = true
+keep_per_atom_property = true
+[potential.postprocessing_parameter.general_postprocessing_operation]
+calculate_molecular_self_energy = true

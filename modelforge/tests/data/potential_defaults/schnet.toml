@@ -29,6 +29,7 @@ keep_per_atom_property = true
 [potential.postprocessing_parameter.per_atom_charge]
 conserve = true
 conserve_strategy = "default"
+
 # ------------------------------------------------------------ #
 # [potential.postprocessing_parameter.per_atom_charge.coulomb_potential]
 # electrostatic_strategy = "coulomb"

@@ -105,6 +105,7 @@ from modelforge.potential.processing import (
     CoulombPotential,
     PerAtomCharge,
     PerAtomEnergy,
+    ZBLPotential,
 )
 
 
@@ -113,6 +114,7 @@ class PostProcessing(torch.nn.Module):
         "per_atom_energy",
         "per_atom_charge",
         "electrostatic_potential",
+        "zbl_potential",
         "general_postprocessing_operation",
     ]
 
@@ -186,6 +188,13 @@ class PostProcessing(torch.nn.Module):
                 raise NotImplementedError(
                     "Only Coulomb potential is supported for electrostatics."
                 )
+        if "zbl_potential" in properties_to_process:
+            self.registered_chained_operations["zbl_potential"] = ZBLPotential()
+            self._registered_properties.append("zbl_potential")
+            assert all(
+                prop in PostProcessing._SUPPORTED_PROPERTIES
+                for prop in self._registered_properties
+            )
 
     def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
@@ -919,7 +928,9 @@ def load_inference_model_from_checkpoint(
     """
 
     # Load the checkpoint
-    checkpoint = torch.load(checkpoint_path, map_location=torch.device("cpu"))
+    checkpoint = torch.load(
+        checkpoint_path, map_location=torch.device("cpu"), weights_only=False
+    )
 
     # Extract hyperparameters
     hyperparams = checkpoint["hyper_parameters"]

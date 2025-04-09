@@ -172,11 +172,16 @@ class ElectrostaticPotential(ParametersBase):
     )(_convert_str_or_unit_to_unit_length)
 
 
+class ZBLPotential(ParametersBase):
+    calculate_zbl_potential: bool = False
+
+
 class PostProcessingParameter(ParametersBase):
     properties_to_process: List[str]
     per_atom_energy: PerAtomEnergy = PerAtomEnergy()
     per_atom_charge: PerAtomCharge = PerAtomCharge()
     electrostatic_potential: ElectrostaticPotential = ElectrostaticPotential()
+    zbl_potential: ZBLPotential = ZBLPotential()
     general_postprocessing_operation: GeneralPostProcessingOperation = (
         GeneralPostProcessingOperation()
     )

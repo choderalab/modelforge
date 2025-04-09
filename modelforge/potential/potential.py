@@ -928,7 +928,9 @@ def load_inference_model_from_checkpoint(
     """
 
     # Load the checkpoint
-    checkpoint = torch.load(checkpoint_path, map_location=torch.device("cpu"))
+    checkpoint = torch.load(
+        checkpoint_path, map_location=torch.device("cpu"), weights_only=False
+    )
 
     # Extract hyperparameters
     hyperparams = checkpoint["hyper_parameters"]

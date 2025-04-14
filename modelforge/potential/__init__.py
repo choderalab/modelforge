@@ -14,6 +14,7 @@ from .parameters import (
     SAKEParameters,
     SchNetParameters,
     TensorNetParameters,
+    SpookyNetParameters,
 )
 from .processing import FromAtomToMoleculeReduction
 from .representation import (
@@ -63,6 +64,7 @@ class _Implemented_NNPs(Enum):
     PAINN = PaiNNCore
     SAKE = SAKECore
     AIMNET2 = AimNet2Core
+    SPOOKYNET = SpookyNet
 
     @classmethod
     def get_neural_network_class(cls, neural_network_name: str):

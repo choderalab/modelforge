@@ -23,47 +23,29 @@ from loguru import logger
 from openff.units import unit
 
 
-class tmQMXTBCuration(DatasetCuration):
+class FeIICuration(DatasetCuration):
     """
-    Routines to process the tmQM-xtb dataset into a curated hdf5 file.
+    Routines to process the Fe(II) dataset into a curated hdf5 file.
 
-    This dataset uses  configurations from the original tmQM dataset as starting points
-    for semi-emperical calculations using the GFN2-XTB (calculated using TBlite) that perform MD-based sampling.
-    MD sampling using the atomic simulation environment (ASE) and was performed using the Langevin thermostat,
-    with a time step of 1.0 fs, and friction of 0.01 1/fs.
-
-    v0 of the dataset performings sampling at T=400K, generating 10 snapshots per molecule (the first corresponding
-    to the original, energy minimized state in tmQM) with 100 timesteps spacing between each snapshot. The goal
-    was to primarily capture the fluctuations around the equilibrium, rather than large scale conformation changes.
-
-    To remove potentially problematic configurations, a filtering criteria is applied during curation:
-    - The initial configurations of the molecules undergo bond perception using RDKit, with bond distances recorded.
-    - The relative change in bond length is calculated for each snapshot.
-    - If the relative change in any bond length is more than 0.09 the snapshot is removed from the dataset.
+    The Fe(II) dataset includes 28834 total configurations for 383 unique molecules Fe(II) organometallic complexes.
+    Specifically, this includes 15568 HS geometries and 13266 LS geometries.
+    These complexes originate from the Cambridge Structural Database (CSD) as curated by
+    Nandy, et al. (Journal of Physical Chemistry Letters (2023), 14 (25), 10.1021/acs.jpclett.3c01214), and were filtered
+    into “computation-ready” complexes, (those where both oxidation states and charges are already specified
+    without hydrogen atoms missing in the structures), following the procedure outlined by Arunachalam, et al.
+    (Journal of Chemical Physics (2022), 157 (18), 10.1063/5.0125700)
 
 
-    The original tmQM dataset contains the geometries and properties of 108,541 (in the 13Aug24 release)
-    mononuclear complexes extracted from the Cambridge Structural Database, including Werner, bioinorganic, and
-    organometallic complexes based on a large variety of organic ligands and 30 transition metals
-    (the 3d, 4d, and 5d from groups 3 to 12).
-    All complexes are closed-shell, with a formal charge in the range {+1, 0, −1}e
+    The Fe (II)  dataset is available from github:
+    https://github.com/Neon8988/Iron_NNPs
 
-    The scripts used to generate the tmQM-xtb dataset are available at:
-    https://github.com/chrisiacovella/xtb_Config_gen
+    Citation to the original  dataset:
 
-    The tmQM-xtb dataset is available from zenodo:
-     10.5281/zenodo.14894964 (v0)
+    Modeling Fe(II) Complexes Using Neural Networks
+    Hongni Jin and Kenneth M. Merz Jr.
+    Journal of Chemical Theory and Computation 2024 20 (6), 2551-2558
+    DOI: 10.1021/acs.jctc.4c00063
 
-    Citation to the original tmQM dataset:
-
-    David Balcells and Bastian Bjerkem Skjelstad,
-    tmQM Dataset—Quantum Geometries and Properties of 86k Transition Metal Complexes
-    Journal of Chemical Information and Modeling 2020 60 (12), 6135-6146
-    DOI: 10.1021/acs.jcim.0c01041
-
-    Original dataset source: https://github.com/uiocompcat/tmQM
-
-    forked to be able to create releases:  https://github.com/chrisiacovella/tmQM/
 
     Parameters
     ----------

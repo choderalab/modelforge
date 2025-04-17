@@ -517,9 +517,9 @@ class Record:
                 conf.SetAtomPosition(
                     j,
                     Point3D(
-                        pos[j][0].to(unit.angstrom).m,
-                        pos[j][1].to(unit.angstrom).m,
-                        pos[j][2].to(unit.angstrom).m,
+                        float(pos[j][0].to(unit.angstrom).m),
+                        float(pos[j][1].to(unit.angstrom).m),
+                        float(pos[j][2].to(unit.angstrom).m),
                     ),
                 )
             mol.AddConformer(conf)

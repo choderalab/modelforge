@@ -171,7 +171,6 @@ class FeIICuration(DatasetCuration):
             append_property=True,
         )
         ev_to_kj_mol = 96.485
-
         for lmdb_file in lmdb_files:
             with OpenWithLock(f"{local_path_dir}/{lmdb_file}.lockfile", "w") as f:
                 env = lmdb.open(
@@ -244,10 +243,27 @@ class FeIICuration(DatasetCuration):
                             == record.atomic_numbers.value
                         ):
                             # if they don't match, we need to get the mapping and reorder
+                            # this uses RDKIT under the hood, using GetBestAlignmentTransform.
+                            # It is not very efficient, because of many steps, but since curation is  namely
+                            # a one time cost, it is not a big deal.
+                            # The steps involve: find the orientation that minimizes the RMSD, then
+                            # find the correspondence between atoms in each molecule based on element and distance.
+                            # This is likely better than just reordering atoms naively,
+                            # since it ensures that, e.g., the 3rd carbon atom refers to the same carbon atom
+                            # in both molecules. This is especially useful for visualization or any application that
+                            # requires a fixed topology.
+                            # However it shouldn't actually matter to the NNP claculation, since 1) we don't have bonds
+                            # 2) interacting pairs are determined uniquely for each configuration during training.
+                            # only about 65 fail the first method, so even still should only be a small fraction
                             try:
                                 mapping = map_configurations(record_existing, record)
 
                             except:
+                                # if the rdkit mapping fails, we need to use the fast mapping
+                                # this does not try to orient the molecules and then create
+                                # a mapping based on the closest atoms of the same species,
+                                # instead it just ensure that the atomic numbers are the same
+                                # order, which should be fine
                                 mapping = self._fast_map(
                                     record_existing.atomic_numbers.value,
                                     record.atomic_numbers.value,
@@ -273,7 +289,6 @@ class FeIICuration(DatasetCuration):
                                 record.get_property("spin_multiplicities"),
                             ],
                         )
-
         return dataset
 
     def process(

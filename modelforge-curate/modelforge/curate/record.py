@@ -875,7 +875,7 @@ def map_configurations(record_ref: Record, record_test: Record) -> np.ndarray:
     mol1 = record_ref.to_rdkit(first_config=True)
     mol2 = record_test.to_rdkit(first_config=True)
     out = rdMolAlign.GetBestAlignmentTransform(
-        mol1, mol2, maxMatches=1000000, maxIters=1000, numThreads=4
+        mol1, mol2, maxIters=100, numThreads=16  # maxMatches=1000000,
     )
 
     return np.array(out[2])[:, 1]

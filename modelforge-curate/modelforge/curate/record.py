@@ -319,7 +319,17 @@ class Record:
         if property.classification == PropertyClassification.atomic_numbers:
             # we will not allow atomic numbers to be set twice
             if self.atomic_numbers is not None:
-                raise ValueError(f"Atomic numbers already set for record {self.name}")
+                if self.append_property == False:
+                    raise ValueError(
+                        f"Atomic numbers already set for record {self.name}"
+                    )
+                else:
+                    if not np.all(
+                        property.atomic_numbers.value == self.atomic_numbers.value
+                    ):
+                        raise ValueError(
+                            f"Atomic numbers do not match for record {self.name}"
+                        )
 
             self.atomic_numbers = property.model_copy(deep=True)
 
@@ -464,7 +474,12 @@ class Record:
                 + list(self.meta_data.keys())
             )
 
-    def to_rdkit(self, position_key: str = "positions", infer_bonds: bool = True):
+    def to_rdkit(
+        self,
+        position_key: str = "positions",
+        infer_bonds: bool = True,
+        first_config: bool = False,
+    ):
         """
         Convert the record to an RDKit molecule
 
@@ -474,6 +489,8 @@ class Record:
             Name of the property to use for the positions of the atoms
         infer_bonds: bool, optional, default=True
             If True, infer bonds in the molecule based on the first configuration
+        first_config: bool, optional, default=False
+            If True, use the first configuration for the positions of the atoms
         Returns
         -------
         RWMol RDKit Molecule
@@ -503,8 +520,10 @@ class Record:
         for i in range(self.n_atoms):
             atom = Chem.Atom(_ATOMIC_NUMBER_TO_ELEMENT[self.atomic_numbers.value[i][0]])
             mol.AddAtom(atom)
-
-        for ii in range(self.n_configs):
+        n_configs = self.n_configs
+        if first_config:
+            n_configs = 1
+        for ii in range(n_configs):
 
             conf = Chem.Conformer(self.n_atoms)
             conf.SetId(ii)
@@ -828,3 +847,35 @@ def infer_bonds(
     bonds = [[b.GetBeginAtomIdx(), b.GetEndAtomIdx()] for b in mol.GetBonds()]
 
     return bonds
+
+
+def map_configurations(record_ref: Record, record_test: Record) -> np.ndarray:
+    """
+    This will determine the mapping between coordinates between the reference and test system.
+
+    The is uses the GetBestAlignmentTransform in rdkit, which will orient the two systems
+    and then find the best mapping between the two systems.  This will only work if the two systems
+    have the same number of atoms and the same atomic numbers, just ordered differently.
+
+    Parameters
+    ----------
+    record_ref: Record
+        The reference record to map to
+    record_test: Record
+        The test record to map from
+
+    Returns
+    -------
+        numpy.ndarray:
+            A list of indices that map the test record to the reference record
+    """
+
+    from rdkit.Chem import rdMolAlign
+
+    mol1 = record_ref.to_rdkit(first_config=True)
+    mol2 = record_test.to_rdkit(first_config=True)
+    out = rdMolAlign.GetBestAlignmentTransform(
+        mol1, mol2, maxMatches=1000000, maxIters=1000, numThreads=4
+    )
+
+    return np.array(out[2])[:, 1]

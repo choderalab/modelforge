@@ -11,7 +11,11 @@ from modelforge.curate.properties import (
     DipoleMomentPerSystem,
     SpinMultiplicities,
 )
-from modelforge.curate.record import infer_bonds, calculate_max_bond_length_change
+from modelforge.curate.record import (
+    infer_bonds,
+    calculate_max_bond_length_change,
+    map_configurations,
+)
 
 from modelforge.dataset.utils import _ATOMIC_NUMBER_TO_ELEMENT
 
@@ -122,6 +126,19 @@ class FeIICuration(DatasetCuration):
     #         return Data(**{k: v for k, v in data.__dict__.items() if v is not None})
     #
     #     return data
+    def _fast_map(
+        self, atomic_numbers_ref: np.ndarray, atomic_numbers_test: np.ndarray
+    ) -> List[int]:
+        index_map1 = [(val, idx) for idx, val in enumerate(atomic_numbers_test)]
+
+        mapping = []
+        for i in range(len(atomic_numbers_ref)):
+            for j in range(len(index_map1)):
+                if atomic_numbers_ref[i] == index_map1[j][0]:
+                    mapping.append((index_map1[j][1]))
+                    index_map1.pop(j)
+                    break
+        return mapping
 
     def _process_downloaded(
         self,
@@ -149,8 +166,12 @@ class FeIICuration(DatasetCuration):
         import pickle
 
         dataset = SourceDataset(
-            name=self.dataset_name, local_db_dir=self.local_cache_dir
+            name=self.dataset_name,
+            local_db_dir=self.local_cache_dir,
+            append_property=True,
         )
+        ev_to_kj_mol = 96.485
+
         for lmdb_file in lmdb_files:
             with OpenWithLock(f"{local_path_dir}/{lmdb_file}.lockfile", "w") as f:
                 env = lmdb.open(
@@ -164,97 +185,96 @@ class FeIICuration(DatasetCuration):
                 )
 
                 keys = [f"{j}".encode("ascii") for j in range(env.stat()["entries"])]
-                for idx in range(len(keys)):
+                for idx in tqdm(range(len(keys))):
                     datapoint_pickled = env.begin().get(keys[idx])
 
                     pickled = pickle.loads(datapoint_pickled)
-                    print(pickled["atomic_numbers"])
-                    break
-                    # pickled = self._pyg2_data_transform(pickle.loads(datapoint_pickled))
-        # with OpenWithLock(f"{local_path_dir}/{hdf5_file_name}.lockfile", "w") as f:
-        #     with h5py.File(f"{local_path_dir}/{hdf5_file_name}", "r") as f:
-        #         for key in tqdm(f.keys()):
-        #             # set up a record
-        #             record = Record(name=key)
-        #
-        #             # extract the atomic numbers
-        #             atomic_numbers = AtomicNumbers(
-        #                 value=f[key]["atomic_numbers"][()].reshape(-1, 1)
-        #             )
-        #             record.add_property(atomic_numbers)
-        #             n_atoms = atomic_numbers.n_atoms
-        #             # extract the positions
-        #             positions = Positions(
-        #                 value=f[key]["geometry"][()].reshape(-1, n_atoms, 3),
-        #                 units=f[key]["geometry"].attrs["u"],
-        #             )
-        #             record.add_property(positions)
-        #
-        #             # extract the energies
-        #             energies = Energies(
-        #                 value=f[key]["energy"][()].reshape(-1, 1),
-        #                 units=f[key]["energy"].attrs["u"],
-        #             )
-        #             record.add_property(energies)
-        #
-        #             # extract the forces
-        #             forces = Forces(
-        #                 value=f[key]["forces"][()].reshape(-1, n_atoms, 3),
-        #                 units=f[key]["forces"].attrs["u"],
-        #             )
-        #             record.add_property(forces)
-        #
-        #             # extract the partial charges
-        #             partial_charges = PartialCharges(
-        #                 value=f[key]["partial_charges"][()].reshape(-1, n_atoms, 1),
-        #                 units=f[key]["partial_charges"].attrs["u"],
-        #             )
-        #             record.add_property(partial_charges)
-        #
-        #             # extract the dipole moment
-        #             dipole_moment = DipoleMomentPerSystem(
-        #                 value=f[key]["dipole_moment"][()].reshape(-1, 3),
-        #                 units=f[key]["dipole_moment"].attrs["u"],
-        #             )
-        #             record.add_property(dipole_moment)
-        #
-        #             # extract the total charge
-        #             total_charge = TotalCharge(
-        #                 value=f[key]["total_charge"][()].reshape(-1, 1),
-        #                 units=f[key]["total_charge"].attrs["u"],
-        #             )
-        #             record.add_property(total_charge)
-        #
-        #             # extract spin multiplicities
-        #             spin_multiplicities = SpinMultiplicities(
-        #                 value=f[key]["spin_multiplicity"][()].reshape(-1, 1),
-        #             )
-        #             record.add_property(spin_multiplicities)
-        #
-        #             # metadata for scoichiometry
-        #             metadata = MetaData(
-        #                 name="stoichiometry",
-        #                 value=f[key]["stoichiometry"][()].decode("utf-8"),
-        #             )
-        #             record.add_property(metadata)
-        #
-        #             if cutoff is not None:
-        #                 bonds = infer_bonds(record)
-        #                 max_bond_delta = calculate_max_bond_length_change(record, bonds)
-        #                 configs_to_include = []
-        #                 if len(max_bond_delta) != record.n_configs:
-        #                     raise ValueError(
-        #                         "Number of  max bond lengths does not match number of configurations"
-        #                     )
-        #                 for index, delta in enumerate(max_bond_delta):
-        #                     if delta <= cutoff:
-        #                         configs_to_include.append(index)
-        #                 record_new = record.remove_configs(configs_to_include)
-        #                 dataset.add_record(record_new)
-        #             else:
-        #                 dataset.add_record(record)
-        #
-        #     return dataset
+                    atomic_numbers_tmp = (
+                        pickled["atomic_numbers"].numpy().reshape(-1, 1)
+                    )
+
+                    atomic_numbers = AtomicNumbers(value=atomic_numbers_tmp.astype(int))
+
+                    # in all cases, we have only a single snapshot
+                    positions_tmp = pickled["pos"].numpy().reshape(1, -1, 3)
+                    positions = Positions(value=positions_tmp, units="angstrom")
+
+                    energies_tmp = np.array(pickled["y"]).reshape(1, 1) * ev_to_kj_mol
+                    energies = Energies(value=energies_tmp, units="kilojoule_per_mole")
+
+                    forces_tmp = (
+                        pickled["force"].numpy().reshape(1, -1, 3) * ev_to_kj_mol
+                    )
+                    forces = Forces(
+                        value=forces_tmp, units=unit.kilojoule_per_mole / unit.angstrom
+                    )
+
+                    charge_tmp = np.array([pickled["charge"]]).reshape(1, 1)
+                    charge = TotalCharge(value=charge_tmp, units="elementary_charge")
+
+                    spin_tmp = np.array(pickled["spin"]).reshape(1, 1)
+                    spin = SpinMultiplicities(value=spin_tmp)
+
+                    sid = pickled["sid"]
+                    molid = sid.split("_")[0]
+                    molecule_name = MetaData(name="mol_id", value=molid)
+                    record = Record(name=molid, append_property=True)
+                    record.add_properties(
+                        [
+                            atomic_numbers,
+                            positions,
+                            energies,
+                            forces,
+                            charge,
+                            spin,
+                            molecule_name,
+                        ]
+                    )
+                    # if the molecule is not in the dataset, add it
+                    if not molid in dataset.records.keys():
+                        dataset.add_record(record)
+                    # if the molecule is in the dataset, we need to check if the atomic numbers match
+                    else:
+                        # fetch the existing record
+                        record_existing = dataset.get_record(molid)
+
+                        # compare the atomic numbers, if they do not match, we need to reorder
+                        if not np.all(
+                            record_existing.atomic_numbers.value
+                            == record.atomic_numbers.value
+                        ):
+                            # if they don't match, we need to get the mapping and reorder
+                            try:
+                                mapping = map_configurations(record_existing, record)
+
+                            except:
+                                mapping = self._fast_map(
+                                    record_existing.atomic_numbers.value,
+                                    record.atomic_numbers.value,
+                                )
+                            record.reorder(mapping)
+
+                            if not np.all(
+                                record.atomic_numbers.value
+                                == record_existing.atomic_numbers.value
+                            ):
+                                raise ValueError(
+                                    "Atomic numbers do not match after reordering"
+                                )
+
+                        # add the properties to the existing record
+                        dataset.add_properties(
+                            name=molid,
+                            properties=[
+                                record.get_property("positions"),
+                                record.get_property("energies"),
+                                record.get_property("forces"),
+                                record.get_property("total_charge"),
+                                record.get_property("spin_multiplicities"),
+                            ],
+                        )
+
+        return dataset
 
     def process(
         self,

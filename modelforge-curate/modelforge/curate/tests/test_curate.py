@@ -802,6 +802,105 @@ def test_append_properties(prep_temp_dir):
         record_new.add_property(atomic_numbers)
 
 
+def test_recorder():
+    import copy
+
+    record1 = Record(name="mol1", append_property=True)
+    atomic_numbers = AtomicNumbers(value=np.array([[1], [6], [8]]))
+    positions = Positions(
+        value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0], [3.0, 3.0, 3.0]]], units="nanometer"
+    )
+
+    record1.add_property(atomic_numbers)
+    record1.add_property(positions)
+    assert record1.n_atoms == 3
+
+    record2 = copy.deepcopy(record1)
+
+    # create a mapping that doesn't change anything
+    mapping = [0, 1, 2]
+    record2.reorder(mapping)
+    assert record2.n_atoms == 3
+    assert np.all(
+        record2.per_atom["positions"].value == record1.per_atom["positions"].value
+    )
+    assert np.all(record2.atomic_numbers.value == record1.atomic_numbers.value)
+
+    # create a mapping that changes the order
+    mapping = [2, 1, 0]
+    record2 = copy.deepcopy(record1)
+    record2.reorder(mapping)
+    assert record2.n_atoms == 3
+    assert np.all(record2.atomic_numbers.value == np.array([[8], [6], [1]]))
+    assert np.all(
+        record2.per_atom["positions"].value
+        == np.array([[[3.0, 3.0, 3.0], [2.0, 2.0, 2.0], [1.0, 1.0, 1.0]]])
+    )
+
+    # let's add another config to the record to ensure this works for multiple configs
+
+    record2 = copy.deepcopy(record1)
+    record2.add_property(positions)
+
+    assert record2.n_atoms == 3
+    assert record2.n_configs == 2
+
+    record2.reorder(mapping)
+    assert np.all(record2.atomic_numbers.value == np.array([[8], [6], [1]]))
+    assert np.all(
+        record2.per_atom["positions"].value
+        == np.array(
+            [
+                [[3.0, 3.0, 3.0], [2.0, 2.0, 2.0], [1.0, 1.0, 1.0]],
+                [[3.0, 3.0, 3.0], [2.0, 2.0, 2.0], [1.0, 1.0, 1.0]],
+            ]
+        )
+    )
+
+
+def test_merge_records(prep_temp_dir):
+
+    # merge function works basically the same as append function
+    record1 = Record(name="mol1")
+    positions1 = Positions(
+        value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer"
+    )
+    energies1 = Energies(value=np.array([[0.1]]), units=unit.hartree)
+    atomic_numbers1 = AtomicNumbers(value=np.array([[1], [6]]))
+
+    meta_data1 = MetaData(name="smiles", value="[CH]")
+    record1.add_properties([positions1, energies1, atomic_numbers1, meta_data1])
+    assert record1.append_property == False
+
+    record2 = Record(name="mol2")
+    positions2 = Positions(
+        value=[[[3.0, 1.0, 1.0], [4.0, 2.0, 2.0]]], units="nanometer"
+    )
+    energies2 = Energies(value=np.array([[0.5]]), units=unit.hartree)
+    atomic_numbers2 = AtomicNumbers(value=np.array([[1], [6]]))
+    meta_data2 = MetaData(name="smiles", value="[CH]")
+
+    record2.add_properties([positions2, energies2, atomic_numbers2, meta_data2])
+
+    # Merge records
+    record1.merge(record2)
+
+    assert record1.n_configs == 2
+    assert record1.n_atoms == 2
+    assert np.all(record1.per_atom["positions"].value[0] == positions1.value[0])
+    assert np.all(record1.per_atom["positions"].value[1] == positions2.value[0])
+
+    assert np.all(record1.per_system["energies"].value == np.array([[0.1], [0.5]]))
+    assert record1.append_property == False
+
+    # create a record with a different atomic_numbers
+    record3 = Record(name="mol3")
+    atomic_numbers3 = AtomicNumbers(value=np.array([[1], [8]]))
+    record3.add_properties([positions1, energies1, atomic_numbers3, meta_data1])
+    with pytest.raises(ValueError):
+        record1.merge(record3)
+
+
 def test_write_hdf5(prep_temp_dir):
     new_dataset = SourceDataset(
         "test_dataset8",

@@ -658,6 +658,74 @@ class Record:
             target_units = GlobalUnitSystem.get_units(property_type)
             self.per_system[key].convert_units(target_units)
 
+    def reorder(self, atomic_mapping: Union[np.ndarray, List[int]]):
+        """
+        Reorder the record based on the atomic_mapping provided.
+
+        This will reorder the atomic_numbers and all per_atom properties.
+
+        Parameters
+        ----------
+        atomic_mapping: Union[np.ndarray, List[int]]
+            Mapping of the indices to reorder the record.
+            This should be a 1D array of integers that is the same length as the number of atoms in the record.
+
+        Returns
+        -------
+
+        """
+        assert isinstance(atomic_mapping, (np.ndarray, list))
+        if len(atomic_mapping) != self.n_atoms:
+            raise ValueError(
+                f"Atomic mapping must be the same length as the number of atoms in the record {self.name}"
+            )
+        self.atomic_numbers.value = self.atomic_numbers.value[atomic_mapping]
+
+        for key in self.per_atom.keys():
+
+            self.per_atom[key].value = self.per_atom[key].value[:, atomic_mapping]
+
+    def merge(self, record: Self):
+        """
+        Method to merge a record into the current record by appending the properties.
+
+        Note, this will temporarily set append_property to True and use the underlying appending operations.
+
+        Note, since metadata cannot necessarily be appended, it will be ignored if a metadata property of
+        the same name already exists in the record.
+        Parameters
+        ----------
+        record: Record
+            Record to merge into the current record.
+
+        Returns
+        -------
+
+        """
+        # first grab the current append state
+        # we will override this to True and set back to the
+        # original state at the end
+
+        append_state = self.append_property
+        self.append_property = True
+
+        # first validate that the atomic_numbers are the same
+
+        if not np.all(self.atomic_numbers.value == record.atomic_numbers.value):
+            raise ValueError(
+                f"Atomic numbers do not match between records {self.name} and {record.name}"
+            )
+        # now we will append the properties
+        for prop in record.per_atom.values():
+            self.add_property(prop)
+        for prop in record.per_system.values():
+            self.add_property(prop)
+        for prop in record.meta_data.values():
+            if prop.name not in self.meta_data.keys():
+                self.add_property(prop)
+
+        self.append_property = append_state
+
 
 def calculate_max_bond_length_change(
     record: Record, bonds: List[List[int]], positions_key: str = "positions"

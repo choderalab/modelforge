@@ -871,21 +871,22 @@ class PyTorch2JAXConverter:
         )
 
         # Convert the model parameters from PyTorch to JAX representations
-        model_params = jax.tree_map(convert_to_jax, model_params)
+        model_params = jax.tree_util.tree_map(convert_to_jax, model_params)
         # Convert the model buffer from PyTorch to JAX representations
-        model_buffer = jax.tree_map(convert_to_jax, model_buffer)
+        model_buffer = jax.tree_util.tree_map(convert_to_jax, model_buffer)
 
         # Define the apply function using a custom VJP
         @custom_vjp
         def apply(params, *args, **kwargs):
             # Convert the input data from JAX to PyTorch
             params, args, kwargs = map(
-                lambda x: jax.tree_map(convert_to_pyt, x), (params, args, kwargs)
+                lambda x: jax.tree_util.tree_map(convert_to_pyt, x),
+                (params, args, kwargs),
             )
             # Apply the model function to the input data
             out = model_fn(params, *args, **kwargs)
             # Convert the output data from PyTorch to JAX
-            out = jax.tree_map(convert_to_jax, out)
+            out = jax.tree_util.tree_map(convert_to_jax, out)
             return out
 
         # Define the forward and backward passes for the VJP
@@ -895,13 +896,14 @@ class PyTorch2JAXConverter:
         def apply_bwd(res, grads):
             params, args, kwargs = res
             params, args, kwargs = map(
-                lambda x: jax.tree_map(convert_to_pyt, x), (params, args, kwargs)
+                lambda x: jax.tree_util.tree_map(convert_to_pyt, x),
+                (params, args, kwargs),
             )
-            grads = jax.tree_map(convert_to_pyt, grads)
+            grads = jax.tree_util.tree_map(convert_to_pyt, grads)
             # Compute the gradients using the model function and convert them
             # from JAX to PyTorch representations
             grads = functorch.vjp(model_fn, params, *args, **kwargs)[1](grads)
-            return jax.tree_map(convert_to_jax, grads)
+            return jax.tree_util.tree_map(convert_to_jax, grads)
 
         apply.defvjp(apply_fwd, apply_bwd)
 

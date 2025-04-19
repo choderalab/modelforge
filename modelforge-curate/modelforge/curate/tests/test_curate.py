@@ -772,8 +772,12 @@ def test_append_properties(prep_temp_dir):
     assert np.all(record.per_atom["positions"].value == new_pos)
     assert np.all(new_dataset.get_record("mol1").per_atom["positions"].value == new_pos)
 
+    # try appending with the wrong shaped atomic numbers
+    # note appending atomic numbers doesn't raise an error unless the shape doesn't match
+    # we just don't append the atomic_numbers. This seems more consistent when append_property is set to True
     with pytest.raises(ValueError):
-        new_dataset.add_property("mol1", atomic_numbers)
+        atomic_numbers2 = AtomicNumbers(value=np.array([[1], [6], [8]]))
+        new_dataset.add_property("mol1", atomic_numbers2)
 
     # modify the name; this should fail because the record doesn't exist now
     # since search is done by name
@@ -798,8 +802,6 @@ def test_append_properties(prep_temp_dir):
     record_new.add_properties([positions, energies])
 
     assert record_new.n_configs == 2
-    with pytest.raises(ValueError):
-        record_new.add_property(atomic_numbers)
 
 
 def test_recorder():

@@ -324,14 +324,12 @@ class Record:
                         f"Atomic numbers already set for record {self.name}"
                     )
                 else:
-                    if not np.all(
-                        property.atomic_numbers.value == self.atomic_numbers.value
-                    ):
+                    if not np.all(property.value == self.atomic_numbers.value):
                         raise ValueError(
                             f"Atomic numbers do not match for record {self.name}"
                         )
-
-            self.atomic_numbers = property.model_copy(deep=True)
+            else:
+                self.atomic_numbers = property.model_copy(deep=True)
 
             # Note, the number of atoms will always be set by the atomic_numbers property.
             # We will later validate that per_atom properties are consistent with this value later

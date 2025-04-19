@@ -254,7 +254,7 @@ class FeIICuration(DatasetCuration):
                             # requires a fixed topology.
                             # However it shouldn't actually matter to the NNP claculation, since 1) we don't have bonds
                             # 2) interacting pairs are determined uniquely for each configuration during training.
-                            # only about 65 fail the first method, so even still should only be a small fraction
+                            # 65 configurations cdfail the first method, so even still should only be a small fraction
                             try:
                                 mapping = map_configurations(record_existing, record)
 

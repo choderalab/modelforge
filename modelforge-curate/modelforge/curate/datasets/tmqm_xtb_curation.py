@@ -51,7 +51,7 @@ class tmQMXTBCuration(DatasetCuration):
     The scripts used to generate the tmQM-xtb dataset are available at:
     https://github.com/chrisiacovella/xtb_Config_gen
 
-    The tmQM-xtb dataset is avialble from zenodo:
+    The tmQM-xtb dataset is available from zenodo:
      10.5281/zenodo.14894964 (v0)
 
     Citation to the original tmQM dataset:

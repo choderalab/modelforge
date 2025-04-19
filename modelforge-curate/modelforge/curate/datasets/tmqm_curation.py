@@ -426,13 +426,11 @@ class tmQMCuration(DatasetCuration):
             length=self.dataset_length,
             force_download=force_download,
         )
-        # clear out the data array before we process
 
         # untar the dataset
         from modelforge.utils.misc import extract_tarred_file
 
-        # extract the tar.bz2 file into the local_cache_dir
-        # creating a directory called qm9_xyz_files to hold the contents
+        # extract the tar.gz file into the local_cache_dir
         extract_tarred_file(
             input_path_dir=self.local_cache_dir,
             file_name=self.dataset_filename,

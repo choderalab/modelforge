@@ -41,10 +41,10 @@ nc_1000_v1:
     name: tmqm_xtb_dataset_PdZnFeCu_T100K_ntc_1000_v1.hdf5.gz
   hdf5_data_file:
     md5: 1f0de26ee54c70028f99312a19a2bee6
-    name: mqm_xtb_dataset_PdZnFeCu_T100K_ntc_1000_v1.hdf5
+    name: tmqm_xtb_dataset_PdZnFeCu_T100K_ntc_1000_v1.hdf5
   processed_data_file:
     md5: null
-    name: mqm_xtb_dataset_PdZnFeCu_T100K_ntc_1000_v1.npz
+    name: tmqm_xtb_dataset_PdZnFeCu_T100K_ntc_1000_v1.npz
   url: https://zenodo.org/records/15015505/files/tmqm_xtb_dataset_PdZnFeCu_T100_ntc_1000_v1.0.hdf5.gz
 
 PdZnFeCu_T100K_single_config_v1:
@@ -71,10 +71,10 @@ nc_1000_v1.1:
     name: tmqm_xtb_dataset_PdZnFeCu_T100K_ntc_1000_v1.1.hdf5.gz
   hdf5_data_file:
     md5: 6c8676c119a4f0028b3cf9c7de5d577c
-    name: mqm_xtb_dataset_PdZnFeCu_T100K_ntc_1000_v1.1.hdf5
+    name: tmqm_xtb_dataset_PdZnFeCu_T100K_ntc_1000_v1.1.hdf5
   processed_data_file:
     md5: null
-    name: mqm_xtb_dataset_PdZnFeCu_T100K_ntc_1000_v1.1.npz
+    name: tmqm_xtb_dataset_PdZnFeCu_T100K_ntc_1000_v1.1.npz
   url: https://zenodo.org/records/15059379/files/tmqm_xtb_dataset_PdZnFeCu_T100_ntc_1000_v1.1.hdf5.gz
 
 PdZnFeCu_T100K_v1.1:

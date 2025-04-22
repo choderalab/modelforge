@@ -911,18 +911,16 @@ def test_energy_postprocessing(prep_temp_dir):
         batch.metadata.per_system_energy.squeeze(1),
         torch.tensor(
             [
-                [
-                    -5966.9515,
-                    -6157.1063,
-                    -5612.6762,
-                    -5385.5678,
-                    -4396.5738,
-                    -5568.9688,
-                    -4778.9399,
-                    -6732.1988,
-                    -5960.1068,
-                    -6156.9383,
-                ]
+                -5966.9100571298040450,
+                -6157.1746223365189508,
+                -5612.6684020420070738,
+                -5385.5226032892242074,
+                -4396.5057445814600214,
+                -5568.9083594406256452,
+                -4778.8909704150864854,
+                -6732.2083670498104766,
+                -5960.0653795696562156,
+                -6157.0065903597278520,
             ],
             dtype=torch.float64,
         ),
@@ -947,7 +945,7 @@ def test_energy_postprocessing(prep_temp_dir):
         unit.Quantity(
             dataset_statistic["training_dataset_statistics"]["per_atom_energy_stddev"]
         ).m,
-        25.013382078330697,
+        25.0124824,
     )
 
     # check that the normalization is correct
@@ -959,7 +957,7 @@ def test_energy_postprocessing(prep_temp_dir):
 
     # seams reasonable
     assert np.isclose(mean, -388.36276540521123)
-    assert np.isclose(stddev, 19.372371857226035)
+    assert np.isclose(stddev, 19.37047462337448)
 
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])

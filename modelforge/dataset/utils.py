@@ -249,7 +249,7 @@ def _calculate_self_energies(torch_dataset, collate_fn) -> Dict[str, unit.Quanti
     self_energies = {
         _ATOMIC_NUMBER_TO_ELEMENT[int(idx)]: energy * unit.kilojoule_per_mole
         for idx, energy in zip(unique_atomic_numbers, least_squares_fit)
-    }  # NOTE: we are assinging units here without check that the dataset is in unit system
+    }  # NOTE: we are assigning units here without check that the dataset is in unit system
 
     log.debug("Calculated self energies for elements.")
 

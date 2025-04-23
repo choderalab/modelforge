@@ -203,7 +203,7 @@ class AtomicSelfEnergies:
     def ase_tensor_for_indexing(self) -> torch.Tensor:
         if self._ase_tensor_for_indexing is None:
             max_z = max(self.atomic_number_to_element.keys()) + 1
-            ase_tensor_for_indexing = torch.zeros(max_z)
+            ase_tensor_for_indexing = torch.zeros(max_z, dtype=torch.float64)
             for idx in self.atomic_number_to_element:
                 if self[idx]:
                     ase_tensor_for_indexing[idx] = self[idx]

@@ -1,0 +1,10 @@
+dataset_name: fe_II
+latest: v_0
+v_0:
+  version: 0
+  dataset_download_url: https://github.com/chrisiacovella/Iron_NNPs/archive/refs/tags/2024Jan16.tar.gz
+  dataset_md5_checksum: 06e88f3c78b1f0e788dbc9eb97c8e426
+  dataset_length: 47831986
+  dataset_filename: Iron_NNPs-2024Jan16.tar.gz
+  extracted_filepath: Iron_NNPs-2024Jan16/data
+

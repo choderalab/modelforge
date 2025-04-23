@@ -24,6 +24,20 @@ def test_dataset_imported():
     assert "modelforge.dataset" in sys.modules
 
 
+testing_version = {
+    "tmqm_xtb": "nc_1000_v1.1",
+    "fe_ii": "nc_1000_v1.1",
+    "qm9": "nc_1000_v0",
+    "ani1x": "nc_1000_v0",
+    "ani2x": "nc_1000_v0",
+    "spice1": "nc_1000_v0",
+    "spice1_openff": "nc_1000_v0",
+    "spice2": "nc_1000_v0",
+    "phalkethoh": "nc_1000_v0",
+    "tmqm": "nc_1000_v0",
+}
+
+
 def test_dataset_basic_operations():
     atomic_subsystem_counts = np.array([3, 4])
     n_confs = np.array([2, 1])
@@ -103,9 +117,8 @@ def test_dataset_basic_operations():
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 def test_get_properties(dataset_name, single_batch_with_batchsize, prep_temp_dir):
 
-    version = "nc_1000_v0"
-    if dataset_name.lower() == "tmqm_xtb":
-        version = "nc_1000_v1"
+    version = testing_version[dataset_name.lower()]
+
     batch = single_batch_with_batchsize(
         batch_size=16,
         dataset_name=dataset_name,
@@ -118,9 +131,7 @@ def test_get_properties(dataset_name, single_batch_with_batchsize, prep_temp_dir
 def test_different_properties_of_interest(dataset_name, dataset_factory, prep_temp_dir):
     local_cache_dir = str(prep_temp_dir) + "/data_test"
 
-    version = "nc_1000_v0"
-    if dataset_name.lower() == "tmqm_xtb":
-        version = "nc_1000_v1"
+    version = testing_version[dataset_name.lower()]
 
     data = _ImplementedDatasets.get_dataset_class(
         dataset_name,
@@ -273,9 +284,7 @@ def test_file_existence_after_initialization(
     import contextlib
 
     local_cache_dir = str(prep_temp_dir) + "/data_test"
-    version = "nc_1000_v0"
-    if dataset_name.lower() == "tmqm_xtb":
-        version = "nc_1000_v1"
+    version = testing_version[dataset_name.lower()]
 
     data = _ImplementedDatasets.get_dataset_class(dataset_name)(
         local_cache_dir=local_cache_dir, version_select=version
@@ -515,9 +524,7 @@ def test_data_item_format_of_datamodule(
 
     local_cache_dir = str(prep_temp_dir)
 
-    version = "nc_1000_v0"
-    if dataset_name.lower() == "tmqm_xtb":
-        version = "nc_1000_v1"
+    version = testing_version[dataset_name.lower()]
 
     dm = datamodule_factory(
         dataset_name=dataset_name,
@@ -546,9 +553,7 @@ def test_removal_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir)
     # test the self energy calculation on the QM9 dataset
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
-    version = "nc_1000_v0"
-    if dataset_name.lower() == "tmqm_xtb":
-        version = "nc_1000_v1"
+    version = testing_version[dataset_name.lower()]
 
     # prepare reference value
     dm = datamodule_factory(
@@ -692,9 +697,7 @@ def test_dataset_neighborlist(
 def test_dataset_generation(dataset_name, datamodule_factory, prep_temp_dir):
     """Test the splitting of the dataset."""
 
-    version = "nc_1000_v0"
-    if dataset_name.lower() == "tmqm_xtb":
-        version = "nc_1000_v1"
+    version = testing_version[dataset_name.lower()]
 
     dataset = datamodule_factory(
         dataset_name=dataset_name,
@@ -866,9 +869,7 @@ def test_numpy_dataset_assignment(dataset_name, prep_temp_dir):
     """
     from modelforge.dataset import _ImplementedDatasets
 
-    version = "nc_1000_v0"
-    if dataset_name.lower() == "tmqm_xtb":
-        version = "nc_1000_v1"
+    version = testing_version[dataset_name.lower()]
 
     factory = DatasetFactory()
     data = _ImplementedDatasets.get_dataset_class(dataset_name)(
@@ -911,18 +912,16 @@ def test_energy_postprocessing(prep_temp_dir):
         batch.metadata.per_system_energy.squeeze(1),
         torch.tensor(
             [
-                [
-                    -5966.9515,
-                    -6157.1063,
-                    -5612.6762,
-                    -5385.5678,
-                    -4396.5738,
-                    -5568.9688,
-                    -4778.9399,
-                    -6732.1988,
-                    -5960.1068,
-                    -6156.9383,
-                ]
+                -5966.9100571298040450,
+                -6157.1746223365189508,
+                -5612.6684020420070738,
+                -5385.5226032892242074,
+                -4396.5057445814600214,
+                -5568.9083594406256452,
+                -4778.8909704150864854,
+                -6732.2083670498104766,
+                -5960.0653795696562156,
+                -6157.0065903597278520,
             ],
             dtype=torch.float64,
         ),
@@ -947,7 +946,7 @@ def test_energy_postprocessing(prep_temp_dir):
         unit.Quantity(
             dataset_statistic["training_dataset_statistics"]["per_atom_energy_stddev"]
         ).m,
-        25.013382078330697,
+        25.0124824,
     )
 
     # check that the normalization is correct
@@ -959,7 +958,7 @@ def test_energy_postprocessing(prep_temp_dir):
 
     # seams reasonable
     assert np.isclose(mean, -388.36276540521123)
-    assert np.isclose(stddev, 19.372371857226035)
+    assert np.isclose(stddev, 19.37047462337448)
 
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])
@@ -1276,9 +1275,8 @@ def test_element_filter(dataset_name, prep_temp_dir):
             [12],
         ]
     )
-    version = "nc_1000_v0"
-    if dataset_name.lower() == "tmqm_xtb":
-        version = "nc_1000_v1"
+    version = testing_version[dataset_name.lower()]
+
     # positive tests
 
     # Case 0: Include any system

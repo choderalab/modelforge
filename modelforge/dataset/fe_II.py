@@ -1,5 +1,5 @@
 """
-Data class for handling tmQM-xtb data.
+Data class for handling Fe_II data.
 """
 
 from typing import List
@@ -7,26 +7,29 @@ from typing import List
 from .dataset import HDF5Dataset
 
 
-class tmQMXTBDataset(HDF5Dataset):
+class FeIIDataset(HDF5Dataset):
     """
-    Data class for handling tmQM-xtb dataset.
+    Data class for handling Fe (II) dataset.
 
-    This class provides utilities for processing and interacting with tmQM-xtb data stored in HDF5 format.
-    The tmQM-xtb dataset, uses the tmQM dataset as a reference point, peforming GFN2-xTB-based MD simulations to
-    provide additional configurations.
+    This class provides utilities for processing and interacting with Fe_II data stored in HDF5 format.
+    This dataset contains 384 unique systems with a total of 28,834 configurations
+    (note, the original publication states 383 unique systems).
 
-    The originalal tmQM dataset contains the geometries and properties of mononuclear complexes extracted from the
-    Cambridge Structural Database, including Werner, bioinorganic, and organometallic complexes based on a large
-    variety of organic ligands and 30 transition metals (the 3d, 4d, and 5d from groups 3 to 12).
-    All complexes are closed-shell, with a formal charge in the range {+1, 0, −1}e
+    The full Fe(II) dataset includes 28834 total configurations Fe(II) organometallic complexes.
+    Specifically, this includes 15568 HS geometries and 13266 LS geometries.
+    These complexes originate from the Cambridge Structural Database (CSD) as curated by Nandy, et al.
+    (Journal of Physical Chemistry Letters (2023), 14 (25), 10.1021/acs.jpclett.3c01214),
+    and were filtered into “computation-ready” complexes, (those where both oxidation states and charges are
+    already specified without hydrogen atoms missing in the structures), following the procedure outlined by
+    Arunachalam, et al. (Journal of Chemical Physics (2022), 157 (18), 10.1063/5.0125700)
 
-    :
-    Original Citation:
 
-    David Balcells and Bastian Bjerkem Skjelstad,
-    tmQM Dataset—Quantum Geometries and Properties of 86k Transition Metal Complexes
-    Journal of Chemical Information and Modeling 2020 60 (12), 6135-6146
-    DOI: 10.1021/acs.jcim.0c01041
+    Citation to the original dataset:
+
+        Modeling Fe(II) Complexes Using Neural Networks
+        Hongni Jin and Kenneth M. Merz Jr.
+        Journal of Chemical Theory and Computation 2024 20 (6), 2551-2558
+        DOI: 10.1021/acs.jctc.4c00063
 
     Attributes
     ----------
@@ -46,7 +49,7 @@ class tmQMXTBDataset(HDF5Dataset):
 
     Examples
     --------
-    >>> data = tmQMXTBDataset()
+    >>> data = FeIIDataset()
     >>> data._download()
     """
 
@@ -57,7 +60,6 @@ class tmQMXTBDataset(HDF5Dataset):
         positions="positions",
         E="energies",
         F="forces",
-        dipole_moment="dipole_moment_per_system",
         total_charge="total_charge",
     )
 
@@ -67,9 +69,7 @@ class tmQMXTBDataset(HDF5Dataset):
         "atomic_numbers",
         "total_charge",
         "forces",
-        "dipole_moment_per_system",
         "energies",
-        "partial_charges",
         # "spin_multiplicities",
     ]
 
@@ -77,15 +77,13 @@ class tmQMXTBDataset(HDF5Dataset):
         "positions": "positions",
         "atomic_numbers": "atomic_numbers",
         "total_charge": "total_charge",
-        "dipole_moment_per_system": "dipole_moment",
         "energies": "E",
         "forces": "F",
-        "partial_charges": "total_charge",  # note this isn't interchangeable with partial charge but has the same units
     }
 
     def __init__(
         self,
-        dataset_name: str = "tmQM-xtb",
+        dataset_name: str = "fe_II",
         version_select: str = "latest",
         local_cache_dir: str = ".",
         force_download: bool = False,
@@ -98,11 +96,12 @@ class tmQMXTBDataset(HDF5Dataset):
         Parameters
         ----------
         data_name : str, optional
-            Name of the dataset, by default "QM9".
+            Name of the dataset, by default "Fe_II".
         version_select : str,optional
             Select the version of the dataset to use, default will provide the "latest".
             "latest_test" will select the testing subset of 1000 conformers.
-        A version name can  be specified that corresponds to an entry in the associated yaml file, e.g., "full_dataset_v0".
+             A version name can  be specified that corresponds to an entry in the associated yaml file,
+             e.g., "full_dataset_v0".
         local_cache_dir: str, optional
             Path to the local cache directory, by default ".".
         force_download: bool, optional
@@ -112,15 +111,14 @@ class tmQMXTBDataset(HDF5Dataset):
             previously downloaded files, if available; by default False.
         Examples
         --------
-        >>> data = QM9Dataset()  # Default dataset
-        >>> test_data = QM9Dataset(version_select="latest_test"))  # Testing subset
+        >>> data = FeIIDataset()  # Default dataset
+        >>> test_data = FeIIDataset(version_select="latest_test"))  # Testing subset
         """
 
         _default_properties_of_interest = [
             "positions",
             "atomic_numbers",
             "energies",
-            "dipole_moment_per_system",
             "forces",
             "total_charge",
         ]  # NOTE: Default values
@@ -137,13 +135,13 @@ class tmQMXTBDataset(HDF5Dataset):
         from modelforge.dataset import yaml_files
         import yaml
 
-        yaml_file = resources.files(yaml_files) / "tmqm_xtb.yaml"
+        yaml_file = resources.files(yaml_files) / "fe_II.yaml"
         logger.debug(f"Loading config data from {yaml_file}")
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)
 
         # make sure we have the correct yaml file
-        assert data_inputs["dataset"] == "tmqm_xtb"
+        assert data_inputs["dataset"] == "fe_II"
 
         if self.version_select == "latest":
             # in the yaml file, the entry latest will define the name of the version to use
@@ -177,25 +175,14 @@ class tmQMXTBDataset(HDF5Dataset):
 
         # values from regression
         self._ase = {
-            "H": -1346.9991827591664 * unit.kilojoule_per_mole,
-            "C": -5617.968751828634 * unit.kilojoule_per_mole,
-            "N": -7672.109298341974 * unit.kilojoule_per_mole,
-            "O": -10704.649544039614 * unit.kilojoule_per_mole,
-            "F": -12450.413867238472 * unit.kilojoule_per_mole,
-            "Ir": -6598.040049917221 * unit.kilojoule_per_mole,
-            "Pt": -8576.086025878865 * unit.kilojoule_per_mole,
-            "P": -12100.053458428218 * unit.kilojoule_per_mole,
-            "S": -4944.219007863149 * unit.kilojoule_per_mole,
-            "Cl": -7938.35372876674 * unit.kilojoule_per_mole,
-            "Cr": -12369.173271985948 * unit.kilojoule_per_mole,
-            "Fe": -9663.693466916478 * unit.kilojoule_per_mole,
-            "Ni": -1252.3530347274261 * unit.kilojoule_per_mole,
-            "Cu": -10894.410447334463 * unit.kilojoule_per_mole,
-            "Zn": -10182.310751929233 * unit.kilojoule_per_mole,
-            "Br": -11739.997032286365 * unit.kilojoule_per_mole,
-            "Rh": -9590.608153082434 * unit.kilojoule_per_mole,
-            "Pd": -9713.417530536652 * unit.kilojoule_per_mole,
-            "Ag": -11641.150291664564 * unit.kilojoule_per_mole,
+            "H": -257.8658772400123 * unit.kilojoule_per_mole,
+            "C": -897.1371901363243 * unit.kilojoule_per_mole,
+            "N": -683.3438581909822 * unit.kilojoule_per_mole,
+            "O": -707.3905177027947 * unit.kilojoule_per_mole,
+            "P": -445.4451443983543 * unit.kilojoule_per_mole,
+            "S": -367.7922055565044 * unit.kilojoule_per_mole,
+            "Cl": -227.0568137730898 * unit.kilojoule_per_mole,
+            "Fe": 224.48679425562852 * unit.kilojoule_per_mole,
         }
 
     @property

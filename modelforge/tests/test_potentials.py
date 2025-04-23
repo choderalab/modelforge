@@ -22,6 +22,20 @@ def prep_temp_dir(tmp_path_factory):
     return fn
 
 
+testing_version = {
+    "tmqm_xtb": "nc_1000_v1.1",
+    "fe_ii": "nc_1000_v1.1",
+    "qm9": "nc_1000_v0",
+    "ani1x": "nc_1000_v0",
+    "ani2x": "nc_1000_v0",
+    "spice1": "nc_1000_v0",
+    "spice1_openff": "nc_1000_v0",
+    "spice2": "nc_1000_v0",
+    "phalkethoh": "nc_1000_v0",
+    "tmqm": "nc_1000_v0",
+}
+
+
 def initialize_model(
     simulation_environment: Literal["PyTorch", "JAX"], config, jit: bool
 ):
@@ -627,13 +641,11 @@ def test_forward_pass_with_all_datasets(
     # -------------------------------#
     # setup dataset
     # use a subset of the SPICE2 dataset for ANI2x
+
+    version = testing_version[dataset_name.lower()]
+
     if dataset_name.lower().startswith("spice"):
         version = "nc_1000_v0_HCNOFClS"
-    elif dataset_name.lower() == "tmqm_xtb":
-        print("using subset")
-        version = "nc_1000_v1"
-    else:
-        version = "nc_1000_v0"
 
     dataset = datamodule_factory(
         dataset_name=dataset_name,
@@ -642,6 +654,8 @@ def test_forward_pass_with_all_datasets(
     )
     if dataset_name.lower().startswith("tmqm") and potential_name.lower() == "ani2x":
         pytest.skip("Ani2x cannot be trained with the TMQM/TMQM-xtb dataset")
+    if dataset_name.lower().startswith("fe_ii") and potential_name.lower() == "ani2x":
+        pytest.skip("Ani2x cannot be trained with the fe_II dataset")
 
     dataset_statistic = toml.load(dataset.dataset_statistic_filename)
     train_dataloader = dataset.train_dataloader()

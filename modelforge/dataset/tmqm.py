@@ -1,5 +1,5 @@
 """
-Data class for handling QM9 data.
+Data class for handling tmQM data.
 """
 
 from typing import List

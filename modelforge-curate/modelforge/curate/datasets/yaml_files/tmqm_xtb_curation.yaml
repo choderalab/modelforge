@@ -13,3 +13,17 @@ v1_100K:
   dataset_md5_checksum:  297defb3844a40d9e11a0cf6513a064e
   dataset_length: 3989131489
   dataset_filename: tmqm_xtb_raw_100K_v1.hdf5.gz
+
+v1_PdZnFeCuNiPtIrRhCrAg_200K:
+  version: 1
+  dataset_download_url: https://zenodo.org/records/15215124/files/tmqm_dataset_xtb_PdZnFeCuNiPtIrRhCrAg_T200_raw_v1.hdf5.gz
+  dataset_md5_checksum: 786ace5b4b62cd28664ea1a35a6f4984
+  dataset_length: 5482752036
+  dataset_filename: tmqm_xtb_raw_PdZnFeCuNiPtIrRhCrAg_200K_v1.hdf5.gz
+
+v1_PdZnFeCuNiPtIrRhCrAg_300K:
+  version: 1
+  dataset_download_url: https://zenodo.org/records/15221008/files/tmqm_dataset_xtb_PdZnFeCuNiPtIrRhCrAg_T300_raw_v1.hdf5.gz
+  dataset_md5_checksum: 48b3041fb4fdf6b0a68c68149d891d88
+  dataset_length: 5484104790
+  dataset_filename: tmqm_xtb_raw_PdZnFeCuNiPtIrRhCrAg_300K_v1.hdf5.gz

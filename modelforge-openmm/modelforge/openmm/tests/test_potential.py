@@ -1,6 +1,6 @@
 import torch
 import pytest
-
+from openmm.app import *
 
 from modelforge.potential import _Implemented_NNPs as Implemented_NNPs
 

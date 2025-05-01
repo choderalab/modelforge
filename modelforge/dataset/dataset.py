@@ -228,73 +228,260 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
 from abc import ABC, abstractmethod
 
 
-class HDF5Dataset(ABC):
-    """
-    Manages data stored in HDF5 format, supporting processing and interaction.
-
-    Attributes
-    ----------
-    raw_data_file : str
-        Path to the raw HDF5 data file.
-    processed_data_file : str
-        Path to the processed data file, typically a .npz file for efficiency.
-    """
+class HDF5Dataset:
 
     def __init__(
         self,
-        url: str,
-        gz_data_file: Dict[str, str],
-        hdf5_data_file: Dict[str, str],
-        processed_data_file: Dict[str, str],
+        dataset_name: str,
+        global_cache_dir: str,
         local_cache_dir: str,
+        version_select: str = "latest",
         force_download: bool = False,
-        regenerate_cache: bool = False,
         element_filter: List[tuple] = None,
+        local_yaml_file: Optional[str] = None,
     ):
         """
-        Initializes the HDF5Dataset with paths to raw and processed data files.
+        Initializes the HDF5Dataset class.
 
         Parameters
         ----------
-        url : str
-            URL of the hdf5.gz data file.
-        gz_data_file : Dict[str, str]
-            Name of the gzipped data file (name) and checksum (md5).
-        hdf5_data_file : Dict[str, str]
-            Name of the hdf5 data file (name) and checksum (md5).
-        processed_data_file : Dict[str, str]
-            Name of the processed npz data file (name) and checksum (md5).
-        local_cache_dir : str
+        dataset_name : str
+            Name of the dataset.
+        global_cache_dir : str
             Directory to store the files.
-        force_download : bool, optional
-            If set to True, the data will be downloaded even if it already exists. Default is False.
-        regenerate_cache : bool, optional
-            If set to True, the cache file will be regenerated even if it already exists. Default is False.
         """
-        self.url = url
-        self.gz_data_file = gz_data_file
-        self.hdf5_data_file = hdf5_data_file
-        self.processed_data_file = processed_data_file
         import os
 
+        self.dataset_name = dataset_name.lower()
         # make sure we can handle a path with a ~ in it
+        self.global_cache_dir = os.path.expanduser(global_cache_dir)
         self.local_cache_dir = os.path.expanduser(local_cache_dir)
+
         self.force_download = force_download
-        self.regenerate_cache = regenerate_cache
         self.element_filter = element_filter
+        self.version_select = version_select
+        self.local_yaml_file = local_yaml_file
 
-        self.hdf5data: Optional[Dict[str, List[np.ndarray]]] = None
-        self.numpy_data: Optional[np.ndarray] = None
+        from loguru import logger
+
+        import yaml
+
+        # if we did not specify a local yaml file, we will look in the yaml_files directory in datasets
+        if self.local_yaml_file is None:
+
+            from importlib import resources
+            from modelforge.dataset import yaml_files
+
+            yaml_file = resources.files(yaml_files) / f"{dataset_name}.yaml"
+
+            # check to ensure the yaml file exists
+            if not os.path.exists(yaml_file):
+                raise FileNotFoundError(
+                    f"Dataset yaml file {yaml_file} not found. Please check the dataset name."
+                )
+            logger.debug(f"Loading config data from {yaml_file}")
+
+        # if we have specified a local yaml file, we will use that instead
+        if self.local_yaml_file is not None:
+            yaml_file = self.local_yaml_file
+            # make sure the file exists
+            if not os.path.exists(yaml_file):
+                raise FileNotFoundError(
+                    f"Local dataset yaml file {yaml_file} not found."
+                )
+            logger.debug(f"Loading config data from user specified file: {yaml_file}")
+
+        # actually open the yaml file
+        with open(yaml_file, "r") as file:
+            data_inputs = yaml.safe_load(file)
+
+        # make sure we have the correct yaml file
+        assert data_inputs["dataset"] == self.dataset_name
+
+        # load the atomic self energies  from the data file if they exist
+        if "atomic_self_energies" in data_inputs:
+            self._ase = data_inputs["atomic_self_energies"]
+        else:
+            log.warning("No atomic self energies found in the dataset yaml file.")
+            self._ase = None
+
+        if self.version_select == "latest":
+            # in the yaml file, the entry latest will define the name of the version to use
+            dataset_version = data_inputs["latest"]
+            logger.info(f"Using the latest dataset: {dataset_version}")
+        elif self.version_select == "latest_test":
+            dataset_version = data_inputs["latest_test"]
+            logger.info(f"Using the latest test dataset: {dataset_version}")
+        else:
+            dataset_version = self.version_select
+            logger.info(f"Using dataset version {dataset_version}")
+
+        if local_yaml_file is None:
+
+            # if we are using the remote dataset, we need to make sure that we have the correct version
+
+            if dataset_version not in data_inputs:
+                raise ValueError(
+                    f"Dataset version {dataset_version} not found in {yaml_file}"
+                )
+            self.url = data_inputs[dataset_version]["remote_dataset"]["url"]
+
+            # fetch the dictionaries that defined the size, md5 checksums (if provided) and filenames of the data files
+            self.gz_data_file_dict = data_inputs[dataset_version]["remote_dataset"][
+                "gz_data_file"
+            ]
+            self.hdf5_data_file_dict = data_inputs[dataset_version]["remote_dataset"][
+                "hdf5_data_file"
+            ]
+
+    def _acquire_dataset(self) -> None:
+        """
+        Function to acquire the dataset.
+
+        Note, this wraps logic to check the global_cache_dir for appropriate files, to avoid
+        downloading the dataset if it already exists (or extracting the .hdf5 file from the .hdf5.gz file).
+
+        This also handles file validation for any local datasets defined in a local_yaml_file.
+
+
+        Examples
+        --------
+        >>> data = HDF5Dataset(dataset_name="qm9", local_cache_dir="~/data", )
+        >>> data._acquire_dataset()  # Downloads the dataset
+
+        """
+        # Right now this function needs to be defined for each dataset.
+        # once all datasets are moved to zenodo, we should only need a single function defined in the base class
+        from modelforge.utils.remote import download_from_url
+
+        # If we are not using a local_yaml_file,
+        # (1) we will check the global cache for the appropriate hdf5 file
+        # (2) if that is not available, we will check for the gz file
+        # (3) if that is not available, we will download the gz filele
+        if self.local_yaml_file is None:
+            # first check if the appropriate .hdf5 file exists in the global_cache_dir and the checksum matches
+            if (
+                self._file_validation(
+                    file_name=self.hdf5_data_file_dict["name"],
+                    file_path=self.global_cache_dir,
+                    checksum=self.hdf5_data_file_dict["md5"],
+                )
+                and not self.force_download
+            ):
+
+                log.debug(
+                    f"Unzipped hdf5 file {self.hdf5_data_file_dict['name']} already exists in {self.global_cache_dir}"
+                )
+
+            # If the .hdf5 file didn't exist or the checksum didn't match, we will next see if the .gz file exists
+            # If it doesn't, we will download it. Fortuitously, download_from_url will do both these functions for us
+            # so we can just use a single else statement.
+            else:
+
+                download_from_url(
+                    url=self.url,
+                    md5_checksum=self.gz_data_file["md5"],
+                    output_path=self.global_cache_dir,
+                    output_filename=self.gz_data_file["name"],
+                    length=self.gz_data_file["length"],
+                    force_download=self.force_download,
+                )
+                self._ungzip_hdf5()
+        # if we are using a local yaml file, we will not download
+        # we will just check if the hdf5 file exists and has the right checksum
+        # Note: I think we still should require the checksum to be defined in the local yaml to ensure that the
+        # user is actually using the correct file.
+        else:
+            if not self._file_validation(
+                file_name=self.hdf5_data_file_dict["name"],
+                checksum=self.hdf5_data_file_dict["md5"],
+            ):
+                raise ValueError(
+                    f"File {self.hdf5_data_file_dict['name']} does not exist in {self.global_cache_dir} or the checksum does not match."
+                )
+
+        self._from_hdf5()
+        self._to_file_cache()
+        self._from_file_cache()
+
+    # def __init__(
+    #     self,
+    #     url: str,
+    #     gz_data_file: Dict[str, str],
+    #     hdf5_data_file: Dict[str, str],
+    #     processed_data_file: Dict[str, str],
+    #     local_cache_dir: str,
+    #     force_download: bool = False,
+    #     regenerate_cache: bool = False,
+    #     element_filter: List[tuple] = None,
+    # ):
+    #     """
+    #     Initializes the HDF5Dataset with paths to raw and processed data files.
+    #
+    #     Parameters
+    #     ----------
+    #     url : str
+    #         URL of the hdf5.gz data file.
+    #     gz_data_file : Dict[str, str]
+    #         Name of the gzipped data file (name) and checksum (md5).
+    #     hdf5_data_file : Dict[str, str]
+    #         Name of the hdf5 data file (name) and checksum (md5).
+    #     processed_data_file : Dict[str, str]
+    #         Name of the processed npz data file (name) and checksum (md5).
+    #     local_cache_dir : str
+    #         Directory to store the files.
+    #     force_download : bool, optional
+    #         If set to True, the data will be downloaded even if it already exists. Default is False.
+    #     regenerate_cache : bool, optional
+    #         If set to True, the cache file will be regenerated even if it already exists. Default is False.
+    #     """
+    #     self.url = url
+    #     self.gz_data_file = gz_data_file
+    #     self.hdf5_data_file = hdf5_data_file
+    #     self.processed_data_file = processed_data_file
+    #     import os
+    #
+    #     # make sure we can handle a path with a ~ in it
+    #     self.local_cache_dir = os.path.expanduser(local_cache_dir)
+    #     self.force_download = force_download
+    #     self.regenerate_cache = regenerate_cache
+    #     self.element_filter = element_filter
+    #
+    #     self.hdf5data: Optional[Dict[str, List[np.ndarray]]] = None
+    #     self.numpy_data: Optional[np.ndarray] = None
 
     @property
-    @abstractmethod
-    def properties_of_interest(self):
-        pass
+    def properties_of_interest(self) -> List[str]:
+        """
+        Getter for the properties of interest.
+        The order of this list determines also the order provided in the __getitem__ call
+        from the PytorchDataset.
+
+        Returns
+        -------
+        List[str]
+            List of properties of interest.
+
+        """
+        return self._properties_of_interest
 
     @property
-    @abstractmethod
-    def _available_properties_association(self):
-        pass
+    def available_properties(self) -> List[str]:
+        """
+        List of available properties in the dataset.
+
+        Returns
+        -------
+        List[str]
+            List of available properties in the dataset.
+
+        Examples
+        --------
+        >>> data = HDF5Dataset()
+        >>> data.available_properties
+        ['geometry', 'atomic_numbers', 'return_energy']
+        """
+        return self._available_properties
 
     def _ungzip_hdf5(self) -> None:
         """
@@ -307,7 +494,7 @@ class HDF5Dataset(ABC):
         import shutil
 
         with gzip.open(
-            f"{self.local_cache_dir}/{self.gz_data_file['name']}", "rb"
+            f"{self.global_cache_dir}/{self.gz_data_file['name']}", "rb"
         ) as gz_file:
             from modelforge.utils.misc import OpenWithLock
 
@@ -316,17 +503,18 @@ class HDF5Dataset(ABC):
             # The use of a lockfile is necessary because h5py will exit immediately if it tries to open a file that is
             # locked by another process.
             with OpenWithLock(
-                f"{self.local_cache_dir}/{self.hdf5_data_file['name']}.lockfile", "w"
+                f"{self.global_cache_dir}/{self.hdf5_data_file['name']}.lockfile",
+                "w",
             ) as lock_file:
                 with open(
-                    f"{self.local_cache_dir}/{self.hdf5_data_file['name']}", "wb"
+                    f"{self.global_cache_dir}/{self.hdf5_data_file['name']}", "wb"
                 ) as out_file:
                     shutil.copyfileobj(gz_file, out_file)
 
             # now that the file is written we can safely remove the lockfile
             import os
 
-            os.remove(f"{self.local_cache_dir}/{self.hdf5_data_file['name']}.lockfile")
+            os.remove(f"{self.global_cache_dir}/{self.hdf5_data_file['name']}.lockfile")
 
     def _check_lists(self, list_1: List, list_2: List) -> bool:
         """
@@ -409,7 +597,9 @@ class HDF5Dataset(ABC):
         return True
 
     @staticmethod
-    def _file_validation(file_name: str, file_path: str, checksum: str = None) -> bool:
+    def _file_validation(
+        file_name: str, file_path: str = None, checksum: str = None
+    ) -> bool:
         """
         Validates if the file exists, and if the calculated checksum matches the expected checksum.
 
@@ -418,7 +608,9 @@ class HDF5Dataset(ABC):
         file_name : str
             Name of the file to validate.
         file_path : str
-            Path to the file.
+            Path to the file to validate. Default = None.
+            If None, the code will assume the file_path is defined as part of file_name
+            If define, the file_path will be prepended to the file_name, i.e., {file_path}/{file_name}
         checksum : str
             Expected checksum of the file. Default=None
             If None, checksum will not be validated.
@@ -428,7 +620,11 @@ class HDF5Dataset(ABC):
         bool
             True if the file exists and the checksum matches, False otherwise.
         """
-        full_file_path = f"{file_path}/{file_name}"
+        if file_path is not None:
+            file_path = os.path.expanduser(file_path)
+            full_file_path = f"{file_path}/{file_name}"
+        else:
+            full_file_path = os.path.expanduser(file_name)
         if not os.path.exists(full_file_path):
             log.debug(f"File {full_file_path} does not exist.")
             return False
@@ -491,37 +687,39 @@ class HDF5Dataset(ABC):
         import h5py
         import tqdm
 
-        # this will create an unzipped file which we can then load in
-        # this is substantially faster than passing gz_file directly to h5py.File()
-        # by avoiding data chunking issues.
+        #
+        if self.local_yaml_file is None:
+            temp_hdf5_file = f"{self.global_cache_dir}/{self.hdf5_data_file['name']}"
 
-        temp_hdf5_file = f"{self.local_cache_dir}/{self.hdf5_data_file['name']}"
-
-        if self._file_validation(
-            self.hdf5_data_file["name"],
-            self.local_cache_dir,
-            self.hdf5_data_file["md5"],
-        ):
-            log.debug(f"Loading unzipped hdf5 file from {temp_hdf5_file}")
         else:
-            from modelforge.utils.remote import calculate_md5_checksum
+            # if a local yaml file is provided, the "name" field provides the full path to the file
+            # we will expand the path to handle ~ if provided
+            temp_hdf5_file = os.path.expanduser(self.hdf5_data_file["name"])
 
-            checksum = calculate_md5_checksum(
-                self.hdf5_data_file["name"], self.local_cache_dir
-            )
-            raise ValueError(
-                f"Checksum mismatch for unzipped data file {temp_hdf5_file}. Found {checksum}, Expected {self.hdf5_data_file['md5']}"
-            )
+        # validation is already called in the _acquire dataset function so I'm not sure this is necessary
+        # if self._file_validation(
+        #     self.hdf5_data_file["name"],
+        #     self.local_cache_dir,
+        #     self.hdf5_data_file["md5"],
+        # ):
+        #     log.debug(f"Loading unzipped hdf5 file from {temp_hdf5_file}")
+        # else:
+        #     from modelforge.utils.remote import calculate_md5_checksum
+        #
+        #     checksum = calculate_md5_checksum(
+        #         self.hdf5_data_file["name"], self.local_cache_dir
+        #     )
+        #     raise ValueError(
+        #         f"Checksum mismatch for unzipped data file {temp_hdf5_file}. Found {checksum}, Expected {self.hdf5_data_file['md5']}"
+        #     )
         from modelforge.utils.misc import OpenWithLock
 
         log.debug(f"Reading data from {temp_hdf5_file}")
         log.debug(f"element filter: {self.element_filter}")
         # h5py does file locking internally, but will exit immediately if the file is locked by another program
-        # let us create a simple lockfile to prevent this, as OpenWithLock will just wait until the lockfile is unlocked
+        # we create a simple lockfile to prevent this, as OpenWithLock will just wait until the lockfile is unlocked
         # before proceeding
-        with OpenWithLock(
-            f"{self.local_cache_dir}/{self.hdf5_data_file['name']}.lockfile", "w"
-        ) as lock_file:
+        with OpenWithLock(f"{temp_hdf5_file}.lockfile", "w") as lock_file:
             with h5py.File(temp_hdf5_file, "r") as hf:
                 # create dicts to store data for each format type
                 single_rec_data: Dict[str, List[np.ndarray]] = OrderedDict()
@@ -680,7 +878,8 @@ class HDF5Dataset(ABC):
                                         f"Property {value} has an index error for record {record}."
                                     )
                                     log.warning(
-                                        record_array.shape, atomic_subsystem_counts_rec
+                                        record_array.shape,
+                                        atomic_subsystem_counts_rec,
                                     )
 
                             for value in series_mol_data.keys():
@@ -791,7 +990,8 @@ class HDF5Dataset(ABC):
         # reading the npz file from a separate process while still writing
 
         with OpenWithLock(
-            f"{self.local_cache_dir}/{self.processed_data_file['name']}.lockfile", "w"
+            f"{self.local_cache_dir}/{self.processed_data_file['name']}.lockfile",
+            "w",
         ) as f:
             np.savez(
                 f"{self.local_cache_dir}/{self.processed_data_file['name']}",
@@ -848,47 +1048,30 @@ class DatasetFactory:
             The HDF5 dataset instance to use.
         """
 
-        # For efficiency purposes, we first want to see if there is an npz file available before reprocessing the hdf5
-        # file, expanding the gzziped archive or download the file.
-        # Saving to cache will create an npz file and metadata file.
-        # The metadata file will contain the keys used to generate the npz file, the checksum of the hdf5 and gz
-        # file used to generate the npz file.  We will look at the metadata file and compare this to the
-        # variables saved in the HDF5Dataset class to determine if the npz file is valid.
-        # It is important to check the keys used to generate the npz file, as these are allowed to be changed by the user.
+        if data.local_yaml_file is not None:
+            # We want to avoid having to download something that already exists.
+            # We first want to see if the hdf5 file exists and matches the checksum.
+            # If not, we will check to see if the gzipped file exists and matches the checksum.
+            # If that fails, we will download the gzipped file.
+            # Note, we only need an if/else here because the download function actually checks
 
-        if data._file_validation(
-            file_name=data.processed_data_file["name"],
-            file_path=data.local_cache_dir,
-        ) and (
-            data._metadata_validation(
-                data.processed_data_file["name"].replace(".npz", ".json"),
-                data.local_cache_dir,
-            )
-            and not data.force_download
-            and not data.regenerate_cache
-        ):
-            data._from_file_cache()
-        # check to see if the hdf5 file exists and the checksum matches
-        elif (
-            data._file_validation(
-                data.hdf5_data_file["name"],
-                data.local_cache_dir,
-                data.hdf5_data_file["md5"],
-            )
-            and not data.force_download
-        ):
-            data._from_hdf5()
-            data._to_file_cache()
-            data._from_file_cache()
-        # if the npz or hdf5 files don't exist/match checksums, call download
-        # download will check if the gz file exists and matches the checksum
-        # or will use force_download.
-        else:
-            data._download()
-            data._ungzip_hdf5()
-            data._from_hdf5()
-            data._to_file_cache()
-            data._from_file_cache()
+            if (
+                data._file_validation(
+                    data.hdf5_data_file["name"],
+                    data.hdf5_data_file["md5"],
+                )
+                and not data.force_download
+            ):
+                data._from_hdf5()
+                data._to_file_cache()
+            else:
+                # note the download function will check to see if the gzipped file exists and matches the checksum
+                # so we do not need to call _file_validation.
+                data._download()
+                data._ungzip_hdf5()
+                data._from_hdf5()
+                data._to_file_cache()
+                data._from_file_cache()
 
     @staticmethod
     def create_dataset(
@@ -908,7 +1091,6 @@ class DatasetFactory:
             The resulting PyTorch-compatible dataset.
         """
 
-        log.info(f"Creating dataset from {data.url}")
         DatasetFactory._load_or_process_data(data)
         return TorchDataset(data.numpy_data, data._property_names)
 
@@ -930,15 +1112,16 @@ class DataModule(pl.LightningDataModule):
         force_download: bool = False,
         version_select: str = "latest",
         local_cache_dir: str = "./",
-        regenerate_cache: bool = False,
+        global_cache_dir: str = "./",
         regenerate_dataset_statistic: bool = False,
         regenerate_processed_cache: bool = True,
         properties_of_interest: Optional[PropertyNames] = None,
         properties_assignment: Optional[Dict[str, str]] = None,
         element_filter: Optional[List[tuple]] = None,
+        local_yaml_file: Optional[str] = None,
     ):
         """
-        Initializes adData module for PyTorch Lightning handling data preparation and loading object with the specified configuration.
+        Initializes a DataModule for PyTorch Lightning handling data preparation and loading object with the specified configuration.
         If `remove_self_energies` is `True` and:
         - `self_energies` are passed as a dictionary, these will be used
         - `self_energies` are `None`, `self._ase` will be used
@@ -960,7 +1143,7 @@ class DataModule(pl.LightningDataModule):
             atomic_self_energies : Optional[Dict[str, float]]
                 A dictionary mapping element names to their self energies. If not provided, the self energies will be calculated.
             regression_ase: bool, defaults to False
-                Whether to use the calculated self energies for regression.
+                If True, calculate atomic self energies (ASE) using regression, rather than provided values or those in the dataset.
             force_download : bool,  defaults to False
                 Whether to force the dataset to be downloaded, even if it is already cached.
             version_select : str, defaults to "latest"
@@ -968,9 +1151,9 @@ class DataModule(pl.LightningDataModule):
                 "latest_test" will use the latest test version. Specific versions can be selected by passing the version name
                 as defined in the yaml files associated with each dataset.
             local_cache_dir : str, defaults to "./"
-                Directory to store the files.
-            regenerate_cache : bool, defaults to False
-                Whether to regenerate the cache.
+                Directory to store the files associated/specific with a given dataset/training run.
+            global_cache_dir : str, defaults to "./"
+                Directory to store the common files,
             regenerate_dataset_statistic : bool, defaults to False
                 Whether to regenerate the dataset statistics.
             regenerate_processed_cache : bool, defaults to True
@@ -979,6 +1162,9 @@ class DataModule(pl.LightningDataModule):
                 The properties to include in the dataset.
             properties_assignment : Optional[Dict[str, str]]
                 The properties of interest from the hdf5 dataset to associate with internal properties with the code.
+            local_yaml_file : Optional[str]
+                Path to the local yaml file to use for the dataset. If not provided, the code will search for a
+                yaml file associated with the dataset name in the modelforge.dataset.yaml_files directory.
         """
         from modelforge.potential.neighbors import Pairlist
         import os
@@ -1004,17 +1190,17 @@ class DataModule(pl.LightningDataModule):
         self.properties_of_interest = properties_of_interest
         self.properties_assignment = properties_assignment
         self.element_filter = element_filter
+        self.local_yaml_file = local_yaml_file
 
         # make sure we can handle a path with a ~ in it
         self.local_cache_dir = os.path.expanduser(local_cache_dir)
+        self.global_cache_dir = os.path.expanduser(global_cache_dir)
+
         # create the local cache directory if it does not exist
         os.makedirs(self.local_cache_dir, exist_ok=True)
-        self.regenerate_cache = regenerate_cache
-        # Use a logical OR to ensure regenerate_processed_cache is True when
-        # regenerate_cache is True
-        self.regenerate_processed_cache = (
-            regenerate_processed_cache or self.regenerate_cache
-        )
+        os.makedirs(self.global_cache_dir, exist_ok=True)
+
+        self.regenerate_processed_cache = regenerate_processed_cache
 
         self.pairlist = Pairlist()
         self.dataset_statistic_filename = (
@@ -1056,23 +1242,39 @@ class DataModule(pl.LightningDataModule):
             return None
 
         # if the dataset is not already processed, process it
-        from modelforge.dataset import _ImplementedDatasets
+        # from modelforge.dataset import _ImplementedDatasets
 
-        dataset_class = _ImplementedDatasets.get_dataset_class(str(self.name))
-        dataset = dataset_class(
+        # dataset_class = _ImplementedDatasets.get_dataset_class(str(self.name))
+        # dataset = dataset_class(
+        #     force_download=self.force_download,
+        #     version_select=self.version_select,
+        #     local_cache_dir=self.local_cache_dir,
+        #     regenerate_cache=self.regenerate_cache,
+        #     element_filter=self.element_filter,
+        # )
+        dataset = HDF5Dataset(
+            dataset_name=self.name,
             force_download=self.force_download,
             version_select=self.version_select,
             local_cache_dir=self.local_cache_dir,
-            regenerate_cache=self.regenerate_cache,
+            global_cache_dir=self.global_cache_dir,
             element_filter=self.element_filter,
+            local_yaml_file=self.local_yaml_file,
         )
         if self.properties_of_interest is not None:
             dataset.properties_of_interest = self.properties_of_interest
-
+        else:
+            raise ValueError(
+                "Properties of interest must be provided. Please set properties_of_interest."
+            )
         if self.properties_assignment is not None:
             from modelforge.utils import PropertyNames
 
             dataset._properties_names = PropertyNames(**self.properties_assignment)
+        else:
+            raise ValueError(
+                "Properties assignment must be provided. Please set properties_assignment."
+            )
 
         torch_dataset = self._create_torch_dataset(dataset)
         # if dataset statistics is present load it from disk

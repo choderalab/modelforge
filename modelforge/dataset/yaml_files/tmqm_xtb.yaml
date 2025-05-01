@@ -2,174 +2,457 @@ dataset: tmqm_xtb
 latest: PdZnFeCuNiPtIrRhCrAg_T100K_v1.1
 latest_test: nc_1000_v1.1
 
-PdZnFeCuNiPtIrRhCrAg_T100K_v1:
-  version: 1
-  doi:  10.5281/zenodo.15015031
-  gz_data_file:
-    length: 1688599844
-    md5: 6abf90a2c524ff1e328f2d6a38e8bfe2
-    name: tmqm_xtb_dataset_PdZnFeCuNiPtIrRhCrAg_T100K_v1.hdf5.gz
-  hdf5_data_file:
-    md5: ad5fedb704a3f9dc356ed3912b41e542
-    name: tmqm_xtb_dataset_PdZnFeCuNiPtIrRhCrAg_T100K_v1.hdf5
-  processed_data_file:
-    md5: null
-    name: tmqm_xtb_dataset_PdZnFeCuNiPtIrRhCrAg_T100K_v1.npz
-  url: https://zenodo.org/records/15015031/files/tmqm_xtb_dataset_PdZnFeCuNiPtIrCrAg_T100_v1.0.hdf5.gz
+description: "The tmQM-xtb dataset performs GFN2-xTB-based MD simulations starting from the energy-minimized geometries 
+    in the tmQM dataset.  
 
-PdZnFeCu_T100K_v1:
-  version: 1
-  doi:   10.5281/zenodo.15015000
-  gz_data_file:
-    length: 765896627
-    md5: 51f886ee59d8792ab66daa2986444425
-    name: tmqm_xtb_dataset_PdZnFeCu_T100K_v1.hdf5.gz
-  hdf5_data_file:
-    md5: 64326b6d5df143ab5bda46c1b24374a7
-    name: tmqm_xtb_dataset_PdZnFeCu_T100K_v1.hdf5
-  processed_data_file:
-    md5: null
-    name: tmqm_xtb_dataset_PdZnFeCu_T100K_v1.npz
-  url: https://zenodo.org/records/15015000/files/tmqm_xtb_dataset_PdZnFeCu_T100_v1.0.hdf5.gz
+    The original tmQM dataset contains the geometries and properties of mononuclear complexes extracted from the
+    Cambridge Structural Database, including Werner, bioinorganic, and organometallic complexes based on a large
+    variety of organic ligands and 30 transition metals (the 3d, 4d, and 5d from groups 3 to 12).
+    All complexes are closed-shell, with a formal charge in the range {+1, 0, −1}e .
 
-nc_1000_v1:
-  version: 1
-  doi:    10.5281/zenodo.15015505
-  gz_data_file:
-    length: 3501677
-    md5: 9a299fb3244e2f843f290cbe54b50978
-    name: tmqm_xtb_dataset_PdZnFeCu_T100K_ntc_1000_v1.hdf5.gz
-  hdf5_data_file:
-    md5: 1f0de26ee54c70028f99312a19a2bee6
-    name: tmqm_xtb_dataset_PdZnFeCu_T100K_ntc_1000_v1.hdf5
-  processed_data_file:
-    md5: null
-    name: tmqm_xtb_dataset_PdZnFeCu_T100K_ntc_1000_v1.npz
-  url: https://zenodo.org/records/15015505/files/tmqm_xtb_dataset_PdZnFeCu_T100_ntc_1000_v1.0.hdf5.gz
+    Original Citation:
 
-PdZnFeCu_T100K_single_config_v1:
-  version: 1
-  doi: 10.5281/zenodo.15021819
-  gz_data_file:
-    length: 96544047
-    md5: cb86823c62d2127c209cded323c03eef
-    name: tmqm_xtb_dataset_PdZnFeCu_T100K_single_config_v1.hdf5.gz
-  hdf5_data_file:
-    md5: 96811817c3d65fdbe1c3691125ff0664
-    name: tmqm_xtb_dataset_PdZnFeCu_T100K_single_config_v1.hdf5
-  processed_data_file:
-    md5: null
-    name: tmqm_xtb_dataset_PdZnFeCu_T100K_single_config_v1.npz
-  url: https://zenodo.org/records/15021819/files/tmqm_xtb_dataset_PdZnFeCu_T100_first_v1.0.hdf5.gz
+    David Balcells and Bastian Bjerkem Skjelstad,
+    tmQM Dataset—Quantum Geometries and Properties of 86k Transition Metal Complexes
+    Journal of Chemical Information and Modeling 2020 60 (12), 6135-6146
+    DOI: 10.1021/acs.jcim.0c01041 "
+
+atomic_self_energies:
+  H: -1346.9991827591664 * kilojoule_per_mole
+  C: -5617.968751828634 * kilojoule_per_mole
+  N: -7672.109298341974 * kilojoule_per_mole
+  O: -10704.649544039614 * kilojoule_per_mole
+  F: -12450.413867238472 * kilojoule_per_mole
+  Ir: -6598.040049917221 * kilojoule_per_mole
+  Pt: -8576.086025878865 * kilojoule_per_mole
+  P: -12100.053458428218 * kilojoule_per_mole
+  S: -4944.219007863149 * kilojoule_per_mole
+  Cl: -7938.35372876674 * kilojoule_per_mole
+  Cr: -12369.173271985948 * kilojoule_per_mole
+  Fe: -9663.693466916478 * kilojoule_per_mole
+  Ni: -1252.3530347274261 * kilojoule_per_mole
+  Cu: -10894.410447334463 * kilojoule_per_mole
+  Zn: -10182.310751929233 * kilojoule_per_mole
+  Br: -11739.997032286365 * kilojoule_per_mole
+  Rh: -9590.608153082434 * kilojoule_per_mole
+  Pd: -9713.417530536652 * kilojoule_per_mole
+  Ag: -11641.150291664564 * kilojoule_per_mole
+
+PdZnFeCu_T100K_single_config_v1.0:
+  hdf5_schema: 2
+  available_properties:
+    - positions
+    - atomic_numbers
+    - total_charge
+    - forces
+    - dipole_moment_per_system
+    - energies
+    - partial_charges
+  about:  "This dataset contains 23134 unique systems with 23134 total configurations (1 configuration per system)  
+           Each configuration corresponds to the geometry distributed as part of the original tmQM dataset. with
+           no MD sampling applied.
+             
+           This dataset is limited to systems that contain transition metals Pd, Zn, Fe,  or Cu, 
+           and also only contain elements C, H, P, S, O, N, F, Cl, or Br. 
+          
+          This dataset was generated starting from the tmQM dataset; the original tmQM repository 
+          (https://github.com/uiocompcat/tmQM) was forked and a release made that corresponds to the data committed
+          on 13 August 2024 (https://github.com/chrisiacovella/tmQM/releases/tag/2024Aug13).
+          
+          The tblite package was used to evaluate the energetic of the system using the gfn2-xtb formalism, 
+          using the calculator as part of the Atomic Simulation Environment (ASE), calculated at accuracy level 1. 
+
+          Scripts used to perform the sampling can be found at  https://github.com/chrisiacovella/xtb_config_gen"
+  remote_dataset:
+    doi: 10.5281/zenodo.15021819
+    url: https://zenodo.org/records/15021819/files/tmqm_xtb_dataset_PdZnFeCu_T100_first_v1.0.hdf5.gz
+    gz_data_file:
+      length: 96544047
+      md5: cb86823c62d2127c209cded323c03eef
+      name: tmqm_xtb_dataset_PdZnFeCu_T100K_single_config_v1.hdf5.gz
+    hdf5_data_file:
+      md5: 96811817c3d65fdbe1c3691125ff0664
+      name: tmqm_xtb_dataset_PdZnFeCu_T100K_single_config_v1.hdf5
 
 nc_1000_v1.1:
-  version: 1.1
+  hdf5_schema: 2
   doi: 10.5281/zenodo.15059379
-  gz_data_file:
-    length: 3425268
-    md5: 43e80a303a9e02c47cc679ee8502cd11
-    name: tmqm_xtb_dataset_PdZnFeCu_T100K_ntc_1000_v1.1.hdf5.gz
-  hdf5_data_file:
-    md5: 6c8676c119a4f0028b3cf9c7de5d577c
-    name: tmqm_xtb_dataset_PdZnFeCu_T100K_ntc_1000_v1.1.hdf5
-  processed_data_file:
-    md5: null
-    name: tmqm_xtb_dataset_PdZnFeCu_T100K_ntc_1000_v1.1.npz
-  url: https://zenodo.org/records/15059379/files/tmqm_xtb_dataset_PdZnFeCu_T100_ntc_1000_v1.1.hdf5.gz
+  available_properties:
+    - positions
+    - atomic_numbers
+    - total_charge
+    - forces
+    - dipole_moment_per_system
+    - energies
+    - partial_charges
+  about: "This dataset contains 103 unique systems with 1000 total configurations (max of 10 configurations per system), 
+          where MD sampling was performed at T=100K.  
+          
+          This dataset is limited to systems that contain transition metals Pd, Zn, Fe,  or Cu, and also only contain 
+          elements C, H, P, S, O, N, F, Cl, or Br. 
+          
+          Potentially problematic configurations (i.e., unstable or those with structural changes) were removed. 
+          Briefly, bond inference was performed on the initial configuration using RDKit and a configuration was 
+          excluded if any of those bond distances changed by more than 0.15 angstroms compared to the initial, 
+          energy minimized state.
+          
+          This dataset was generated starting from the tmQM dataset; the original tmQM repository 
+          (https://github.com/uiocompcat/tmQM) was forked and a release made that corresponds to the data committed
+          on 13 August 2024 (https://github.com/chrisiacovella/tmQM/releases/tag/2024Aug13).
+          
+          Each system in the tmQM database was evaluated using gfn2-xtb, and then a short MD simulation performed to 
+          provide additional configurations of the systems.
+          
+          - The tblite package was used to evaluate the energetic of the system using the gfn2-xtb formalism.
+          - MD simulations were performed using the Atomic Simulation Environment (ASE), using the Langevin integrator.
+          - Simulations were performed at 100K with a 1 fs timestep and 0.01 1/fs friction damping factor. 
+          - In all trajectories, the first configuration corresponds to the energy minimized configuration reported 
+            in the original tmQM dataset.
+          - 100 steps were taken between snapshots (100 fs), with 10 total snapshots per system.
+          - During MD sampling, gfn2-xtb accuracy was set to 2; all reported properties were calculated at 
+            gfn2-xtb accuracy level 1.
+
+          Scripts used to perform the sampling can be found https://github.com/chrisiacovella/xtb_config_gen"
+  remote_dataset:
+    gz_data_file:
+      length: 3425268
+      md5: 43e80a303a9e02c47cc679ee8502cd11
+      name: tmqm_xtb_dataset_PdZnFeCu_T100K_ntc_1000_v1.1.hdf5.gz
+    hdf5_data_file:
+      md5: 6c8676c119a4f0028b3cf9c7de5d577c
+      name: tmqm_xtb_dataset_PdZnFeCu_T100K_ntc_1000_v1.1.hdf5
+    url: https://zenodo.org/records/15059379/files/tmqm_xtb_dataset_PdZnFeCu_T100_ntc_1000_v1.1.hdf5.gz
 
 PdZnFeCu_T100K_v1.1:
-  version: 1.1
+  hdf5_schema: 2
   doi: 10.5281/zenodo.15059433
-  gz_data_file:
-    length: 828124531
-    md5: c7c8d48d7077dfbd10635a17ffa38848
-    name: tmqm_xtb_dataset_PdZnFeCu_T100K_v1.1.hdf5.gz
-  hdf5_data_file:
-    md5: e121c9182a2c6621d9f92f8d4b4a8188
-    name: tmqm_xtb_dataset_PdZnFeCu_T100K_v1.1.hdf5
-  processed_data_file:
-    md5: null
-    name: tmqm_xtb_dataset_PdZnFeCu_T100K_v1.1.npz
-  url: https://zenodo.org/records/15059433/files/tmqm_xtb_dataset_PdZnFeCu_T100_v1.1.hdf5.gz
+  available_properties:
+    - positions
+    - atomic_numbers
+    - total_charge
+    - forces
+    - dipole_moment_per_system
+    - energies
+    - partial_charges
+  about: "This dataset contains 23134 unique systems with 225068 total configurations, where MD sampling was performed 
+          at T=100K. 
+                    
+          This dataset is limited to systems that contain transition metals Pd, Zn, Fe,  or Cu, and also only contain 
+          elements C, H, P, S, O, N, F, Cl, or Br. 
+          
+          Potentially problematic configurations (i.e., unstable or those with structural changes) were removed. 
+          Briefly, bond inference was performed on the initial configuration using RDKit and a configuration was 
+          excluded if any of those bond distances changed by more than 0.15 angstroms compared to the initial, 
+          energy minimized state.
+          
+          This dataset was generated starting from the tmQM dataset; the original tmQM repository 
+          (https://github.com/uiocompcat/tmQM) was forked and a release made that corresponds to the data committed
+          on 13 August 2024 (https://github.com/chrisiacovella/tmQM/releases/tag/2024Aug13).
+          
+          Each system in the tmQM database was evaluated using gfn2-xtb, and then a short MD simulation performed to 
+          provide additional configurations of the systems.
+          
+          - The tblite package was used to evaluate the energetic of the system using the gfn2-xtb formalism.
+          - MD simulations were performed using the Atomic Simulation Environment (ASE), using the Langevin integrator.
+          - Simulations were performed at 100K with a 1 fs timestep and 0.01 1/fs friction damping factor. 
+          - In all trajectories, the first configuration corresponds to the energy minimized configuration reported 
+            in the original tmQM dataset.
+          - 100 steps were taken between snapshots (100 fs), with 10 total snapshots per system.
+          - During MD sampling, gfn2-xtb accuracy was set to 2; all reported properties were calculated at 
+            gfn2-xtb accuracy level 1.
+
+          Scripts used to perform the sampling can be found https://github.com/chrisiacovella/xtb_config_gen"
+  remote_dataset:
+    gz_data_file:
+      length: 828124531
+      md5: c7c8d48d7077dfbd10635a17ffa38848
+      name: tmqm_xtb_dataset_PdZnFeCu_T100K_v1.1.hdf5.gz
+    hdf5_data_file:
+      md5: e121c9182a2c6621d9f92f8d4b4a8188
+      name: tmqm_xtb_dataset_PdZnFeCu_T100K_v1.1.hdf5
+    url: https://zenodo.org/records/15059433/files/tmqm_xtb_dataset_PdZnFeCu_T100_v1.1.hdf5.gz
 
 PdZnFeCuNiPtIrRhCrAg_T100K_v1.1:
-  version: 1.1
+  hdf5_schema: 2
   doi:  10.5281/zenodo.15059465
-  gz_data_file:
-    length: 1829694005
-    md5: 9efd03d7c18901b5618489db6209d0a0
-    name: tmqm_xtb_dataset_PdZnFeCuNiPtIrRhCrAg_T100K_v1.1.hdf5.gz
-  hdf5_data_file:
-    md5: 16fa0b45afb7ff3ca9568cca54d89de0
-    name: tmqm_xtb_dataset_PdZnFeCuNiPtIrRhCrAg_T100K_v1.1.hdf5
-  processed_data_file:
-    md5: null
-    name: tmqm_xtb_dataset_PdZnFeCuNiPtIrRhCrAg_T100K_v1.1.npz
-  url: https://zenodo.org/records/15059465/files/tmqm_xtb_dataset_PdZnFeCuNiPtIrCrAg_T100_v1.1.hdf5.gz
+  available_properties:
+    - positions
+    - atomic_numbers
+    - total_charge
+    - forces
+    - dipole_moment_per_system
+    - energies
+    - partial_charges
+  about: "This dataset contains 51160 unique systems with 499087 total configurations, with MD sampling at T=100K.
+  
+          This dataset is limited to systems that contain transition metals Pd, Zn, Fe, Cu, Ni, Pt, Ir, Rh, Cr, or Ag 
+          and also only contain elements C, H, P, S, O, N, F, Cl, or Br. 
+
+          Potentially problematic configurations (i.e., unstable or those with structural changes) were removed. 
+          Briefly, bond inference was performed on the initial configuration using RDKit and a configuration was 
+          excluded if any of those bond distances changed by more than 0.15 angstroms compared to the initial, 
+          energy minimized state.
+
+          This dataset was generated starting from the tmQM dataset; the original tmQM repository 
+          (https://github.com/uiocompcat/tmQM) was forked and a release made that corresponds to the data committed
+          on 13 August 2024 (https://github.com/chrisiacovella/tmQM/releases/tag/2024Aug13).
+
+          Each system in the tmQM database was evaluated using gfn2-xtb, and then a short MD simulation performed to 
+          provide additional configurations of the systems.
+
+          - The tblite package was used to evaluate the energetic of the system using the gfn2-xtb formalism.
+          - MD simulations were performed using the Atomic Simulation Environment (ASE), using the Langevin integrator.
+          - Simulations were performed at 100K with a 1 fs timestep and 0.01 1/fs friction damping factor. 
+          - In all trajectories, the first configuration corresponds to the energy minimized configuration reported 
+            in the original tmQM dataset.
+          - 100 steps were taken between snapshots (100 fs), with 10 total snapshots per system.
+          - During MD sampling, gfn2-xtb accuracy was set to 2; all reported properties were calculated at 
+            gfn2-xtb accuracy level 1.
+
+          Scripts used to perform the sampling can be found https://github.com/chrisiacovella/xtb_config_gen"
+  remote_dataset:
+    gz_data_file:
+      length: 1829694005
+      md5: 9efd03d7c18901b5618489db6209d0a0
+      name: tmqm_xtb_dataset_PdZnFeCuNiPtIrRhCrAg_T100K_v1.1.hdf5.gz
+    hdf5_data_file:
+      md5: 16fa0b45afb7ff3ca9568cca54d89de0
+      name: tmqm_xtb_dataset_PdZnFeCuNiPtIrRhCrAg_T100K_v1.1.hdf5
+    url: https://zenodo.org/records/15059465/files/tmqm_xtb_dataset_PdZnFeCuNiPtIrCrAg_T100_v1.1.hdf5.gz
 
 PdZnFeCuNiPtIrRhCrAg_T200K_v1.1:
-  version: 1.1
+  hdf5_schema: 2
   doi: 10.5281/zenodo.15226046
-  gz_data_file:
-    length: 4749276362
-    md5: a1d03a025ecfd48d7dc286b3d71cb900
-    name: tmqm_xtb_dataset_PdZnFeCuNiPtIrRhCrAg_T200K_v1.1.hdf5.gz
-  hdf5_data_file:
-    md5: 19203071e1ff743d3402a36750f74b86
-    name: tmqm_xtb_dataset_PdZnFeCuNiPtIrRhCrAg_T200K_v1.1.hdf5
-  processed_data_file:
-    md5: null
-    name: tmqm_xtb_dataset_PdZnFeCuNiPtIrRhCrAg_T200K_v1.1.npz
-  url: https://zenodo.org/records/15226046/files/tmqm_xtb_dataset_PdZnFeCuNiPtIrCrAg_T200_v1.1.hdf5.gz
+  available_properties:
+    - positions
+    - atomic_numbers
+    - total_charge
+    - forces
+    - dipole_moment_per_system
+    - energies
+    - partial_charges
+  about: "This dataset contains 51249 unique systems with 1317625 total configurations, sampled at T=200K.
+
+          This dataset is limited to systems that contain transition metals Pd, Zn, Fe, Cu, Ni, Pt, Ir, Rh, Cr, or Ag 
+          and also only contain elements C, H, P, S, O, N, F, Cl, or Br. 
+
+          Potentially problematic configurations (i.e., unstable or those with structural changes) were removed. 
+          Briefly, bond inference was performed on the initial configuration using RDKit and a configuration was 
+          excluded if any of those bond distances changed by more than 0.15 angstroms compared to the initial, 
+          energy minimized state.
+
+          This dataset was generated starting from the tmQM dataset; the original tmQM repository 
+          (https://github.com/uiocompcat/tmQM) was forked and a release made that corresponds to the data committed
+          on 13 August 2024 (https://github.com/chrisiacovella/tmQM/releases/tag/2024Aug13).
+
+          Each system in the tmQM database was evaluated using gfn2-xtb, and then a short MD simulation performed to 
+          provide additional configurations of the systems.
+
+          - The tblite package was used to evaluate the energetic of the system using the gfn2-xtb formalism.
+          - MD simulations were performed using the Atomic Simulation Environment (ASE), using the Langevin integrator.
+          - Simulations were performed at 200K with a 1 fs timestep and 0.01 1/fs friction damping factor. 
+          - In all trajectories, the first configuration corresponds to the energy minimized configuration reported 
+            in the original tmQM dataset.
+          - 100 steps were taken between snapshots (100 fs), with 30 total snapshots per system.
+          - During MD sampling, gfn2-xtb accuracy was set to 2; all reported properties were calculated at 
+            gfn2-xtb accuracy level 1.
+
+          Scripts used to perform the sampling can be found https://github.com/chrisiacovella/xtb_config_gen"
+  remote_dataset:
+    gz_data_file:
+      length: 4749276362
+      md5: a1d03a025ecfd48d7dc286b3d71cb900
+      name: tmqm_xtb_dataset_PdZnFeCuNiPtIrRhCrAg_T200K_v1.1.hdf5.gz
+    hdf5_data_file:
+      md5: 19203071e1ff743d3402a36750f74b86
+      name: tmqm_xtb_dataset_PdZnFeCuNiPtIrRhCrAg_T200K_v1.1.hdf5
+    url: https://zenodo.org/records/15226046/files/tmqm_xtb_dataset_PdZnFeCuNiPtIrCrAg_T200_v1.1.hdf5.gz
 
 PdZnFeCuNiPtIrRhCrAg_T300K_v1.1:
-  version: 1.1
+  hdf5_schema: 2
   doi: 10.5281/zenodo.15226639
-  gz_data_file:
-    length: 4062452149
-    md5: 5005e4b8c329031b14ceeef67cb67644
-    name: tmqm_xtb_dataset_PdZnFeCuNiPtIrRhCrAg_T300K_v1.1.hdf5.gz
-  hdf5_data_file:
-    md5: 999454490fe077a88c409970504f7f41
-    name: tmqm_xtb_dataset_PdZnFeCuNiPtIrRhCrAg_T300K_v1.1.hdf5
-  processed_data_file:
-    md5: null
-    name: tmqm_xtb_dataset_PdZnFeCuNiPtIrRhCrAg_T300K_v1.1.npz
-  url: https://zenodo.org/records/15226639/files/tmqm_xtb_dataset_PdZnFeCuNiPtIrCrAg_T300_v1.1.hdf5.gz
+  available_properties:
+    - positions
+    - atomic_numbers
+    - total_charge
+    - forces
+    - dipole_moment_per_system
+    - energies
+    - partial_charges
+  about: "This dataset contains 51252 unique systems with 1118541 total configurations, sampled at T=300K.
+
+          This dataset is limited to systems that contain transition metals Pd, Zn, Fe, Cu, Ni, Pt, Ir, Rh, Cr, or Ag 
+          and also only contain elements C, H, P, S, O, N, F, Cl, or Br. 
+
+          Potentially problematic configurations (i.e., unstable or those with structural changes) were removed. 
+          Briefly, bond inference was performed on the initial configuration using RDKit and a configuration was 
+          excluded if any of those bond distances changed by more than 0.15 angstroms compared to the initial, 
+          energy minimized state.
+
+          This dataset was generated starting from the tmQM dataset; the original tmQM repository 
+          (https://github.com/uiocompcat/tmQM) was forked and a release made that corresponds to the data committed
+          on 13 August 2024 (https://github.com/chrisiacovella/tmQM/releases/tag/2024Aug13).
+
+          Each system in the tmQM database was evaluated using gfn2-xtb, and then a short MD simulation performed to 
+          provide additional configurations of the systems.
+
+          - The tblite package was used to evaluate the energetic of the system using the gfn2-xtb formalism.
+          - MD simulations were performed using the Atomic Simulation Environment (ASE), using the Langevin integrator.
+          - Simulations were performed at 300K with a 1 fs timestep and 0.01 1/fs friction damping factor. 
+          - In all trajectories, the first configuration corresponds to the energy minimized configuration reported 
+            in the original tmQM dataset.
+          - 100 steps were taken between snapshots (100 fs), with 30 total snapshots per system.
+          - During MD sampling, gfn2-xtb accuracy was set to 2; all reported properties were calculated at 
+            gfn2-xtb accuracy level 1.
+
+          Scripts used to perform the sampling can be found https://github.com/chrisiacovella/xtb_config_gen"
+  remote_dataset:
+    gz_data_file:
+      length: 4062452149
+      md5: 5005e4b8c329031b14ceeef67cb67644
+      name: tmqm_xtb_dataset_PdZnFeCuNiPtIrRhCrAg_T300K_v1.1.hdf5.gz
+    hdf5_data_file:
+      md5: 999454490fe077a88c409970504f7f41
+      name: tmqm_xtb_dataset_PdZnFeCuNiPtIrRhCrAg_T300K_v1.1.hdf5
+    url: https://zenodo.org/records/15226639/files/tmqm_xtb_dataset_PdZnFeCuNiPtIrCrAg_T300_v1.1.hdf5.gz
 
 PdZnFeCu_T200K_v1.1:
-  version: 1.1
+  hdf5_schema: 2
   doi: 10.5281/zenodo.15227023
-  gz_data_file:
-    length: 2118955545
-    md5: 834ec7ed3670dfaaacc78beccc4b8a8d
-    name: tmqm_xtb_dataset_PdZnFeCu_T200K_v1.1.hdf5.gz
-  hdf5_data_file:
-    md5: 4cb6d3e170e5cb9c63e2cac58b84a33f
-    name: tmqm_xtb_dataset_PdZnFeCu_T200K_v1.1.hdf5
-  processed_data_file:
-    md5: null
-    name: tmqm_xtb_dataset_PdZnFeCu_T200K_v1.1.npz
-  url: https://zenodo.org/records/15227023/files/tmqm_xtb_dataset_PdZnFeCu_T200_v1.1.hdf5.gz
+  available_properties:
+    - positions
+    - atomic_numbers
+    - total_charge
+    - forces
+    - dipole_moment_per_system
+    - energies
+    - partial_charges
+  about: "This dataset contains  23175 unique systems with 584,935 total configurations, sampled at T=200K.
+
+          This dataset is limited to systems that contain transition metals Pd, Zn, Fe, or Cu, 
+          and also only contain elements C, H, P, S, O, N, F, Cl, or Br.
+          
+          Potentially problematic configurations (i.e., unstable or those with structural changes) were removed. 
+          Briefly, bond inference was performed on the initial configuration using RDKit and a configuration was 
+          excluded if any of those bond distances changed by more than 0.15 angstroms compared to the initial, 
+          energy minimized state.
+
+          This dataset was generated starting from the tmQM dataset; the original tmQM repository 
+          (https://github.com/uiocompcat/tmQM) was forked and a release made that corresponds to the data committed
+          on 13 August 2024 (https://github.com/chrisiacovella/tmQM/releases/tag/2024Aug13).
+
+          Each system in the tmQM database was evaluated using gfn2-xtb, and then a short MD simulation performed to 
+          provide additional configurations of the systems.
+
+          - The tblite package was used to evaluate the energetic of the system using the gfn2-xtb formalism.
+          - MD simulations were performed using the Atomic Simulation Environment (ASE), using the Langevin integrator.
+          - Simulations were performed at 200K with a 1 fs timestep and 0.01 1/fs friction damping factor. 
+          - In all trajectories, the first configuration corresponds to the energy minimized configuration reported 
+            in the original tmQM dataset.
+          - 100 steps were taken between snapshots (100 fs), with 30 total snapshots per system.
+          - During MD sampling, gfn2-xtb accuracy was set to 2; all reported properties were calculated at 
+            gfn2-xtb accuracy level 1.
+
+          Scripts used to perform the sampling can be found https://github.com/chrisiacovella/xtb_config_gen"
+  remote_dataset:
+    gz_data_file:
+      length: 2118955545
+      md5: 834ec7ed3670dfaaacc78beccc4b8a8d
+      name: tmqm_xtb_dataset_PdZnFeCu_T200K_v1.1.hdf5.gz
+    hdf5_data_file:
+      md5: 4cb6d3e170e5cb9c63e2cac58b84a33f
+      name: tmqm_xtb_dataset_PdZnFeCu_T200K_v1.1.hdf5
+    url: https://zenodo.org/records/15227023/files/tmqm_xtb_dataset_PdZnFeCu_T200_v1.1.hdf5.gz
 
 PdZnFeCu_T200K_ncr10_v1.1:
-  version: 1.1
+  hdf5_schema: 2
   doi: 10.5281/zenodo.15227086
-  gz_data_file:
-    length: 846498137
-    md5: 9bf52e1a6ce2fa0a72c93600fb7c7431
-    name: tmqm_xtb_dataset_PdZnFeCu_T200K_ncr_10_v1.1.hdf5.gz
-  hdf5_data_file:
-    md5: 624979457c74cb472bef4bbbba77920b
-    name: tmqm_xtb_dataset_PdZnFeCu_T200K_ncr_10_v1.1.hdf5
-  processed_data_file:
-    md5: null
-    name: tmqm_xtb_dataset_PdZnFeCu_T200K_ncr_10_v1.1.npz
-  url: https://zenodo.org/records/15227086/files/tmqm_xtb_dataset_PdZnFeCu_T200_first10_v1.1.hdf5.gz
+  available_properties:
+    - positions
+    - atomic_numbers
+    - total_charge
+    - forces
+    - dipole_moment_per_system
+    - energies
+    - partial_charges
+  about: "This dataset contains 23175b unique systems with 230,030 total configurations (maximum of 10 per system), 
+          sampled at T=200K. While 30 configurations were generated per system during sampling, this dataset limits 
+          this to be a maximum of 10 configurations per system, to allow for more direct comparison with T=100K data.
+          
+
+          This dataset is limited to systems that contain transition metals Pd, Zn, Fe, or Cu, 
+          and also only contain elements C, H, P, S, O, N, F, Cl, or Br.
+          
+          Potentially problematic configurations (i.e., unstable or those with structural changes) were removed. 
+          Briefly, bond inference was performed on the initial configuration using RDKit and a configuration was 
+          excluded if any of those bond distances changed by more than 0.15 angstroms compared to the initial, 
+          energy minimized state.
+
+          This dataset was generated starting from the tmQM dataset; the original tmQM repository 
+          (https://github.com/uiocompcat/tmQM) was forked and a release made that corresponds to the data committed
+          on 13 August 2024 (https://github.com/chrisiacovella/tmQM/releases/tag/2024Aug13).
+
+          Each system in the tmQM database was evaluated using gfn2-xtb, and then a short MD simulation performed to 
+          provide additional configurations of the systems.
+
+          - The tblite package was used to evaluate the energetic of the system using the gfn2-xtb formalism.
+          - MD simulations were performed using the Atomic Simulation Environment (ASE), using the Langevin integrator.
+          - Simulations were performed at 200K with a 1 fs timestep and 0.01 1/fs friction damping factor. 
+          - In all trajectories, the first configuration corresponds to the energy minimized configuration reported 
+            in the original tmQM dataset.
+          - 100 steps were taken between snapshots (100 fs), with 30 total snapshots per system.
+          - During MD sampling, gfn2-xtb accuracy was set to 2; all reported properties were calculated at 
+            gfn2-xtb accuracy level 1.
+
+          Scripts used to perform the sampling can be found https://github.com/chrisiacovella/xtb_config_gen"
+  remote_dataset:
+    gz_data_file:
+      length: 846498137
+      md5: 9bf52e1a6ce2fa0a72c93600fb7c7431
+      name: tmqm_xtb_dataset_PdZnFeCu_T200K_ncr_10_v1.1.hdf5.gz
+    hdf5_data_file:
+      md5: 624979457c74cb472bef4bbbba77920b
+      name: tmqm_xtb_dataset_PdZnFeCu_T200K_ncr_10_v1.1.hdf5
+    url: https://zenodo.org/records/15227086/files/tmqm_xtb_dataset_PdZnFeCu_T200_first10_v1.1.hdf5.gz
 
 PdZnFeCu_T300K_v1.1:
-  version: 1.1
+  hdf5_schema: 2
   doi: 10.5281/zenodo.15227144
+  available_properties:
+    - positions
+    - atomic_numbers
+    - total_charge
+    - forces
+    - dipole_moment_per_system
+    - energies
+    - partial_charges
+  about: "This dataset contains 23177 unique systems with 490,861 total configurations, sampled at T=300K.
+          
+          This dataset is limited to systems that contain transition metals Pd, Zn, Fe, or Cu, 
+          and also only contain elements C, H, P, S, O, N, F, Cl, or Br.
+          
+          Potentially problematic configurations (i.e., unstable or those with structural changes) were removed. 
+          Briefly, bond inference was performed on the initial configuration using RDKit and a configuration was 
+          excluded if any of those bond distances changed by more than 0.15 angstroms compared to the initial, 
+          energy minimized state.
+
+          This dataset was generated starting from the tmQM dataset; the original tmQM repository 
+          (https://github.com/uiocompcat/tmQM) was forked and a release made that corresponds to the data committed
+          on 13 August 2024 (https://github.com/chrisiacovella/tmQM/releases/tag/2024Aug13).
+
+          Each system in the tmQM database was evaluated using gfn2-xtb, and then a short MD simulation performed to 
+          provide additional configurations of the systems.
+
+          - The tblite package was used to evaluate the energetic of the system using the gfn2-xtb formalism.
+          - MD simulations were performed using the Atomic Simulation Environment (ASE), using the Langevin integrator.
+          - Simulations were performed at 300K with a 1 fs timestep and 0.01 1/fs friction damping factor. 
+          - In all trajectories, the first configuration corresponds to the energy minimized configuration reported 
+            in the original tmQM dataset.
+          - 100 steps were taken between snapshots (100 fs), with 30 total snapshots per system.
+          - During MD sampling, gfn2-xtb accuracy was set to 2; all reported properties were calculated at 
+            gfn2-xtb accuracy level 1.
+
+          Scripts used to perform the sampling can be found https://github.com/chrisiacovella/xtb_config_gen"
   gz_data_file:
     length: 1793203012
     md5: c133327bcf73182efecccaea51a34fdf
@@ -177,14 +460,49 @@ PdZnFeCu_T300K_v1.1:
   hdf5_data_file:
     md5: 0bbee004a633654963b57811b690b128
     name: tmqm_xtb_dataset_PdZnFeCu_T300K_v1.1.hdf5
-  processed_data_file:
-    md5: null
-    name: tmqm_xtb_dataset_PdZnFeCu_T300K_v1.1.npz
   url: https://zenodo.org/records/15227144/files/tmqm_xtb_dataset_PdZnFeCu_T300_v1.1.hdf5.gz
 
 PdZnFeCu_T300K_ncr10_v1.1:
-  version: 1.1
+  hdf5_schema: 2
   doi: 10.5281/zenodo.15227237
+  available_properties:
+    - positions
+    - atomic_numbers
+    - total_charge
+    - forces
+    - dipole_moment_per_system
+    - energies
+    - partial_charges
+  about: "This dataset contains 23177 unique systems with 225,571 total configurations with a maximum number 
+          of 10 configurations per system, sampled at T=300K. While 30 configurations were generated,
+          this was restricted to only be 10 maximum per system for comparison to the T=100K data where 
+          only 10 configurations were generated.
+          
+          This dataset is limited to systems that contain transition metals Pd, Zn, Fe, or Cu, 
+          and also only contain elements C, H, P, S, O, N, F, Cl, or Br.
+          
+          Potentially problematic configurations (i.e., unstable or those with structural changes) were removed. 
+          Briefly, bond inference was performed on the initial configuration using RDKit and a configuration was 
+          excluded if any of those bond distances changed by more than 0.15 angstroms compared to the initial, 
+          energy minimized state.
+
+          This dataset was generated starting from the tmQM dataset; the original tmQM repository 
+          (https://github.com/uiocompcat/tmQM) was forked and a release made that corresponds to the data committed
+          on 13 August 2024 (https://github.com/chrisiacovella/tmQM/releases/tag/2024Aug13).
+
+          Each system in the tmQM database was evaluated using gfn2-xtb, and then a short MD simulation performed to 
+          provide additional configurations of the systems.
+
+          - The tblite package was used to evaluate the energetic of the system using the gfn2-xtb formalism.
+          - MD simulations were performed using the Atomic Simulation Environment (ASE), using the Langevin integrator.
+          - Simulations were performed at 300K with a 1 fs timestep and 0.01 1/fs friction damping factor. 
+          - In all trajectories, the first configuration corresponds to the energy minimized configuration reported 
+            in the original tmQM dataset.
+          - 100 steps were taken between snapshots (100 fs), with 30 total snapshots per system.
+          - During MD sampling, gfn2-xtb accuracy was set to 2; all reported properties were calculated at 
+            gfn2-xtb accuracy level 1.
+
+          Scripts used to perform the sampling can be found https://github.com/chrisiacovella/xtb_config_gen"
   gz_data_file:
     length: 831615242
     md5: f7c6dca18f52d99253cbdd74fe540032
@@ -192,7 +510,5 @@ PdZnFeCu_T300K_ncr10_v1.1:
   hdf5_data_file:
     md5: 60219cdee1c975f3eef2a193d16a3dcc
     name: tmqm_xtb_dataset_PdZnFeCu_T300K_ncr_10_v1.1.hdf5
-  processed_data_file:
-    md5: null
-    name: tmqm_xtb_dataset_PdZnFeCu_T300K_ncr_10_v1.1.npz
   url: https://zenodo.org/records/15227237/files/tmqm_xtb_dataset_PdZnFeCu_T300_first10_v1.1.hdf5.gz
+

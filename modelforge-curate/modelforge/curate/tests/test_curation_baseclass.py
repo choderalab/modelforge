@@ -4,7 +4,7 @@ import numpy as np
 from openff.units import unit
 
 from modelforge.curate import Record, SourceDataset
-from modelforge.curate.units import GlobalUnitSystem
+from modelforge.utils.units import GlobalUnitSystem
 from modelforge.curate.properties import *
 
 from modelforge.curate.datasets.curation_baseclass import DatasetCuration

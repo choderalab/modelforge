@@ -171,7 +171,6 @@ class GlobalUnitSystem:
 
         """
         if isinstance(units, str):
-
             units = _convert_unit_str_to_unit_unit(units)
 
         if not isinstance(units, unit.Unit):

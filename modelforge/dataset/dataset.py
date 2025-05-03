@@ -239,6 +239,7 @@ class HDF5Dataset:
         properties_assignment: Dict[str, str],
         version_select: str = "latest",
         force_download: bool = False,
+        regenerate_processed_dataset: bool = False,
         element_filter: List[tuple] = None,
         local_yaml_file: Optional[str] = None,
     ):
@@ -260,15 +261,17 @@ class HDF5Dataset:
         self.local_cache_dir = os.path.expanduser(local_cache_dir)
 
         self.force_download = force_download
+        self.regenerate_processed_dataset = regenerate_processed_dataset
         self.element_filter = element_filter
         self.version_select = version_select
         self.local_yaml_file = local_yaml_file
 
         self._properties_of_interest = properties_of_interest
 
+        self.cache_regenerated = False
         from modelforge.utils import PropertyNames
 
-        self._properties_names = PropertyNames(**properties_assignment)
+        self._properties_assignment = PropertyNames(**properties_assignment)
 
         from loguru import logger
 
@@ -280,7 +283,7 @@ class HDF5Dataset:
             from importlib import resources
             from modelforge.dataset import yaml_files
 
-            yaml_file = resources.files(yaml_files) / f"{dataset_name}.yaml"
+            yaml_file = resources.files(yaml_files) / f"{dataset_name.lower()}.yaml"
 
             # check to ensure the yaml file exists
             if not os.path.exists(yaml_file):
@@ -308,6 +311,10 @@ class HDF5Dataset:
 
         # load the atomic self energies  from the data file if they exist
         if "atomic_self_energies" in data_inputs:
+
+            for key, val in data_inputs["atomic_self_energies"].items():
+                data_inputs["atomic_self_energies"][key] = Quantity(val)
+
             self._ase = data_inputs["atomic_self_energies"]
         else:
             log.warning("No atomic self energies found in the dataset yaml file.")
@@ -345,6 +352,7 @@ class HDF5Dataset:
             self.hdf5_data_file_dict = data_inputs[dataset_version]["remote_dataset"][
                 "hdf5_data_file"
             ]
+        self.processed_data_file = self.dataset_name.lower() + ".npz"
 
     def _acquire_dataset(self) -> None:
         """
@@ -355,21 +363,33 @@ class HDF5Dataset:
 
         This also handles file validation for any local datasets defined in a local_yaml_file.
 
-
-        Examples
-        --------
-        >>> data = HDF5Dataset(dataset_name="qm9", local_cache_dir="~/data", )
-        >>> data._acquire_dataset()  # Downloads the dataset
-
         """
         # Right now this function needs to be defined for each dataset.
         # once all datasets are moved to zenodo, we should only need a single function defined in the base class
         from modelforge.utils.remote import download_from_url
 
+        if (
+            os.path.exists(f"{self.local_cache_dir}/{self.processed_data_file}")
+            and not self.force_download
+            and not self.regenerate_processed_dataset
+        ):
+            if self._metadata_validation(
+                self.processed_data_file.replace(".npz", ".json"), self.local_cache_dir
+            ):
+                log.debug(
+                    f"Unzipped npz file {self.processed_data_file} already exists in {self.local_cache_dir}"
+                )
+                self._from_file_cache()
+
+                return
+
+        # if we do not use the cached file, we will mark the cache as regenerated
+        self.cache_regenerated = True
+
         # If we are not using a local_yaml_file,
         # (1) we will check the dataset_cache_dir  for the appropriate hdf5 file
         # (2) if that is not available, we will check for the gz file
-        # (3) if that is not available, we will download the gz filele
+        # (3) if that is not available, we will download the gz file
         if self.local_yaml_file is None:
             # first check if the appropriate .hdf5 file exists in the dataset_cache_dir and the checksum matches
             if (
@@ -415,6 +435,15 @@ class HDF5Dataset:
         self._from_hdf5()
         self._to_file_cache()
         self._from_file_cache()
+
+    @property
+    def atomic_self_energies(self):
+        from modelforge.potential.processing import AtomicSelfEnergies
+
+        if self._ase is None:
+            return None
+
+        return AtomicSelfEnergies(energies=self._ase)
 
     # def __init__(
     #     self,
@@ -511,7 +540,7 @@ class HDF5Dataset:
             Dictionary of properties assignment.
 
         """
-        return self._properties_names
+        return self._properties_assignment
 
     @property
     def available_properties(self) -> List[str]:
@@ -638,7 +667,7 @@ class HDF5Dataset:
 
                     if (
                         self._npz_metadata["hdf5_checksum"]
-                        != self.hdf5_data_file["md5"]
+                        != self.hdf5_data_file_dict["md5"]
                     ):
                         log.warning(
                             f"Checksum for hdf5 file used to generate npz file does not match current file in dataloader."
@@ -962,6 +991,7 @@ class HDF5Dataset:
                     data[value] = np.concatenate(per_atom_data[value], axis=0)
 
             self.hdf5data = data
+
         # we can safely remove the lockfile now that we have read the file
         import os
 
@@ -977,14 +1007,14 @@ class HDF5Dataset:
         # skip validating the checksum, as the npz file checksum of otherwise identical data differs between python 3.11 and 3.9/10
         # we have a metadatafile we validate separately instead
         if self._file_validation(
-            self.processed_data_file["name"], self.local_cache_dir, checksum=None
+            self.processed_data_file, self.local_cache_dir, checksum=None
         ):
             if self._metadata_validation(
-                self.processed_data_file["name"].replace(".npz", ".json"),
+                self.processed_data_file.replace(".npz", ".json"),
                 self.local_cache_dir,
             ):
                 log.debug(
-                    f"Loading processed data from {self.local_cache_dir}/{self.processed_data_file['name']} generated on {self._npz_metadata['date_generated']}"
+                    f"Loading processed data from {self.local_cache_dir}/{self.processed_data_file} generated on {self._npz_metadata['date_generated']}"
                 )
                 log.debug(
                     f"Properties of Interest in .npz file: {self._npz_metadata['data_keys']}"
@@ -996,21 +1026,19 @@ class HDF5Dataset:
                 # we will just open it as write, since we do not need to read it in; this ensure that we don't have an issue
                 # where we have deleted the lock file from a separate, prior process
                 with OpenWithLock(
-                    f"{self.local_cache_dir}/{self.processed_data_file['name']}.lockfile",
+                    f"{self.local_cache_dir}/{self.processed_data_file}.lockfile",
                     "w",
                 ) as f:
                     self.numpy_data = np.load(
-                        f"{self.local_cache_dir}/{self.processed_data_file['name']}"
+                        f"{self.local_cache_dir}/{self.processed_data_file}"
                     )
                 # we can safely remove the lockfile
                 import os
 
-                os.remove(
-                    f"{self.local_cache_dir}/{self.processed_data_file['name']}.lockfile"
-                )
+                os.remove(f"{self.local_cache_dir}/{self.processed_data_file}.lockfile")
         else:
             raise ValueError(
-                f"Processed data file {self.local_cache_dir}/{self.processed_data_file['name']} not found."
+                f"Processed data file {self.local_cache_dir}/{self.processed_data_file} not found."
             )
 
     def _to_file_cache(
@@ -1027,7 +1055,7 @@ class HDF5Dataset:
                 >>> hdf5_data._to_file_cache()
         """
         log.debug(
-            f"Writing npz file to {self.local_cache_dir}/{self.processed_data_file['name']}"
+            f"Writing npz file to {self.local_cache_dir}/{self.processed_data_file}"
         )
         from modelforge.utils.misc import OpenWithLock
 
@@ -1035,11 +1063,11 @@ class HDF5Dataset:
         # reading the npz file from a separate process while still writing
 
         with OpenWithLock(
-            f"{self.local_cache_dir}/{self.processed_data_file['name']}.lockfile",
+            f"{self.local_cache_dir}/{self.processed_data_file}.lockfile",
             "w",
         ) as f:
             np.savez(
-                f"{self.local_cache_dir}/{self.processed_data_file['name']}",
+                f"{self.local_cache_dir}/{self.processed_data_file}",
                 atomic_subsystem_counts=self.atomic_subsystem_counts,
                 n_confs=self.n_confs,
                 **self.hdf5data,
@@ -1047,7 +1075,7 @@ class HDF5Dataset:
         # we can safely remove the lockfile
         import os
 
-        os.remove(f"{self.local_cache_dir}/{self.processed_data_file['name']}.lockfile")
+        os.remove(f"{self.local_cache_dir}/{self.processed_data_file}.lockfile")
         import datetime
 
         # we will generate a simple metadata file to list which data keys were used to generate the npz file
@@ -1056,13 +1084,13 @@ class HDF5Dataset:
         metadata = {
             "data_keys": list(self.hdf5data.keys()),
             "element_filter": str(self.element_filter),
-            "hdf5_checksum": self.hdf5_data_file["md5"],
-            "hdf5_gz_checkusm": self.gz_data_file["md5"],
+            "hdf5_checksum": self.hdf5_data_file_dict["md5"],
+            "hdf5_gz_checkusm": self.gz_data_file_dict["md5"],
             "date_generated": str(datetime.datetime.now()),
         }
         import json
 
-        json_file_path = f"{self.local_cache_dir}/{self.processed_data_file['name'].replace('.npz', '.json')}"
+        json_file_path = f"{self.local_cache_dir}/{self.processed_data_file.replace('.npz', '.json')}"
         with OpenWithLock(f"{json_file_path}.lockfile", "w") as fl:
             with open(
                 json_file_path,
@@ -1071,57 +1099,6 @@ class HDF5Dataset:
                 json.dump(metadata, f)
 
         del self.hdf5data
-
-
-class DatasetFactory:
-    """
-    Factory for creating TorchDataset instances from HDF5 data.
-
-    Methods are provided to load or process data as needed, handling caching to improve efficiency.
-    """
-
-    @staticmethod
-    def _load_or_process_data(
-        data: HDF5Dataset,
-    ) -> None:
-        """
-        Loads the dataset from cache if available, otherwise processes and caches the data.
-
-        Parameters
-        ----------
-        data : HDF5Dataset
-            The HDF5 dataset instance to use.
-        """
-
-        if data.local_yaml_file is not None:
-            # We want to avoid having to download something that already exists.
-            # We first want to see if the hdf5 file exists and matches the checksum.
-            # If not, we will check to see if the gzipped file exists and matches the checksum.
-            # If that fails, we will download the gzipped file.
-            # Note, we only need an if/else here because the download function actually checks
-
-            data._acquire_dataset()
-
-    @staticmethod
-    def create_dataset(
-        data: HDF5Dataset,
-    ) -> TorchDataset:
-        """
-        Creates a TorchDataset from an HDF5Dataset, applying optional transformations.
-
-        Parameters
-        ----------
-        data : HDF5Dataset
-            The HDF5 dataset to convert.
-
-        Returns
-        -------
-        TorchDataset
-            The resulting PyTorch-compatible dataset.
-        """
-
-        DatasetFactory._load_or_process_data(data)
-        return TorchDataset(data.numpy_data, data._property_names)
 
 
 from openff.units import unit
@@ -1139,10 +1116,10 @@ class DataModule(pl.LightningDataModule):
         atomic_self_energies: Optional[Dict[str, float]] = None,
         regression_ase: bool = False,
         force_download: bool = False,
+        regenerate_processed_dataset: bool = False,
         version_select: str = "latest",
         local_cache_dir: str = "./",
         dataset_cache_dir: str = "./",
-        regenerate_dataset_statistic: bool = False,
         properties_of_interest: Optional[PropertyNames] = None,
         properties_assignment: Optional[Dict[str, str]] = None,
         element_filter: Optional[List[tuple]] = None,
@@ -1151,9 +1128,10 @@ class DataModule(pl.LightningDataModule):
         """
         Initializes a DataModule for PyTorch Lightning handling data preparation and loading object with the specified configuration.
         If `remove_self_energies` is `True` and:
-        - `self_energies` are passed as a dictionary, these will be used
-        - `self_energies` are `None`, `self._ase` will be used
-        - `regression_ase` is `True`, self_energies will be calculated
+        - If `atomic_self_energies` are passed as a dictionary, these will be used
+        - If we have not provided a dict for `atomic_self_energies` and  regression_ase is 'True', self energies will be calculated via regression
+        - Otherwise, ASE values provided with the dataset will be used; if they are not provided in the dataset yaml, an error will be raised
+        If `remove_self_energies` is `False`, the self energies from the dataset will be queried and written to the dataset statistics file
 
         Parameters
         ---------
@@ -1174,6 +1152,8 @@ class DataModule(pl.LightningDataModule):
                 If True, calculate atomic self energies (ASE) using regression, rather than provided values or those in the dataset.
             force_download : bool,  defaults to False
                 Whether to force the dataset to be downloaded, even if it is already cached.
+            regenerate_processed_dataset : bool, defaults to False
+                Whether to regenerate the .npz file cached in local_cache_dir.
             version_select : str, defaults to "latest"
                 Select the version of the dataset to use. If "latest", the latest version will be used.
                 "latest_test" will use the latest test version. Specific versions can be selected by passing the version name
@@ -1182,8 +1162,6 @@ class DataModule(pl.LightningDataModule):
                 Directory to store the files associated/specific with a given dataset/training run.
             dataset_cache_dir : str, defaults to "./"
                 Directory to store the dataset files,
-            regenerate_dataset_statistic : bool, defaults to False
-                Whether to regenerate the dataset statistics.
             properties_of_interest : Optional[PropertyNames]
                 The properties to include in the dataset.
             properties_assignment : Optional[Dict[str, str]]
@@ -1207,8 +1185,8 @@ class DataModule(pl.LightningDataModule):
         )
         self.regression_ase = regression_ase
         self.force_download = force_download
+        self.regenerate_processed_dataset = regenerate_processed_dataset
         self.version_select = version_select
-        self.regenerate_dataset_statistic = regenerate_dataset_statistic
         self.train_dataset: Optional[TorchDataset] = None
         self.val_dataset: Optional[TorchDataset] = None
         self.test_dataset: Optional[TorchDataset] = None
@@ -1251,26 +1229,15 @@ class DataModule(pl.LightningDataModule):
         """
         # check if there is a filelock present, if so, wait until it is removed
 
-        if properties_of_interest is None:
+        if self.properties_of_interest is None:
             raise ValueError(
                 "Properties of interest must be provided. Please set properties_of_interest."
             )
-        if properties_assignment is None:
+        if self.properties_assignment is None:
             raise ValueError(
                 "Properties assignment must be provided. Please set properties_assignment."
             )
 
-            # if the dataset is not already processed, process it
-        # from modelforge.dataset import _ImplementedDatasets
-
-        # dataset_class = _ImplementedDatasets.get_dataset_class(str(self.name))
-        # dataset = dataset_class(
-        #     force_download=self.force_download,
-        #     version_select=self.version_select,
-        #     local_cache_dir=self.local_cache_dir,
-        #     regenerate_cache=self.regenerate_cache,
-        #     element_filter=self.element_filter,
-        # )
         dataset = HDF5Dataset(
             dataset_name=self.name,
             force_download=self.force_download,
@@ -1281,59 +1248,55 @@ class DataModule(pl.LightningDataModule):
             dataset_cache_dir=self.dataset_cache_dir,
             element_filter=self.element_filter,
             local_yaml_file=self.local_yaml_file,
+            regenerate_processed_dataset=self.regenerate_processed_dataset,
         )
 
-        # check if the dataset is already processed
         torch_dataset = self._create_torch_dataset(dataset)
-        # if dataset statistics is present load it from disk
-        if (
-            os.path.exists(self.dataset_statistic_filename)
-            and self.regenerate_dataset_statistic is False
-        ):
-            log.info(
-                f"Loading dataset statistics from disk: {self.dataset_statistic_filename}"
-            )
-            atomic_self_energies = self._read_atomic_self_energies()
-            training_dataset_statistics = self._read_atomic_energies_stats()
-        else:
-            atomic_self_energies = None
-            training_dataset_statistics = None
-            # obtain the atomic self energies from the dataset
-            dataset_ase = dataset.atomic_self_energies.energies
 
-            # depending on the control flow that is set in the __init__,
-            # either use the atomic self energies of the dataset, recalculate
-            # it on the fly  or use the provided dictionary
+        if self.remove_self_energies:
+            # all the logic described in the doc string above regarding
+            # whether to regress , user provided, or from the dataset
+            # are handled by this function
+            # note this will return an instance of the AtomicSelfEnergies class
+            # not a dictionary
             atomic_self_energies = self._calculate_atomic_self_energies(
-                torch_dataset, dataset_ase
+                torch_dataset, dataset.atomic_self_energies
             )
 
-        # wrap them in the AtomicSelfEnergy class for processing the dataset
-        from modelforge.potential.processing import AtomicSelfEnergies
+        else:
+            # if we are not removing self energies, we do not actually use these values
+            # but we still need something for the dataset statistic writer
+            atomic_self_energies = dataset.atomic_self_energies
 
+        # perform the operations to process the dataset which may include:
+        # 1. removing self energies
+        # 2. shifting the center of mass to the origin
+        # 3. calculating the pairlist
         log.debug("Process dataset ...")
-        self._process_dataset(torch_dataset, AtomicSelfEnergies(atomic_self_energies))
+        self._per_datapoint_operations(torch_dataset, atomic_self_energies)
 
         # calculate the dataset statistic of the dataset
         # This is done __after__ self energies are removed (if requested)
-        if training_dataset_statistics is None:
-            from modelforge.dataset.utils import calculate_mean_and_variance
+        # note, this is a fast operation and thus we will just recalculate this every time to ensure
+        # there are no issues with an old statistic file hanging around in a directory
+        from modelforge.dataset.utils import calculate_mean_and_variance
 
-            training_dataset_statistics = calculate_mean_and_variance(torch_dataset)
-            # wrap everything in a dictionary and save it to disk
-            dataset_statistic = {
-                "atomic_self_energies": atomic_self_energies,
-                "training_dataset_statistics": training_dataset_statistics,
-            }
+        training_dataset_statistics = calculate_mean_and_variance(torch_dataset)
 
-            if atomic_self_energies and training_dataset_statistics:
-                log.info(dataset_statistic)
-                # save dataset_statistic dictionary to disk as yaml files
-                self._log_dataset_statistic(dataset_statistic)
-            else:
-                raise RuntimeError(
-                    "Atomic self energies or atomic energies statistics are missing."
-                )
+        # wrap everything in a dictionary and save it to disk
+        dataset_statistic = {
+            "atomic_self_energies": atomic_self_energies.energies,
+            "training_dataset_statistics": training_dataset_statistics,
+        }
+
+        if atomic_self_energies and training_dataset_statistics:
+            log.info(dataset_statistic)
+            # save dataset_statistic dictionary to disk as yaml files
+            self._log_dataset_statistic(dataset_statistic)
+        else:
+            raise RuntimeError(
+                "Atomic self energies or atomic energies statistics are missing."
+            )
 
         # Save processed dataset and statistics for later use in setup
         self._cache_dataset(torch_dataset)
@@ -1387,39 +1350,38 @@ class DataModule(pl.LightningDataModule):
 
     def _create_torch_dataset(self, dataset):
         """Create a PyTorch dataset from the provided dataset instance."""
-        return DatasetFactory().create_dataset(dataset)
-
-    def _process_dataset(
-        self, torch_dataset: TorchDataset, atomic_self_energies: "AtomicSelfEnergies"
-    ) -> None:
-        """Calculate and subtract self energies from the dataset."""
-        from modelforge.potential.processing import AtomicSelfEnergies
-
-        if self.regression_ase and not self.dict_atomic_self_energies:
-            atomic_self_energies = AtomicSelfEnergies(
-                self.calculate_self_energies(torch_dataset)
-            )
-        self._per_datapoint_operations(torch_dataset, atomic_self_energies)
+        dataset._acquire_dataset()
+        return TorchDataset(dataset.numpy_data, dataset.properties_assignment)
 
     def _calculate_atomic_self_energies(
         self, torch_dataset, dataset_ase
-    ) -> Dict[str, float]:
-        # Use provided ase dictionary
-        if self.dict_atomic_self_energies:
+    ) -> "AtomicSelfEnergies":
+        """
+        This function wraps the logic for the source of the atomic self energies,
+        i.e., from a provided dictionary, from the dataset, or calculated via regression.
+        """
+        from modelforge.potential.processing import AtomicSelfEnergies
+
+        # if a dictionary of atomic self energies is provided, we will use that
+        if self.dict_atomic_self_energies and self.regression_ase is False:
             log.info("Using atomic self energies from the provided dictionary.")
-            return self.dict_atomic_self_energies
-
-        # Use regression to calculate ase
-        elif self.dict_atomic_self_energies is None and self.regression_ase is True:
+            atomic_self_energies = AtomicSelfEnergies(self.dict_atomic_self_energies)
+        # if we have not been provided ASE, but regression_ase is True, we will calculate them
+        elif self.regression_ase is True:
             log.info("Calculating atomic self energies using regression.")
-            return self.calculate_self_energies(torch_dataset)
-
-        # use self energies provided by the dataset (this should be the DEFAULT option)
-        elif self.dict_atomic_self_energies is None and self.regression_ase is False:
-            log.info("Using atomic self energies provided by the dataset.")
-            return dataset_ase
+            atomic_self_energies = AtomicSelfEnergies(
+                self.calculate_self_energies(torch_dataset)
+            )
+        # if we have not been provided ASE and regression_ase is False, we will use the ASE values provided by the dataset
         else:
-            raise RuntimeError()
+            log.info("Using atomic self energies provided by the dataset.")
+            atomic_self_energies = dataset_ase
+            if atomic_self_energies is None:
+                raise ValueError(
+                    "Atomic self energies are required. Provide them or set regression_ase = True."
+                )
+
+        return atomic_self_energies
 
     def _cache_dataset(self, torch_dataset):
         """Cache the dataset and its statistics using PyTorch's serialization."""
@@ -1542,7 +1504,7 @@ class DataModule(pl.LightningDataModule):
         for batch in tqdm(
             DataLoader(
                 dataset,
-                batch_size=500,
+                batch_size=200,
                 collate_fn=collate_conformers,
                 num_workers=4,
                 shuffle=False,
@@ -1562,7 +1524,6 @@ class DataModule(pl.LightningDataModule):
 
         nr_of_pairs = torch.cat(n_pairs_per_system_list, dim=0)
         nr_of_pairs_in_dataset = torch.cumsum(nr_of_pairs, dim=0, dtype=torch.int64)
-
         # Determine N (number of tensors) and K (maximum M)
         dataset.properties_of_interest["pair_list"] = torch.cat(all_pairs, dim=1)
         dataset.properties_of_interest["number_of_pairs"] = nr_of_pairs_in_dataset
@@ -1708,7 +1669,7 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
     return BatchData(nnp_input, metadata)
 
 
-from modelforge.dataset.dataset import DatasetFactory
+# from modelforge.dataset.dataset import DatasetFactory
 from modelforge.dataset.utils import (
     FirstComeFirstServeSplittingStrategy,
     SplittingStrategy,
@@ -1725,9 +1686,11 @@ def initialize_datamodule(
     regression_ase: bool = False,
     regenerate_dataset_statistic: bool = False,
     local_cache_dir="./",
+    dataset_cache_dir="./",
     properties_of_interest: Optional[PropertyNames] = None,
     properties_assignment: Optional[Dict[str, str]] = None,
     element_filter: Optional[List[tuple]] = None,
+    local_yaml_file: Optional[str] = None,
 ) -> DataModule:
     """
     Initialize a dataset for a given mode.
@@ -1743,9 +1706,11 @@ def initialize_datamodule(
         regression_ase=regression_ase,
         regenerate_dataset_statistic=regenerate_dataset_statistic,
         local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
         properties_of_interest=properties_of_interest,
         properties_assignment=properties_assignment,
         element_filter=element_filter,
+        local_yaml_file=local_yaml_file,
     )
     data_module.prepare_data()
     data_module.setup()

@@ -10,7 +10,7 @@ from .phalkethoh import PhAlkEthOHDataset
 from .tmqm import tmQMDataset
 from .tmqm_xtb import tmQMXTBDataset
 from .fe_II import FeIIDataset
-from .dataset import DatasetFactory, DataModule
+from .dataset import DataModule  # DatasetFactory,
 from enum import Enum
 
 

@@ -2,32 +2,75 @@ dataset: fe_II
 latest: full_version_v1.1
 latest_test: nc_1000_v1.1
 
+description: "This dataset contains 384 unique systems with a total of 28,834 configurations
+    (note, the original publication states 383 unique systems).
+
+    The full Fe(II) dataset includes 28834 total configurations Fe(II) organometallic complexes.
+    Specifically, this includes 15568 HS geometries and 13266 LS geometries.
+    These complexes originate from the Cambridge Structural Database (CSD) as curated by Nandy, et al.
+    (Journal of Physical Chemistry Letters (2023), 14 (25), 10.1021/acs.jpclett.3c01214),
+    and were filtered into “computation-ready” complexes, (those where both oxidation states and charges are
+    already specified without hydrogen atoms missing in the structures), following the procedure outlined by
+    Arunachalam, et al. (Journal of Chemical Physics (2022), 157 (18), 10.1063/5.0125700)
+
+
+    Citation to the original dataset:
+
+        Modeling Fe(II) Complexes Using Neural Networks
+        Hongni Jin and Kenneth M. Merz Jr.
+        Journal of Chemical Theory and Computation 2024 20 (6), 2551-2558
+        DOI: 10.1021/acs.jctc.4c00063 
+    "
+atomic_self_energies:
+  H: -257.8658772400123 * unit.kilojoule_per_mole
+  C: -897.1371901363243 * unit.kilojoule_per_mole
+  N: -683.3438581909822 * unit.kilojoule_per_mole
+  O: -707.3905177027947 * unit.kilojoule_per_mole
+  P: -445.4451443983543 * unit.kilojoule_per_mole
+  S: -367.7922055565044 * unit.kilojoule_per_mole
+  Cl: -227.0568137730898 * unit.kilojoule_per_mole
+  Fe: 224.48679425562852 * unit.kilojoule_per_mole
+
 nc_1000_v1.1:
-  version: 1.1
-  doi: 10.5281/zenodo.15264766
-  gz_data_file:
-    length: 1425316
-    md5: 5337732f01cc99fac8c500c1df7a4b39
-    name: Fe_II_dataset_nc1000_v1.1.hdf5.gz
-  hdf5_data_file:
-    md5: 824a03eb589b4bf46d07d12fbfab507d
-    name: Fe_II_dataset_nc1000_v1.1.hdf5
-  processed_data_file:
-    md5: null
-    name: Fe_II_dataset_processed_nc1000_v1.1.npz
-  url: https://zenodo.org/records/15264766/files/fe_II_ntc_1000_v1.1.hdf5.gz
+  hdf5_schema: 2
+  available_properties:
+    - atomic_numbers
+    - positions
+    - total_charge
+    - forces
+    - energies
+    - spin_multiplicities
+  about: "This provides a modelforge curated hdf5 file for the Fe (II) dataset.
+          This dataset contains 102 unique systems with a total of 1000 configurations 
+          (max of 10 configurations per system). "
+  remote_dataset:
+    doi: 10.5281/zenodo.15264766
+    url: https://zenodo.org/records/15264766/files/fe_II_ntc_1000_v1.1.hdf5.gz
+    gz_data_file:
+      length: 1425316
+      md5: 5337732f01cc99fac8c500c1df7a4b39
+      name: Fe_II_dataset_nc1000_v1.1.hdf5.gz
+    hdf5_data_file:
+      md5: 824a03eb589b4bf46d07d12fbfab507d
+      name: Fe_II_dataset_nc1000_v1.1.hdf5
 
 full_version_v1.1:
-  version: 1.1
-  doi: 10.5281/zenodo.15264721
-  gz_data_file:
-    length: 39631216
-    md5: 55bc8488a1e115712b0c48a740ad73f1
-    name: Fe_II_dataset_v1.1.hdf5.gz
-  hdf5_data_file:
-    md5: 7569fe3c7f8acdef5dc3f6340af51d35
-    name: Fe_II_dataset_v1.1.hdf5
-  processed_data_file:
-    md5: null
-    name: Fe_II_dataset_processed_v1.1.npz
-  url: https://zenodo.org/records/15264721/files/fe_II_v1.1.hdf5.gz
+  hdf5_schema: 2
+  available_properties:
+    - atomic_numbers
+    - positions
+    - total_charge
+    - forces
+    - energies
+    - spin_multiplicities
+  remote_dataset:
+    doi: 10.5281/zenodo.15264721
+    url: https://zenodo.org/records/15264721/files/fe_II_v1.1.hdf5.gz
+    gz_data_file:
+      length: 39631216
+      md5: 55bc8488a1e115712b0c48a740ad73f1
+      name: Fe_II_dataset_v1.1.hdf5.gz
+    hdf5_data_file:
+      md5: 7569fe3c7f8acdef5dc3f6340af51d35
+      name: Fe_II_dataset_v1.1.hdf5
+

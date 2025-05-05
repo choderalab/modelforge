@@ -25,12 +25,12 @@ def main():
     from modelforge.curate.datasets.ani2x_curation import ANI2xCuration
 
     local_prefix = os.path.expanduser("~/mf_datasets")
-    output_file_dir = f"{local_prefix}/hdf5_files"
+    output_file_dir = f"{local_prefix}/hdf5_files/ani2x_dataset"
     local_cache_dir = f"{local_prefix}/ani2x_dataset"
 
     # We'll want to provide some simple means of versioning
     # if we make updates to either the underlying dataset, curation modules, or parameters given to the code
-    version = "1.0"
+    version = "1.1"
 
     # version of the dataset to curate
     version_select = f"v_0"

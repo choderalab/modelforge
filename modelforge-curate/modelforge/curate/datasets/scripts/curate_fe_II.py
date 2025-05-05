@@ -37,7 +37,7 @@ def main():
     import os
 
     local_prefix = os.path.expanduser("~/mf_datasets")
-    output_file_dir = f"{local_prefix}/hdf5_files"
+    output_file_dir = f"{local_prefix}/hdf5_files/fe_II_dataset"
     local_cache_dir = f"{local_prefix}/tmqm_xtb_dataset"
 
     # We'll want to provide some simple means of versioning

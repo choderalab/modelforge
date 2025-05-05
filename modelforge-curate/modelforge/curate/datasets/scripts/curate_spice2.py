@@ -33,7 +33,7 @@ def main():
 
     # We'll want to provide some simple means of versioning
     # if we make updates to either the underlying dataset, curation modules, or parameters given to the code
-    version = "1.0"
+    version = "1.1"
     # version of the dataset to curate
     version_select = f"v_0"
 

@@ -18,7 +18,7 @@ def main():
     import os
 
     local_prefix = os.path.expanduser("~/mf_datasets")
-    output_file_dir = f"{local_prefix}/hdf5_files"
+    output_file_dir = f"{local_prefix}/hdf5_files/phalkethoh_openff_dataset"
     local_cache_dir = f"{local_prefix}/PhAlkEthOH_openff_dataset"
 
     # We'll want to provide some simple means of versioning

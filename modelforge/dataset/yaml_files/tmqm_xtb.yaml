@@ -76,7 +76,6 @@ PdZnFeCu_T100K_single_config_v1.0:
 
 nc_1000_v1.1:
   hdf5_schema: 2
-  doi: 10.5281/zenodo.15059379
   available_properties:
     - positions
     - atomic_numbers
@@ -114,6 +113,7 @@ nc_1000_v1.1:
 
           Scripts used to perform the sampling can be found https://github.com/chrisiacovella/xtb_config_gen"
   remote_dataset:
+    doi: 10.5281/zenodo.15059379
     gz_data_file:
       length: 3425268
       md5: 43e80a303a9e02c47cc679ee8502cd11
@@ -125,7 +125,6 @@ nc_1000_v1.1:
 
 PdZnFeCu_T100K_v1.1:
   hdf5_schema: 2
-  doi: 10.5281/zenodo.15059433
   available_properties:
     - positions
     - atomic_numbers
@@ -163,6 +162,7 @@ PdZnFeCu_T100K_v1.1:
 
           Scripts used to perform the sampling can be found https://github.com/chrisiacovella/xtb_config_gen"
   remote_dataset:
+    doi: 10.5281/zenodo.15059433
     gz_data_file:
       length: 828124531
       md5: c7c8d48d7077dfbd10635a17ffa38848
@@ -174,7 +174,6 @@ PdZnFeCu_T100K_v1.1:
 
 PdZnFeCuNiPtIrRhCrAg_T100K_v1.1:
   hdf5_schema: 2
-  doi:  10.5281/zenodo.15059465
   available_properties:
     - positions
     - atomic_numbers
@@ -211,6 +210,7 @@ PdZnFeCuNiPtIrRhCrAg_T100K_v1.1:
 
           Scripts used to perform the sampling can be found https://github.com/chrisiacovella/xtb_config_gen"
   remote_dataset:
+    doi: 10.5281/zenodo.15059465
     gz_data_file:
       length: 1829694005
       md5: 9efd03d7c18901b5618489db6209d0a0
@@ -222,7 +222,6 @@ PdZnFeCuNiPtIrRhCrAg_T100K_v1.1:
 
 PdZnFeCuNiPtIrRhCrAg_T200K_v1.1:
   hdf5_schema: 2
-  doi: 10.5281/zenodo.15226046
   available_properties:
     - positions
     - atomic_numbers
@@ -259,6 +258,7 @@ PdZnFeCuNiPtIrRhCrAg_T200K_v1.1:
 
           Scripts used to perform the sampling can be found https://github.com/chrisiacovella/xtb_config_gen"
   remote_dataset:
+    doi: 10.5281/zenodo.15226046
     gz_data_file:
       length: 4749276362
       md5: a1d03a025ecfd48d7dc286b3d71cb900
@@ -270,7 +270,6 @@ PdZnFeCuNiPtIrRhCrAg_T200K_v1.1:
 
 PdZnFeCuNiPtIrRhCrAg_T300K_v1.1:
   hdf5_schema: 2
-  doi: 10.5281/zenodo.15226639
   available_properties:
     - positions
     - atomic_numbers
@@ -307,6 +306,7 @@ PdZnFeCuNiPtIrRhCrAg_T300K_v1.1:
 
           Scripts used to perform the sampling can be found https://github.com/chrisiacovella/xtb_config_gen"
   remote_dataset:
+    doi: 10.5281/zenodo.15226639
     gz_data_file:
       length: 4062452149
       md5: 5005e4b8c329031b14ceeef67cb67644
@@ -318,7 +318,6 @@ PdZnFeCuNiPtIrRhCrAg_T300K_v1.1:
 
 PdZnFeCu_T200K_v1.1:
   hdf5_schema: 2
-  doi: 10.5281/zenodo.15227023
   available_properties:
     - positions
     - atomic_numbers
@@ -355,6 +354,7 @@ PdZnFeCu_T200K_v1.1:
 
           Scripts used to perform the sampling can be found https://github.com/chrisiacovella/xtb_config_gen"
   remote_dataset:
+    doi: 10.5281/zenodo.15227023
     gz_data_file:
       length: 2118955545
       md5: 834ec7ed3670dfaaacc78beccc4b8a8d
@@ -366,7 +366,6 @@ PdZnFeCu_T200K_v1.1:
 
 PdZnFeCu_T200K_ncr10_v1.1:
   hdf5_schema: 2
-  doi: 10.5281/zenodo.15227086
   available_properties:
     - positions
     - atomic_numbers
@@ -406,6 +405,7 @@ PdZnFeCu_T200K_ncr10_v1.1:
 
           Scripts used to perform the sampling can be found https://github.com/chrisiacovella/xtb_config_gen"
   remote_dataset:
+    doi: 10.5281/zenodo.15227086
     gz_data_file:
       length: 846498137
       md5: 9bf52e1a6ce2fa0a72c93600fb7c7431
@@ -417,7 +417,6 @@ PdZnFeCu_T200K_ncr10_v1.1:
 
 PdZnFeCu_T300K_v1.1:
   hdf5_schema: 2
-  doi: 10.5281/zenodo.15227144
   available_properties:
     - positions
     - atomic_numbers
@@ -453,18 +452,19 @@ PdZnFeCu_T300K_v1.1:
             gfn2-xtb accuracy level 1.
 
           Scripts used to perform the sampling can be found https://github.com/chrisiacovella/xtb_config_gen"
-  gz_data_file:
-    length: 1793203012
-    md5: c133327bcf73182efecccaea51a34fdf
-    file_name: tmqm_xtb_dataset_PdZnFeCu_T300K_v1.1.hdf5.gz
-  hdf5_data_file:
-    md5: 0bbee004a633654963b57811b690b128
-    file_name: tmqm_xtb_dataset_PdZnFeCu_T300K_v1.1.hdf5
-  url: https://zenodo.org/records/15227144/files/tmqm_xtb_dataset_PdZnFeCu_T300_v1.1.hdf5.gz
+  remote_dataset:
+    doi: 10.5281/zenodo.15227144
+    gz_data_file:
+      length: 1793203012
+      md5: c133327bcf73182efecccaea51a34fdf
+      file_name: tmqm_xtb_dataset_PdZnFeCu_T300K_v1.1.hdf5.gz
+    hdf5_data_file:
+      md5: 0bbee004a633654963b57811b690b128
+      file_name: tmqm_xtb_dataset_PdZnFeCu_T300K_v1.1.hdf5
+    url: https://zenodo.org/records/15227144/files/tmqm_xtb_dataset_PdZnFeCu_T300_v1.1.hdf5.gz
 
 PdZnFeCu_T300K_ncr10_v1.1:
   hdf5_schema: 2
-  doi: 10.5281/zenodo.15227237
   available_properties:
     - positions
     - atomic_numbers
@@ -503,12 +503,14 @@ PdZnFeCu_T300K_ncr10_v1.1:
             gfn2-xtb accuracy level 1.
 
           Scripts used to perform the sampling can be found https://github.com/chrisiacovella/xtb_config_gen"
-  gz_data_file:
-    length: 831615242
-    md5: f7c6dca18f52d99253cbdd74fe540032
-    file_name: tmqm_xtb_dataset_PdZnFeCu_T300K_ncr_10_v1.1.hdf5.gz
-  hdf5_data_file:
-    md5: 60219cdee1c975f3eef2a193d16a3dcc
-    file_name: tmqm_xtb_dataset_PdZnFeCu_T300K_ncr_10_v1.1.hdf5
-  url: https://zenodo.org/records/15227237/files/tmqm_xtb_dataset_PdZnFeCu_T300_first10_v1.1.hdf5.gz
+  remote_dataset:
+    doi: 10.5281/zenodo.15227237
+    gz_data_file:
+      length: 831615242
+      md5: f7c6dca18f52d99253cbdd74fe540032
+      file_name: tmqm_xtb_dataset_PdZnFeCu_T300K_ncr_10_v1.1.hdf5.gz
+    hdf5_data_file:
+      md5: 60219cdee1c975f3eef2a193d16a3dcc
+      file_name: tmqm_xtb_dataset_PdZnFeCu_T300K_ncr_10_v1.1.hdf5
+    url: https://zenodo.org/records/15227237/files/tmqm_xtb_dataset_PdZnFeCu_T300_first10_v1.1.hdf5.gz
 

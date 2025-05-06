@@ -45,6 +45,10 @@ def main():
 
     # curate ANI2x test dataset with 1000 total conformers, max of 10 conformers per record
     hdf5_file_name = f"ani2x_dataset_v{version}_ntc_1000.hdf5"
+    dataset_name = f"nc_1000_v{version}"
+    about = """This provides a curated hdf5 file for the ANI-2x dataset designed to be compatible with modelforge. 
+         This dataset contains 16514 unique records for 9651712 total configurations. Note, configurations are partitioned 
+         into entries based on the array of atomic species appearing in sequence in the source data file."""
 
     n_total_records, n_total_configs = ani2x_dataset.to_hdf5(
         hdf5_file_name=hdf5_file_name,

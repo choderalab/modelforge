@@ -42,10 +42,12 @@ def main():
 
     # Curates the full dataset
     hdf5_file_name = f"qm9_dataset_v{version}.hdf5"
-
+    version_name = f"full_dataset_v{version}"
+    about =
     n_total_records, n_total_configs = qm9_dataset.to_hdf5(
         hdf5_file_name=hdf5_file_name, output_file_dir=output_file_dir
     )
+
     print("full dataset")
     print(f"Total records: {n_total_records}")
     print(f"Total configs: {n_total_configs}")

@@ -31,6 +31,26 @@ def main():
     output_file_dir = f"{local_prefix}/hdf5_files/spice2"
     local_cache_dir = f"{local_prefix}/spice2_dataset"
 
+    description = """The SPICE2 dataset contains conformations for a diverse set of small molecules,
+    dimers, dipeptides, and solvated amino acids. It includes 15 elements, charged and
+    uncharged molecules, and a wide range of covalent and non-covalent interactions.
+    It provides both forces and energies calculated at the ωB97M-D3(BJ)/def2-TZVPPD level of theory,
+    using Psi4 along with other useful quantities such as multipole moments and bond orders.
+    
+    SPICE 2 zenodo release:
+    https://zenodo.org/records/10835749
+
+    Reference to SPICE 2 publication:
+    Eastman, P., Pritchard, B. P., Chodera, J. D., & Markland, T. E. 
+    Nutmeg and SPICE: models and data for biomolecular machine learning. 
+    Journal of chemical theory and computation, 20(19), 8583-8593 (2024).
+    https://doi.org/10.1021/acs.jctc.4c00794
+    
+    Reference to original SPICE publication:
+    Eastman, P., Behara, P.K., Dotson, D.L. et al. 
+    SPICE, A Dataset of Drug-like Molecules and Peptides for Training Machine Learning Potentials.
+    Sci Data 10, 11 (2023). https://doi.org/10.1038/s41597-022-01882-6"""
+
     # We'll want to provide some simple means of versioning
     # if we make updates to either the underlying dataset, curation modules, or parameters given to the code
     version = "1.1"

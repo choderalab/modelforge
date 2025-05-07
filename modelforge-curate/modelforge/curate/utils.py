@@ -100,7 +100,18 @@ def gzip_file(
 from dataclasses import dataclass
 
 
-class YamlMetaData:
+class VersionMetadata:
+    """
+    Class to hold the metadata for a version of a dataset.
+
+    This will provide functionality to write the metadata to the format used in the .yaml files.
+
+    this will also provide a function to compress the hdf5 file, extracting the checksum and file length
+    needed for the yaml file.
+
+    the DOI and URL files will be left blank, as those come after the dataset is uploaded.
+
+    """
 
     def __init__(
         self,
@@ -140,7 +151,7 @@ class YamlMetaData:
             file_name=self.gzipped_file_name, file_path=self.hdf5_file_dir
         )
 
-    def to_dict(self):
+    def to_dict_remote_dataset(self):
 
         data = {}
         data[self.version_name] = {
@@ -155,6 +166,22 @@ class YamlMetaData:
                     "md5": self.gzipped_checksum,
                     "file_name": self.gzipped_file_name,
                 },
+                "hdf5_data_file": {
+                    "md5": self.hdf5_checksum,
+                    "file_name": self.hdf5_file_name,
+                },
+            },
+        }
+
+        return data
+
+    def to_dict_local_dataset(self):
+        data = {}
+        data[self.version_name] = {
+            "hdf5_schema": 2,
+            "available_properties": self.available_properties,
+            "about": self.about,
+            "local_dataset": {
                 "hdf5_data_file": {
                     "md5": self.hdf5_checksum,
                     "file_name": self.hdf5_file_name,

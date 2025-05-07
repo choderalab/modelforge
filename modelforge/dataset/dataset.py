@@ -334,24 +334,31 @@ class HDF5Dataset:
         self._available_properties = data_inputs[dataset_version][
             "available_properties"
         ]
+        if dataset_version not in data_inputs:
+            raise ValueError(
+                f"Dataset version {dataset_version} not found in {yaml_file}"
+            )
 
         if local_yaml_file is None:
 
-            # if we are using the remote dataset, we need to make sure that we have the correct version
-
-            if dataset_version not in data_inputs:
-                raise ValueError(
-                    f"Dataset version {dataset_version} not found in {yaml_file}"
-                )
             self.url = data_inputs[dataset_version]["remote_dataset"]["url"]
 
             # fetch the dictionaries that defined the size, md5 checksums (if provided) and filenames of the data files
             self.gz_data_file_dict = data_inputs[dataset_version]["remote_dataset"][
                 "gz_data_file"
             ]
+            # dict for the hdf5 file contains checksum and filename
             self.hdf5_data_file_dict = data_inputs[dataset_version]["remote_dataset"][
                 "hdf5_data_file"
             ]
+        else:
+            # if we are using a local yaml file, we will not download
+            # or need to unzip, we just need to load the hdf5 file
+            # note this assumes that the file name has the path to the file defined
+            self.hdf5_data_file_dict = data_inputs[dataset_version]["local_dataset"][
+                "hdf5_data_file"
+            ]
+
         self.processed_data_file = self.dataset_name.lower() + ".npz"
 
     def _acquire_dataset(self) -> None:

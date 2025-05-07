@@ -83,3 +83,39 @@ def test_gzip_file(prep_temp_dir):
     assert result3[1] == f"{file_name}.gz"
     # Check if the gzipped file exists
     assert os.path.exists(f"{prep_temp_dir}/{result3[1]}")
+
+
+def test_VersionMetadata(prep_temp_dir):
+    # this will test the yaml file metadata helper class VersionMetadata
+    # first we need to create a SourceDataset instance so we can write an HDF5 file
+
+    from modelforge.curate import SourceDataset, Record
+    from modelforge.curate.properties import (
+        Positions,
+        Energies,
+        AtomicNumbers,
+        MetaData,
+    )
+
+    record = Record(name="mol1")
+
+    positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
+    energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
+    atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
+    meta_data = MetaData(name="smiles", value="[CH]")
+
+    record.add_property(property=atomic_numbers)
+    record.add_properties([positions, energies, meta_data])
+
+    new_dataset = SourceDataset(
+        name="test_dataset3",
+        local_db_dir=str(prep_temp_dir),
+        local_db_name="test_dataset3.sqlite",
+    )
+    new_dataset.add_record(record)
+
+    checksum = new_dataset.to_hdf5(
+        file_path=str(prep_temp_dir), file_name="test_dataset.hdf5"
+    )
+
+    from modelforge.curate.utils import VersionMetadata

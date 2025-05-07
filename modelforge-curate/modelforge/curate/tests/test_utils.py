@@ -96,6 +96,7 @@ def test_VersionMetadata(prep_temp_dir):
         AtomicNumbers,
         MetaData,
     )
+    from openff.units import unit
 
     record = Record(name="mol1")
 
@@ -119,3 +120,71 @@ def test_VersionMetadata(prep_temp_dir):
     )
 
     from modelforge.curate.utils import VersionMetadata
+
+    version_metadata = VersionMetadata(
+        version_name="test1",
+        about="test dataset version test1",
+        hdf5_file_name="test_dataset.hdf5",
+        hdf5_file_dir=str(prep_temp_dir),
+        hdf5_checksum=checksum,
+        available_properties=[
+            "atomic_numbers",
+            "energies",
+            "positions",
+        ],
+    )
+    version_metadata.compress_hdf5()
+    # check the gzipped file exists
+    import os
+
+    os.path.exists(f"{prep_temp_dir}/{version_metadata.gzipped_file_name}")
+    # generate the dictionary if this is a remote dataset
+    data_dict = version_metadata.remote_dataset_to_dict()
+    # check the dictionary is correct
+    assert data_dict["test1"]["hdf5_schema"] == 2
+    assert data_dict["test1"]["available_properties"] == [
+        "atomic_numbers",
+        "energies",
+        "positions",
+    ]
+    assert data_dict["test1"]["about"] == "test dataset version test1"
+    assert data_dict["test1"]["remote_dataset"]["doi"] == " "
+    assert data_dict["test1"]["remote_dataset"]["url"] == " "
+    assert (
+        data_dict["test1"]["remote_dataset"]["gz_data_file"]["length"]
+        == version_metadata.gzipped_length
+    )
+    assert (
+        data_dict["test1"]["remote_dataset"]["gz_data_file"]["md5"]
+        == version_metadata.gzipped_checksum
+    )
+    assert (
+        data_dict["test1"]["remote_dataset"]["gz_data_file"]["file_name"]
+        == version_metadata.gzipped_file_name
+    )
+    assert (
+        data_dict["test1"]["remote_dataset"]["hdf5_data_file"]["md5"]
+        == version_metadata.hdf5_checksum
+    )
+    assert (
+        data_dict["test1"]["remote_dataset"]["hdf5_data_file"]["file_name"]
+        == version_metadata.hdf5_file_name
+    )
+    # check the local dataset dictionary
+    data_dict = version_metadata.local_dataset_to_dict()
+    # check the dictionary is correct
+    assert data_dict["test1"]["hdf5_schema"] == 2
+    assert data_dict["test1"]["available_properties"] == [
+        "atomic_numbers",
+        "energies",
+        "positions",
+    ]
+    assert data_dict["test1"]["about"] == "test dataset version test1"
+    assert (
+        data_dict["test1"]["local_dataset"]["hdf5_data_file"]["md5"]
+        == version_metadata.hdf5_checksum
+    )
+    assert (
+        data_dict["test1"]["local_dataset"]["hdf5_data_file"]["file_name"]
+        == f"{version_metadata.hdf5_file_dir}/{version_metadata.hdf5_file_name}"
+    )

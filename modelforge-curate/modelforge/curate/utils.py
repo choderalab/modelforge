@@ -90,7 +90,6 @@ def gzip_file(
     else:
         os.system(f"gzip -9 -f {input_file_dir}/{input_file_name}")
 
-    print(f"{input_file_dir}/{gzip_file_name}")
     return (
         os.path.getsize(f"{input_file_dir}/{gzip_file_name}"),
         gzip_file_name,
@@ -145,13 +144,13 @@ class VersionMetadata:
         self.gzipped_file_name = filename
         self.gzipped_length = length
 
-        from modelforge.utils.remote import get_md5_checksum
+        from modelforge.utils.remote import calculate_md5_checksum
 
-        self.gzipped_checksum = get_md5_checksum(
+        self.gzipped_checksum = calculate_md5_checksum(
             file_name=self.gzipped_file_name, file_path=self.hdf5_file_dir
         )
 
-    def to_dict_remote_dataset(self):
+    def remote_dataset_to_dict(self):
 
         data = {}
         data[self.version_name] = {
@@ -175,7 +174,7 @@ class VersionMetadata:
 
         return data
 
-    def to_dict_local_dataset(self):
+    def local_dataset_to_dict(self):
         data = {}
         data[self.version_name] = {
             "hdf5_schema": 2,
@@ -184,7 +183,8 @@ class VersionMetadata:
             "local_dataset": {
                 "hdf5_data_file": {
                     "md5": self.hdf5_checksum,
-                    "file_name": self.hdf5_file_name,
+                    "file_name": f"{self.hdf5_file_dir}/{self.hdf5_file_name}",
                 },
             },
         }
+        return data

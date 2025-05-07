@@ -893,7 +893,8 @@ class SourceDataset:
 
         Returns
         -------
-
+        chksum: str
+            MD5 checksum of the hdf5_ file.
         """
         import h5py
         import os

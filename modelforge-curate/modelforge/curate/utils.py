@@ -95,3 +95,69 @@ def gzip_file(
         os.path.getsize(f"{input_file_dir}/{gzip_file_name}"),
         gzip_file_name,
     )
+
+
+from dataclasses import dataclass
+
+
+class YamlMetaData:
+
+    def __init__(
+        self,
+        version_name: str,
+        about: str,
+        hdf5_file_name: str,
+        hdf5_file_dir: str,
+        hdf5_checksum: str,
+        available_properties: list,
+    ):
+
+        self.version_name = version_name
+        self.about = about
+        self.hdf5_file_name = hdf5_file_name
+        self.hdf5_file_dir = hdf5_file_dir
+        self.hdf5_checksum = hdf5_checksum
+        self.available_properties = available_properties
+
+    def compress_hdf5(self):
+        """
+        Compress the hdf5 file using gzip
+        """
+        from modelforge.curate.utils import gzip_file
+
+        length, filename = gzip_file(
+            input_file_name=self.hdf5_file_name,
+            input_file_dir=self.hdf5_file_dir,
+            keep_original=False,
+        )
+
+        self.gzipped_file_name = filename
+        self.gzipped_length = length
+
+        from modelforge.utils.remote import get_md5_checksum
+
+        self.gzipped_checksum = get_md5_checksum(
+            file_name=self.gzipped_file_name, file_path=self.hdf5_file_dir
+        )
+
+    def to_dict(self):
+
+        data = {}
+        data[self.version_name] = {
+            "hdf5_schema": 2,
+            "available_properties": self.available_properties,
+            "about": self.about,
+            "remote_dataset": {
+                "doi": " ",
+                "url": " ",
+                "gz_data_file": {
+                    "length": self.gzipped_length,
+                    "md5": self.gzipped_checksum,
+                    "file_name": self.gzipped_file_name,
+                },
+                "hdf5_data_file": {
+                    "md5": self.hdf5_checksum,
+                    "file_name": self.hdf5_file_name,
+                },
+            },
+        }

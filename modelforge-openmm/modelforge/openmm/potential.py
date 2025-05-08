@@ -62,6 +62,7 @@ class Potential(torch.nn.Module):
             atomic_subsystem_indices=torch.zeros(n_atoms),
             is_periodic=torch.tensor([self.is_periodic]),
             per_system_total_charge=torch.zeros(1),
+            per_system_spin_state=torch.zeros(1),
         )
         self.modelforge_potential = torch.jit.load(modelforge_potential_path)
 
@@ -92,6 +93,7 @@ class Potential(torch.nn.Module):
             per_atom_partial_charge=self.nnp_input.per_atom_partial_charge,
             box_vectors=self.nnp_input.box_vectors,
             is_periodic=self.nnp_input.is_periodic,
+            per_system_spin_state=self.nnp_input.per_system_spin_state,
         )
 
         energy = torch.zeros(1, dtype=self.precision, device=positions.device)

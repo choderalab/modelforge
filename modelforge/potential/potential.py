@@ -368,6 +368,7 @@ class Potential(torch.nn.Module):
         per_system_total_charge: torch.Tensor,
         pair_list: torch.Tensor,
         per_atom_partial_charge: torch.Tensor,
+        per_system_spin_state: torch.Tensor,
         box_vectors: torch.Tensor,
         is_periodic: torch.Tensor,
     ) -> Dict[str, torch.Tensor]:
@@ -379,6 +380,7 @@ class Potential(torch.nn.Module):
             per_system_total_charge=per_system_total_charge,
             pair_list=pair_list,
             per_atom_partial_charge=per_atom_partial_charge,
+            per_system_spin_state=per_system_spin_state,
             box_vectors=box_vectors,
             is_periodic=is_periodic,
         )

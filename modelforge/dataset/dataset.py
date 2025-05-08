@@ -210,12 +210,13 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
         total_charge = self.properties_of_interest["total_charge"][idx]
         number_of_atoms = len(atomic_numbers)
         dipole_moment = self.properties_of_interest["dipole_moment"][idx]
-
+        spin_state = self.properties_of_interest["S"][idx]
         nnp_input = NNPInput(
             atomic_numbers=atomic_numbers,
             positions=positions,
             pair_list=self._set_pairlist(idx),
             per_system_total_charge=total_charge,
+            per_system_spin_state=spin_state,
             atomic_subsystem_indices=torch.zeros(number_of_atoms, dtype=torch.int32),
         )
         metadata = Metadata(
@@ -1434,6 +1435,7 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
     atomic_numbers_list = []
     positions_list = []
     total_charge_list = []
+    S_list = []
     E_list = []  # total energy
     F_list = []  # forces
     ij_list = []
@@ -1464,6 +1466,7 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
         dipole_moment_list.append(conf.metadata.per_system_dipole_moment)
         E_list.append(conf.metadata.per_system_energy)
         F_list.append(conf.metadata.per_atom_force)
+        S_list.append(conf.nnp_input.per_system_spin_state)
         atomic_subsystem_counts_list.append(conf.metadata.atomic_subsystem_counts)
         atomic_subsystem_indices_referencing_dataset_list.append(
             conf.metadata.atomic_subsystem_indices_referencing_dataset
@@ -1477,11 +1480,12 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
         atomic_subsystem_indices_referencing_dataset_list
     )
     atomic_numbers = torch.cat(atomic_numbers_list)
-    total_charge = torch.stack(total_charge_list)
+    total_charge = torch.stack(total_charge_list).to(torch.float32)
     positions = torch.cat(positions_list).requires_grad_(True)
     F = torch.cat(F_list).to(torch.float64)
     dipole_moment = torch.stack(dipole_moment_list).to(torch.float64)
     E = torch.stack(E_list)
+    S = torch.cat(S_list).to(torch.float32)
     if pair_list_present:
         IJ_cat = torch.cat(ij_list, dim=1).to(torch.int64)
     else:
@@ -1492,6 +1496,7 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
         positions=positions,
         per_system_total_charge=total_charge,
         atomic_subsystem_indices=atomic_subsystem_indices,
+        per_system_spin_state=S,
         pair_list=IJ_cat,
     )
     metadata = Metadata(

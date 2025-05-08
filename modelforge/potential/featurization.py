@@ -45,6 +45,7 @@ class AddPerMoleculeValue(nn.Module):
             The updated per-atom property tensor with the per-molecule value appended.
         """
         values_to_append = getattr(data, self.key)
+
         _, counts = torch.unique(data.atomic_subsystem_indices, return_counts=True)
         expanded_values = torch.repeat_interleave(values_to_append, counts).unsqueeze(1)
         return torch.cat((per_atom_property_tensor, expanded_values), dim=1)

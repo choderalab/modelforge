@@ -60,11 +60,11 @@ class NNPInput:
         positions: torch.Tensor,
         atomic_subsystem_indices: torch.Tensor,
         per_system_total_charge: torch.Tensor,
+        per_system_spin_state: torch.Tensor,
         box_vectors: torch.Tensor = torch.zeros(3, 3),
         is_periodic: torch.Tensor = torch.tensor([False]),
         pair_list: torch.Tensor = torch.tensor([]),
         per_atom_partial_charge: torch.Tensor = torch.tensor([]),
-        per_system_spin_state: torch.Tensor = torch.tensor([]),
     ):
         self.atomic_numbers = atomic_numbers
         self.positions = positions
@@ -129,6 +129,7 @@ class NNPInput:
         """Move all **relevant** tensors to dtype."""
         self.positions = self.positions.to(dtype)
         self.box_vectors = self.box_vectors.to(dtype)
+
         return self
 
 

@@ -12,11 +12,12 @@ from openff.units import unit
 @dataclass
 class PropertyNames:
     atomic_numbers: str
-    positions: str
-    E: str
-    F: Optional[str] = None
-    total_charge: Optional[str] = None
-    dipole_moment: Optional[str] = None
+    positions: str  # Positions
+    E: str  # Energy
+    F: Optional[str] = None  # Forces
+    total_charge: Optional[str] = None  # Total charge
+    dipole_moment: Optional[str] = None  # Dipole moment
+    S: Optional[str] = None  # Spin multiplicity
 
 
 PropertyUnits = {
@@ -26,6 +27,7 @@ PropertyUnits = {
     "F": unit.kilojoule_per_mole / unit.nanometer,
     "total_charge": unit.elementary_charge,
     "dipole_moment": unit.elementary_charge * unit.nanometer,
+    "S": "dimensionless",
 }
 
 
@@ -49,6 +51,7 @@ class NNPInput:
         "per_atom_partial_charge",
         "box_vectors",
         "is_periodic",
+        "per_system_spin_state",
     )
 
     def __init__(
@@ -61,6 +64,7 @@ class NNPInput:
         is_periodic: torch.Tensor = torch.tensor([False]),
         pair_list: torch.Tensor = torch.tensor([]),
         per_atom_partial_charge: torch.Tensor = torch.tensor([]),
+        per_system_spin_state: torch.Tensor = torch.tensor([]),
     ):
         self.atomic_numbers = atomic_numbers
         self.positions = positions
@@ -70,6 +74,7 @@ class NNPInput:
         self.per_atom_partial_charge = per_atom_partial_charge
         self.box_vectors = box_vectors
         self.is_periodic = is_periodic
+        self.per_system_spin_state = per_system_spin_state
 
         # Validate inputs
         self._validate_inputs()
@@ -116,6 +121,7 @@ class NNPInput:
         self.is_periodic = self.is_periodic.to(device)
         self.pair_list = self.pair_list.to(device)
         self.per_atom_partial_charge = self.per_atom_partial_charge.to(device)
+        self.per_system_spin_state = self.per_system_spin_state.to(device)
 
         return self
 

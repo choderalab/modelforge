@@ -97,6 +97,8 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
             "E": torch.from_numpy(dataset[property_name.E]).to(torch.float64),
         }
 
+        # since total_charge, force, dipole_moment and spin state are optional
+        # we will set them to zero if they are not present
         properties["total_charge"] = (
             torch.from_numpy(dataset[property_name.total_charge])
             .to(torch.int32)
@@ -119,6 +121,10 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
                 (dataset[property_name.E].shape[0], 3), dtype=torch.float32
             )
         )
+        properties["S"] = (
+            torch.from_numpy(dataset[property_name.S])
+            if property_name.S is not None
+            else torch.zeros((dataset[property_name.E].shape[0], 1), dtype=torch.int32)
 
         properties["pair_list"] = None  # Placeholder for pair list
 

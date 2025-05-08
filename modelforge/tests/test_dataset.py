@@ -263,6 +263,23 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
             "positions",
             "atomic_numbers",
         ]
+    elif dataset_name == "fe_II":
+        assert data.properties_of_interest == [
+            "positions",
+            "atomic_numbers",
+            "total_charge",
+            "forces",
+            "energies",
+            "spin_multiplicities",
+        ]
+
+        data.properties_of_interest = ["energies", "positions", "atomic_numbers"]
+
+        assert data.properties_of_interest == [
+            "energies",
+            "positions",
+            "atomic_numbers",
+        ]
     dataset = dataset_factory(
         dataset_name=dataset_name,
         local_cache_dir=local_cache_dir,
@@ -272,7 +289,9 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
     raw_data_item = dataset[0]
     assert isinstance(raw_data_item, BatchData)
     assert len(raw_data_item.__dataclass_fields__) == 2
-    assert len(raw_data_item.nnp_input.__slots__) == 8  # 8 properties are returned
+    assert (
+        len(raw_data_item.nnp_input.__slots__) == 9
+    )  # 9 properties are returned now that we have included spin state
     assert len(raw_data_item.metadata.__slots__) == 6  # 6 properties are returned
 
 

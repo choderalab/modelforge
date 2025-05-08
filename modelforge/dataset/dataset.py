@@ -125,6 +125,7 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
             torch.from_numpy(dataset[property_name.S])
             if property_name.S is not None
             else torch.zeros((dataset[property_name.E].shape[0], 1), dtype=torch.int32)
+        )
 
         properties["pair_list"] = None  # Placeholder for pair list
 

@@ -118,7 +118,6 @@ class VersionMetadata:
         about: str,
         hdf5_file_name: str,
         hdf5_file_dir: str,
-        hdf5_checksum: str,
         available_properties: list,
     ):
 
@@ -126,8 +125,12 @@ class VersionMetadata:
         self.about = about
         self.hdf5_file_name = hdf5_file_name
         self.hdf5_file_dir = hdf5_file_dir
-        self.hdf5_checksum = hdf5_checksum
         self.available_properties = available_properties
+        from modelforge.utils.remote import calculate_md5_checksum
+
+        self.hdf5_checksum = calculate_md5_checksum(
+            file_name=self.hdf5_file_name, file_path=self.hdf5_file_dir
+        )
 
     def compress_hdf5(self):
         """
@@ -151,12 +154,13 @@ class VersionMetadata:
         )
 
     def remote_dataset_to_dict(self):
+        import re
 
         data = {}
         data[self.version_name] = {
             "hdf5_schema": 2,
             "available_properties": self.available_properties,
-            "about": self.about,
+            "about": re.sub(" +", " ", self.about.replace("\n", " ")),
             "remote_dataset": {
                 "doi": " ",
                 "url": " ",
@@ -179,7 +183,7 @@ class VersionMetadata:
         data[self.version_name] = {
             "hdf5_schema": 2,
             "available_properties": self.available_properties,
-            "about": self.about,
+            "about": re.sub(" +", " ", self.about.replace("\n", " ")),
             "local_dataset": {
                 "hdf5_data_file": {
                     "md5": self.hdf5_checksum,

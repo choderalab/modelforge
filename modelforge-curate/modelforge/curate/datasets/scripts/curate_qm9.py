@@ -16,6 +16,12 @@ Citation: Ramakrishnan, R., Dral, P., Rupp, M. et al.
 DOI for dataset: 10.6084/m9.figshare.c.978904.v5
 """
 
+from modelforge.curate.datasets.qm9_curation import QM9Curation
+from modelforge.curate.utils import VersionMetadata
+import time
+import yaml
+import os
+
 
 def main():
     # define the location where to store and output the files
@@ -40,13 +46,62 @@ def main():
     )
     qm9_dataset.process(force_download=False)
 
+    yaml_file = f"{output_file_dir}/qm9_dataset_curation_v{version}.yaml"
+    with open(yaml_file, "w") as f:
+        f.write(
+            f"# This file contains the metadata for the curated qm9 dataset v{version}.\n"
+        )
+        f.write(
+            f"# Processed on {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}.\n"
+        )
+
+    ###############
+    # full dataset
+    ##############
     # Curates the full dataset
     hdf5_file_name = f"qm9_dataset_v{version}.hdf5"
-    version_name = f"full_dataset_v{version}"
-    about =
+
     n_total_records, n_total_configs = qm9_dataset.to_hdf5(
         hdf5_file_name=hdf5_file_name, output_file_dir=output_file_dir
     )
+
+    version_name = f"full_dataset_v{version}"
+    about = f"""This provides a curated hdf5 file for the qm9  dataset designed
+        to be compatible with modelforge. This dataset contains {n_total_records} unique records 
+        for {n_total_configs} total configurations.  Note, the dataset contains only a single 
+        configuration per record."""
+
+    metadata = VersionMetadata(
+        version_name=version_name,
+        about=about,
+        hdf5_file_name=hdf5_file_name,
+        hdf5_file_dir=output_file_dir,
+        available_properties=[
+            "atomic_numbers",
+            "positions",
+            "partial_charges",
+            "polarizability",
+            "dipole_moment_per_system",
+            "dipole_moment_scalar_per_system" "energy_of_homo",
+            "lumo-homo_gap",
+            "zero_point_vibrational_energy",
+            "internal_energy_at_298.15K",
+            "internal_energy_at_0K",
+            "enthalpy_at_298.15K",
+            "free_energy_at_298.15K",
+            "heat_capacity_at_298.15K",
+            "rotational_constants",
+            "harmonic_vibrational_frequencies",
+            "electronic_spatial_extent",
+        ],
+    )
+
+    # we need to compress the hdf5 file to get the checksum and length for the gzipped file
+    metadata.compress_hdf5()
+
+    # dump the metadata to the yaml file
+    with open(yaml_file, "a") as f:
+        yaml.dump(metadata.remote_dataset_to_dict(), f)
 
     print("full dataset")
     print(f"Total records: {n_total_records}")
@@ -61,6 +116,43 @@ def main():
         output_file_dir=output_file_dir,
         total_configurations=1000,
     )
+    version_name = f"nc_1000_{version}"
+    about = f"""This provides a curated hdf5 file for a subset of the qm9 dataset designed
+        to be compatible with modelforge. This dataset contains {n_total_records} unique records 
+        for {n_total_configs} total configurations. Note, the dataset contains only a single 
+        configuration per record."""
+
+    metadata = VersionMetadata(
+        version_name=version_name,
+        about=about,
+        hdf5_file_name=hdf5_file_name,
+        hdf5_file_dir=output_file_dir,
+        available_properties=[
+            "atomic_numbers",
+            "positions",
+            "partial_charges",
+            "polarizability",
+            "dipole_moment_per_system",
+            "dipole_moment_scalar_per_system" "energy_of_homo",
+            "lumo-homo_gap",
+            "zero_point_vibrational_energy",
+            "internal_energy_at_298.15K",
+            "internal_energy_at_0K",
+            "enthalpy_at_298.15K",
+            "free_energy_at_298.15K",
+            "heat_capacity_at_298.15K",
+            "rotational_constants",
+            "harmonic_vibrational_frequencies",
+            "electronic_spatial_extent",
+        ],
+    )
+
+    # we need to compress the hdf5 file to get the checksum and length for the gzipped file
+    metadata.compress_hdf5()
+
+    # dump the metadata to the yaml file
+    with open(yaml_file, "a") as f:
+        yaml.dump(metadata.remote_dataset_to_dict(), f)
     print(" 1000 configuration subset")
     print(f"Total records: {n_total_records}")
     print(f"Total configs: {n_total_configs}")

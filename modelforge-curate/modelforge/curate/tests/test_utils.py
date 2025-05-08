@@ -126,7 +126,6 @@ def test_VersionMetadata(prep_temp_dir):
         about="test dataset version test1",
         hdf5_file_name="test_dataset.hdf5",
         hdf5_file_dir=str(prep_temp_dir),
-        hdf5_checksum=checksum,
         available_properties=[
             "atomic_numbers",
             "energies",

@@ -3,7 +3,7 @@ dataset_name = "fe_ii"
 version_select = "nc_1000_v1.1"
 num_workers = 4
 pin_memory = true
-properties_of_interest = ["atomic_numbers", "positions", "energies", "total_charge", "forces"]
+properties_of_interest = ["atomic_numbers", "positions", "energies", "total_charge", "forces", "spin_multiplicities"]
 element_filter = []
 
 [dataset.properties_assignment]
@@ -12,3 +12,4 @@ positions = "positions"
 E = "energies"
 total_charge = "total_charge"
 F = "forces"
+S = "spin_multiplicities"

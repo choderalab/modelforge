@@ -273,7 +273,11 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
             "spin_multiplicities",
         ]
 
-        data.properties_of_interest = ["energies", "positions", "atomic_numbers"]
+        data.properties_of_interest = [
+            "energies",
+            "positions",
+            "atomic_numbers",
+        ]
 
         assert data.properties_of_interest == [
             "energies",

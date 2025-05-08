@@ -123,6 +123,7 @@ class FeIIDataset(HDF5Dataset):
             "energies",
             "forces",
             "total_charge",
+            "spin_multiplicities",
         ]  # NOTE: Default values
 
         self._properties_of_interest = _default_properties_of_interest

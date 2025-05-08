@@ -136,7 +136,7 @@ Example of how the postprocessing section in a .toml file that that calculates t
 Featurization options
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Currently, modelforge requires `atomic_number` to be included in the list of properties to featurize.  Additional properties can be included in the list of properties to featurize, including: `atomic_group`, `atomic_period`, and `per_system_total_charge`.  The `atomic_group` and `atomic_period` properties are derived from the atomic number and are used to provide additional information to the neural network.  Similar to `atomic_number` we can provide additional options for `atomic_group` and `atomic_period` that will specify the underlying tensor shape. The snippet below shows the syntax for defining these in the toml file:
+Currently, modelforge requires `atomic_number` to be included in the list of properties to featurize.  Additional properties can be included in the list of properties to featurize, including: `atomic_group`, `atomic_period`, `per_system_total_charge`, and `per_system_spin_state`.  The `atomic_group` and `atomic_period` properties are derived from the atomic number and are used to provide additional information to the neural network.  Similar to `atomic_number` we can provide additional options for `atomic_group` and `atomic_period` that will specify the underlying tensor shape. The snippet below shows the syntax for defining these in the toml file:
 
 .. code-block:: toml
 
@@ -157,7 +157,7 @@ Currently, modelforge requires `atomic_number` to be included in the list of pro
 
 
 
-The `per_system_total_charge` property is the total charge of the system; this property does not have any additional parameters that need to be defined in the toml file, as this simply adds an additional feature to the input tensor  (note, to use `per_system_total_charge` the dataset must include the `total_charge` of the system).
+The `per_system_total_charge` property is the total charge of the system and `per_system_spin_state` represents the spin state of the system; these properties does not have any additional parameters that need to be defined in the toml file, as this simply adds an additional feature to the input tensor. Note, to use these in a meaningful the dataset must include data to set for the properties  `total_charge` and `S`, respectively.  These values, if not provided, will be initialized to 0; as such without this information from the datafile, the code will run, these will not necessarily provide any meaningful information for the embedding.
 
 
 

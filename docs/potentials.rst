@@ -158,7 +158,7 @@ Currently, modelforge requires `atomic_number` to be included in the list of pro
 
 
 
-The `per_system_total_charge` property is the total charge of the system and `per_system_spin_state` represents the spin state of the system; these properties does not have any additional parameters that need to be defined in the toml file, as this simply adds an additional feature to the input tensor. Note, to use these in a meaningful the dataset must include data to set for the properties  `total_charge` and `S`, respectively.  These values, if not provided, will be initialized to 0; as such without this information from the datafile, the code will run, these will not necessarily provide any meaningful information for the embedding.
+The `per_system_total_charge` property is the total charge of the system and `per_system_spin_state` is the spin state of the system; these properties do not have any additional parameters that need to be defined in the toml file, as their inclusion simply adds an additional feature to the input tensor. Note, to use these in a meaningful way, the dataset should include these properties (and assign them in the .toml file), as these values will be initialized to 0 if not assigned from the datafile. This means the code would run, but again, all values would be zero which adds no information to the model.
 
 
 

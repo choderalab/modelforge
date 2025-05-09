@@ -85,7 +85,7 @@ def test_gzip_file(prep_temp_dir):
     assert os.path.exists(f"{prep_temp_dir}/{result3[1]}")
 
 
-def test_VersionMetadata(prep_temp_dir):
+def test_version_metadata(prep_temp_dir):
     # this will test the yaml file metadata helper class VersionMetadata
     # first we need to create a SourceDataset instance so we can write an HDF5 file
 
@@ -131,14 +131,15 @@ def test_VersionMetadata(prep_temp_dir):
             "energies",
             "positions",
         ],
+        remote_dataset=True,
     )
-    version_metadata.compress_hdf5()
+    version_metadata._compress_hdf5()
     # check the gzipped file exists
     import os
 
     os.path.exists(f"{prep_temp_dir}/{version_metadata.gzipped_file_name}")
     # generate the dictionary if this is a remote dataset
-    data_dict = version_metadata.remote_dataset_to_dict()
+    data_dict = version_metadata._remote_dataset_to_dict()
     # check the dictionary is correct
     assert data_dict["test1"]["hdf5_schema"] == 2
     assert data_dict["test1"]["available_properties"] == [
@@ -170,7 +171,7 @@ def test_VersionMetadata(prep_temp_dir):
         == version_metadata.hdf5_file_name
     )
     # check the local dataset dictionary
-    data_dict = version_metadata.local_dataset_to_dict()
+    data_dict = version_metadata._local_dataset_to_dict()
     # check the dictionary is correct
     assert data_dict["test1"]["hdf5_schema"] == 2
     assert data_dict["test1"]["available_properties"] == [
@@ -187,3 +188,24 @@ def test_VersionMetadata(prep_temp_dir):
         data_dict["test1"]["local_dataset"]["hdf5_data_file"]["file_name"]
         == f"{version_metadata.hdf5_file_dir}/{version_metadata.hdf5_file_name}"
     )
+
+    # remote the gzipped file
+    os.remove(f"{prep_temp_dir}/{version_metadata.gzipped_file_name}")
+
+    version_metadata.to_yaml(file_name="test.yaml", file_path=prep_temp_dir)
+
+    # check the yaml file exists
+    assert os.path.exists(f"{prep_temp_dir}/test.yaml")
+    # check that the gzipped file exists
+    assert os.path.exists(f"{prep_temp_dir}/{version_metadata.gzipped_file_name}")
+
+    # remove the gzipped file
+    os.remove(f"{prep_temp_dir}/{version_metadata.gzipped_file_name}")
+    # generate a local dataset yaml
+    version_metadata.remote_dataset = False
+    version_metadata.to_yaml(file_name="test_local.yaml", file_path=prep_temp_dir)
+
+    # check the yaml file exists
+    assert os.path.exists(f"{prep_temp_dir}/test_local.yaml")
+    # check that the gzipped file does not exist because the local dataset does not compress the zip file
+    assert not os.path.exists(f"{prep_temp_dir}/{version_metadata.gzipped_file_name}")

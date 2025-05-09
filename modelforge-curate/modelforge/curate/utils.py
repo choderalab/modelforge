@@ -110,6 +110,22 @@ class VersionMetadata:
 
     the DOI and URL files will be left blank, as those come after the dataset is uploaded.
 
+    Parameters
+    ----------
+    version_name : str
+        The name of the version of the dataset.
+    about : str
+        A description of the dataset.
+    hdf5_file_name : str
+        The name of the hdf5 file.
+    hdf5_file_dir : str
+        The directory containing the hdf5 file.
+    available_properties : list
+        A list of the available properties in the dataset.
+    remote_dataset : bool, optional
+        If True, the dataset is a remote dataset (i.e., stored on zenodo). If False, the dataset is a local dataset.
+        A local dataset will not be compressed and there is slightly different metadata written in the yaml file
+        Default is True.
     """
 
     def __init__(
@@ -119,6 +135,7 @@ class VersionMetadata:
         hdf5_file_name: str,
         hdf5_file_dir: str,
         available_properties: list,
+        remote_dataset: bool = True,
     ):
 
         self.version_name = version_name
@@ -126,13 +143,15 @@ class VersionMetadata:
         self.hdf5_file_name = hdf5_file_name
         self.hdf5_file_dir = hdf5_file_dir
         self.available_properties = available_properties
+        self.remote_dataset = remote_dataset
+
         from modelforge.utils.remote import calculate_md5_checksum
 
         self.hdf5_checksum = calculate_md5_checksum(
             file_name=self.hdf5_file_name, file_path=self.hdf5_file_dir
         )
 
-    def compress_hdf5(self):
+    def _compress_hdf5(self):
         """
         Compress the hdf5 file using gzip
         """
@@ -141,7 +160,7 @@ class VersionMetadata:
         length, filename = gzip_file(
             input_file_name=self.hdf5_file_name,
             input_file_dir=self.hdf5_file_dir,
-            keep_original=False,
+            keep_original=True,
         )
 
         self.gzipped_file_name = filename
@@ -153,7 +172,7 @@ class VersionMetadata:
             file_name=self.gzipped_file_name, file_path=self.hdf5_file_dir
         )
 
-    def remote_dataset_to_dict(self):
+    def _remote_dataset_to_dict(self):
         import re
 
         data = {}
@@ -178,7 +197,9 @@ class VersionMetadata:
 
         return data
 
-    def local_dataset_to_dict(self):
+    def _local_dataset_to_dict(self):
+        import re
+
         data = {}
         data[self.version_name] = {
             "hdf5_schema": 2,
@@ -192,3 +213,40 @@ class VersionMetadata:
             },
         }
         return data
+
+    def to_yaml(self, file_name: str, file_path: str):
+        """
+        Compress the hdf5 file and write the metadata to a yaml file.
+
+        Parameters
+        ----------
+        file_name : str
+            The name of the file to write to.
+        file_path : str
+            The path to the file to write to.
+
+        Returns
+        -------
+            None
+
+        """
+        import os
+        import yaml
+        import time
+
+        # make sure we can handle a tilda in the path
+        file_path = os.path.expanduser(file_path)
+        yaml_file = f"{file_path}/{file_name}"
+
+        # first write out a header for the file so we know when it was generated
+        with open(yaml_file, "w") as f:
+            f.write(
+                f"# Processed on {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}.\n"
+            )
+        if self.remote_dataset:
+            self._compress_hdf5()
+            with open(f"{file_path}/{file_name}", "w") as f:
+                yaml.dump(self._remote_dataset_to_dict(), f)
+        else:
+            with open(f"{file_path}/{file_name}", "w") as f:
+                yaml.dump(self._local_dataset_to_dict(), f)

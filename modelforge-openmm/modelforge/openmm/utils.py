@@ -13,6 +13,7 @@ class NNPInput:
         "per_atom_partial_charge",
         "box_vectors",
         "is_periodic",
+        "per_system_spin_state",
     )
 
     def __init__(
@@ -22,6 +23,7 @@ class NNPInput:
         atomic_subsystem_indices: torch.Tensor,
         per_system_total_charge: torch.Tensor,
         box_vectors: torch.Tensor = torch.zeros(3, 3),
+        per_system_spin_state: torch.Tensor = torch.zeros(1),
         is_periodic: torch.Tensor = torch.tensor([False]),
         pair_list: torch.Tensor = torch.tensor([]),
         per_atom_partial_charge: torch.Tensor = torch.tensor([]),
@@ -34,6 +36,7 @@ class NNPInput:
         self.per_atom_partial_charge = per_atom_partial_charge
         self.box_vectors = box_vectors
         self.is_periodic = is_periodic
+        self.per_system_spin_state = per_system_spin_state
 
         # Validate inputs
         self._validate_inputs()
@@ -80,6 +83,7 @@ class NNPInput:
         self.is_periodic = self.is_periodic.to(device)
         self.pair_list = self.pair_list.to(device)
         self.per_atom_partial_charge = self.per_atom_partial_charge.to(device)
+        self.per_system_spin_state = self.per_system_spin_state.to(device)
 
         return self
 

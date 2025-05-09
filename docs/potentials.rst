@@ -107,6 +107,7 @@ the parameters for the postprocessing operations. Explanation of fields in
 Default parameter files for each potential are available in `modelforge/tests/data/potential_defaults`. These files can be used as starting points for creating new potential configuration files.
 
 Example of how the postprocessing section in a .toml file that that calculates the coulomb potential and the ZBL potential:
+
 .. code-block:: toml
 
     [potential.postprocessing_parameter]
@@ -136,7 +137,7 @@ Example of how the postprocessing section in a .toml file that that calculates t
 Featurization options
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Currently, modelforge requires `atomic_number` to be included in the list of properties to featurize.  Additional properties can be included in the list of properties to featurize, including: `atomic_group`, `atomic_period`, and `per_system_total_charge`.  The `atomic_group` and `atomic_period` properties are derived from the atomic number and are used to provide additional information to the neural network.  Similar to `atomic_number` we can provide additional options for `atomic_group` and `atomic_period` that will specify the underlying tensor shape. The snippet below shows the syntax for defining these in the toml file:
+Currently, modelforge requires `atomic_number` to be included in the list of properties to featurize.  Additional properties can be included in the list of properties to featurize, including: `atomic_group`, `atomic_period`, `per_system_total_charge`, and `per_system_spin_state`.  The `atomic_group` and `atomic_period` properties are derived from the atomic number and are used to provide additional information to the neural network.  Similar to `atomic_number` we can provide additional options for `atomic_group` and `atomic_period` that will specify the underlying tensor shape. The snippet below shows the syntax for defining these in the toml file:
 
 .. code-block:: toml
 
@@ -157,7 +158,7 @@ Currently, modelforge requires `atomic_number` to be included in the list of pro
 
 
 
-The `per_system_total_charge` property is the total charge of the system; this property does not have any additional parameters that need to be defined in the toml file, as this simply adds an additional feature to the input tensor  (note, to use `per_system_total_charge` the dataset must include the `total_charge` of the system).
+The `per_system_total_charge` property is the total charge of the system and `per_system_spin_state` is the spin state of the system; these properties do not have any additional parameters that need to be defined in the toml file, as their inclusion simply adds an additional feature to the input tensor. Note, to use these in a meaningful way, the dataset should include these properties (and assign them in the .toml file), as these values will be initialized to 0 if not assigned from the datafile. This means the code would run, but again, all values would be zero which adds no information to the model.
 
 
 

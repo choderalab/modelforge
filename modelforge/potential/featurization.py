@@ -45,6 +45,7 @@ class AddPerMoleculeValue(nn.Module):
             The updated per-atom property tensor with the per-molecule value appended.
         """
         values_to_append = getattr(data, self.key)
+
         _, counts = torch.unique(data.atomic_subsystem_indices, return_counts=True)
         expanded_values = torch.repeat_interleave(values_to_append, counts).unsqueeze(1)
         return torch.cat((per_atom_property_tensor, expanded_values), dim=1)
@@ -143,7 +144,7 @@ class FeaturizeInput(nn.Module):
         "atomic_period",
         "atomic_group",
         "per_system_total_charge",
-        "spin_state",
+        "per_system_spin_state",
     ]
 
     def __init__(self, featurization_config: Dict[str, Dict[str, int]]) -> None:
@@ -262,7 +263,17 @@ class FeaturizeInput(nn.Module):
                 )
                 self.increase_dim_of_embedded_tensor += 1
                 self.registered_appended_properties.append("per_system_total_charge")
-
+            # add per_system spin state to embedding vector
+            elif (
+                featurization == "per_system_spin_state"
+                and featurization in self._SUPPORTED_FEATURIZATION_TYPES
+            ):
+                # per system spin state needs to be made into a per_atom property; i.e., same value for all atoms in the molecule
+                self.append_to_embedding_tensor.append(
+                    AddPerMoleculeValue("per_system_spin_state")
+                )
+                self.increase_dim_of_embedded_tensor += 1
+                self.registered_appended_properties.append("per_system_spin_state")
             # add partial charge to embedding vector
             elif (
                 featurization == "per_atom_partial_charge"

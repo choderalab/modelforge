@@ -61,6 +61,7 @@ class FeIIDataset(HDF5Dataset):
         E="energies",
         F="forces",
         total_charge="total_charge",
+        S="spin_multiplicities",
     )
 
     # for simplicity, commenting out those properties that are cannot be used in our current implementation
@@ -70,7 +71,7 @@ class FeIIDataset(HDF5Dataset):
         "total_charge",
         "forces",
         "energies",
-        # "spin_multiplicities",
+        "spin_multiplicities",
     ]
 
     _available_properties_association = {
@@ -79,6 +80,7 @@ class FeIIDataset(HDF5Dataset):
         "total_charge": "total_charge",
         "energies": "E",
         "forces": "F",
+        "spin_multiplicities": "S",
     }
 
     def __init__(
@@ -121,6 +123,7 @@ class FeIIDataset(HDF5Dataset):
             "energies",
             "forces",
             "total_charge",
+            "spin_multiplicities",
         ]  # NOTE: Default values
 
         self._properties_of_interest = _default_properties_of_interest

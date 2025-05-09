@@ -48,6 +48,7 @@ class PropertiesDefinition(ParametersBase):
     F: Optional[str] = None
     dipole_moment: Optional[str] = None
     total_charge: Optional[str] = None
+    S: Optional[str] = None
 
 
 class DatasetParameters(BaseModel):

@@ -9,6 +9,7 @@ def nnpinput_flatten(nnpinput: NNPInput):
         nnpinput.atomic_subsystem_indices,
         nnpinput.per_system_total_charge,
         nnpinput.box_vectors,
+        nnpinput.per_system_spin_state,
         nnpinput.is_periodic,
         nnpinput.pair_list,
         nnpinput.per_atom_partial_charge,
@@ -46,5 +47,6 @@ def convert_NNPInput_to_jax(nnp_input: NNPInput):
     nnp_input.per_atom_partial_charge = convert_to_jax(
         nnp_input.per_atom_partial_charge
     )
+    nnp_input.per_system_spin_state = convert_to_jax(nnp_input.per_system_spin_state)
 
     return nnp_input

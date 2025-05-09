@@ -107,6 +107,7 @@ the parameters for the postprocessing operations. Explanation of fields in
 Default parameter files for each potential are available in `modelforge/tests/data/potential_defaults`. These files can be used as starting points for creating new potential configuration files.
 
 Example of how the postprocessing section in a .toml file that that calculates the coulomb potential and the ZBL potential:
+
 .. code-block:: toml
 
     [potential.postprocessing_parameter]

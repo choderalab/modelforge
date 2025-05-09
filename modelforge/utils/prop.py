@@ -60,7 +60,7 @@ class NNPInput:
         positions: torch.Tensor,
         atomic_subsystem_indices: torch.Tensor,
         per_system_total_charge: torch.Tensor,
-        per_system_spin_state: torch.Tensor,
+        per_system_spin_state: torch.Tensor() = torch.zeros(1),
         box_vectors: torch.Tensor = torch.zeros(3, 3),
         is_periodic: torch.Tensor = torch.tensor([False]),
         pair_list: torch.Tensor = torch.tensor([]),

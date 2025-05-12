@@ -9,6 +9,9 @@ This will generate separate HDF5 files for:
 
 """
 
+from modelforge.curate.datasets.phalkethoh_curation import PhAlkEthOHCuration
+from modelforge.curate.utils import VersionMetadata
+
 
 def main():
 
@@ -27,8 +30,6 @@ def main():
     # version of the dataset to curate
     version_select = f"v_0"
 
-    from modelforge.curate.datasets.phalkethoh_curation import PhAlkEthOHCuration
-
     PhAlkEthOH_openff = PhAlkEthOHCuration(
         dataset_name="PhAlkEthOH_openff",
         local_cache_dir=local_cache_dir,
@@ -41,11 +42,10 @@ def main():
     #     local_db_name="PhAlkEthOH_openff.sqlite",
     # )
 
-    # record_names = list(PhAlkEthOH_openff.dataset.records.keys())
+    #################
+    # 1000 configuration version
+    #################
 
-    # record = PhAlkEthOH_openff.dataset.get_record(record_names[0])
-
-    # print(record)
     # curate dataset with 1000 total configurations, max of 10 configurations per record
     hdf5_file_name = f"PhAlkEthOH_openff_dataset_v{version}_ntc_1000.hdf5"
 
@@ -57,10 +57,41 @@ def main():
         max_force=1.0 * unit.hartree / unit.bohr,
         max_force_key="dft_total_force",
     )
+    version_name = f"nc_1000_v{version}"
+    about = f"""This provides a curated hdf5 file for a subset of the PhAlkEthOH dataset designed
+            to be compatible with modelforge. This dataset contains {n_total_records} unique records
+            for {n_total_configs} total configurations, with a maximum of 10 configurations per record.
+            """
+    metadata = VersionMetadata(
+        version_name=version_name,
+        about=about,
+        hdf5_file_name=hdf5_file_name,
+        hdf5_file_dir=output_file_dir,
+        available_properties=[
+            "atomic_numbers",
+            "positions",
+            "total_charge",
+            "dispersion_correction_energy",
+            "dft_total_energy",
+            "dispersion_correction_gradient",
+            "dispersion_correction_force",
+            "dft_total_gradient",
+            "dft_total_force",
+            "scf_dipole",
+        ],
+    )
+    # we need to compress the hdf5 file to get the checksum and length for the gzipped file
+    metadata.to_yaml(
+        file_name=f"{version_name}_metadata.yaml", file_path=output_file_dir
+    )
+
     print("1000 configuration subset")
     print(f"Total records: {n_total_records}")
     print(f"Total configs: {n_total_configs}")
 
+    ###############
+    # full dataset
+    ##############
     # curate the full dataset
     hdf5_file_name = f"PhAlkEthOH_openff_dataset_v{version}.hdf5"
     print("total dataset")
@@ -71,9 +102,42 @@ def main():
         max_force=1.0 * unit.hartree / unit.bohr,
         max_force_key="dft_total_force",
     )
+
+    version_name = f"full_dataset_v{version}"
+
+    about = f"""This provides a curated hdf5 file for the PhAlkEthOH dataset designed 
+            to be compatible with modelforge. This dataset contains {n_total_records} unique records
+            for {n_total_configs} total configurations."""
+
+    metadata = VersionMetadata(
+        version_name=version_name,
+        about=about,
+        hdf5_file_name=hdf5_file_name,
+        hdf5_file_dir=output_file_dir,
+        available_properties=[
+            "atomic_numbers",
+            "positions",
+            "total_charge",
+            "dispersion_correction_energy",
+            "dft_total_energy",
+            "dispersion_correction_gradient",
+            "dispersion_correction_force",
+            "dft_total_gradient",
+            "dft_total_force",
+            "scf_dipole",
+        ],
+    )
+    # we need to compress the hdf5 file to get the checksum and length for the gzipped file
+    metadata.to_yaml(
+        file_name=f"{version_name}_metadata.yaml", file_path=output_file_dir
+    )
+
     print(f"Total records: {n_total_records}")
     print(f"Total configs: {n_total_configs}")
 
+    ######################################
+    # 1000 conformer, last configuration only
+    ######################################
     # curate dataset with 1000 total configurations, last only
     hdf5_file_name = f"PhAlkEthOH_openff_dataset_v{version}_ntc_1000_minimal.hdf5"
 
@@ -85,9 +149,41 @@ def main():
         max_force_key="dft_total_force",
         final_configuration_only=True,
     )
+    version_name = f"nc_1000_v{version}_minimal"
+    about = f"""This provides a curated hdf5 file for a subset of the PhAlkEthOH dataset designed
+            to be compatible with modelforge. This dataset contains {n_total_records} unique records
+            for {n_total_configs} total configurations, with only the final configuration of the optimization."""
+
+    metadata = VersionMetadata(
+        version_name=version_name,
+        about=about,
+        hdf5_file_name=hdf5_file_name,
+        hdf5_file_dir=output_file_dir,
+        available_properties=[
+            "atomic_numbers",
+            "positions",
+            "total_charge",
+            "dispersion_correction_energy",
+            "dft_total_energy",
+            "dispersion_correction_gradient",
+            "dispersion_correction_force",
+            "dft_total_gradient",
+            "dft_total_force",
+            "scf_dipole",
+        ],
+    )
+    # we need to compress the hdf5 file to get the checksum and length for the gzipped file
+    metadata.to_yaml(
+        file_name=f"{version_name}_metadata.yaml", file_path=output_file_dir
+    )
+
     print("1000 configuration subset last configurations only")
     print(f"Total records: {n_total_records}")
     print(f"Total configs: {n_total_configs}")
+
+    #######################################3
+    # full dataset last configuration only
+    #######################################3
 
     # curate the full dataset last config only
 
@@ -100,7 +196,33 @@ def main():
         max_force_key="dft_total_force",
         final_configuration_only=True,
     )
+    version_name = f"full_dataset_v{version}_minimal"
+    about = f"""This provides a curated hdf5 file for the PhAlkEthOH dataset designed
+            to be compatible with modelforge. This dataset contains {n_total_records} unique records
+            for {n_total_configs} total configurations, with only the final configuration of the optimization."""
 
+    metadata = VersionMetadata(
+        version_name=version_name,
+        about=about,
+        hdf5_file_name=hdf5_file_name,
+        hdf5_file_dir=output_file_dir,
+        available_properties=[
+            "atomic_numbers",
+            "positions",
+            "total_charge",
+            "dispersion_correction_energy",
+            "dft_total_energy",
+            "dispersion_correction_gradient",
+            "dispersion_correction_force",
+            "dft_total_gradient",
+            "dft_total_force",
+            "scf_dipole",
+        ],
+    )
+    # we need to compress the hdf5 file to get the checksum and length for the gzipped file
+    metadata.to_yaml(
+        file_name=f"{version_name}_metadata.yaml", file_path=output_file_dir
+    )
     print("full dataset last configurations only")
     print(f"Total records: {n_total_records}")
     print(f"Total configs: {n_total_configs}")

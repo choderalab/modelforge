@@ -24,8 +24,6 @@ def main():
     import os
     from modelforge.curate.datasets.ani2x_curation import ANI2xCuration
     from modelforge.curate.utils import VersionMetadata
-    import time
-    import yaml
 
     local_prefix = os.path.expanduser("~/mf_datasets")
     output_file_dir = f"{local_prefix}/hdf5_files/ani2x_dataset"
@@ -46,23 +44,11 @@ def main():
 
     ani2x_dataset.process(force_download=False)
 
-    # Generate a yaml file with the information about each of the dataset versions we curated in this script.
-    # The contents can be cut and paste into the appropriate file in the modelforge/dataset/yaml_files
-    yaml_file = f"{output_file_dir}/ani2x_dataset_curation_v{version}.yaml"
-    with open(yaml_file, "w") as f:
-        f.write(
-            f"# This file contains the metadata for the curated ANI2x dataset v{version}.\n"
-        )
-        f.write(
-            f"# Processed on {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}.\n"
-        )
-
     ####################
     # 1000 configuration test set
     ####################
 
     # Curate ANI2x test dataset with 1000 total conformers, max of 10 conformers per record
-    version_name = f"nc_1000_v{version}"
     hdf5_file_name = f"ani2x_dataset_v{version}_ntc_1000.hdf5"
 
     n_total_records, n_total_configs = ani2x_dataset.to_hdf5(
@@ -72,6 +58,7 @@ def main():
         max_configurations_per_record=10,
     )
 
+    version_name = f"nc_1000_v{version}"
     about = f"""This provides a curated hdf5 file for a subset of the ANI-2x dataset designed 
     to be compatible with modelforge. This dataset contains {n_total_records} unique records 
     for {n_total_configs} total configurations, with a maximum of 10 configurations per record. 
@@ -87,12 +74,11 @@ def main():
         hdf5_file_dir=output_file_dir,
         available_properties=["atomic_numbers", "energies", "positions", "forces"],
     )
-    # we need to compress the hdf5 file to get the checksum and length for the gzipped file
-    metadata.compress_hdf5()
 
-    # dump the metadata to the yaml file
-    with open(yaml_file, "a") as f:
-        yaml.dump(metadata.remote_dataset_to_dict(), f)
+    # this will also compress the hdf5 file
+    metadata.to_yaml(
+        file_name=f"{version_name}_metadata.yaml", file_path=output_file_dir
+    )
 
     print("1000 configuration dataset")
     print(f"Total records: {n_total_records}")
@@ -101,7 +87,6 @@ def main():
     ###############
     # curate the full ANI-2x dataset
     ###############
-    version_name = f"full_dataset_v{version}"
     hdf5_file_name = f"ani2x_dataset_v{version}.hdf5"
 
     n_total_records, n_total_configs = ani2x_dataset.to_hdf5(
@@ -109,6 +94,7 @@ def main():
         output_file_dir=output_file_dir,
     )
 
+    version_name = f"full_dataset_v{version}"
     about = f"""This provides a curated hdf5 file for the ANI-2x dataset designed
     to be compatible with modelforge. This dataset contains {n_total_records} unique records 
     for {n_total_configs} total configurations. Note, individual configurations are partitioned 
@@ -123,12 +109,11 @@ def main():
         hdf5_file_dir=output_file_dir,
         available_properties=["atomic_numbers", "energies", "positions", "forces"],
     )
-    # we need to compress the hdf5 file to get the checksum and length for the gzipped file
-    metadata.compress_hdf5()
+    # this will also compress the hdf5 file
+    metadata.to_yaml(
+        file_name=f"{version_name}_metadata.yaml", file_path=output_file_dir
+    )
 
-    # dump the metadata to the yaml file
-    with open(yaml_file, "a") as f:
-        yaml.dump(metadata.remote_dataset_to_dict(), f)
     print("full dataset dataset")
     print(f"Total records: {n_total_records}")
     print(f"Total configs: {n_total_configs}")

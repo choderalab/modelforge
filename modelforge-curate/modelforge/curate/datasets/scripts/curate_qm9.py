@@ -18,8 +18,6 @@ DOI for dataset: 10.6084/m9.figshare.c.978904.v5
 
 from modelforge.curate.datasets.qm9_curation import QM9Curation
 from modelforge.curate.utils import VersionMetadata
-import yaml
-import os
 
 
 def main():

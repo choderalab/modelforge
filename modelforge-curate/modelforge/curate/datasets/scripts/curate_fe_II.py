@@ -31,8 +31,6 @@ he Fe(II) dataset includes 28834 total configurations for 383 unique molecules F
 from modelforge.curate.datasets.fe_II_curation import FeIICuration
 from openff.units import unit
 from modelforge.curate.utils import VersionMetadata
-import time
-import yaml
 
 
 def main():
@@ -58,27 +56,17 @@ def main():
     # fe_II.load_from_db(local_cache_dir, "fe_II.sqlite")
     fe_II.process(force_download=False)
 
-    # Generate a yaml file with the information about each of the dataset versions we curated in this script.
-    # The contents can be cut and paste into the appropriate file in the modelforge/dataset/yaml_files
-    yaml_file = f"{output_file_dir}/fe_II_dataset_curation_v{version}.yaml"
-    with open(yaml_file, "w") as f:
-        f.write(
-            f"# This file contains the metadata for the curated Fe II dataset v{version}.\n"
-        )
-        f.write(
-            f"# Processed on {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}.\n"
-        )
-
     ####################
     # full dataset
     ####################
-    version_name = f"full_dataset_v{version}"
     hdf5_file_name = f"fe_II_v{version}.hdf5"
 
     total_records, total_configs = fe_II.to_hdf5(
         hdf5_file_name=hdf5_file_name,
         output_file_dir=output_file_dir,
     )
+
+    version_name = f"full_dataset_v{version}"
     about = f"""This provides a curated hdf5 file for the Fe (II) dataset designed
     to be compatible with modelforge. This dataset contains {n_total_records} unique records 
     for {n_total_configs} total configurations. """
@@ -98,12 +86,10 @@ def main():
         ],
     )
 
-    # we need to compress the hdf5 file to get the checksum and length for the gzipped file
-    metadata.compress_hdf5()
-
-    # dump the metadata to the yaml file
-    with open(yaml_file, "a") as f:
-        yaml.dump(metadata.remote_dataset_to_dict(), f)
+    # this will also compress the hdf5 file
+    metadata.to_yaml(
+        file_name=f"{version_name}_metadata.yaml", file_path=output_file_dir
+    )
 
     print("primary configuration subset")
     print(f"Total records: {total_records}")
@@ -113,7 +99,6 @@ def main():
     # 1000 configuration test set
     ####################
 
-    version_name = f"nc_1000_v{version}"
     hdf5_file_name = f"fe_II_ntc_1000_v{version}.hdf5"
 
     total_records, total_configs = fe_II.to_hdf5(
@@ -122,6 +107,7 @@ def main():
         total_configurations=1000,
         max_configurations_per_record=10,
     )
+    version_name = f"nc_1000_v{version}"
     about = f"""This provides a curated hdf5 file for a subset of the Fe (II) dataset designed
     to be compatible with modelforge. This dataset contains {n_total_records} unique records 
     for {n_total_configs} total configurations witha  maximum of 10 configurations per record."""
@@ -141,12 +127,11 @@ def main():
         ],
     )
 
-    # we need to compress the hdf5 file to get the checksum and length for the gzipped file
-    metadata.compress_hdf5()
+    # this will also compress the hdf5 file
+    metadata.to_yaml(
+        file_name=f"{version_name}_metadata.yaml", file_path=output_file_dir
+    )
 
-    # dump the metadata to the yaml file
-    with open(yaml_file, "a") as f:
-        yaml.dump(metadata.remote_dataset_to_dict(), f)
     print("primary configuration subset")
     print(f"Total records: {total_records}")
     print(f"Total configs: {total_configs}")

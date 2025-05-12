@@ -844,7 +844,7 @@ class SourceDataset:
                 }
 
             for prop in record.meta_data.keys():
-                temp_props[prop] = "meta_data"
+                temp_props[prop] = {"classification": "meta_data"}
 
             output_dict["properties"] = temp_props
 

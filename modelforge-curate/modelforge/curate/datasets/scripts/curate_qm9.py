@@ -18,7 +18,6 @@ DOI for dataset: 10.6084/m9.figshare.c.978904.v5
 
 from modelforge.curate.datasets.qm9_curation import QM9Curation
 from modelforge.curate.utils import VersionMetadata
-import time
 import yaml
 import os
 
@@ -45,15 +44,6 @@ def main():
         version_select=version_select,
     )
     qm9_dataset.process(force_download=False)
-
-    yaml_file = f"{output_file_dir}/qm9_dataset_curation_v{version}.yaml"
-    with open(yaml_file, "w") as f:
-        f.write(
-            f"# This file contains the metadata for the curated qm9 dataset v{version}.\n"
-        )
-        f.write(
-            f"# Processed on {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}.\n"
-        )
 
     ###############
     # full dataset
@@ -96,18 +86,19 @@ def main():
         ],
     )
 
-    # we need to compress the hdf5 file to get the checksum and length for the gzipped file
-    metadata.compress_hdf5()
-
-    # dump the metadata to the yaml file
-    with open(yaml_file, "a") as f:
-        yaml.dump(metadata.remote_dataset_to_dict(), f)
+    # this will also compress the hdf5 file
+    metadata.to_yaml(
+        file_name=f"{version_name}_metadata.yaml", file_path=output_file_dir
+    )
 
     print("full dataset")
     print(f"Total records: {n_total_records}")
     print(f"Total configs: {n_total_configs}")
 
-    # Curates the test dataset with 1000 total conformers
+    #################
+    # 1000 configuration version
+    #################
+    # Curates the test dataset with 1000 total configurations
     # only a single config per record
 
     hdf5_file_name = f"qm9_dataset_v{version}_ntc_1000.hdf5"
@@ -116,7 +107,7 @@ def main():
         output_file_dir=output_file_dir,
         total_configurations=1000,
     )
-    version_name = f"nc_1000_{version}"
+    version_name = f"nc_1000_v{version}"
     about = f"""This provides a curated hdf5 file for a subset of the qm9 dataset designed
         to be compatible with modelforge. This dataset contains {n_total_records} unique records 
         for {n_total_configs} total configurations. Note, the dataset contains only a single 
@@ -148,11 +139,10 @@ def main():
     )
 
     # we need to compress the hdf5 file to get the checksum and length for the gzipped file
-    metadata.compress_hdf5()
+    metadata.to_yaml(
+        file_name=f"{version_name}_metadata.yaml", file_path=output_file_dir
+    )
 
-    # dump the metadata to the yaml file
-    with open(yaml_file, "a") as f:
-        yaml.dump(metadata.remote_dataset_to_dict(), f)
     print(" 1000 configuration subset")
     print(f"Total records: {n_total_records}")
     print(f"Total configs: {n_total_configs}")

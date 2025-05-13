@@ -190,6 +190,7 @@ class SPICE2Curation(DatasetCuration):
                             units=hf[name]["dft_total_energy"].attrs["units"],
                         )
                         record_temp.add_property(dft_total_energy)
+                        # note, swap the sign for the forces
                         dft_total_force = Forces(
                             name="dft_total_force",
                             value=-hf[name]["dft_total_gradient"][()],

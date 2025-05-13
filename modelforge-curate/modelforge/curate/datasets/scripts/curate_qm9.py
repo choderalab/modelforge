@@ -34,8 +34,7 @@ def main():
     # version of the dataset to curate
     version_select = f"v_0"
     # Curate the test dataset with 1000 total conformers
-    from modelforge.curate.datasets.qm9_curation import QM9Curation
-
+    # only a single config per record
     qm9_dataset = QM9Curation(
         dataset_name="qm9",
         local_cache_dir=local_cache_dir,

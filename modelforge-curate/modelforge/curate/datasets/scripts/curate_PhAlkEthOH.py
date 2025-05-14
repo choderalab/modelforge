@@ -61,6 +61,7 @@ def main():
     about = f"""This provides a curated hdf5 file for a subset of the PhAlkEthOH dataset designed
             to be compatible with modelforge. This dataset contains {n_total_records} unique records
             for {n_total_configs} total configurations, with a maximum of 10 configurations per record.
+            This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
             """
     metadata = VersionMetadata(
         version_name=version_name,
@@ -107,7 +108,9 @@ def main():
 
     about = f"""This provides a curated hdf5 file for the PhAlkEthOH dataset designed 
             to be compatible with modelforge. This dataset contains {n_total_records} unique records
-            for {n_total_configs} total configurations."""
+            for {n_total_configs} total configurations.
+            This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
+            """
 
     metadata = VersionMetadata(
         version_name=version_name,
@@ -152,7 +155,9 @@ def main():
     version_name = f"nc_1000_v{version}_minimal"
     about = f"""This provides a curated hdf5 file for a subset of the PhAlkEthOH dataset designed
             to be compatible with modelforge. This dataset contains {n_total_records} unique records
-            for {n_total_configs} total configurations, with only the final configuration of the optimization."""
+            for {n_total_configs} total configurations, with only the final configuration of the optimization.
+            This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
+            """
 
     metadata = VersionMetadata(
         version_name=version_name,
@@ -199,7 +204,9 @@ def main():
     version_name = f"full_dataset_v{version}_minimal"
     about = f"""This provides a curated hdf5 file for the PhAlkEthOH dataset designed
             to be compatible with modelforge. This dataset contains {n_total_records} unique records
-            for {n_total_configs} total configurations, with only the final configuration of the optimization."""
+            for {n_total_configs} total configurations, with only the final configuration of the optimization.
+            This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
+            """
 
     metadata = VersionMetadata(
         version_name=version_name,

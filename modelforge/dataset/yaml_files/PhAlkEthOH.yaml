@@ -1,91 +1,142 @@
 dataset: PhAlkEthOH
-latest: full_dataset_v1
-latest_test: nc_1000_v1
-full_dataset_v1:
-  version: 1
-  doi: 10.5281/zenodo.13450735
-  notes: removes high force conformers
-  gz_data_file:
-    length: 3300668359
-    md5: b051af374f3233e2925f7a1b96707772
-    name: PhAlkEthOH_dataset_v1.hdf5.gz
-  hdf5_data_file:
-    md5: f5d9dccb8e79a51892b671108bc57bde
-    name: PhAlkEthOH_dataset_v1.hdf5
-  processed_data_file:
-    md5: null
-    name: PhAlkEthOH_dataset_v1_processed.npz
-  url: https://zenodo.org/records/13450735/files/PhAlkEthOH_openff_dataset_v1.hdf5.gz
-nc_1000_v1:
-  version: 1
-  doi: 10.5281/zenodo.13560343
-  notes: removes high force conformers, 1000 conformers, max 10 per molecule
-  gz_data_file:
-    length: 2702091
-    md5: 76b421802bef68f858757dba41f3ea2e
-    name: PhAlkEthOH_dataset_v1_nc_1000.hdf5.gz
-  hdf5_data_file:
-    md5: 244eb8d1b3547b8da229fd1507fb4d4e
-    name: PhAlkEthOH_dataset_v1_nc_1000.hdf5
-  processed_data_file:
-    md5: null
-    name: PhAlkEthOH_dataset_v1_nc_1000_processed.npz
-  url: https://zenodo.org/records/13560343/files/PhAlkEthOH_openff_dataset_v1_ntc_1000.hdf5.gz
-full_dataset_min_v1:
-  version: 1
-  doi: 10.5281/zenodo.13561100
-  notes: removes high force configurations, only contains final optimized configuration
-  gz_data_file:
-    length: 31352642
-    md5: 205b0b7bc1858b1d3745480d9a29a770
-    name: PhAlkEthOH_dataset_v1_min.hdf5.gz
-  hdf5_data_file:
-    md5: 41cb40718f8872baa6c468ab08574d46
-    name: PhAlkEthOH_dataset_v1_min.hdf5
-  processed_data_file:
-    md5: null
-    name: PhAlkEthOH_dataset_v1_min_processed.npz
-  url: https://zenodo.org/records/13561100/files/PhAlkEthOH_openff_dataset_v1_min.hdf5.gz
-nc_1000_min_v1:
-  version: 1
-  doi: 10.5281/zenodo.13576458
-  notes: removes high force conformers, 1000 conformers, only contains final optimized configuration
-  gz_data_file:
-    length: 3476870
-    md5: 7261f4738efd4bf8409268961837ba78
-    name: PhAlkEthOH_dataset_v1_nc_1000_min.hdf5.gz
-  hdf5_data_file:
-    md5: 5d347a78c6c3b45531870a05d5aab77e
-    name: PhAlkEthOH_dataset_v1_nc_1000_min.hdf5
-  processed_data_file:
-    md5: null
-    name: PhAlkEthOH_dataset_v1_nc_1000_min_processed.npz
-  url: https://zenodo.org/records/13576458/files/PhAlkEthOH_openff_dataset_v1_ntc_1000_min.hdf5.gz
-full_dataset_v0:
-  version: 0
-  doi: 10.5281/zenodo.12174233
-  gz_data_file:
-    length: 3300705368
-    md5: bb7df97851a1ee317d1ea5a2ee3f0a36
-    name: PhAlkEthOH_dataset_v0.hdf5.gz
-  hdf5_data_file:
-    md5: b38983172f3807562f78dc45353292eb
-    name: PhAlkEthOH_dataset_v0.hdf5
-  processed_data_file:
-    md5: null
-    name: PhAlkEthOH_dataset_v0_processed.npz
-  url: https://zenodo.org/records/12174233/files/PhAlkEthOH_openff_dataset_v0.hdf5.gz
-nc_1000_v0:
-  version: 0
-  doi: 10.5281/zenodo.12176407
-  gz_data_file:
-    length: 2713690
-    md5: 932d09a33fcbbf2246c3da8ed36f3d41
-    name: PhAlkEthOH_dataset_v0_nc_1000.hdf5.gz
-  hdf5_data_file:
-    md5: 244eb8d1b3547b8da229fd1507fb4d4e
-    name: PhAlkEthOH_dataset_v0_nc_1000.hdf5
-  processed_data_file:
-    md5: null
-    name: PhAlkEthOH_dataset_v0_nc_1000_processed.npz
-  url: https://zenodo.org/records/12176407/files/PhAlkEthOH_openff_dataset_v0_ntc_1000.hdf5.gz
+latest: full_dataset_v1.1
+latest_test: nc_1000_v1.1
+
+description: "PhAlkEthOH: Phenyls, Alkanes, Ethers, and Alcohols (OH) 
+            The PhAlkEthOH dataset contains a collection of optimized trajectories of linear and cyclic molecules 
+            containing phyl rings, small alkanes, ethers, and alcohols containing only elements carbon, oxygen and hydrogen.  
+            For each unique system, configurations correspond to snapshots from the optimization trajectory.  
+            
+            All QM datapoints were generated using B3LYP-D3BJ/DZVP level of theory, the default theory used for force field 
+            development by the Open Force Field Initiative.
+            
+            The dataset was retrieved from The MolSSI qcarchive.  
+            
+            Related manuscripts:
+          
+            Bannan CC, Mobley D. 
+            ChemPer: An Open Source Tool for Automatically Generating SMIRKS Patterns. 
+            ChemRxiv. 2019; doi:10.26434/chemrxiv.8304578.v1
+            
+            Wang Y, Fass J, Kaminow B, Herr JE, Rufa D, Zhang I, Pulido I, Henry M, Macdonald HE, Takaba K, Chodera JD. 
+            End-to-end differentiable construction of molecular mechanics force fields. 
+            Chemical Science. 2022;13(41):12016-33. doi:10.1039/d2sc02739a
+          
+            Repository used for generating and submitting the dataset via MolSSI qcfractal:
+            
+            Gokey, T,., 
+            OpenFF Sandbox CHO PhAlkEthOH v1.0, 2020, 
+            https://github.com/openforcefield/qca-dataset-submission/tree/master/submissions/2020-09-18-OpenFF-Sandbox-CHO-PhAlkEthOH
+            "
+atomic_self_energies:
+  C: -37.87264507233593 * unit.hartree
+  H: -0.498760510048753 * unit.hartree
+  O: -75.11317840410095 * unit.hartree
+
+full_dataset_v1.1:
+  about: This provides a curated hdf5 file for the PhAlkEthOH dataset designed to
+    be compatible with modelforge. This dataset contains 10301 unique records for
+    1188691 total configurations.
+  available_properties:
+  - atomic_numbers
+  - positions
+  - total_charge
+  - dispersion_correction_energy
+  - dft_total_energy
+  - dispersion_correction_gradient
+  - dispersion_correction_force
+  - dft_total_gradient
+  - dft_total_force
+  - scf_dipole
+  hdf5_schema: 2
+  remote_dataset:
+    doi: 10.5281/zenodo.15398204
+    url: https://zenodo.org/records/15398204/files/PhAlkEthOH_openff_dataset_v1.1.hdf5.gz
+    gz_data_file:
+      file_name: PhAlkEthOH_openff_dataset_v1.1.hdf5.gz
+      length: 5445897672
+      md5: 5bd91d2533581478d35b1c32472c22a7
+    hdf5_data_file:
+      file_name: PhAlkEthOH_openff_dataset_v1.1.hdf5
+      md5: 643a6ff5387088d7cb0c70b5ba39a027
+
+nc_1000_v1.1:
+  about: 'This provides a curated hdf5 file for a subset of the PhAlkEthOH dataset
+    designed to be compatible with modelforge. This dataset contains 101 unique records
+    for 1000 total configurations, with a maximum of 10 configurations per record. '
+  available_properties:
+  - atomic_numbers
+  - positions
+  - total_charge
+  - dispersion_correction_energy
+  - dft_total_energy
+  - dispersion_correction_gradient
+  - dispersion_correction_force
+  - dft_total_gradient
+  - dft_total_force
+  - scf_dipole
+  hdf5_schema: 2
+  remote_dataset:
+    doi: 10.5281/zenodo.15417002
+    url: https://zenodo.org/records/15417002/files/PhAlkEthOH_openff_dataset_v1.1_ntc_1000.hdf5.gz
+    gz_data_file:
+      file_name: PhAlkEthOH_openff_dataset_v1.1_ntc_1000.hdf5.gz
+      length: 4053133
+      md5: d80e9ea3318dfeb3a40f2d614ca62dec
+    hdf5_data_file:
+      file_name: PhAlkEthOH_openff_dataset_v1.1_ntc_1000.hdf5
+      md5: 1e9160bfba6e8bf2c4b9677a7992a000
+
+nc_1000_minimal_v1.1:
+  about: This provides a curated hdf5 file for a subset of the PhAlkEthOH dataset
+    designed to be compatible with modelforge. This dataset contains 1000 unique records
+    for 1000 total configurations, with only the final configuration of the optimization.
+  available_properties:
+  - atomic_numbers
+  - positions
+  - total_charge
+  - dispersion_correction_energy
+  - dft_total_energy
+  - dispersion_correction_gradient
+  - dispersion_correction_force
+  - dft_total_gradient
+  - dft_total_force
+  - scf_dipole
+  hdf5_schema: 2
+  remote_dataset:
+    doi: 10.5281/zenodo.15419953
+    url: https://zenodo.org/records/15419953/files/PhAlkEthOH_openff_dataset_v1.1_ntc_1000_minimal.hdf5.gz
+    gz_data_file:
+      file_name: PhAlkEthOH_openff_dataset_v1.1_ntc_1000_minimal.hdf5.gz
+      length: 5277672
+      md5: 03ac17b57f163baaf996a707ac281eb1
+    hdf5_data_file:
+      file_name: PhAlkEthOH_openff_dataset_v1.1_ntc_1000_minimal.hdf5
+      md5: 612036eca20f9bb715cafd4a897be8d0
+
+  full_dataset_minimal_v1.1:
+    about: This provides a curated hdf5 file for the PhAlkEthOH dataset designed to
+      be compatible with modelforge. This dataset contains 10301 unique records for
+      10301 total configurations, with only the final configuration of the optimization.
+    available_properties:
+      - atomic_numbers
+      - positions
+      - total_charge
+      - dispersion_correction_energy
+      - dft_total_energy
+      - dispersion_correction_gradient
+      - dispersion_correction_force
+      - dft_total_gradient
+      - dft_total_force
+      - scf_dipole
+    hdf5_schema: 2
+    remote_dataset:
+      doi: 10.5281/zenodo.15418579
+      url: https://zenodo.org/records/15418579/files/PhAlkEthOH_openff_dataset_v1.1_minimal.hdf5.gz
+      gz_data_file:
+        file_name: PhAlkEthOH_openff_dataset_v1.1_minimal.hdf5.gz
+        length: 38338045
+        md5: 2b7784da858c566b93d032a1faa00ad3
+      hdf5_data_file:
+        file_name: PhAlkEthOH_openff_dataset_v1.1_minimal.hdf5
+        md5: f35154b3114824cc3d882e9a53436c80

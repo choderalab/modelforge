@@ -12,6 +12,12 @@ Small-molecule/Protein Interaction Chemical Energies (SPICE). The SPICE dataset 
 set of small molecules, dimers, dipeptides, and solvated amino acids. It provides both forces and energies calculated
 at the ωB97M-D3(BJ)/def2-TZVPPD level of theory using Psi4.
 
+Reference to SPICE 2 publication:
+    Eastman, P., Pritchard, B. P., Chodera, J. D., & Markland, T. E.
+    Nutmeg and SPICE: models and data for biomolecular machine learning.
+    Journal of chemical theory and computation, 20(19), 8583-8593 (2024).
+    https://doi.org/10.1021/acs.jctc.4c00794
+
 Reference to the original SPICE 1 dataset publication:
     Eastman, P., Behara, P.K., Dotson, D.L. et al. SPICE,
     A Dataset of Drug-like Molecules and Peptides for Training Machine Learning Potentials.

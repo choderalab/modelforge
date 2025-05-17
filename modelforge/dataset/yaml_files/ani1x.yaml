@@ -1,31 +1,115 @@
 dataset: ani1x
-latest: full_dataset_v0
-latest_test: nc_1000_v0
-full_dataset_v0:
-  version: 0
-  doi: 10.5281/zenodo.12176580
-  gz_data_file:
-    length: 4510287724
-    md5: 9b65d337213d8574fb90170af6df4d92
-    name: ani1x_dataset_v0.hdf5.gz
-  hdf5_data_file:
-    md5: 361b7c4b9a4dfeece70f0fe6a893e76a
-    name: ani1x_dataset_v0.hdf5
-  processed_data_file:
-    md5: null
-    name: ani1x_dataset_v0_processed.npz
-  url: https://zenodo.org/records/12176580/files/ani1x_dataset_v0.hdf5.gz
-nc_1000_v0:
-  version: 0
-  doi: 10.5281/zenodo.12176605
-  gz_data_file:
-    length: 1761813
-    md5: ab72a43b342bf57b94f4e242c132da97
-    name: ani1x_dataset_v0_nc_1000.hdf5.gz
-  hdf5_data_file:
-    md5: 776d38c18f3aa37b00360556cf8d78cc
-    name: ani1x_dataset_v0_nc_1000.hdf5
-  processed_data_file:
-    md5: null
-    name: ani1x_dataset_v0_nc_1000_processed.npz
-  url: https://zenodo.org/records/12176605/files/ani1x_dataset_v0_ntc_1000.hdf5.gz
+latest: full_dataset_v1.1
+latest_test: nc_1000_v1.1
+
+description: "ANI1x  dataset includes ~5 million density function theory calculations
+        for small organic molecules containing H, C, N, and O.
+        A subset of ~500k are computed with accurate coupled cluster methods.
+
+        References:
+
+        ANI-1x dataset:
+        Smith, J. S.; Nebgen, B.; Lubbers, N.; Isayev, O.; Roitberg, A. E.
+        Less Is More: Sampling Chemical Space with Active Learning.
+        J. Chem. Phys. 2018, 148 (24), 241733.
+        https://doi.org/10.1063/1.5023802
+        https://arxiv.org/abs/1801.09319
+
+        ANI-1ccx dataset:
+        Smith, J. S.; Nebgen, B. T.; Zubatyuk, R.; Lubbers, N.; Devereux, C.; Barros, K.; Tretiak, S.; Isayev, O.; Roitberg, A. E.
+        Approaching Coupled Cluster Accuracy with a General-Purpose Neural Network Potential through Transfer Learning. N
+        at. Commun. 2019, 10 (1), 2903.
+        https://doi.org/10.1038/s41467-019-10827-4
+
+        wB97x/def2-TZVPP data:
+        Zubatyuk, R.; Smith, J. S.; Leszczynski, J.; Isayev, O.
+        Accurate and Transferable Multitask Prediction of Chemical Properties with an Atoms-in-Molecules Neural Network.
+        Sci. Adv. 2019, 5 (8), eaav6490.
+        https://doi.org/10.1126/sciadv.aav6490"
+
+atomic_self_energies:
+  H: -0.5978583943827134 * unit.hartree
+  C: -38.08933878049795 * unit.hartree
+  N: -54.711968298621066 * unit.hartree
+  O: -75.19106774742086 * unit.hartree
+
+full_dataset_v1.1:
+  about: "This provides a curated hdf5 file for the ANI-1x dataset designed to be compatible
+    with modelforge. This dataset contains 3114 unique records for 4956005 total configurations.
+    Note, individual configurations are partitioned into entries based on the array
+    of atomic species appearing in sequence in the source data file."
+  available_properties:
+  - atomic_numbers
+  - positions
+  - wb97x_dz_energy
+  - wb97x_tz_energy
+  - ccsd(t)_cbs_energy
+  - hf_dz_energy
+  - hf_tz_energy
+  - hf_qz_energy
+  - npno_ccsd(t)_dz_corr_energy
+  - npno_ccsd(t)_tz_corr_energy
+  - tpno_ccsd(t)_dz_corr_energy
+  - mp2_dz_corr_energy
+  - mp2_tz_corr_energy
+  - mp2_qz_corr_energy
+  - wb97x_dz_forces
+  - wb97x_tz_forces
+  - wb97x_dz_dipole
+  - wb97x_tz_dipole
+  - wb97x_dz_quadrupole
+  - wb97x_dz_cm5_charges
+  - wb97x_dz_hirshfeld_charges
+  - wb97x_tz_mbis_charges
+  hdf5_schema: 2
+  remote_dataset:
+    doi: 10.5281/zenodo.15447970
+    url: https://zenodo.org/records/15447970/files/ani1x_dataset_v1.1.hdf5.gz
+    gz_data_file:
+      file_name: ani1x_dataset_v1.1.hdf5.gz
+      length: 3514221240
+      md5: 0a93b1da5b36298cba7d6b14f7f65ded
+    hdf5_data_file:
+      file_name: ani1x_dataset_v1.1.hdf5
+      md5: b973e519602d24eb4a288e135875ea7e
+
+  nc_1000_v1.1:
+    about: "This provides a curated hdf5 file for a subset of the ANI-1x dataset designed
+      to be compatible with modelforge. This dataset contains 135 unique records for
+      1000 total configurations, with a maximum of 10 configurations per record. Note,
+      individual configurations are partitioned into entries based on the array of atomic
+      species appearing in sequence in the source data file."
+    available_properties:
+      - atomic_numbers
+      - positions
+      - wb97x_dz_energy
+      - wb97x_tz_energy
+      - ccsd(t)_cbs_energy
+      - hf_dz_energy
+      - hf_tz_energy
+      - hf_qz_energy
+      - npno_ccsd(t)_dz_corr_energy
+      - npno_ccsd(t)_tz_corr_energy
+      - tpno_ccsd(t)_dz_corr_energy
+      - mp2_dz_corr_energy
+      - mp2_tz_corr_energy
+      - mp2_qz_corr_energy
+      - wb97x_dz_forces
+      - wb97x_tz_forces
+      - wb97x_dz_dipole
+      - wb97x_tz_dipole
+      - wb97x_dz_quadrupole
+      - wb97x_dz_cm5_charges
+      - wb97x_dz_hirshfeld_charges
+      - wb97x_tz_mbis_charges
+    hdf5_schema: 2
+    remote_dataset:
+      doi: 10.5281/zenodo.15447763
+      url: https://zenodo.org/records/15447763/files/ani1x_dataset_v1.1_ntc_1000.hdf5.gz
+      gz_data_file:
+        file_name: ani1x_dataset_v1.1_ntc_1000.hdf5.gz
+        length: 1426717
+        md5: 4808bdbd49ae3cf7c2049bff439aaa8b
+      hdf5_data_file:
+        file_name: ani1x_dataset_v1.1_ntc_1000.hdf5
+        md5: ac1bc889f45c09b6971f3b56428b61ca

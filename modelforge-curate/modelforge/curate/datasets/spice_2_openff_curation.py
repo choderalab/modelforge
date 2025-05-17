@@ -30,17 +30,17 @@ class SPICE2OpenFFCuration(DatasetCuration):
     Collections that are common to both spice 1 and 2.  Note, in these cases, the original level of theory (generally spec_3) and spice
     level of theory (spec_2 and spec_6) are included in the same collection.
 
-      - 'SPICE Solvated Amino Acids Single Points Dataset v1.1'     * (SPICE 1.1.4 at v1.1)
-      - 'SPICE Dipeptides Single Points Dataset v1.3'               * (SPICE 1.1.4 at v1.2)
-      - 'SPICE DES Monomers Single Points Dataset v1.1'             * (SPICE 1.1.4 at v1.1)
-      - 'SPICE DES370K Single Points Dataset v1.0'                  * (SPICE 1.1.4 at v1.0)
-      - 'SPICE DES370K Single Points Dataset Supplement v1.1'       * (SPICE 1.1.4 at v1.0)
-      - 'SPICE PubChem Set 1 Single Points Dataset v1.3'            * (SPICE 1.1.4 at v1.2)
-      - 'SPICE PubChem Set 2 Single Points Dataset v1.3'            * (SPICE 1.1.4 at v1.2)
-      - 'SPICE PubChem Set 3 Single Points Dataset v1.3'            * (SPICE 1.1.4 at v1.2)
-      - 'SPICE PubChem Set 4 Single Points Dataset v1.3'            * (SPICE 1.1.4 at v1.2)
-      - 'SPICE PubChem Set 5 Single Points Dataset v1.3'            * (SPICE 1.1.4 at v1.2)
-      - 'SPICE PubChem Set 6 Single Points Dataset v1.3'            * (SPICE 1.1.4 at v1.2)
+      - 'SPICE Solvated Amino Acids Single Points Dataset v1.1'
+      - 'SPICE Dipeptides Single Points Dataset v1.2'
+      - 'SPICE DES Monomers Single Points Dataset v1.1'
+      - 'SPICE DES370K Single Points Dataset v1.0'
+      - 'SPICE DES370K Single Points Dataset Supplement v1.1'
+      - 'SPICE PubChem Set 1 Single Points Dataset v1.2'
+      - 'SPICE PubChem Set 2 Single Points Dataset v1.2'
+      - 'SPICE PubChem Set 3 Single Points Dataset v1.2'
+      - 'SPICE PubChem Set 4 Single Points Dataset v1.2'
+      - 'SPICE PubChem Set 5 Single Points Dataset v1.2'
+      - 'SPICE PubChem Set 6 Single Points Dataset v1.2'
 
     The following are only part of spice 2.  Note, for clarity, these collections do not include the data at the
     original level of theory for SPICE, but only the data at the openff level of theory; these have "OpenFF" in the name
@@ -256,6 +256,7 @@ class SPICE2OpenFFCuration(DatasetCuration):
             name = d.join([s.join(temp[0:-1]), temp[-1]])
             non_error_keys_sanitized.append(name)
             original_name[name] = key
+            print(name, key)
 
         # We will sort the keys such that conformers are listed in numerical order.
         # This is not strictly necessary, but will help to better retain
@@ -619,6 +620,20 @@ class SPICE2OpenFFCuration(DatasetCuration):
                                 pbar=pbar,
                             )
                         )
+        # with tqdm() as pbar:
+        #     pbar.total = 0
+        #     for i, dataset_name in enumerate(dataset_names):
+        #         local_database_name = f"{dataset_name}.sqlite"
+        #         local_database_names.append(local_database_name)
+        #         for specification_name in specification_names:
+        #             self._fetch_singlepoint_from_qcarchive(
+        #                 dataset_name=dataset_name,
+        #                 specification_name=specification_name,
+        #                 local_database_name=local_database_name,
+        #                 local_path_dir=self.local_cache_dir,
+        #                 force_download=force_download,
+        #                 pbar=pbar,
+        #             )
 
         logger.debug(f"Data fetched.")
         logger.debug(f"Processing downloaded dataset.")

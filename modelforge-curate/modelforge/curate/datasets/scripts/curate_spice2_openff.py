@@ -60,7 +60,7 @@ def main():
         version_select=version_select,
     )
 
-    spice2_dataset.process(force_download=False, n_threads=8)
+    spice2_dataset.process(force_download=False, n_threads=2)
 
     ani2x_elements = ["H", "C", "N", "O", "F", "Cl", "S"]
 

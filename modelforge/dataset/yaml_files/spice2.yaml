@@ -183,7 +183,8 @@ full_dataset_HCNOFClS_v1.1:
       - scf_quadrupole
     hdf5_schema: 2
     remote_dataset:
-      doi: ' '
+      doi: 10.5281/zenodo.15429193
+      url: https://zenodo.org/records/15429193/files/spice_2_dataset_v1.1_HCNOF.hdf5.gz
       gz_data_file:
         file_name: spice_2_dataset_v1.1_HCNOF.hdf5.gz
         length: 25532396069
@@ -191,4 +192,3 @@ full_dataset_HCNOFClS_v1.1:
       hdf5_data_file:
         file_name: spice_2_dataset_v1.1_HCNOF.hdf5
         md5: e2628a66e1f8f428151bcdbbfb1c41a7
-      url: ' '

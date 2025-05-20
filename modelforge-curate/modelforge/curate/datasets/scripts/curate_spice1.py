@@ -72,7 +72,9 @@ def main():
     about = f"""This provides a curated hdf5 file for a subset of the SPICE1 dataset designed
         to be compatible with modelforge. This dataset contains {total_records} unique records
         for {total_configs} total configurations, with a maximum of 10 configurations per record.
-        The dataset is limited to the elements that are compatible with ANI2x: {ani2x_elements}"""
+        The dataset is limited to the elements that are compatible with ANI2x: {ani2x_elements}
+        This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
+        """
 
     metadata = VersionMetadata(
         version_name=version_name,
@@ -117,8 +119,9 @@ def main():
     about = f"""This provides a curated hdf5 file for the SPICE1 dataset designed
         to be compatible with modelforge. This dataset contains {total_records} unique records
         for {total_configs} total configurations.
-        The dataset is limited to the elements that are compatible with ANI2x: {ani2x_elements}"""
-
+        The dataset is limited to the elements that are compatible with ANI2x: {ani2x_elements}
+        This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
+    """"
     metadata = VersionMetadata(
         version_name=version_name,
         about=about,
@@ -154,10 +157,18 @@ def main():
     # curate the test SPICE 1.1.4 dataset with 1000 total configurations, max of 10 configurations per record
     hdf5_file_name = f"spice_1_dataset_v{version}_ntc_1000.hdf5"
 
-    version_name = f"full_dataset_v{version}"
+    total_records, total_configs = spice1_dataset.to_hdf5(
+        hdf5_file_name=hdf5_file_name,
+        output_file_dir=output_file_dir,
+        total_configurations=1000,
+        max_configurations_per_record=10,
+    )
+
+    version_name = f"nc_1000_v{version}"
     about = f"""This provides a curated hdf5 file for the SPICE1 dataset designed
         to be compatible with modelforge. This dataset contains {total_records} unique records
         for {total_configs} total configurations, with a maximum of 10 configurations per record.
+        This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
         """
 
     metadata = VersionMetadata(
@@ -184,12 +195,6 @@ def main():
     metadata.to_yaml(
         file_name=f"{version_name}_metadata.yaml", file_path=output_file_dir
     )
-    total_records, total_configs = spice1_dataset.to_hdf5(
-        hdf5_file_name=hdf5_file_name,
-        output_file_dir=output_file_dir,
-        total_configurations=1000,
-        max_configurations_per_record=10,
-    )
 
     print("SPICE1: 1000 configuration subset")
     print(f"Total records: {total_records}")
@@ -209,6 +214,7 @@ def main():
     about = f"""This provides a curated hdf5 file for the SPICE1 dataset designed
         to be compatible with modelforge. This dataset contains {total_records} unique records
         for {total_configs} total configurations.
+        This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
         """
 
     metadata = VersionMetadata(

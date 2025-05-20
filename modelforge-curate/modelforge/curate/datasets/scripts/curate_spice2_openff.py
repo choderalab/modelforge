@@ -174,7 +174,7 @@ def main():
         max_force=1.0 * unit.hartree / unit.bohr,
         max_force_key="dft_total_force",
     )
-    version_name = f"full_dataset_v{version}"
+    version_name = f"nc_1000_v{version}"
     about = f"""This provides a curated hdf5 file for the SPICE2 openff dataset designed
             to be compatible with modelforge. This dataset contains {total_records} unique records
             for {total_configs} total configurations, with a maximum of 10 configurations per record.

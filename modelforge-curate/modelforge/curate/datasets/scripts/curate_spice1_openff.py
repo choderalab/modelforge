@@ -38,7 +38,7 @@ def main():
 
     # We'll want to provide some simple means of versioning
     # if we make updates to either the underlying dataset, curation modules, or parameters given to the code
-    version = "1.1"
+    version = "2.1"
     # version of the dataset to curate
     version_select = f"v_0"
 
@@ -157,7 +157,7 @@ def main():
     # curate the test SPICE 1.1.4 dataset with 1000 total configurations, max of 10 configurations per record
     hdf5_file_name = f"spice_1_openff_dataset_v{version}_ntc_1000.hdf5"
 
-    version_name = f"full_dataset_v{version}"
+    version_name = f"nc_1000_v{version}"
     total_records, total_configs = spice1_dataset.to_hdf5(
         hdf5_file_name=hdf5_file_name,
         output_file_dir=output_file_dir,

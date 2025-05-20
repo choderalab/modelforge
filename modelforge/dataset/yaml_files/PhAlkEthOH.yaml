@@ -63,7 +63,8 @@ full_dataset_v1.1:
 nc_1000_v1.1:
   about: 'This provides a curated hdf5 file for a subset of the PhAlkEthOH dataset
     designed to be compatible with modelforge. This dataset contains 101 unique records
-    for 1000 total configurations, with a maximum of 10 configurations per record. '
+    for 1000 total configurations, with a maximum of 10 configurations per record. 
+    This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.'
   available_properties:
   - atomic_numbers
   - positions
@@ -88,9 +89,11 @@ nc_1000_v1.1:
       md5: 1e9160bfba6e8bf2c4b9677a7992a000
 
 nc_1000_minimal_v1.1:
-  about: This provides a curated hdf5 file for a subset of the PhAlkEthOH dataset
+  about: 'This provides a curated hdf5 file for a subset of the PhAlkEthOH dataset
     designed to be compatible with modelforge. This dataset contains 1000 unique records
     for 1000 total configurations, with only the final configuration of the optimization.
+    This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.'
+
   available_properties:
   - atomic_numbers
   - positions
@@ -115,9 +118,11 @@ nc_1000_minimal_v1.1:
       md5: 612036eca20f9bb715cafd4a897be8d0
 
   full_dataset_minimal_v1.1:
-    about: This provides a curated hdf5 file for the PhAlkEthOH dataset designed to
+    about: 'This provides a curated hdf5 file for the PhAlkEthOH dataset designed to
       be compatible with modelforge. This dataset contains 10301 unique records for
       10301 total configurations, with only the final configuration of the optimization.
+      This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.'
+
     available_properties:
       - atomic_numbers
       - positions

@@ -27,23 +27,23 @@ desciption: "The SPICE2 dataset contains conformations for a diverse set of smal
     "
 
 atomic_self_energies:
-  B: -24.671520535482145 * unit.hartree,
-  Br: -2574.1167240829964 * unit.hartree,
-  C: -37.87264507233593 * unit.hartree,
-  Ca: -676.9528465198214 * unit.hartree,  # 2+
-  Cl: -460.1988762285739 * unit.hartree,
-  F: -99.78611622985483 * unit.hartree,
-  H: -0.498760510048753 * unit.hartree,
-  I: -297.76228914445625 * unit.hartree,
-  K: -599.8025677513111 * unit.hartree,  # 1+
-  Li: -7.285254714046546 * unit.hartree,  # 1+
-  Mg: -199.2688420040449 * unit.hartree,  # 2+
-  N: -54.62327513368922 * unit.hartree,
-  Na: -162.11366478783253 * unit.hartree,  # 1+
-  O: -75.11317840410095 * unit.hartree,
-  P: -341.3059197024934 * unit.hartree,
-  S: -398.1599636677874 * unit.hartree,
-  Si: -289.4131352299586 * unit.hartree,
+  B: -24.671520535482145 * unit.hartree
+  Br: -2574.1167240829964 * unit.hartree
+  C: -37.87264507233593 * unit.hartree
+  Ca: -676.9528465198214 * unit.hartree
+  Cl: -460.1988762285739 * unit.hartree
+  F: -99.78611622985483 * unit.hartree
+  H: -0.498760510048753 * unit.hartree
+  I: -297.76228914445625 * unit.hartree
+  K: -599.8025677513111 * unit.hartree
+  Li: -7.285254714046546 * unit.hartree
+  Mg: -199.2688420040449 * unit.hartree
+  N: -54.62327513368922 * unit.hartree
+  Na: -162.11366478783253 * unit.hartree
+  O: -75.11317840410095 * unit.hartree
+  P: -341.3059197024934 * unit.hartree
+  S: -398.1599636677874 * unit.hartree
+  Si: -289.4131352299586 * unit.hartree
 
 full_dataset_v1.1:
   about: This provides a curated hdf5 file for the SPICE2 dataset designed to be compatible

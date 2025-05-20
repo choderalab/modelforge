@@ -494,42 +494,45 @@ class SPICE1OpenFFCuration(DatasetCuration):
             # we need to add the dispersion correction energy to the dft energy
             # and also the dispersion correction force to the dft force
 
-            for name in dataset.keys():
-                record = dataset.get_record(name)
+        for name in dataset.keys():
+            record = dataset.get_record(name)
 
-                # first process energy
-                # fetch the properties from the dataset
-                dft_energy = record.get_property("dft_energy")
-                dispersion_correction_energy = record.get_property(
-                    "dispersion_correction_energy"
-                )
+            # first process energy
+            # fetch the properties from the dataset
+            dft_energy = record.get_property("dft_energy")
+            dispersion_correction_energy = record.get_property(
+                "dispersion_correction_energy"
+            )
 
-                # ensure we have the same units otherwise this won't work so well!
-                assert dft_energy.units == dispersion_correction_energy.units
+            # ensure we have the same units otherwise this won't work so well!
+            assert dft_energy.units == dispersion_correction_energy.units
+            dft_total_energy = dft_energy.value + dispersion_correction_energy.value
+            print(dft_total_energy.shape, dft_energy.value.shape)
+            print(record.n_configs, record.n_atoms)
+            assert dft_total_energy.shape == dft_energy.value.shape
+            # add a new property that is the sum of the two
+            dft_total_energy = Energies(
+                name="dft_total_energy",
+                value=dft_energy.value + dispersion_correction_energy.value,
+                units=dft_energy.units,
+            )
+            dataset.add_property(name, dft_total_energy)
 
-                # add a new property that is the sum of the two
-                dft_total_energy = Energies(
-                    name="dft_total_energy",
-                    value=dft_energy.value + dispersion_correction_energy.value,
-                    units=dft_energy.units,
-                )
-                dataset.add_property(name, dft_total_energy)
+            # now process forces
+            dft_force = record.get_property("dft_force")
+            dispersion_correction_force = record.get_property(
+                "dispersion_correction_force"
+            )
 
-                # now process forces
-                dft_force = record.get_property("dft_force")
-                dispersion_correction_force = record.get_property(
-                    "dispersion_correction_force"
-                )
+            assert dft_force.units == dispersion_correction_force.units
 
-                assert dft_force.units == dispersion_correction_force.units
-
-                dft_total_force = Forces(
-                    name="dft_total_force",
-                    value=dft_force.value + dispersion_correction_force.value,
-                    units=dft_force.units,
-                )
-                dataset.add_property(name, dft_total_force)
-
+            dft_total_force = Forces(
+                name="dft_total_force",
+                value=dft_force.value + dispersion_correction_force.value,
+                units=dft_force.units,
+            )
+            dataset.add_property(name, dft_total_force)
+            print(dataset.validate_record(name))
         return dataset
 
     def process(

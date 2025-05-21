@@ -2,17 +2,31 @@ dataset: spice1openff
 latest: full_dataset_v2.1
 latest_test: nc_1000_v2.1
 
-description: "Small-molecule/Protein Interaction Chemical Energies (SPICE). The SPICE dataset contains conformations for a diverse
-  set of small molecules, dimers, dipeptides, and solvated amino acids.
-  All QM datapoints retrieved were generated using B3LYP-D3BJ/DZVP level of theory.
-  This is the default theory used for force field development by the Open Force Field Initiative.
+description: "Small-molecule/Protein Interaction Chemical Energies (SPICE), calculated at the default OpenFF level of theory.
+  The SPICE dataset contains conformations for a diverse set of small molecules, dimers, dipeptides, and solvated amino acids
+  For 14 different elements (H, Li, C, N, O, F, Na, Mg, P, S, Cl, K, Ca, Br) in both charged and uncharged molecules. 
+  Note, the original SPICE 1  dataset also includes Iodine (I), but systems with this element are not included in this
+  dataset, as a small subset of the SPICE1 dataset was not included in the OpenFF dataset, namely: 
+  
+      -SPICE Ion Pairs Single Points Dataset v1.1
+      -SPICE DES370K Single Points Dataset Supplement v1.0
+  
+  and a subset of calculations were not able to be converged fully. 
+  
+  The full SPICE 1 OpenFF dataset includes 18782 unique records for 1106949 total configurations while the original 
+  SPICE 1 dataset includes 19238 unique records for 1110165 configurations 
+  (both excluding those with forces > 1 hartree/bohr).
+  
+  All QM datapoints retrieved were generated using B3LYP-D3BJ/DZVP level of theory as this is the default theory used 
+  for force field development by the Open Force Field Initiative; the original SPICE 1 dataset
+  was generated using ωB97M-D3(BJ)/def2-TZVPPD level of theory.
 
   Reference to the original SPICE 1 dataset publication:
     Eastman, P., Behara, P.K., Dotson, D.L. et al. SPICE,
     A Dataset of Drug-like Molecules and Peptides for Training Machine Learning Potentials.
     Sci Data 10, 11 (2023). https://doi.org/10.1038/s41597-022-01882-6
 
-  Dataset DOI:
+  DOI to original SPICE 1 dataset (not at the OpenFF level of theory):
   https://doi.org/10.5281/zenodo.8222043"
 
 atomic_self_energies:

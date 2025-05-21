@@ -85,6 +85,7 @@ def main():
     about = f"""This provides a curated hdf5 file for a subset of the SPICE2 openff dataset designed
         to be compatible with modelforge. This dataset contains {total_records} unique records
         for {total_configs} total configurations, with a maximum of 10 configurations per record.
+        This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
         The dataset is limited to the elements that are compatible with ANI2x: {ani2x_elements}"""
 
     metadata = VersionMetadata(
@@ -130,7 +131,8 @@ def main():
     version_name = f"full_dataset_HCNOFClS_v{version}"
     about = f"""This provides a curated hdf5 file for the SPICE2 openff dataset designed
         to be compatible with modelforge. This dataset contains {total_records} unique records
-        for {total_configs} total configurations.
+        for {total_configs} total configurations. This excludes any configurations where the magnitude of any forces 
+        on the atoms are greater than 1 hartree/bohr.
         The dataset is limited to the elements that are compatible with ANI2x: {ani2x_elements}"""
 
     metadata = VersionMetadata(
@@ -178,6 +180,8 @@ def main():
     about = f"""This provides a curated hdf5 file for the SPICE2 openff dataset designed
             to be compatible with modelforge. This dataset contains {total_records} unique records
             for {total_configs} total configurations, with a maximum of 10 configurations per record.
+            This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
+
             """
 
     metadata = VersionMetadata(
@@ -224,6 +228,7 @@ def main():
     about = f"""This provides a curated hdf5 file for the SPICE2 openff dataset designed
         to be compatible with modelforge. This dataset contains {total_records} unique records
         for {total_configs} total configurations.
+        This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
         """
 
     metadata = VersionMetadata(

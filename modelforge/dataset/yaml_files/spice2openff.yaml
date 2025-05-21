@@ -1,0 +1,164 @@
+dataset: spice1openff
+latest: full_dataset_v1.1
+latest_test: nc_1000_v1.1
+
+description: "Small-molecule/Protein Interaction Chemical Energies (SPICE).  
+  It includes 17 elements (H, Li, B, C, N, O, F, Na, Mg, Si, P, S, Cl, K, Ca, Br, I), charged and uncharged molecules, 
+  and a wide range of covalent and non-covalent interactions. 
+  
+  All QM datapoints retrieved were generated using B3LYP-D3BJ/DZVP level of theory.
+  This is the default theory used for force field development by the Open Force Field Initiative.
+
+  Reference to SPICE 2 publication:
+    Eastman, P., Pritchard, B. P., Chodera, J. D., & Markland, T. E 
+    Nutmeg and SPICE: models and data for biomolecular machine learning. 
+    Journal of chemical theory and computation, 20(19), 8583-8593 (2024). 
+    https://doi.org/10.1021/acs.jctc.4c00794
+    
+  Reference to the original SPICE 1 dataset publication:
+    Eastman, P., Behara, P.K., Dotson, D.L. et al. SPICE,
+    A Dataset of Drug-like Molecules and Peptides for Training Machine Learning Potentials.
+    Sci Data 10, 11 (2023). 
+    https://doi.org/10.1038/s41597-022-01882-6
+
+  DOI to original SPICE 1 and 2 datasets (not at the openff level of theory:
+  10.5281/zenodo.7258939"
+
+atomic_self_energies: # these need to be replaced
+  B: -24.671520535482145 * unit.hartree
+  Br: -2574.1167240829964 * unit.hartree
+  C: -37.87264507233593 * unit.hartree
+  Ca: -676.9528465198214 * unit.hartree
+  Cl: -460.1988762285739 * unit.hartree
+  F: -99.78611622985483 * unit.hartree
+  H: -0.498760510048753 * unit.hartree
+  I: -297.76228914445625 * unit.hartree
+  K: -599.8025677513111 * unit.hartree
+  Li: -7.285254714046546 * unit.hartree
+  Mg: -199.2688420040449 * unit.hartree
+  N: -54.62327513368922 * unit.hartree
+  Na: -162.11366478783253 * unit.hartree
+  O: -75.11317840410095 * unit.hartree
+  P: -341.3059197024934 * unit.hartree
+  S: -398.1599636677874 * unit.hartree
+  Si: -289.4131352299586 * unit.hartree
+
+nc_1000_v1.1:
+  about: 'This provides a curated hdf5 file for the SPICE2 openff dataset designed
+    to be compatible with modelforge. This dataset contains 100 unique records for
+    1000 total configurations, with a maximum of 10 configurations per record.         
+    This excludes any configurations where the magnitude of any forces on the
+    atoms are greater than 1 hartree/bohr.'
+  available_properties:
+  - atomic_numbers
+  - positions
+  - total_charge
+  - dft_energy
+  - dispersion_correction_energy
+  - dft_total_energy
+  - dft_force
+  - dispersion_correction_force
+  - dft_total_force
+  - mbis_charges
+  - scf_dipole
+  hdf5_schema: 2
+  remote_dataset:
+    doi: 10.5281/zenodo.15476920
+    gz_data_file:
+      file_name: spice_2_openff_dataset_v1.1_ntc_1000.hdf5.gz
+      length: 5717857
+      md5: 957c1d89fb698d8e195eaf2b7bca2362
+    hdf5_data_file:
+      file_name: spice_2_openff_dataset_v1.1_ntc_1000.hdf5
+      md5: 51f0f237be809c764db2585d9a541be6
+    url: https://zenodo.org/records/15476920/files/spice_2_openff_dataset_v1.1_ntc_1000.hdf5.gz
+
+nc_1000_HCNOFClS_v1.1:
+  about: 'This provides a curated hdf5 file for a subset of the SPICE2 openff dataset
+    designed to be compatible with modelforge. This dataset contains 100 unique records
+    for 1000 total configurations, with a maximum of 10 configurations per record.
+    This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
+    The dataset is limited to the elements that are compatible with ANI2x NNP: [H, C, N, O, F, Cl, S]'
+  available_properties:
+  - atomic_numbers
+  - positions
+  - total_charge
+  - dft_energy
+  - dispersion_correction_energy
+  - dft_total_energy
+  - dft_force
+  - dispersion_correction_force
+  - dft_total_force
+  - mbis_charges
+  - scf_dipole
+  hdf5_schema: 2
+  remote_dataset:
+    doi: 10.5281/zenodo.15477012
+    gz_data_file:
+      file_name: spice_2_openff_dataset_v1.1_ntc_1000_HCNOFClS.hdf5.gz
+      length: 5717866
+      md5: ae8cc23e52692ff90b90378d6a7ea226
+    hdf5_data_file:
+      file_name: spice_2_openff_dataset_v1.1_ntc_1000_HCNOFClS.hdf5
+      md5: 51f0f237be809c764db2585d9a541be6
+    url: https://zenodo.org/records/15477012/files/spice_2_openff_dataset_v1.1_ntc_1000_HCNOFClS.hdf5.gz
+
+full_dataset_HCNOFClS_v1.1:
+  about: 'This provides a curated hdf5 file for the SPICE2 openff dataset designed
+    to be compatible with modelforge. This dataset contains 97274 unique records for
+    1620018 total configurations. This excludes any configurations where the 
+    magnitude of any forces on the atoms are greater than 1 hartree/bohr.
+    The dataset is limited to the elements that are compatible with ANI2x NNP: [H, C, N, O, F, Cl, S]'
+  available_properties:
+  - atomic_numbers
+  - positions
+  - total_charge
+  - dft_energy
+  - dispersion_correction_energy
+  - dft_total_energy
+  - dft_force
+  - dispersion_correction_force
+  - dft_total_force
+  - mbis_charges
+  - scf_dipole
+  hdf5_schema: 2
+  remote_dataset:
+    doi: 10.5281/zenodo.15477069
+    gz_data_file:
+      file_name: spice_2_openff_dataset_v1.1_HCNOFClS.hdf5.gz
+      length: 5912909189
+      md5: dcae9a6853e964ec4d0d3f0201babbce
+    hdf5_data_file:
+      file_name: spice_2_openff_dataset_v1.1_HCNOFClS.hdf5
+      md5: 75839044d1d5e846bd92c8035323ef69
+    url: https://zenodo.org/records/15477069/files/spice_2_openff_dataset_v1.1_HCNOFClS.hdf5.gz
+
+full_dataset_v1.1:
+  about: 'This provides a curated hdf5 file for the SPICE2 openff dataset designed
+    to be compatible with modelforge. This dataset contains 112628 unique records
+    for 1971769 total configurations. This excludes any configurations where
+    the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
+    '
+  available_properties:
+  - atomic_numbers
+  - positions
+  - total_charge
+  - dft_energy
+  - dispersion_correction_energy
+  - dft_total_energy
+  - dft_force
+  - dispersion_correction_force
+  - dft_total_force
+  - mbis_charges
+  - scf_dipole
+  hdf5_schema: 2
+  remote_dataset:
+    doi: 10.5281/zenodo.15477437
+    gz_data_file:
+      file_name: spice_2_openff_dataset_v1.1.hdf5.gz
+      length: 7133416023
+      md5: 5896c787315a6473df14db219b7ce5ef
+    hdf5_data_file:
+      file_name: spice_2_openff_dataset_v1.1.hdf5
+      md5: 7cb903f659447fb838083fd523d14e0a
+    url: https://zenodo.org/records/15477437/files/spice_2_openff_dataset_v1.1.hdf5.gz

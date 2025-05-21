@@ -15,13 +15,13 @@ description: "The ANI-2x data set includes properties for small organic molecule
     DOI for the original dataset: 10.5281/zenodo.10108941"
 
 atomic_self_energies:
-  H: -0.5978583943827134 * unit.hartree
-  C: -38.08933878049795 * unit.hartree
-  N: -54.711968298621066 * unit.hartree
-  O: -75.19106774742086 * unit.hartree
-  S: -398.1577125334925 * unit.hartree
-  F: -99.80348506781634 * unit.hartree
-  Cl: -460.1681939421027 * unit.hartree
+  H: -0.5978583943827134 * hartree
+  C: -38.08933878049795 * hartree
+  N: -54.711968298621066 * hartree
+  O: -75.19106774742086 * hartree
+  S: -398.1577125334925 * hartree
+  F: -99.80348506781634 * hartree
+  Cl: -460.1681939421027 * hartree
 
 full_dataset_v1.1:
   hdf5_schema: 2

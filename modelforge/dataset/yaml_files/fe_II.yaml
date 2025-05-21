@@ -22,14 +22,14 @@ description: "This dataset contains 384 unique systems with a total of 28,834 co
         DOI: 10.1021/acs.jctc.4c00063 
     "
 atomic_self_energies:
-  H: -257.8658772400123 * unit.kilojoule_per_mole
-  C: -897.1371901363243 * unit.kilojoule_per_mole
-  N: -683.3438581909822 * unit.kilojoule_per_mole
-  O: -707.3905177027947 * unit.kilojoule_per_mole
-  P: -445.4451443983543 * unit.kilojoule_per_mole
-  S: -367.7922055565044 * unit.kilojoule_per_mole
-  Cl: -227.0568137730898 * unit.kilojoule_per_mole
-  Fe: 224.48679425562852 * unit.kilojoule_per_mole
+  H: -257.8658772400123 * kilojoule_per_mole
+  C: -897.1371901363243 * kilojoule_per_mole
+  N: -683.3438581909822 * kilojoule_per_mole
+  O: -707.3905177027947 * kilojoule_per_mole
+  P: -445.4451443983543 * kilojoule_per_mole
+  S: -367.7922055565044 * kilojoule_per_mole
+  Cl: -227.0568137730898 * kilojoule_per_mole
+  Fe: 224.48679425562852 * kilojoule_per_mole
 
 nc_1000_v1.1:
   hdf5_schema: 2

@@ -28,10 +28,10 @@ description: "ANI1x  dataset includes ~5 million density function theory calcula
         https://doi.org/10.1126/sciadv.aav6490"
 
 atomic_self_energies:
-  H: -0.5978583943827134 * unit.hartree
-  C: -38.08933878049795 * unit.hartree
-  N: -54.711968298621066 * unit.hartree
-  O: -75.19106774742086 * unit.hartree
+  H: -0.5978583943827134 * hartree
+  C: -38.08933878049795 * hartree
+  N: -54.711968298621066 * hartree
+  O: -75.19106774742086 * hartree
 
 full_dataset_v1.1:
   about: "This provides a curated hdf5 file for the ANI-1x dataset designed to be compatible

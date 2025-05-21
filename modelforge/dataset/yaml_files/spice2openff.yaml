@@ -1,4 +1,4 @@
-dataset: spice1openff
+dataset: spice2openff
 latest: full_dataset_v1.1
 latest_test: nc_1000_v1.1
 
@@ -25,23 +25,23 @@ description: "Small-molecule/Protein Interaction Chemical Energies (SPICE).
   10.5281/zenodo.7258939"
 
 atomic_self_energies: # these need to be replaced
-  B: -24.671520535482145 * unit.hartree
-  Br: -2574.1167240829964 * unit.hartree
-  C: -37.87264507233593 * unit.hartree
-  Ca: -676.9528465198214 * unit.hartree
-  Cl: -460.1988762285739 * unit.hartree
-  F: -99.78611622985483 * unit.hartree
-  H: -0.498760510048753 * unit.hartree
-  I: -297.76228914445625 * unit.hartree
-  K: -599.8025677513111 * unit.hartree
-  Li: -7.285254714046546 * unit.hartree
-  Mg: -199.2688420040449 * unit.hartree
-  N: -54.62327513368922 * unit.hartree
-  Na: -162.11366478783253 * unit.hartree
-  O: -75.11317840410095 * unit.hartree
-  P: -341.3059197024934 * unit.hartree
-  S: -398.1599636677874 * unit.hartree
-  Si: -289.4131352299586 * unit.hartree
+  B: -24.671520535482145 * hartree
+  Br: -2574.1167240829964 * hartree
+  C: -37.87264507233593 * hartree
+  Ca: -676.9528465198214 * hartree
+  Cl: -460.1988762285739 * hartree
+  F: -99.78611622985483 * hartree
+  H: -0.498760510048753 * hartree
+  I: -297.76228914445625 * hartree
+  K: -599.8025677513111 * hartree
+  Li: -7.285254714046546 * hartree
+  Mg: -199.2688420040449 * hartree
+  N: -54.62327513368922 * hartree
+  Na: -162.11366478783253 * hartree
+  O: -75.11317840410095 * hartree
+  P: -341.3059197024934 * hartree
+  S: -398.1599636677874 * hartree
+  Si: -289.4131352299586 * hartree
 
 nc_1000_v1.1:
   about: 'This provides a curated hdf5 file for the SPICE2 openff dataset designed

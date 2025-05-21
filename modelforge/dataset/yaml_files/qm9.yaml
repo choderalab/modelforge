@@ -15,11 +15,11 @@ description: "The QM9 dataset includes 133,885 organic molecules with up to nine
               DOI for dataset: 10.6084/m9.figshare.c.978904.v5"
 
 atomic_self_energies:
-  H: -1313.4668615546 * unit.kilojoule_per_mole
-  C: -99366.70745535441 * unit.kilojoule_per_mole
-  N: -143309.9379722722 * unit.kilojoule_per_mole
-  O: -197082.0671774158 * unit.kilojoule_per_mole
-  F: -261811.54555874597 * unit.kilojoule_per_mole
+  H: -1313.4668615546 * kilojoule_per_mole
+  C: -99366.70745535441 * kilojoule_per_mole
+  N: -143309.9379722722 * kilojoule_per_mole
+  O: -197082.0671774158 * kilojoule_per_mole
+  F: -261811.54555874597 * kilojoule_per_mole
 
 
 full_dataset_v1.1:

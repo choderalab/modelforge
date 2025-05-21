@@ -33,7 +33,8 @@ full_dataset_v1.1:
   - partial_charges
   - polarizability
   - dipole_moment_per_system
-  - dipole_moment_scalar_per_systemenergy_of_homo
+  - dipole_moment_scalar_per_system
+  - energy_of_homo
   - lumo-homo_gap
   - zero_point_vibrational_energy
   - internal_energy_at_298.15K
@@ -67,7 +68,8 @@ nc_1000_v1.1:
   - partial_charges
   - polarizability
   - dipole_moment_per_system
-  - dipole_moment_scalar_per_systemenergy_of_homo
+  - dipole_moment_scalar_per_system
+  - energy_of_homo
   - lumo-homo_gap
   - zero_point_vibrational_energy
   - internal_energy_at_298.15K

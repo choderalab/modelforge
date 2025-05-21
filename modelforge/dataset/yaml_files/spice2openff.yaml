@@ -25,23 +25,23 @@ description: "Small-molecule/Protein Interaction Chemical Energies (SPICE).
   10.5281/zenodo.7258939"
 
 atomic_self_energies: # these need to be replaced
-  B: -24.671520535482145 * hartree
-  Br: -2574.1167240829964 * hartree
-  C: -37.87264507233593 * hartree
-  Ca: -676.9528465198214 * hartree
-  Cl: -460.1988762285739 * hartree
-  F: -99.78611622985483 * hartree
-  H: -0.498760510048753 * hartree
-  I: -297.76228914445625 * hartree
-  K: -599.8025677513111 * hartree
-  Li: -7.285254714046546 * hartree
-  Mg: -199.2688420040449 * hartree
-  N: -54.62327513368922 * hartree
-  Na: -162.11366478783253 * hartree
-  O: -75.11317840410095 * hartree
-  P: -341.3059197024934 * hartree
-  S: -398.1599636677874 * hartree
-  Si: -289.4131352299586 * hartree
+  H: -1583.7235381559833*kilojoule_per_mole
+  Li: -19347.515361076046*kilojoule_per_mole
+  B: -65529.65768442646*kilojoule_per_mole
+  C: -100057.69285084814*kilojoule_per_mole
+  N: -143754.50034055635*kilojoule_per_mole
+  O: -197534.06499229133*kilojoule_per_mole
+  F: -262187.95257544337*kilojoule_per_mole
+  Na: -425581.9250584926*kilojoule_per_mole
+  Mg: -523280.8560382089*kilojoule_per_mole
+  Si: -760216.8701576393*kilojoule_per_mole
+  P: -896215.2333703283*kilojoule_per_mole
+  S: -1045334.9682307948*kilojoule_per_mole
+  Cl: -1208159.74701762*kilojoule_per_mole
+  K: -1574526.5435217225*kilojoule_per_mole
+  Ca: -1777190.5165390158*kilojoule_per_mole
+  Br: -6757220.35723592*kilojoule_per_mole
+
 
 nc_1000_v1.1:
   about: 'This provides a curated hdf5 file for the SPICE2 openff dataset designed

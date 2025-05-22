@@ -128,7 +128,7 @@ class PhAlkEthOHDataset(HDF5Dataset):
             "O": -75.11317840410095 * unit.hartree,
         }
 
-        yaml_file = resources.files(yaml_files) / "PhAlkEthOH.yaml"
+        yaml_file = resources.files(yaml_files) / "phalkethoh.yaml"
         logger.debug(f"Loading config data from {yaml_file}")
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)

@@ -315,7 +315,7 @@ class HDF5Dataset:
             data_inputs = yaml.safe_load(file)
 
         # make sure we have the correct yaml file
-        assert data_inputs["dataset"] == self.dataset_name
+        assert data_inputs["dataset"].lower() == self.dataset_name.lower()
 
         # load the atomic self energies  from the data file if they exist
         if "atomic_self_energies" in data_inputs:
@@ -1738,16 +1738,51 @@ def single_batch(
     batch_size: int = 64,
     dataset_name="QM9",
     local_cache_dir="./",
-    version_select="nc_1000_v0",
+    dataset_cache_dir="./",
+    version_select="nc_1000_v1.1",
+    properties_of_interest=[
+        "atomic_numbers",
+        "positions",
+        "internal_energy_at_0K",
+        "dipole_moment_per_system",
+    ],
+    properties_assignment={
+        "atomic_numbers": "atomic_numbers",
+        "positions": "positions",
+        "E": "internal_energy_at_0K",
+        "dipole_moment": "dipole_moment_per_system",
+    },
 ):
     """
     Utility function to create a single batch of data for testing.
+
+    Parameters
+    ----------
+    batch_size : int
+        The size of the batch to create.
+    dataset_name : str
+        The name of the dataset to use. default is "QM9".
+    local_cache_dir : str
+        Local cache directory for the processed dataset.
+    dataset_cache_dir : str
+        Directory for the raw dataset files.
+    version_select : str
+        The version of the dataset to use. default is "nc_1000_v1.1".
+    properties_of_interest : list
+        List of properties to include in the dataset.
+        Default is ["atomic_numbers", "positions", "internal_energy_at_0K", "dipole_moment_per_system"] for qm9.
+    properties_assignment : dict
+        Dictionary mapping properties of interest to their corresponding keys in the dataset.
+        Default is {"atomic_numbers": "atomic_numbers", "positions": "positions", "E": "internal_energy_at_0K", "dipole_moment": "dipole_moment_per_system"} for qm9.
     """
     data_module = initialize_datamodule(
         dataset_name=dataset_name,
         batch_size=batch_size,
         version_select=version_select,
         local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
+        properties_of_interest=properties_of_interest,
+        properties_assignment=properties_assignment,
     )
     return next(iter(data_module.train_dataloader(shuffle=False)))
 

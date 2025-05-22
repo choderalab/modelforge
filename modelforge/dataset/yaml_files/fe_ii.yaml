@@ -1,4 +1,4 @@
-dataset: fe_II
+dataset: fe_ii
 latest: full_version_v1.1
 latest_test: nc_1000_v1.1
 
@@ -49,10 +49,10 @@ nc_1000_v1.1:
     gz_data_file:
       length: 1425316
       md5: 5337732f01cc99fac8c500c1df7a4b39
-      name: Fe_II_dataset_nc1000_v1.1.hdf5.gz
+      file_name: Fe_II_dataset_nc1000_v1.1.hdf5.gz
     hdf5_data_file:
       md5: 824a03eb589b4bf46d07d12fbfab507d
-      name: Fe_II_dataset_nc1000_v1.1.hdf5
+      file_name: Fe_II_dataset_nc1000_v1.1.hdf5
 
 full_version_v1.1:
   hdf5_schema: 2
@@ -69,8 +69,8 @@ full_version_v1.1:
     gz_data_file:
       length: 39631216
       md5: 55bc8488a1e115712b0c48a740ad73f1
-      name: Fe_II_dataset_v1.1.hdf5.gz
+      file_name: Fe_II_dataset_v1.1.hdf5.gz
     hdf5_data_file:
       md5: 7569fe3c7f8acdef5dc3f6340af51d35
-      name: Fe_II_dataset_v1.1.hdf5
+      file_name: Fe_II_dataset_v1.1.hdf5
 

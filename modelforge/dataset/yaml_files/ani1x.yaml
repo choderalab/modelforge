@@ -1,7 +1,6 @@
 dataset: ani1x
 latest: full_dataset_v1.1
-latest_test: nc_1000_v1.1
-
+latest_test: nc_1000_v1.1[
 description: "ANI1x  dataset includes ~5 million density function theory calculations
         for small organic molecules containing H, C, N, and O.
         A subset of ~500k are computed with accurate coupled cluster methods.
@@ -73,43 +72,43 @@ full_dataset_v1.1:
       file_name: ani1x_dataset_v1.1.hdf5
       md5: b973e519602d24eb4a288e135875ea7e
 
-  nc_1000_v1.1:
-    about: "This provides a curated hdf5 file for a subset of the ANI-1x dataset designed
-      to be compatible with modelforge. This dataset contains 135 unique records for
-      1000 total configurations, with a maximum of 10 configurations per record. Note,
-      individual configurations are partitioned into entries based on the array of atomic
-      species appearing in sequence in the source data file."
-    available_properties:
-      - atomic_numbers
-      - positions
-      - wb97x_dz_energy
-      - wb97x_tz_energy
-      - ccsd(t)_cbs_energy
-      - hf_dz_energy
-      - hf_tz_energy
-      - hf_qz_energy
-      - npno_ccsd(t)_dz_corr_energy
-      - npno_ccsd(t)_tz_corr_energy
-      - tpno_ccsd(t)_dz_corr_energy
-      - mp2_dz_corr_energy
-      - mp2_tz_corr_energy
-      - mp2_qz_corr_energy
-      - wb97x_dz_forces
-      - wb97x_tz_forces
-      - wb97x_dz_dipole
-      - wb97x_tz_dipole
-      - wb97x_dz_quadrupole
-      - wb97x_dz_cm5_charges
-      - wb97x_dz_hirshfeld_charges
-      - wb97x_tz_mbis_charges
-    hdf5_schema: 2
-    remote_dataset:
-      doi: 10.5281/zenodo.15447763
-      url: https://zenodo.org/records/15447763/files/ani1x_dataset_v1.1_ntc_1000.hdf5.gz
-      gz_data_file:
-        file_name: ani1x_dataset_v1.1_ntc_1000.hdf5.gz
-        length: 1426717
-        md5: 4808bdbd49ae3cf7c2049bff439aaa8b
-      hdf5_data_file:
-        file_name: ani1x_dataset_v1.1_ntc_1000.hdf5
-        md5: ac1bc889f45c09b6971f3b56428b61ca
+nc_1000_v1.1:
+  about: "This provides a curated hdf5 file for a subset of the ANI-1x dataset designed
+    to be compatible with modelforge. This dataset contains 135 unique records for
+    1000 total configurations, with a maximum of 10 configurations per record. Note,
+    individual configurations are partitioned into entries based on the array of atomic
+    species appearing in sequence in the source data file."
+  available_properties:
+    - atomic_numbers
+    - positions
+    - wb97x_dz_energy
+    - wb97x_tz_energy
+    - ccsd(t)_cbs_energy
+    - hf_dz_energy
+    - hf_tz_energy
+    - hf_qz_energy
+    - npno_ccsd(t)_dz_corr_energy
+    - npno_ccsd(t)_tz_corr_energy
+    - tpno_ccsd(t)_dz_corr_energy
+    - mp2_dz_corr_energy
+    - mp2_tz_corr_energy
+    - mp2_qz_corr_energy
+    - wb97x_dz_forces
+    - wb97x_tz_forces
+    - wb97x_dz_dipole
+    - wb97x_tz_dipole
+    - wb97x_dz_quadrupole
+    - wb97x_dz_cm5_charges
+    - wb97x_dz_hirshfeld_charges
+    - wb97x_tz_mbis_charges
+  hdf5_schema: 2
+  remote_dataset:
+    doi: 10.5281/zenodo.15447763
+    url: https://zenodo.org/records/15447763/files/ani1x_dataset_v1.1_ntc_1000.hdf5.gz
+    gz_data_file:
+      file_name: ani1x_dataset_v1.1_ntc_1000.hdf5.gz
+      length: 1426717
+      md5: 4808bdbd49ae3cf7c2049bff439aaa8b
+    hdf5_data_file:
+      file_name: ani1x_dataset_v1.1_ntc_1000.hdf5
+      md5: ac1bc889f45c09b6971f3b56428b61ca

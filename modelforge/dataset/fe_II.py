@@ -138,7 +138,7 @@ class FeIIDataset(HDF5Dataset):
         from modelforge.dataset import yaml_files
         import yaml
 
-        yaml_file = resources.files(yaml_files) / "fe_II.yaml"
+        yaml_file = resources.files(yaml_files) / "fe_ii.yaml"
         logger.debug(f"Loading config data from {yaml_file}")
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)

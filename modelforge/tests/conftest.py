@@ -60,14 +60,30 @@ def single_batch_with_batchsize():
     Utility fixture to create a single batch of data for testing.
     """
 
-    def _create_single_batch(
-        batch_size: int, dataset_name: str, local_cache_dir: str, version_select: str
-    ):
+    def _create_single_batch(batch_size: int, dataset_name: str, local_cache_dir: str):
+        from importlib import resources
+        from modelforge.tests.data import dataset_defaults
+        import toml
+        import os
+
+        toml_file = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
+
+        # check to ensure the yaml file exists
+        if not os.path.exists(toml_file):
+            raise FileNotFoundError(
+                f"Dataset toml file {toml_file} not found. Please check the dataset name."
+            )
+
+        config_dict = toml.load(toml_file)
+        print(config_dict)
         return single_batch(
             batch_size=batch_size,
             dataset_name=dataset_name,
             local_cache_dir=local_cache_dir,
-            version_select=version_select,
+            dataset_cache_dir=local_cache_dir,
+            version_select=config_dict["dataset"]["version_select"],
+            properties_of_interest=config_dict["dataset"]["properties_of_interest"],
+            properties_assignment=config_dict["dataset"]["properties_assignment"],
         )
 
     return _create_single_batch

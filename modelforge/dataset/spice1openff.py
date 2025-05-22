@@ -182,7 +182,7 @@ class SPICE1OpenFFDataset(HDF5Dataset):
         from modelforge.dataset import yaml_files
         import yaml
 
-        yaml_file = resources.files(yaml_files) / "spice1openff.yaml"
+        yaml_file = resources.files(yaml_files) / "spice1_openff.yaml"
         logger.debug(f"Loading config data from {yaml_file}")
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)

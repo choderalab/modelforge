@@ -17,50 +17,50 @@ description: "The tmQM dataset contains the geometries and properties of 108,541
     DOI: 10.1021/acs.jcim.0c01041"
 
 atomic_self_energies:
-  H: -1588.690123425219 * unit.kilojoule_per_mole
-  B: -65302.33351128112 * unit.kilojoule_per_mole
-  C: -100005.01654855655 * unit.kilojoule_per_mole
-  N: -143654.56892638578 * unit.kilojoule_per_mole
-  O: -197361.76171021158 * unit.kilojoule_per_mole
-  F: -261926.20424903592 * unit.kilojoule_per_mole
-  Si: -760035.7764038445 * unit.kilojoule_per_mole
-  P: -896075.6280215026 * unit.kilojoule_per_mole
-  S: -1045229.0663264447 * unit.kilojoule_per_mole
-  Cl: -1208038.6914349555 * unit.kilojoule_per_mole
-  Sc: -1997181.018901612 * unit.kilojoule_per_mole
-  Ti: -2230278.4864245243 * unit.kilojoule_per_mole
-  V: -2478389.354471244 * unit.kilojoule_per_mole
-  Cr: -2741967.2994972193 * unit.kilojoule_per_mole
-  Mn: -3021546.098466564 * unit.kilojoule_per_mole
-  Fe: -3317395.5973328506 * unit.kilojoule_per_mole
-  Co: -3629935.0938135427 * unit.kilojoule_per_mole
-  Ni: -3959571.3270608196 * unit.kilojoule_per_mole
-  Cu: -4306402.576897981 * unit.kilojoule_per_mole
-  Zn: -4671113.922983311 * unit.kilojoule_per_mole
-  As: -5869526.931994888 * unit.kilojoule_per_mole
-  Se: -6304454.897949699 * unit.kilojoule_per_mole
-  Br: -6757541.6132786125 * unit.kilojoule_per_mole
-  Y: -100773.37555590154 * unit.kilojoule_per_mole
-  Zr: -123709.71011983423 * unit.kilojoule_per_mole
-  Nb: -149762.5718722473 * unit.kilojoule_per_mole
-  Mo: -179149.19860244964 * unit.kilojoule_per_mole
-  Tc: -212135.93903845942 * unit.kilojoule_per_mole
-  Ru: -248990.05884762504 * unit.kilojoule_per_mole
-  Rh: -290061.85478664236 * unit.kilojoule_per_mole
-  Pd: -335541.5978772224 * unit.kilojoule_per_mole
-  Ag: -385322.4473000328 * unit.kilojoule_per_mole
-  Cd: -440036.922094555 * unit.kilojoule_per_mole
-  I: -781538.4859057926 * unit.kilojoule_per_mole
-  La: -82991.16536291114 * unit.kilojoule_per_mole
-  Hf: -126278.27589562583 * unit.kilojoule_per_mole
-  Ta: -149779.8577882084 * unit.kilojoule_per_mole
-  W: -176248.83619057274 * unit.kilojoule_per_mole
-  Re: -205660.78711122595 * unit.kilojoule_per_mole
-  Os: -237930.364964837 * unit.kilojoule_per_mole
-  Ir: -273916.6051998535 * unit.kilojoule_per_mole
-  Pt: -313193.3625088413 * unit.kilojoule_per_mole
-  Au: -356039.1883931112 * unit.kilojoule_per_mole
-  Hg: -402551.5785347049 * unit.kilojoule_per_mole
+  H: -1588.690123425219 * kilojoule_per_mole
+  B: -65302.33351128112 * kilojoule_per_mole
+  C: -100005.01654855655 * kilojoule_per_mole
+  N: -143654.56892638578 * kilojoule_per_mole
+  O: -197361.76171021158 * kilojoule_per_mole
+  F: -261926.20424903592 * kilojoule_per_mole
+  Si: -760035.7764038445 * kilojoule_per_mole
+  P: -896075.6280215026 * kilojoule_per_mole
+  S: -1045229.0663264447 * kilojoule_per_mole
+  Cl: -1208038.6914349555 * kilojoule_per_mole
+  Sc: -1997181.018901612 * kilojoule_per_mole
+  Ti: -2230278.4864245243 * kilojoule_per_mole
+  V: -2478389.354471244 * kilojoule_per_mole
+  Cr: -2741967.2994972193 * kilojoule_per_mole
+  Mn: -3021546.098466564 * kilojoule_per_mole
+  Fe: -3317395.5973328506 * kilojoule_per_mole
+  Co: -3629935.0938135427 * kilojoule_per_mole
+  Ni: -3959571.3270608196 * kilojoule_per_mole
+  Cu: -4306402.576897981 * kilojoule_per_mole
+  Zn: -4671113.922983311 * kilojoule_per_mole
+  As: -5869526.931994888 * kilojoule_per_mole
+  Se: -6304454.897949699 * kilojoule_per_mole
+  Br: -6757541.6132786125 * kilojoule_per_mole
+  Y: -100773.37555590154 * kilojoule_per_mole
+  Zr: -123709.71011983423 * kilojoule_per_mole
+  Nb: -149762.5718722473 * kilojoule_per_mole
+  Mo: -179149.19860244964 * kilojoule_per_mole
+  Tc: -212135.93903845942 * kilojoule_per_mole
+  Ru: -248990.05884762504 * kilojoule_per_mole
+  Rh: -290061.85478664236 * kilojoule_per_mole
+  Pd: -335541.5978772224 * kilojoule_per_mole
+  Ag: -385322.4473000328 * kilojoule_per_mole
+  Cd: -440036.922094555 * kilojoule_per_mole
+  I: -781538.4859057926 * kilojoule_per_mole
+  La: -82991.16536291114 * kilojoule_per_mole
+  Hf: -126278.27589562583 * kilojoule_per_mole
+  Ta: -149779.8577882084 * kilojoule_per_mole
+  W: -176248.83619057274 * kilojoule_per_mole
+  Re: -205660.78711122595 * kilojoule_per_mole
+  Os: -237930.364964837 * kilojoule_per_mole
+  Ir: -273916.6051998535 * kilojoule_per_mole
+  Pt: -313193.3625088413 * kilojoule_per_mole
+  Au: -356039.1883931112 * kilojoule_per_mole
+  Hg: -402551.5785347049 * kilojoule_per_mole
 
 full_dataset_v1.1:
   hdf5_schema: 2
@@ -89,10 +89,10 @@ full_dataset_v1.1:
     gz_data_file:
       length: 328729880
       md5: 16332938d98f71023a963b36e7ae2191
-      name: tmqm_dataset_v1.1.hdf5.gz
+      file_name: tmqm_dataset_v1.1.hdf5.gz
     hdf5_data_file:
       md5: b9454280213b488081955d46ebb378eb
-      name: tmqm_dataset_v1.1.hdf5
+      file_name: tmqm_dataset_v1.1.hdf5
 
 nc_1000_v1.1:
   hdf5_schema: 2
@@ -121,10 +121,10 @@ nc_1000_v1.1:
     gz_data_file:
       length: 3605547
       md5: d9bfdccaa16b440d5c95c90be6480dab
-      name: tmqm_dataset_nc_1000_v1.1.hdf5.gz
+      file_name: tmqm_dataset_nc_1000_v1.1.hdf5.gz
     hdf5_data_file:
       md5: d7fe366ecf8fee0264fcfac17e0b0b87
-      name: tmqm_dataset_nc_1000_v1.1.hdf5
+      file_name: tmqm_dataset_nc_1000_v1.1.hdf5
 
 PdZnFeCu_CHPSONFClBr_nc_1000_v1.1:
   hdf5_schema: 2
@@ -158,10 +158,10 @@ PdZnFeCu_CHPSONFClBr_nc_1000_v1.1:
     gz_data_file:
       length: 3137141
       md5: 672025a093b4adf3233186be1c8393f4
-      name: tmqm_dataset_PdZnFeCu_CHPSONFClBr_nc_1000_v1.1.hdf5.gz
+      file_name: tmqm_dataset_PdZnFeCu_CHPSONFClBr_nc_1000_v1.1.hdf5.gz
     hdf5_data_file:
       md5: 531977896b6074912098a0ec36baa665
-      name: tmqm_dataset_PdZnFeCu_CHPSONFClBr_nc_1000_v1.1.hdf5
+      file_name: tmqm_dataset_PdZnFeCu_CHPSONFClBr_nc_1000_v1.1.hdf5
 
 
 PdZnFeCu_CHPSONFClBr_v1.1:
@@ -195,10 +195,10 @@ PdZnFeCu_CHPSONFClBr_v1.1:
     gz_data_file:
       length: 69495572
       md5: ebd0ab2f6ab569980e2a2ce5c273146f
-      name: tmqm_dataset_PdZnFeCu_CHPSONFClBr_v1.1.hdf5.gz
+      file_name: tmqm_dataset_PdZnFeCu_CHPSONFClBr_v1.1.hdf5.gz
     hdf5_data_file:
       md5: 4a0127a5c12c8c8a88c87eba058821ed
-      name: tmqm_dataset_PdZnFeCu_CHPSONFClBr_v1.1.hdf5
+      file_name: tmqm_dataset_PdZnFeCu_CHPSONFClBr_v1.1.hdf5
 
 PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr_v1.1:
   hdf5_schema: 2
@@ -231,7 +231,7 @@ PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr_v1.1:
     gz_data_file:
       length: 153375735
       md5: 4add21b5612b9132d7ce4b7d232dfe3e
-      name: tmqm_dataset_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr_v1.1.hdf5.gz
+      file_name: tmqm_dataset_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr_v1.1.hdf5.gz
     hdf5_data_file:
       md5: b0702a256be4f5cf581441ac35c7d7af
-      name: tmqm_dataset_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr_v1.1.hdf5
+      file_name: tmqm_dataset_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr_v1.1.hdf5

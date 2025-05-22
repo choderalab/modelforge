@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import torch
 
-from modelforge.dataset.dataset import DatasetFactory, TorchDataset, BatchData
+from modelforge.dataset.dataset import TorchDataset, BatchData
 from modelforge.dataset import _ImplementedDatasets
 
 from modelforge.utils.prop import PropertyNames
@@ -27,14 +27,15 @@ def test_dataset_imported():
 testing_version = {
     "tmqm_xtb": "nc_1000_v1.1",
     "fe_ii": "nc_1000_v1.1",
-    "qm9": "nc_1000_v0",
-    "ani1x": "nc_1000_v0",
-    "ani2x": "nc_1000_v0",
-    "spice1": "nc_1000_v0",
-    "spice1_openff": "nc_1000_v0",
-    "spice2": "nc_1000_v0",
-    "phalkethoh": "nc_1000_v0",
-    "tmqm": "nc_1000_v0",
+    "qm9": "nc_1000_v1.1",
+    "ani1x": "nc_1000_v1.1",
+    "ani2x": "nc_1000_v1.1",
+    "spice1": "nc_1000_v1.1",
+    "spice1_openff": "nc_1000_v2.1",
+    "spice2_openff": "nc_1000_v1.1",
+    "spice2": "nc_1000_v1.1",
+    "phalkethoh": "nc_1000_v1.1",
+    "tmqm": "nc_1000_v1.1",
 }
 
 
@@ -123,7 +124,6 @@ def test_get_properties(dataset_name, single_batch_with_batchsize, prep_temp_dir
         batch_size=16,
         dataset_name=dataset_name,
         local_cache_dir=str(prep_temp_dir),
-        version_select=version,
     )
 
 
@@ -149,9 +149,6 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
         assert data.gz_data_file["name"] == "qm9_dataset_v0_nc_1000.hdf5.gz"
         assert data.hdf5_data_file["md5"] == "305a0602860f181fafa75f7c7e3e6de4"
         assert data.hdf5_data_file["name"] == "qm9_dataset_v0_nc_1000.hdf5"
-        assert (
-            data.processed_data_file["name"] == "qm9_dataset_v0_nc_1000_processed.npz"
-        )
 
         data.properties_of_interest = [
             "internal_energy_at_0K",

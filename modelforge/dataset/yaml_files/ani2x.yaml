@@ -39,10 +39,10 @@ full_dataset_v1.1:
     gz_data_file:
       length: 5084638320
       md5: 695b788bd5dd8b861053f11f6bf2c8f3
-      name: ani2x_dataset_v1.1.hdf5.gz
+      file_name: ani2x_dataset_v1.1.hdf5.gz
     hdf5_data_file:
       md5: 9e165fdeb9d8dc0cb21307dedec4936a
-      name: ani2x_dataset_v1.1.hdf5
+      file_name: ani2x_dataset_v1.1.hdf5
 
 
 nc_1000_v1.1:
@@ -63,7 +63,7 @@ nc_1000_v1.1:
     gz_data_file:
       length: 179312
       md5: 574cb77f5089019965607f7c7110d4c2
-      name: ani2x_dataset_nc_1000_v1.1.hdf5.gz
+      file_name: ani2x_dataset_nc_1000_v1.1.hdf5.gz
     hdf5_data_file:
       md5: 5be0f654ce8c7bc13ade8141ba53134e
-      name: ani2x_dataset_nc_1000_v1.1.hdf5
+      file_name: ani2x_dataset_nc_1000_v1.1.hdf5

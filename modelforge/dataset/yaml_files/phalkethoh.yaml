@@ -117,31 +117,31 @@ nc_1000_minimal_v1.1:
       file_name: PhAlkEthOH_openff_dataset_v1.1_ntc_1000_minimal.hdf5
       md5: 612036eca20f9bb715cafd4a897be8d0
 
-  full_dataset_minimal_v1.1:
-    about: 'This provides a curated hdf5 file for the PhAlkEthOH dataset designed to
-      be compatible with modelforge. This dataset contains 10301 unique records for
-      10301 total configurations, with only the final configuration of the optimization.
-      This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.'
+full_dataset_minimal_v1.1:
+  about: 'This provides a curated hdf5 file for the PhAlkEthOH dataset designed to
+    be compatible with modelforge. This dataset contains 10301 unique records for
+    10301 total configurations, with only the final configuration of the optimization.
+    This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.'
 
-    available_properties:
-      - atomic_numbers
-      - positions
-      - total_charge
-      - dispersion_correction_energy
-      - dft_total_energy
-      - dispersion_correction_gradient
-      - dispersion_correction_force
-      - dft_total_gradient
-      - dft_total_force
-      - scf_dipole
-    hdf5_schema: 2
-    remote_dataset:
-      doi: 10.5281/zenodo.15418579
-      url: https://zenodo.org/records/15418579/files/PhAlkEthOH_openff_dataset_v1.1_minimal.hdf5.gz
-      gz_data_file:
-        file_name: PhAlkEthOH_openff_dataset_v1.1_minimal.hdf5.gz
-        length: 38338045
-        md5: 2b7784da858c566b93d032a1faa00ad3
-      hdf5_data_file:
-        file_name: PhAlkEthOH_openff_dataset_v1.1_minimal.hdf5
-        md5: f35154b3114824cc3d882e9a53436c80
+  available_properties:
+    - atomic_numbers
+    - positions
+    - total_charge
+    - dispersion_correction_energy
+    - dft_total_energy
+    - dispersion_correction_gradient
+    - dispersion_correction_force
+    - dft_total_gradient
+    - dft_total_force
+    - scf_dipole
+  hdf5_schema: 2
+  remote_dataset:
+    doi: 10.5281/zenodo.15418579
+    url: https://zenodo.org/records/15418579/files/PhAlkEthOH_openff_dataset_v1.1_minimal.hdf5.gz
+    gz_data_file:
+      file_name: PhAlkEthOH_openff_dataset_v1.1_minimal.hdf5.gz
+      length: 38338045
+      md5: 2b7784da858c566b93d032a1faa00ad3
+    hdf5_data_file:
+      file_name: PhAlkEthOH_openff_dataset_v1.1_minimal.hdf5
+      md5: f35154b3114824cc3d882e9a53436c80

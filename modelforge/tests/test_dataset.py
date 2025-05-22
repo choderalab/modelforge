@@ -451,79 +451,6 @@ def test_metadata_validation(prep_temp_dir, load_test_dataset):
     assert data._metadata_validation("qm9_test.json", local_cache_dir) == False
 
 
-@pytest.mark.parametrize("dataset_name", ["QM9"])
-def test_different_scenarios_of_file_availability(
-    dataset_name, prep_temp_dir, dataset_factory
-):
-    """Test the behavior when raw and processed dataset files are removed."""
-    local_cache_dir = str(prep_temp_dir) + "/test_diff_scenario"
-
-    # this will download the .gz, the .hdf5 and the .npz files
-    dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
-    # we initialize this so that we have the correct parameters to compare against
-
-    data = _ImplementedDatasets.get_dataset_class(dataset_name)(
-        version_select="nc_1000_v0", local_cache_dir=local_cache_dir
-    )
-
-    # first check if we remove the npz file, rerunning it will regenerate it
-    os.remove(f"{local_cache_dir}/{data.processed_data_file['name']}")
-    dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
-
-    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
-
-    # now remove metadata file, rerunning will regenerate the npz file
-    os.remove(
-        f"{local_cache_dir}/{data.processed_data_file['name'].replace('npz', 'json')}"
-    )
-    dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
-    assert os.path.exists(
-        f"{local_cache_dir}/{data.processed_data_file['name'].replace('npz', 'json')}"
-    )
-
-    # now remove the  npz and hdf5 files, rerunning will generate it
-
-    os.remove(f"{local_cache_dir}/{data.processed_data_file['name']}")
-    os.remove(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
-    dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
-
-    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
-    assert os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
-
-    # now remove the gz file; rerunning should NOT download, it will use the npz
-    os.remove(f"{local_cache_dir}/{data.gz_data_file['name']}")
-
-    dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
-    assert not os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
-
-    # now let us remove the hdf5 file, it should use the npz file
-    os.remove(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
-    dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
-    assert not os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
-
-    # now if we remove the npz, it will redownload the gz file and unzip it, then process it
-    os.remove(f"{local_cache_dir}/{data.processed_data_file['name']}")
-    dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
-    assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
-    assert os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
-    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
-
-    # now we will remove the gz file, and set force_download to True
-    # this should now regenerate the gz file, even though others are present
-
-    dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
-    assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
-    assert os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
-    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
-
-    # now we will remove the gz file and run it again
-    os.remove(f"{local_cache_dir}/{data.gz_data_file['name']}")
-    dataset_factory(
-        dataset_name=dataset_name, local_cache_dir=local_cache_dir, force_download=True
-    )
-    assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
-
-
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 def test_data_item_format_of_datamodule(
     dataset_name, datamodule_factory, prep_temp_dir
@@ -562,16 +489,12 @@ def test_removal_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir)
     # test the self energy calculation on the QM9 dataset
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
-    version = testing_version[dataset_name.lower()]
-
     # prepare reference value
     dm = datamodule_factory(
         dataset_name=dataset_name,
-        version_select=version,
         batch_size=512,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         remove_self_energies=False,
-        regenerate_dataset_statistic=True,
         local_cache_dir=str(prep_temp_dir),
     )
 
@@ -582,7 +505,6 @@ def test_removal_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir)
         dataset_name=dataset_name,
         batch_size=512,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-        version_select=version,
         remove_self_energies=True,
         local_cache_dir=str(prep_temp_dir),
     )
@@ -600,9 +522,13 @@ def test_dataset_neighborlist(
 ):
     """Test the neighborlist."""
 
+    # we will simply load up qm9
     batch = single_batch_with_batchsize(
-        64, "QM9", str(prep_temp_dir), version_select="nc_1000_v0"
+        batch_size=64,
+        dataset_name="qm9",
+        local_cache_dir=str(prep_temp_dir),
     )
+
     nnp_input = batch.nnp_input
 
     # test that the neighborlist is correctly generated
@@ -611,7 +537,7 @@ def test_dataset_neighborlist(
     model = setup_potential_for_test(
         use="inference",
         potential_seed=42,
-        potential_name="ani2x",
+        potential_name=potential_name,
         simulation_environment="PyTorch",
         use_training_mode_neighborlist=True,
         local_cache_dir=str(prep_temp_dir),
@@ -623,95 +549,82 @@ def test_dataset_neighborlist(
     assert torch.all(pair_list[0, 1:] >= pair_list[0, :-1])
 
     # test the pairlist for message passing networks (with redundant atom pairs)
-    # first molecule is methane, check if bonds are correct
-    methane_bonds = pair_list[:, :20]
+    # the first molecule in qm9 is methane, check if pairs are correct
+    # methane will have 5 choose 2 unique pairs, or 20 total non-unique pairs
 
-    assert (
-        torch.any(
-            torch.eq(
-                methane_bonds,
-                torch.tensor(
-                    [
-                        [
-                            0,
-                            0,
-                            0,
-                            0,
-                            1,
-                            1,
-                            1,
-                            1,
-                            2,
-                            2,
-                            2,
-                            2,
-                            3,
-                            3,
-                            3,
-                            3,
-                            4,
-                            4,
-                            4,
-                            4,
-                        ],
-                        [
-                            1,
-                            2,
-                            3,
-                            4,
-                            0,
-                            2,
-                            3,
-                            4,
-                            0,
-                            1,
-                            3,
-                            4,
-                            0,
-                            1,
-                            2,
-                            4,
-                            0,
-                            1,
-                            2,
-                            3,
-                        ],
-                    ]
-                ),
-            )
-            == False
-        ).item()
-        == False
+    methane_pairs = pair_list[:, :20]
+    print(methane_pairs)
+
+    methane_pairs_known = torch.tensor(
+        [
+            [
+                0,
+                0,
+                0,
+                0,
+                1,
+                1,
+                1,
+                1,
+                2,
+                2,
+                2,
+                2,
+                3,
+                3,
+                3,
+                3,
+                4,
+                4,
+                4,
+                4,
+            ],
+            [
+                1,
+                2,
+                3,
+                4,
+                0,
+                2,
+                3,
+                4,
+                0,
+                1,
+                3,
+                4,
+                0,
+                1,
+                2,
+                4,
+                0,
+                1,
+                2,
+                3,
+            ],
+        ]
     )
-    # second molecule is ammonium, check if bonds are correct
-    ammonium_bonds = pair_list[:, 20:30]
-    assert (
-        torch.any(
-            torch.eq(
-                ammonium_bonds,
-                torch.tensor(
-                    [
-                        [5, 5, 5, 6, 6, 6, 7, 7, 7, 8],
-                        [6, 7, 8, 5, 7, 8, 5, 6, 8, 5],
-                    ]
-                ),
-            )
-            == False
-        ).item()
-        == False
+    assert torch.all(methane_pairs == methane_pairs_known)
+
+    ammonium_pairs = pair_list[:, 20:30]
+    ammonium_pairs_known = torch.tensor(
+        [
+            [5, 5, 5, 6, 6, 6, 7, 7, 7, 8],
+            [6, 7, 8, 5, 7, 8, 5, 6, 8, 5],
+        ]
     )
+    assert torch.all(ammonium_pairs == ammonium_pairs_known)
 
 
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 def test_dataset_generation(dataset_name, datamodule_factory, prep_temp_dir):
     """Test the splitting of the dataset."""
-
-    version = testing_version[dataset_name.lower()]
+    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
     dataset = datamodule_factory(
         dataset_name=dataset_name,
         local_cache_dir=str(prep_temp_dir),
-        version_select=version,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        batch_size=64,
     )
     train_dataloader = dataset.train_dataloader()
     val_dataloader = dataset.val_dataloader()

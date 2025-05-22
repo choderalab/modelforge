@@ -1758,7 +1758,7 @@ def single_batch(
     },
 ):
     """
-    Utility function to create a single batch of data for testing.
+    Utility function to create a single batch of data for testing (default returns qm9)
 
     Parameters
     ----------

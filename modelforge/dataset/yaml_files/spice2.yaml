@@ -133,62 +133,62 @@ full_dataset_HCNOFClS_v1.1:
       file_name: spice_2_dataset_v1.1_HCNOFClS.hdf5
       md5: 178e4b6f1d812895ae23e3823f032ea9
 
-  nc_1000_HCNOFClS_v1.1:
-    about: 'This provides a curated hdf5 file for a subset of the SPICE2 dataset designed
-      to be compatible with modelforge. This dataset contains 374 unique records for
-      1000 total configurations, with a maximum of 10 configurations per record. The
-      dataset is limited to the elements that are compatible with ANI2x NNP architecture: 
-      [H, C, N, O, F, Cl, S].'
-    available_properties:
-      - atomic_numbers
-      - positions
-      - total_charge
-      - dft_total_energy
-      - dft_total_force
-      - formation_energy
-      - mbis_charges
-      - mbis_dipoles
-      - mbis_quadrupoles
-      - mbis_octupoles
-      - scf_dipole
-      - scf_quadrupole
-    hdf5_schema: 2
-    remote_dataset:
-      url: https://zenodo.org/records/15429129/files/spice_2_dataset_v1.1_ntc_1000_HCNOFClS.hdf5.gz
-      doi: 10.5281/zenodo.15429129
-      gz_data_file:
-        file_name: spice_2_dataset_v1.1_ntc_1000_HCNOFClS.hdf5.gz
-        length: 26256317
-        md5: 3e0d774ffe05c2f6653d4249bdf6de98
-      hdf5_data_file:
-        file_name: spice_2_dataset_v1.1_ntc_1000_HCNOFClS.hdf5
-        md5: 1e9ef56d71de23223ed73d2e4db510f5
+nc_1000_HCNOFClS_v1.1:
+  about: 'This provides a curated hdf5 file for a subset of the SPICE2 dataset designed
+    to be compatible with modelforge. This dataset contains 374 unique records for
+    1000 total configurations, with a maximum of 10 configurations per record. The
+    dataset is limited to the elements that are compatible with ANI2x NNP architecture: 
+    [H, C, N, O, F, Cl, S].'
+  available_properties:
+    - atomic_numbers
+    - positions
+    - total_charge
+    - dft_total_energy
+    - dft_total_force
+    - formation_energy
+    - mbis_charges
+    - mbis_dipoles
+    - mbis_quadrupoles
+    - mbis_octupoles
+    - scf_dipole
+    - scf_quadrupole
+  hdf5_schema: 2
+  remote_dataset:
+    url: https://zenodo.org/records/15429129/files/spice_2_dataset_v1.1_ntc_1000_HCNOFClS.hdf5.gz
+    doi: 10.5281/zenodo.15429129
+    gz_data_file:
+      file_name: spice_2_dataset_v1.1_ntc_1000_HCNOFClS.hdf5.gz
+      length: 26256317
+      md5: 3e0d774ffe05c2f6653d4249bdf6de98
+    hdf5_data_file:
+      file_name: spice_2_dataset_v1.1_ntc_1000_HCNOFClS.hdf5
+      md5: 1e9ef56d71de23223ed73d2e4db510f5
 
-  full_dataset_HCNOF_v1.1:
-    about: This provides a curated hdf5 file for the SPICE2 dataset designed to be compatible
-      with modelforge. This dataset contains 113985 unique records for 2008126 total
-      configurations. The dataset is limited to the elements ['H', 'C', 'N', 'O', 'F'].
-    available_properties:
-      - atomic_numbers
-      - positions
-      - total_charge
-      - dft_total_energy
-      - dft_total_force
-      - formation_energy
-      - mbis_charges
-      - mbis_dipoles
-      - mbis_quadrupoles
-      - mbis_octupoles
-      - scf_dipole
-      - scf_quadrupole
-    hdf5_schema: 2
-    remote_dataset:
-      doi: 10.5281/zenodo.15429193
-      url: https://zenodo.org/records/15429193/files/spice_2_dataset_v1.1_HCNOF.hdf5.gz
-      gz_data_file:
-        file_name: spice_2_dataset_v1.1_HCNOF.hdf5.gz
-        length: 25532396069
-        md5: 36d5939535abcf666d8cf1a1bfae8845
-      hdf5_data_file:
-        file_name: spice_2_dataset_v1.1_HCNOF.hdf5
-        md5: e2628a66e1f8f428151bcdbbfb1c41a7
+full_dataset_HCNOF_v1.1:
+  about: This provides a curated hdf5 file for the SPICE2 dataset designed to be compatible
+    with modelforge. This dataset contains 113985 unique records for 2008126 total
+    configurations. The dataset is limited to the elements ['H', 'C', 'N', 'O', 'F'].
+  available_properties:
+    - atomic_numbers
+    - positions
+    - total_charge
+    - dft_total_energy
+    - dft_total_force
+    - formation_energy
+    - mbis_charges
+    - mbis_dipoles
+    - mbis_quadrupoles
+    - mbis_octupoles
+    - scf_dipole
+    - scf_quadrupole
+  hdf5_schema: 2
+  remote_dataset:
+    doi: 10.5281/zenodo.15429193
+    url: https://zenodo.org/records/15429193/files/spice_2_dataset_v1.1_HCNOF.hdf5.gz
+    gz_data_file:
+      file_name: spice_2_dataset_v1.1_HCNOF.hdf5.gz
+      length: 25532396069
+      md5: 36d5939535abcf666d8cf1a1bfae8845
+    hdf5_data_file:
+      file_name: spice_2_dataset_v1.1_HCNOF.hdf5
+      md5: e2628a66e1f8f428151bcdbbfb1c41a7

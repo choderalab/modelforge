@@ -19,9 +19,9 @@ class SPICE2Curation(DatasetCuration):
     using Psi4 along with other useful quantities such as multipole moments and bond orders.
 
     This includes the following collections from qcarchive. Collections included in SPICE 1.1.4 are annotated with
-    along with the version used in  SPICE 1.1.4; while the underlying molecules are typically the same in a given collection,
+    along with the version used in  SPICE 1.1.4; while the underlying molecules are the same in a given collection,
     newer versions may have had some calculations redone, e.g., rerun calculations that failed or rerun with
-    a newer version Psi4
+    a newer version Psi4 in some instances:
 
       - 'SPICE Solvated Amino Acids Single Points Dataset v1.1'     * (SPICE 1.1.4 at v1.1)
       - 'SPICE Dipeptides Single Points Dataset v1.3'               * (SPICE 1.1.4 at v1.2)
@@ -38,11 +38,13 @@ class SPICE2Curation(DatasetCuration):
       - 'SPICE PubChem Set 8 Single Points Dataset v1.0'
       - 'SPICE PubChem Set 9 Single Points Dataset v1.0'
       - 'SPICE PubChem Set 10 Single Points Dataset v1.0'
-      - 'SPICE Ion Pairs Single Points Dataset v1.2'                * (SPICE 1.1.4 at v1.1)
-      - 'SPICE PubChem Boron Silicon v1.0'
-      - 'SPICE Solvated PubChem Set 1 v1.0'
-      - 'SPICE Water Clusters v1.0'
+      - 'SPICE Water Clusters v1.01
       - 'SPICE Amino Acid Ligand v1.0
+      - 'SPICE Solvated PubChem Set 1 v1.0'
+      - 'SPICE PubChem Boron Silicon v1.0'
+
+      - 'SPICE Ion Pairs Single Points Dataset v1.2'                * (SPICE 1.1.4 at v1.1)
+
 
 
     SPICE 2 zenodo release:

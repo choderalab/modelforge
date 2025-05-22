@@ -1,15 +1,7 @@
 """Module that contains classes and function for loading and processing of datasets."""
 
-from .qm9 import QM9Dataset
-from .ani1x import ANI1xDataset
-from .ani2x import ANI2xDataset
-from .spice1 import SPICE1Dataset
-from .spice2 import SPICE2Dataset
-from .spice1openff import SPICE1OpenFFDataset
-from .phalkethoh import PhAlkEthOHDataset
-from .tmqm import tmQMDataset
-from .tmqm_xtb import tmQMXTBDataset
-from .fe_II import FeIIDataset
+from .dataset import HDF5Dataset
+
 from .dataset import DataModule  # DatasetFactory,
 from enum import Enum
 

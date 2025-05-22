@@ -60,7 +60,12 @@ def single_batch_with_batchsize():
     Utility fixture to create a single batch of data for testing.
     """
 
-    def _create_single_batch(batch_size: int, dataset_name: str, local_cache_dir: str):
+    def _create_single_batch(
+        batch_size: int,
+        dataset_name: str,
+        local_cache_dir: str,
+        dataset_cache_dir: Optional[str] = None,
+    ):
         from importlib import resources
         from modelforge.tests.data import dataset_defaults
         import toml
@@ -75,18 +80,66 @@ def single_batch_with_batchsize():
             )
 
         config_dict = toml.load(toml_file)
-        print(config_dict)
+
+        if dataset_cache_dir is None:
+            dataset_cache_dir = local_cache_dir
         return single_batch(
             batch_size=batch_size,
             dataset_name=dataset_name,
             local_cache_dir=local_cache_dir,
-            dataset_cache_dir=local_cache_dir,
+            dataset_cache_dir=dataset_cache_dir,
             version_select=config_dict["dataset"]["version_select"],
             properties_of_interest=config_dict["dataset"]["properties_of_interest"],
             properties_assignment=config_dict["dataset"]["properties_assignment"],
         )
 
     return _create_single_batch
+
+
+@pytest.fixture(scope="session")
+def load_test_dataset():
+    """
+    Fixture to load a test dataset.
+    """
+
+    def _load_test_dataset(
+        dataset_name: str, local_cache_dir: str, dataset_cache_dir: Optional[str] = None
+    ):
+        from modelforge.dataset import HDF5Dataset
+
+        from importlib import resources
+        from modelforge.tests.data import dataset_defaults
+        import toml
+        import os
+
+        toml_file = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
+
+        # check to ensure the yaml file exists
+        if not os.path.exists(toml_file):
+            raise FileNotFoundError(
+                f"Dataset toml file {toml_file} not found. Please check the dataset name."
+            )
+
+        config_dict = toml.load(toml_file)
+        if dataset_cache_dir is None:
+            dataset_cache_dir = local_cache_dir
+        return HDF5Dataset(
+            dataset_name=dataset_name,
+            force_download=False,
+            version_select=config_dict["dataset"]["version_select"],
+            properties_of_interest=config_dict["dataset"]["properties_of_interest"],
+            properties_assignment=config_dict["dataset"]["properties_assignment"],
+            local_cache_dir=local_cache_dir,
+            dataset_cache_dir=dataset_cache_dir,
+        )
+
+        return initialize_dataset(
+            dataset_name=dataset_name,
+            local_cache_dir=local_cache_dir,
+            version_select="latest_test",
+        )
+
+    return _load_test_dataset
 
 
 # @pytest.fixture(scope="session")

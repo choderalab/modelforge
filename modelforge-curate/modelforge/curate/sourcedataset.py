@@ -53,6 +53,7 @@ class SourceDataset:
         self.records = {}
         self.append_property = append_property
         self.local_db_dir = local_db_dir
+        os.makedirs(self.local_db_dir, exist_ok=True)
 
         if local_db_name is None:
             self.local_db_name = name.replace(" ", "_") + ".sqlite"

@@ -268,6 +268,10 @@ class HDF5Dataset:
         self.dataset_cache_dir = os.path.expanduser(dataset_cache_dir)
         self.local_cache_dir = os.path.expanduser(local_cache_dir)
 
+        # make the directories if they don't exist
+        os.makedirs(self.dataset_cache_dir, exist_ok=True)
+        os.makedirs(self.local_cache_dir, exist_ok=True)
+
         self.force_download = force_download
         self.regenerate_processed_dataset = regenerate_processed_dataset
         self.element_filter = element_filter
@@ -1123,7 +1127,7 @@ from modelforge.custom_types import DatasetType
 class DataModule(pl.LightningDataModule):
     def __init__(
         self,
-        name: DatasetType,
+        name: str,
         splitting_strategy: SplittingStrategy = RandomRecordSplittingStrategy(),
         batch_size: int = 64,
         remove_self_energies: bool = True,
@@ -1697,7 +1701,7 @@ from modelforge.dataset.utils import (
 
 def initialize_datamodule(
     dataset_name: str,
-    version_select: str = "nc_1000_v0",
+    version_select: str,
     batch_size: int = 64,
     splitting_strategy: SplittingStrategy = FirstComeFirstServeSplittingStrategy(),
     remove_self_energies: bool = True,
@@ -1715,7 +1719,7 @@ def initialize_datamodule(
     """
 
     data_module = DataModule(
-        dataset_name,
+        name=dataset_name,
         splitting_strategy=splitting_strategy,
         batch_size=batch_size,
         version_select=version_select,
@@ -1790,20 +1794,26 @@ def single_batch(
 def initialize_dataset(
     dataset_name: str,
     local_cache_dir: str,
-    version_select: str = "nc_1000_v0",
+    dataset_cache_dir: str,
+    version_select: str,
+    properties_of_interest=List[str],
+    properties_assignment=Dict[str, str],
     force_download: bool = False,
+    local_yaml_file: Optional[str] = None,
 ) -> DataModule:
     """
     Initialize a dataset for a given mode.
     """
-    from modelforge.dataset import _ImplementedDatasets
 
-    factory = DatasetFactory()
-    data = _ImplementedDatasets.get_dataset_class(dataset_name)(
-        local_cache_dir=local_cache_dir,
-        version_select=version_select,
+    dataset = HDF5Dataset(
+        dataset_name=dataset_name,
         force_download=force_download,
+        version_select=version_select,
+        properties_of_interest=properties_of_interest,
+        properties_assignment=properties_assignment,
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
+        local_yaml_file=local_yaml_file,
     )
-    dataset = factory.create_dataset(data)
 
     return dataset

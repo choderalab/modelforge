@@ -125,169 +125,7 @@ def test_get_properties(dataset_name, single_batch_with_batchsize, prep_temp_dir
         dataset_name=dataset_name,
         local_cache_dir=str(prep_temp_dir),
     )
-
-
-@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
-def test_different_properties_of_interest(dataset_name, dataset_factory, prep_temp_dir):
-    local_cache_dir = str(prep_temp_dir) + "/data_test"
-
-    version = testing_version[dataset_name.lower()]
-
-    data = _ImplementedDatasets.get_dataset_class(
-        dataset_name,
-    )(version_select=version, local_cache_dir=local_cache_dir)
-    if dataset_name == "QM9":
-        assert data.properties_of_interest == [
-            "geometry",
-            "atomic_numbers",
-            "internal_energy_at_0K",
-            "dipole_moment",
-        ]
-        # spot check the processing of the yaml file
-        assert data.gz_data_file["length"] == 1697917
-        assert data.gz_data_file["md5"] == "dc8ada0d808d02c699daf2000aff1fe9"
-        assert data.gz_data_file["name"] == "qm9_dataset_v0_nc_1000.hdf5.gz"
-        assert data.hdf5_data_file["md5"] == "305a0602860f181fafa75f7c7e3e6de4"
-        assert data.hdf5_data_file["name"] == "qm9_dataset_v0_nc_1000.hdf5"
-
-        data.properties_of_interest = [
-            "internal_energy_at_0K",
-            "geometry",
-            "atomic_numbers",
-        ]
-        assert data.properties_of_interest == [
-            "internal_energy_at_0K",
-            "geometry",
-            "atomic_numbers",
-        ]
-
-    elif dataset_name == "ANI1x" or dataset_name == "ANI2x":
-        assert data.properties_of_interest == [
-            "geometry",
-            "atomic_numbers",
-            "wb97x_dz.energy",
-            "wb97x_dz.forces",
-            "dipole_moment",
-        ]
-
-        data.properties_of_interest = [
-            "internal_energy_at_0K",
-            "geometry",
-            "atomic_numbers",
-            "wb97x_dz.energy",
-            "wb97x_dz.forces",
-        ]
-        assert data.properties_of_interest == [
-            "internal_energy_at_0K",
-            "geometry",
-            "atomic_numbers",
-            "wb97x_dz.energy",
-            "wb97x_dz.forces",
-        ]
-    elif dataset_name == "SPICE2":
-        assert data.properties_of_interest == [
-            "geometry",
-            "atomic_numbers",
-            "dft_total_energy",
-            "dft_total_force",
-            "total_charge",
-            "scf_dipole",
-        ]
-
-        data.properties_of_interest = [
-            "dft_total_energy",
-            "geometry",
-            "atomic_numbers",
-            "total_charge",
-        ]
-        assert data.properties_of_interest == [
-            "dft_total_energy",
-            "geometry",
-            "atomic_numbers",
-            "total_charge",
-        ]
-    elif dataset_name == "PhAlkEthOH":
-        assert data.properties_of_interest == [
-            "geometry",
-            "atomic_numbers",
-            "dft_total_energy",
-            "dft_total_force",
-            "total_charge",
-            "dipole_moment",
-        ]
-
-        data.properties_of_interest = [
-            "dft_total_energy",
-            "geometry",
-            "atomic_numbers",
-        ]
-        assert data.properties_of_interest == [
-            "dft_total_energy",
-            "geometry",
-            "atomic_numbers",
-        ]
-    elif dataset_name == "tmqm":
-        assert data.properties_of_interest == [
-            "geometry",
-            "atomic_numbers",
-            "total_energy",
-            "dipole_moment_computed",
-            "total_charge",
-        ]
-
-        data.properties_of_interest = ["total_energy", "geometry", "atomic_numbers"]
-
-        assert data.properties_of_interest == [
-            "total_energy",
-            "geometry",
-            "atomic_numbers",
-        ]
-    elif dataset_name == "tmqm-xtb":
-        assert data.properties_of_interest == [
-            "positions",
-            "atomic_numbers",
-            "total_charge",
-            "forces",
-            "dipole_moment_per_system",
-            "energies",
-            "partial_charges",
-        ]
-
-        data.properties_of_interest = ["energies", "positions", "atomic_numbers"]
-
-        assert data.properties_of_interest == [
-            "energies",
-            "positions",
-            "atomic_numbers",
-        ]
-    elif dataset_name == "fe_II":
-        assert data.properties_of_interest == [
-            "positions",
-            "atomic_numbers",
-            "total_charge",
-            "forces",
-            "energies",
-            "spin_multiplicities",
-        ]
-
-        data.properties_of_interest = [
-            "energies",
-            "positions",
-            "atomic_numbers",
-        ]
-
-        assert data.properties_of_interest == [
-            "energies",
-            "positions",
-            "atomic_numbers",
-        ]
-    dataset = dataset_factory(
-        dataset_name=dataset_name,
-        local_cache_dir=local_cache_dir,
-        version_select=version,
-    )
-
-    raw_data_item = dataset[0]
+    raw_data_item = batch
     assert isinstance(raw_data_item, BatchData)
     assert len(raw_data_item.__dataclass_fields__) == 2
     assert (
@@ -296,64 +134,123 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
     assert len(raw_data_item.metadata.__slots__) == 6  # 6 properties are returned
 
 
+def test_different_properties_of_interest(load_test_dataset, prep_temp_dir):
+    # since we have switched from separate classses to using yaml files with a single class
+    # we need to test the properties of interest of a single dataset
+
+    local_cache_dir = str(prep_temp_dir) + "/data_test"
+
+    from modelforge.dataset import HDF5Dataset
+
+    dataset = load_test_dataset("qm9", local_cache_dir=local_cache_dir)
+
+    assert dataset.properties_of_interest == [
+        "atomic_numbers",
+        "positions",
+        "internal_energy_at_0K",
+        "dipole_moment_per_system",
+    ]
+
+    # spot check the processing of the yaml file
+    assert dataset.gz_data_file_dict["length"] == 1923749
+    assert dataset.gz_data_file_dict["md5"] == "54a2471bba075fcc2cdfe0b78bc567fa"
+    assert dataset.gz_data_file_dict["file_name"] == "qm9_dataset_v1.1_ntc_1000.hdf5.gz"
+    assert dataset.hdf5_data_file_dict["md5"] == "befb3ef66d74f436ef399bf68eda9b90"
+    assert dataset.hdf5_data_file_dict["file_name"] == "qm9_dataset_v1.1_ntc_1000.hdf5"
+
+    dataset.properties_of_interest = [
+        "internal_energy_at_0K",
+        "positions",
+        "atomic_numbers",
+    ]
+    assert dataset.properties_of_interest == [
+        "internal_energy_at_0K",
+        "positions",
+        "atomic_numbers",
+    ]
+
+    # raw_data_item = dataset[0]
+    # assert isinstance(raw_data_item, BatchData)
+    # assert len(raw_data_item.__dataclass_fields__) == 2
+    # assert (
+    #     len(raw_data_item.nnp_input.__slots__) == 9
+    # )  # 9 properties are returned now that we have included spin state
+    # assert len(raw_data_item.metadata.__slots__) == 6  # 6 properties are returned
+
+
 @pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_file_existence_after_initialization(
-    dataset_name, dataset_factory, prep_temp_dir
+    dataset_name, load_test_dataset, prep_temp_dir
 ):
     """Test if files are created after dataset initialization."""
     import contextlib
 
-    local_cache_dir = str(prep_temp_dir) + "/data_test"
-    version = testing_version[dataset_name.lower()]
+    local_cache_dir = str(prep_temp_dir) + "/local_output"
+    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
 
-    data = _ImplementedDatasets.get_dataset_class(dataset_name)(
-        local_cache_dir=local_cache_dir, version_select=version
+    data = load_test_dataset(
+        "qm9", local_cache_dir=local_cache_dir, dataset_cache_dir=dataset_cache_dir
     )
 
     with contextlib.suppress(FileNotFoundError):
-        os.remove(f"{local_cache_dir}/{data.gz_data_file['name']}")
-        os.remove(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
-        os.remove(f"{local_cache_dir}/{data.processed_data_file['name']}")
+        os.remove(f"{dataset_cache_dir}/{data.gz_data_file_dict['file_name']}")
+        os.remove(f"{dataset_cache_dir}/{data.hdf5_data_file_dict['file_name']}")
+        os.remove(f"{local_cache_dir}/{data.processed_data_file}")
 
-    dataset = dataset_factory(
-        dataset_name=dataset_name,
-        local_cache_dir=local_cache_dir,
+    # acquire the dataset
+    data._acquire_dataset()
+
+    # the datafiles are saved to the dataset_cache_dir
+    # the processed file to the local_cache_dir
+    assert os.path.exists(f"{dataset_cache_dir}/{data.gz_data_file_dict['file_name']}")
+    assert os.path.exists(
+        f"{dataset_cache_dir}/{data.hdf5_data_file_dict['file_name']}"
     )
-
-    assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
-    assert os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
-    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
+    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file}")
 
 
-def test_caching(prep_temp_dir):
+@pytest.mark.parametrize("dataset_name", ["QM9"])
+def test_caching(dataset_name, load_test_dataset, prep_temp_dir):
     import contextlib
 
-    local_cache_dir = str(prep_temp_dir)
-    from modelforge.dataset.qm9 import QM9Dataset
+    local_cache_dir = str(prep_temp_dir) + "/local_output"
+    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
 
-    data = QM9Dataset(version_select="nc_1000_v0", local_cache_dir=local_cache_dir)
+    data = load_test_dataset(
+        dataset_name,
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
+    )
 
-    # first test that no file exists
+    # first ensure that no file exists
     with contextlib.suppress(FileNotFoundError):
-        os.remove(f"{local_cache_dir}/{data.gz_data_file['name']}")
-        os.remove(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
-        os.remove(f"{local_cache_dir}/{data.processed_data_file['name']}")
-    assert not os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
+        os.remove(f"{dataset_cache_dir}/{data.gz_data_file_dict['file_name']}")
+        os.remove(f"{dataset_cache_dir}/{data.hdf5_data_file_dict['file_name']}")
+        os.remove(f"{local_cache_dir}/{data.processed_data_file}")
+
+    assert not os.path.exists(
+        f"{dataset_cache_dir}/{data.gz_data_file_dict['file_name']}"
+    )
     # the _file_validation method also checks the path in addition to the checksum
     assert (
         data._file_validation(
-            data.gz_data_file["name"], local_cache_dir, data.gz_data_file["md5"]
+            data.gz_data_file_dict["file_name"],
+            dataset_cache_dir,
+            data.gz_data_file_dict["md5"],
         )
         == False
     )
 
-    data._download()
+    # acquire the dataset
+    data._acquire_dataset()
     # check that the file exists
-    assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
+    assert os.path.exists(f"{dataset_cache_dir}/{data.gz_data_file_dict['file_name']}")
     # check that the file is there and has the right checksum
     assert (
         data._file_validation(
-            data.gz_data_file["name"], local_cache_dir, data.gz_data_file["md5"]
+            data.gz_data_file_dict["file_name"],
+            dataset_cache_dir,
+            data.gz_data_file_dict["md5"],
         )
         == True
     )
@@ -361,54 +258,104 @@ def test_caching(prep_temp_dir):
     # give a random checksum to see this is false
     assert (
         data._file_validation(
-            data.gz_data_file["name"], local_cache_dir, "madeupcheckusm"
+            data.gz_data_file_dict["file_name"], dataset_cache_dir, "wefweifj3392029302"
         )
         == False
     )
+
+    assert (
+        data._file_validation(
+            data.hdf5_data_file_dict["file_name"],
+            dataset_cache_dir,
+            data.hdf5_data_file_dict["md5"],
+        )
+        == True
+    )
+
+    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file}")
+
     # make sure that if we run again we don't fail
-    data._download()
-    # remove the file and check that it is downloaded again
-    os.remove(f"{local_cache_dir}/{data.gz_data_file['name']}")
-    data._download()
+    data._acquire_dataset()
+
+    # remove the files and check that it is downloaded again
+    os.remove(f"{dataset_cache_dir}/{data.gz_data_file_dict['file_name']}")
+    os.remove(f"{dataset_cache_dir}/{data.hdf5_data_file_dict['file_name']}")
+    os.remove(f"{local_cache_dir}/{data.processed_data_file}")
+
+    data._acquire_dataset()
 
     # check that the file is unzipped
-    data._ungzip_hdf5()
-    assert os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
+    assert os.path.exists(f"{dataset_cache_dir}/{data.gz_data_file_dict['file_name']}")
+    # check that the file is there and has the right checksum
     assert (
         data._file_validation(
-            data.hdf5_data_file["name"], local_cache_dir, data.hdf5_data_file["md5"]
-        )
-        == True
-    )
-    data._from_hdf5()
-
-    data._to_file_cache()
-
-    # npz files saved with different versions of python lead to different checksums
-    # we will skip checking the checksums for these files, only seeing if they exist
-    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
-    assert (
-        data._file_validation(
-            data.processed_data_file["name"],
-            local_cache_dir,
-            None,
+            data.gz_data_file_dict["file_name"],
+            dataset_cache_dir,
+            data.gz_data_file_dict["md5"],
         )
         == True
     )
 
-    data._from_file_cache()
+    assert (
+        data._file_validation(
+            data.hdf5_data_file_dict["file_name"],
+            dataset_cache_dir,
+            data.hdf5_data_file_dict["md5"],
+        )
+        == True
+    )
+    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file}")
+
+    # remove the gz file and processed file and check that it is not  downloaded again, but rather hdf5 file is used
+    # also remove processed file so we can see it is regenerated
+
+    os.remove(f"{dataset_cache_dir}/{data.gz_data_file_dict['file_name']}")
+    os.remove(f"{local_cache_dir}/{data.processed_data_file}")
+
+    data._acquire_dataset()
+
+    # check that the processed file was generated
+    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file}")
+
+    # check that we still don't have a gz file
+    assert not os.path.exists(
+        f"{dataset_cache_dir}/{data.gz_data_file_dict['file_name']}"
+    )
+
+    # remove the hdf5 file and check that we use the processed file
+    os.remove(f"{dataset_cache_dir}/{data.hdf5_data_file_dict['file_name']}")
+    data._acquire_dataset()
+
+    # make sure we don't have the hdf5 or gz file
+    assert not os.path.exists(
+        f"{dataset_cache_dir}/{data.hdf5_data_file_dict['file_name']}"
+    )
+    assert not os.path.exists(
+        f"{dataset_cache_dir}/{data.gz_data_file_dict['file_name']}"
+    )
+
+    # if we change the properties of interest, this should cause us to download again
+    data.properties_of_interest = ["atomic_numbers", "positions", "energy_of_homo"]
+    data._acquire_dataset()
+
+    assert os.path.exists(
+        f"{dataset_cache_dir}/{data.hdf5_data_file_dict['file_name']}"
+    )
+    assert os.path.exists(f"{dataset_cache_dir}/{data.gz_data_file_dict['file_name']}")
+    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file}")
 
 
-def test_metadata_validation(prep_temp_dir):
+def test_metadata_validation(prep_temp_dir, load_test_dataset):
     """When we generate an .npz file, we also write out metadata in a .json file
     which is used to validate if we can use .npz file, or we need to
     regenerate it."""
 
-    local_cache_dir = str(prep_temp_dir)
+    local_cache_dir = str(prep_temp_dir) + "/local_output"
+    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
 
-    from modelforge.dataset.qm9 import QM9Dataset
-
-    data = QM9Dataset(version_select="nc_1000_v0", local_cache_dir=local_cache_dir)
+    data = load_test_dataset(
+        "qm9", local_cache_dir=local_cache_dir, dataset_cache_dir=dataset_cache_dir
+    )
 
     a = ["energy", "force", "atomic_numbers"]
     b = ["energy", "atomic_numbers", "force"]
@@ -429,12 +376,12 @@ def test_metadata_validation(prep_temp_dir):
         "data_keys": [
             "atomic_numbers",
             "internal_energy_at_0K",
-            "geometry",
-            "dipole_moment",
+            "positions",
+            "dipole_moment_per_system",
         ],
         "element_filter": str([[6, 1]]),
-        "hdf5_checksum": "305a0602860f181fafa75f7c7e3e6de4",
-        "hdf5_gz_checkusm": "dc8ada0d808d02c699daf2000aff1fe9",
+        "hdf5_checksum": "befb3ef66d74f436ef399bf68eda9b90",
+        "hdf5_gz_checksum": "54a2471bba075fcc2cdfe0b78bc567fa",
         "date_generated": "2024-04-11 14:05:14.297305",
     }
 
@@ -459,6 +406,48 @@ def test_metadata_validation(prep_temp_dir):
         "w",
     ) as f:
         json.dump(metadata, f)
+    assert data._metadata_validation("qm9_test.json", local_cache_dir) == False
+
+    # create metadata with a bogus property key
+    metadata = {
+        "data_keys": [
+            "atomic_numbers",
+            "internal_energy_at_0K",
+            "not_a_property",
+            "dipole_moment_per_system",
+        ],
+        "element_filter": str([[6, 1]]),
+        "hdf5_checksum": "befb3ef66d74f436ef399bf68eda9b90",
+        "hdf5_gz_checksum": "54a2471bba075fcc2cdfe0b78bc567fa",
+        "date_generated": "2024-04-11 14:05:14.297305",
+    }
+    with open(
+        f"{local_cache_dir}/qm9_test.json",
+        "w+",
+    ) as f:
+        json.dump(metadata, f)
+
+    assert data._metadata_validation("qm9_test.json", local_cache_dir) == False
+
+    # create metadata with a bogus checksum for hdf5
+    metadata = {
+        "data_keys": [
+            "atomic_numbers",
+            "internal_energy_at_0K",
+            "not_a_property",
+            "dipole_moment_per_system",
+        ],
+        "element_filter": str([[6, 1]]),
+        "hdf5_checksum": "coiejfweoijfowklewke33883",
+        "hdf5_gz_checksum": "54a2471bba075fcc2cdfe0b78bc567fa",
+        "date_generated": "2024-04-11 14:05:14.297305",
+    }
+    with open(
+        f"{local_cache_dir}/qm9_test.json",
+        "w+",
+    ) as f:
+        json.dump(metadata, f)
+
     assert data._metadata_validation("qm9_test.json", local_cache_dir) == False
 
 

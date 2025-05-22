@@ -228,7 +228,7 @@ dataset_container: Dict[str, DataSetContainer] = {
     "QM9": DataSetContainer(
         name="QM9",
         expected_properties_of_interest=[
-            "geometry",
+            "positions",
             "atomic_numbers",
             "internal_energy_at_0K",
             "charges",
@@ -239,10 +239,10 @@ dataset_container: Dict[str, DataSetContainer] = {
     "ANI1X": DataSetContainer(
         name="ANI1x",
         expected_properties_of_interest=[
-            "geometry",
+            "positions",
             "atomic_numbers",
-            "wb97x_dz.energy",
-            "wb97x_dz.forces",
+            "wb97x_dz_energy",
+            "wb97x_dz_forces",
         ],
         expected_E_random_split=-1652066.552014041,
         expected_E_fcfs_split=-1015736.8142089575,

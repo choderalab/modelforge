@@ -21,7 +21,6 @@ def test_embedding(single_batch_with_batchsize, prep_temp_dir):
         batch_size=64,
         dataset_name="QM9",
         local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
     )
 
     nnp_input = batch.nnp_input
@@ -86,7 +85,6 @@ def test_add_per_molecule_value(prep_temp_dir, single_batch_with_batchsize):
         batch_size=1,
         dataset_name="SPICE2",
         local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
     )
 
     number_of_per_atom_features = 10
@@ -113,7 +111,6 @@ def test_add_per_atom_value(prep_temp_dir, single_batch_with_batchsize):
         batch_size=1,
         dataset_name="SPICE2",
         local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
     )
     # we need to set the per_atom_partial_charge to a tensor of some values
     # because by default we don't load in the values from the spice dataset
@@ -140,7 +137,6 @@ def test_group_and_period_embedding(prep_temp_dir, single_batch_with_batchsize):
         batch_size=1,
         dataset_name="tmqm",
         local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
     )
 
     number_of_per_atom_features = 10

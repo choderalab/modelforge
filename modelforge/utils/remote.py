@@ -93,13 +93,11 @@ def calculate_md5_checksum(file_name: str, file_path: str) -> str:
 
     # we will use the OpenWithLock context manager to open the file
     # because we do not want to calculate the checksum if the file is still being written
-    with OpenWithLock(f"{file_path}/{file_name}.lockfile", "w") as fl:
+    with OpenWithLock(f"{file_path}/{file_name}_checksum.lockfile", "w") as fl:
         with open(f"{file_path}/{file_name}", "rb") as f:
             file_hash = hashlib.md5()
             while chunk := f.read(8192):
                 file_hash.update(chunk)
-
-    os.remove(f"{file_path}/{file_name}.lockfile")
 
     return file_hash.hexdigest()
 
@@ -122,35 +120,36 @@ def download_from_url(
     # make sure we can handle a path with a ~ in it
     output_path = os.path.expanduser(output_path)
 
-    if os.path.isfile(f"{output_path}/{output_filename}"):
-        # if the file exists, we need to check to make sure that the file that is stored in the output path
-        # note, we will check if the file has a lock on it inside calculate_md5_checksum to ensure
-        # that we aren't looking at a file that is still being written to
-        calculated_checksum = calculate_md5_checksum(
-            file_name=output_filename, file_path=output_path
-        )
-        if calculated_checksum != md5_checksum:
-            force_download = True
+    from modelforge.utils.misc import OpenWithLock
+
+    with OpenWithLock(f"{output_path}/{output_filename}_download.lockfile", "w") as fl:
+
+        if os.path.isfile(f"{output_path}/{output_filename}"):
+            # if the file exists, we need to check to make sure that the file that is stored in the output path
+            # note, we will check if the file has a lock on it inside calculate_md5_checksum to ensure
+            # that we aren't looking at a file that is still being written to
+            calculated_checksum = calculate_md5_checksum(
+                file_name=output_filename, file_path=output_path
+            )
+            if calculated_checksum != md5_checksum:
+                force_download = True
+                logger.debug(
+                    f"Checksum {calculated_checksum} of existing file {output_filename} does not match expected checksum {md5_checksum}, re-downloading."
+                )
+
+        if not os.path.isfile(f"{output_path}/{output_filename}") or force_download:
             logger.debug(
-                f"Checksum {calculated_checksum} of existing file {output_filename} does not match expected checksum {md5_checksum}, re-downloading."
+                f"Downloading datafile from {url} to {output_path}/{output_filename}."
             )
 
-    if not os.path.isfile(f"{output_path}/{output_filename}") or force_download:
-        logger.debug(
-            f"Downloading datafile from {url} to {output_path}/{output_filename}."
-        )
+            r = requests.get(url, stream=True)
 
-        r = requests.get(url, stream=True)
+            os.makedirs(output_path, exist_ok=True)
+            if length is not None:
+                total = int(length / chunk_size) + 1
+            else:
+                total = None
 
-        os.makedirs(output_path, exist_ok=True)
-        if length is not None:
-            total = int(length / chunk_size) + 1
-        else:
-            total = None
-
-        from modelforge.utils.misc import OpenWithLock
-
-        with OpenWithLock(f"{output_path}/{output_filename}.lockfile", "w") as fl:
             with open(f"{output_path}/{output_filename}", "wb") as fd:
                 for chunk in tqdm(
                     r.iter_content(chunk_size=chunk_size),
@@ -159,17 +158,17 @@ def download_from_url(
                     total=total,
                 ):
                     fd.write(chunk)
-        os.remove(f"{output_path}/{output_filename}.lockfile")
-        calculated_checksum = calculate_md5_checksum(
-            file_name=output_filename, file_path=output_path
-        )
-        if calculated_checksum != md5_checksum:
-            raise Exception(
-                f"Checksum of downloaded file {calculated_checksum} does not match expected checksum {md5_checksum}."
-            )
 
-    else:  # if the file exists and we don't set force_download to True, just use the cached version
-        logger.debug(f"Datafile {output_filename} already exists in {output_path}.")
-        logger.debug(
-            "Using previously downloaded file; set force_download=True to re-download."
-        )
+            calculated_checksum = calculate_md5_checksum(
+                file_name=output_filename, file_path=output_path
+            )
+            if calculated_checksum != md5_checksum:
+                raise Exception(
+                    f"Checksum of downloaded file {calculated_checksum} does not match expected checksum {md5_checksum}."
+                )
+
+        else:  # if the file exists and we don't set force_download to True, just use the cached version
+            logger.debug(f"Datafile {output_filename} already exists in {output_path}.")
+            logger.debug(
+                "Using previously downloaded file; set force_download=True to re-download."
+            )

@@ -43,6 +43,7 @@ def datamodule_factory():
         local_yaml_file: Optional[str] = None,
         shift_center_of_mass_to_origin: bool = True,
         version_select: Optional[str] = None,
+        regression_ase: Optional[bool] = False,
     ):
 
         # for simplicity of writing tests, we will have this accept the dataset name
@@ -88,6 +89,7 @@ def datamodule_factory():
             element_filter=element_filter,
             local_yaml_file=local_yaml_file,
             shift_center_of_mass_to_origin=shift_center_of_mass_to_origin,
+            regression_ase=regression_ase,
         )
 
     return create_datamodule
@@ -168,7 +170,10 @@ def load_test_dataset():
     """
 
     def _load_test_dataset(
-        dataset_name: str, local_cache_dir: str, dataset_cache_dir: Optional[str] = None
+        dataset_name: str,
+        local_cache_dir: str,
+        dataset_cache_dir: Optional[str] = None,
+        element_filter: Optional[list] = None,
     ):
         from modelforge.dataset import HDF5Dataset
 
@@ -197,6 +202,7 @@ def load_test_dataset():
             properties_assignment=config_dict["dataset"]["properties_assignment"],
             local_cache_dir=local_cache_dir,
             dataset_cache_dir=dataset_cache_dir,
+            element_filter=element_filter,
         )
 
     return _load_test_dataset

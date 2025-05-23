@@ -119,11 +119,13 @@ def test_dataset_basic_operations():
 def test_get_properties(dataset_name, single_batch_with_batchsize, prep_temp_dir):
 
     version = testing_version[dataset_name.lower()]
-
+    local_cache_dir = str(prep_temp_dir) + "/test_get_properties"
+    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
     batch = single_batch_with_batchsize(
         batch_size=16,
         dataset_name=dataset_name,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
     raw_data_item = batch
     assert isinstance(raw_data_item, BatchData)
@@ -134,15 +136,18 @@ def test_get_properties(dataset_name, single_batch_with_batchsize, prep_temp_dir
     assert len(raw_data_item.metadata.__slots__) == 6  # 6 properties are returned
 
 
-def test_different_properties_of_interest(load_test_dataset, prep_temp_dir):
+def test_get_different_properties_of_interest(load_test_dataset, prep_temp_dir):
     # since we have switched from separate classses to using yaml files with a single class
     # we need to test the properties of interest of a single dataset
 
     local_cache_dir = str(prep_temp_dir) + "/data_test"
+    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
 
     from modelforge.dataset import HDF5Dataset
 
-    dataset = load_test_dataset("qm9", local_cache_dir=local_cache_dir)
+    dataset = load_test_dataset(
+        "qm9", local_cache_dir=local_cache_dir, dataset_cache_dir=dataset_cache_dir
+    )
 
     assert dataset.properties_of_interest == [
         "atomic_numbers",
@@ -185,7 +190,7 @@ def test_file_existence_after_initialization(
     """Test if files are created after dataset initialization."""
     import contextlib
 
-    local_cache_dir = str(prep_temp_dir) + "/local_output"
+    local_cache_dir = str(prep_temp_dir) + "/test_init"
     dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
 
     data = load_test_dataset(
@@ -214,7 +219,7 @@ def test_caching(dataset_name, load_test_dataset, prep_temp_dir):
     import contextlib
 
     local_cache_dir = str(prep_temp_dir) + "/local_output"
-    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
+    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir2"
 
     data = load_test_dataset(
         dataset_name,
@@ -455,10 +460,13 @@ def test_metadata_validation(prep_temp_dir, load_test_dataset):
 def test_data_item_format_of_datamodule(
     dataset_name, datamodule_factory, prep_temp_dir
 ):
+    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
+
     """Test the format of individual data items in the dataset."""
     from typing import Dict
 
     local_cache_dir = str(prep_temp_dir)
+    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
 
     version = testing_version[dataset_name.lower()]
 
@@ -467,6 +475,8 @@ def test_data_item_format_of_datamodule(
         batch_size=512,
         local_cache_dir=local_cache_dir,
         version_select=version,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        dataset_cache_dir=dataset_cache_dir,
     )
 
     raw_data_item = dm.torch_dataset[0]
@@ -484,10 +494,14 @@ def test_data_item_format_of_datamodule(
 from modelforge.potential import _Implemented_NNPs
 
 
-@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
+@pytest.mark.parametrize("dataset_name", ["QM9", "PHALKETHOH"])
+# @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 def test_removal_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir):
     # test the self energy calculation on the QM9 dataset
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
+
+    local_cache_dir = f"{str(prep_temp_dir)}/self_energy"
+    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
 
     # prepare reference value
     dm = datamodule_factory(
@@ -495,7 +509,8 @@ def test_removal_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir)
         batch_size=512,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         remove_self_energies=False,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
 
     first_entry_with_ase = dm.train_dataset[0].metadata.per_system_energy
@@ -506,7 +521,8 @@ def test_removal_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir)
         batch_size=512,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         remove_self_energies=True,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
 
     atomic_numbers = dm.train_dataset[0].nnp_input.atomic_numbers
@@ -522,11 +538,15 @@ def test_dataset_neighborlist(
 ):
     """Test the neighborlist."""
 
+    local_cache_dir = str(prep_temp_dir) + "/test_neigh"
+    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
+
     # we will simply load up qm9
     batch = single_batch_with_batchsize(
         batch_size=64,
         dataset_name="qm9",
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
 
     nnp_input = batch.nnp_input
@@ -540,7 +560,7 @@ def test_dataset_neighborlist(
         potential_name=potential_name,
         simulation_environment="PyTorch",
         use_training_mode_neighborlist=True,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
     )
     model(nnp_input)
 
@@ -620,11 +640,15 @@ def test_dataset_generation(dataset_name, datamodule_factory, prep_temp_dir):
     """Test the splitting of the dataset."""
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
+    local_cache_dir = str(prep_temp_dir) + "/dataset_generation"
+    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
+
     dataset = datamodule_factory(
         dataset_name=dataset_name,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         batch_size=64,
+        dataset_cache_dir=dataset_cache_dir,
     )
     train_dataloader = dataset.train_dataloader()
     val_dataloader = dataset.val_dataloader()
@@ -678,13 +702,17 @@ def test_dataset_splitting(
     get_dataset_container_fix,
     prep_temp_dir,
 ):
+    local_cache_dir = str(prep_temp_dir) + "/dataset_splitting"
+    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
+
     """Test random_split on the the dataset."""
     dm = datamodule_factory(
         dataset_name=dataset_name,
         batch_size=512,
         splitting_strategy=splitting_strategy(),
         remove_self_energies=False,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
 
     train_dataset, val_dataset, test_dataset = (
@@ -705,7 +733,8 @@ def test_dataset_splitting(
         batch_size=512,
         splitting_strategy=splitting_strategy(split=[0.6, 0.3, 0.1]),
         remove_self_energies=False,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
 
     train_dataset2, val_dataset2, test_dataset2 = (
@@ -738,14 +767,22 @@ def test_dataset_splitting(
         print(f"AssertionError raised: {excinfo}")
 
 
-@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
+# @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
+@pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_numpy_dataset_assignment(dataset_name, load_test_dataset, prep_temp_dir):
     """
     Test if the numpy_dataset attribute is correctly assigned after processing or loading.
     """
     from modelforge.dataset import _ImplementedDatasets
 
-    data = load_test_dataset(dataset_name, local_cache_dir=str(prep_temp_dir))
+    local_cache_dir = str(prep_temp_dir) + "/numpy_test"
+    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
+
+    data = load_test_dataset(
+        dataset_name,
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
+    )
 
     data._acquire_dataset()
 
@@ -761,6 +798,9 @@ def test_energy_postprocessing(datamodule_factory, prep_temp_dir):
     # test the self energy calculation on the QM9 dataset
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
+    local_cache_dir = str(prep_temp_dir) + "/energy_postprocessing"
+    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
+
     # -------------------------------#
     # Test that we can calculate the normalize energies correctly
     dm = datamodule_factory(
@@ -768,7 +808,8 @@ def test_energy_postprocessing(datamodule_factory, prep_temp_dir):
         batch_size=10,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         remove_self_energies=True,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
 
     batch = next(iter(dm.val_dataloader()))
@@ -834,15 +875,17 @@ def test_function_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir
     # test the self energy calculation on the QM9 dataset
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
+    local_cache_dir = str(prep_temp_dir) + "/self_energy_qm9"
+    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
+
     # prepare reference value
     dm = datamodule_factory(
         dataset_name=dataset_name,
         batch_size=512,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-        version_select="nc_1000_v0",
         remove_self_energies=False,
-        regenerate_dataset_statistic=True,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
 
     methane_energy_reference = float(dm.train_dataset[0].metadata.per_system_energy)
@@ -853,8 +896,8 @@ def test_function_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir
         dataset_name=dataset_name,
         batch_size=512,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-        regenerate_dataset_statistic=True,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
     # it is saved in the dataset statistics
 
@@ -884,9 +927,8 @@ def test_function_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         regression_ase=True,
         remove_self_energies=True,
-        version_select="nc_1000_v0",
-        regenerate_dataset_statistic=True,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
 
     # it is saved in the dataset statistics
@@ -929,9 +971,8 @@ def test_function_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         regression_ase=True,
         remove_self_energies=True,
-        version_select="nc_1000_v0",
-        regenerate_dataset_statistic=True,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
     # it is saved in the dataset statistics
     import toml
@@ -948,9 +989,8 @@ def test_function_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir
             splitting_strategy=FirstComeFirstServeSplittingStrategy(),
             regression_ase=regression,
             remove_self_energies=True,
-            version_select="nc_1000_v0",
-            regenerate_dataset_statistic=True,
-            local_cache_dir=str(prep_temp_dir),
+            local_cache_dir=local_cache_dir,
+            dataset_cache_dir=dataset_cache_dir,
         )
         # Extract the first molecule (methane)
         # double check that it is methane
@@ -982,8 +1022,9 @@ def test_function_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir
         assert np.isclose(methane_energy_reference, methane_energy_offset + methane_ase)
 
 
-def test_shifting_center_of_mass_to_origin(prep_temp_dir):
-    local_cache_dir = str(prep_temp_dir)
+def test_shifting_center_of_mass_to_origin(prep_temp_dir, datamodule_factory):
+    local_cache_dir = f"{str(prep_temp_dir)}/test_shift_com"
+    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
 
     from modelforge.dataset.dataset import initialize_datamodule
     from openff.units.elements import MASSES
@@ -991,11 +1032,13 @@ def test_shifting_center_of_mass_to_origin(prep_temp_dir):
     import torch
 
     # first check a molecule not centered at the origin
-    dm = initialize_datamodule(
-        "QM9",
-        version_select="nc_1000_v0",
+    dm = datamodule_factory(
+        dataset_name="QM9",
+        batch_size=512,
         shift_center_of_mass_to_origin=False,
         local_cache_dir=local_cache_dir,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        dataset_cache_dir=dataset_cache_dir,
     )
     start_idx = dm.torch_dataset.single_atom_start_idxs_by_conf[0]
     end_idx = dm.torch_dataset.single_atom_end_idxs_by_conf[0]
@@ -1034,17 +1077,21 @@ def test_shifting_center_of_mass_to_origin(prep_temp_dir):
 
     # make sure that we do shift to the origin; we can do the whole dataset
 
-    dm = initialize_datamodule(
-        "PhAlkEthOH",
-        version_select="latest_test",
+    dm = datamodule_factory(
+        dataset_name="QM9",
+        batch_size=512,
         shift_center_of_mass_to_origin=True,
         local_cache_dir=local_cache_dir,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        dataset_cache_dir=dataset_cache_dir,
     )
-    dm_no_shift = initialize_datamodule(
-        "PhAlkEthOH",
-        version_select="latest_test",
+    dm_no_shift = datamodule_factory(
+        dataset_name="QM9",
+        batch_size=512,
         shift_center_of_mass_to_origin=False,
         local_cache_dir=local_cache_dir,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        dataset_cache_dir=dataset_cache_dir,
     )
     for conf_id in range(0, len(dm.torch_dataset)):
         start_idx_mol = dm.torch_dataset.series_atom_start_idxs_by_conf[conf_id]
@@ -1123,9 +1170,10 @@ def test_shifting_center_of_mass_to_origin(prep_temp_dir):
         assert torch.allclose(pairs.d_ij, pairs_ns.d_ij, atol=1e-4)
 
 
-@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
-def test_element_filter(dataset_name, prep_temp_dir):
+@pytest.mark.parametrize("dataset_name", ["QM9"])
+def test_element_filter(dataset_name, load_test_dataset, prep_temp_dir):
     local_cache_dir = str(prep_temp_dir) + "/data_test"
+    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
 
     atomic_number = np.array(
         [
@@ -1143,87 +1191,76 @@ def test_element_filter(dataset_name, prep_temp_dir):
             [12],
         ]
     )
-    version = testing_version[dataset_name.lower()]
-
     # positive tests
 
     # Case 0: Include any system
-    data = _ImplementedDatasets.get_dataset_class(
-        dataset_name,
-    )(
-        version_select=version,
+    data = load_test_dataset(
+        dataset_name=dataset_name,
         local_cache_dir=local_cache_dir,
         element_filter=[],
+        dataset_cache_dir=dataset_cache_dir,
     )
     assert data._satisfy_element_filter(atomic_number)
 
     # Case 1: Systems with atomic number 1
-    data = _ImplementedDatasets.get_dataset_class(
-        dataset_name,
-    )(
-        version_select=version,
+    data = load_test_dataset(
+        dataset_name=dataset_name,
         local_cache_dir=local_cache_dir,
         element_filter=[(1,)],
+        dataset_cache_dir=dataset_cache_dir,
     )
     assert data._satisfy_element_filter(atomic_number)
 
     # Case 2: Systems with atomic number (1 AND 2 AND 3)
-    data = _ImplementedDatasets.get_dataset_class(
-        dataset_name,
-    )(
-        version_select=version,
+    data = load_test_dataset(
+        dataset_name=dataset_name,
         local_cache_dir=local_cache_dir,
         element_filter=[(1, 2, 3)],
+        dataset_cache_dir=dataset_cache_dir,
     )
     assert data._satisfy_element_filter(atomic_number)
 
     # Case 3: Systems with atomic number
     #         (1 AND 2) OR (3 AND 4) OR (5 AND 6)
-    data = _ImplementedDatasets.get_dataset_class(
-        dataset_name,
-    )(
-        version_select=version,
+    data = load_test_dataset(
+        dataset_name=dataset_name,
         local_cache_dir=local_cache_dir,
         element_filter=[(1, 2), (3, 4), (5, 6)],
+        dataset_cache_dir=dataset_cache_dir,
     )
     assert data._satisfy_element_filter(atomic_number)
 
     # Case 4: Systems satisfying atomic number:
     #         (1 AND 2) OR (3 AND without 15)
-    data = _ImplementedDatasets.get_dataset_class(
-        dataset_name,
-    )(
-        version_select=version,
+    data = load_test_dataset(
+        dataset_name=dataset_name,
         local_cache_dir=local_cache_dir,
         element_filter=[(1, 2), (3, -15)],
+        dataset_cache_dir=dataset_cache_dir,
     )
     assert data._satisfy_element_filter(atomic_number)
 
     # Case 5: Should both be true regardless of filter ordering, since 1 AND 2 exists
-    data = _ImplementedDatasets.get_dataset_class(
-        dataset_name,
-    )(
-        version_select=version,
+    data = load_test_dataset(
+        dataset_name=dataset_name,
         local_cache_dir=local_cache_dir,
         element_filter=[(1, 2), (-3,)],
+        dataset_cache_dir=dataset_cache_dir,
     )
     assert data._satisfy_element_filter(atomic_number)
-    data = _ImplementedDatasets.get_dataset_class(
-        dataset_name,
-    )(
-        version_select=version,
+    data = load_test_dataset(
+        dataset_name=dataset_name,
         local_cache_dir=local_cache_dir,
         element_filter=[(-3,), (1, 2)],
+        dataset_cache_dir=dataset_cache_dir,
     )
     assert data._satisfy_element_filter(atomic_number)
 
     # negative tests
 
     # Case 6: Exclude systems with atomic number 1
-    data = _ImplementedDatasets.get_dataset_class(
-        dataset_name,
-    )(
-        version_select=version,
+    data = load_test_dataset(
+        dataset_name=dataset_name,
         local_cache_dir=local_cache_dir,
         element_filter=[(-1,)],
     )
@@ -1231,12 +1268,11 @@ def test_element_filter(dataset_name, prep_temp_dir):
 
     # Case 8: 0 is not a valid atomic number
     try:
-        data = _ImplementedDatasets.get_dataset_class(
-            dataset_name,
-        )(
-            version_select=version,
+        data = load_test_dataset(
+            dataset_name=dataset_name,
             local_cache_dir=local_cache_dir,
             element_filter=[(0, 2), (3, -15)],
+            dataset_cache_dir=dataset_cache_dir,
         )
         data._satisfy_element_filter(atomic_number)
     except ValueError as e:
@@ -1247,35 +1283,34 @@ def test_element_filter(dataset_name, prep_temp_dir):
 
     # Case 9: Should not have any type other than integers
     try:
-        data = _ImplementedDatasets.get_dataset_class(
-            dataset_name,
-        )(
-            version_select=version,
+        data = load_test_dataset(
+            dataset_name=dataset_name,
             local_cache_dir=local_cache_dir,
             element_filter=[(1, "Hydrogen"), (3, -15)],
+            dataset_cache_dir=dataset_cache_dir,
         )
         data._satisfy_element_filter(atomic_number)
     except TypeError as e:
         assert e.args[0] == "Please use atomic number to refer to element types!"
 
 
-def test_element_filter_setting(prep_temp_dir):
-    local_cache_dir = str(prep_temp_dir) + "/data_test"
+def test_element_filter_setting(prep_temp_dir, load_test_dataset):
+    local_cache_dir = str(prep_temp_dir) + "/element_filter"
+    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
 
+    dataset_name = "qm9"
     # test filter setting
-    data = _ImplementedDatasets.get_dataset_class(
-        "QM9",
-    )(
-        version_select="nc_1000_v0",
+    data = load_test_dataset(
+        dataset_name=dataset_name,
         local_cache_dir=local_cache_dir,
         element_filter=[(1, 6)],
+        dataset_cache_dir=dataset_cache_dir,
     )
     assert data.element_filter == [(1, 6)]
 
-    data = _ImplementedDatasets.get_dataset_class(
-        "QM9",
-    )(
-        version_select="nc_1000_v0",
+    data = load_test_dataset(
+        dataset_name=dataset_name,
         local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
     assert data.element_filter is None

@@ -386,21 +386,27 @@ class HDF5Dataset:
         # Right now this function needs to be defined for each dataset.
         # once all datasets are moved to zenodo, we should only need a single function defined in the base class
         from modelforge.utils.remote import download_from_url
+        from modelforge.utils.misc import OpenWithLock
 
-        if (
-            os.path.exists(f"{self.local_cache_dir}/{self.processed_data_file}")
-            and not self.force_download
-            and not self.regenerate_processed_dataset
-        ):
-            if self._metadata_validation(
-                self.processed_data_file.replace(".npz", ".json"), self.local_cache_dir
+        # we will lock this while we are checking the file so it doesn't change on us
+        with OpenWithLock(
+            f"{self.local_cache_dir}/{self.processed_data_file}_checking.lockfile", "w"
+        ) as lock_file:
+            if (
+                os.path.exists(f"{self.local_cache_dir}/{self.processed_data_file}")
+                and not self.force_download
+                and not self.regenerate_processed_dataset
             ):
-                log.debug(
-                    f"Unzipped npz file {self.processed_data_file} already exists in {self.local_cache_dir}"
-                )
-                self._from_file_cache()
+                if self._metadata_validation(
+                    self.processed_data_file.replace(".npz", ".json"),
+                    self.local_cache_dir,
+                ):
+                    log.debug(
+                        f"Unzipped npz file {self.processed_data_file} already exists in {self.local_cache_dir}"
+                    )
+                    self._from_file_cache()
 
-                return
+                    return
 
         # if we do not use the cached file, we will mark the cache as regenerated
         self.cache_regenerated = True
@@ -419,16 +425,19 @@ class HDF5Dataset:
                 )
                 and not self.force_download
             ):
-
                 log.debug(
                     f"Unzipped hdf5 file {self.hdf5_data_file_dict['file_name']} already exists in {self.dataset_cache_dir}"
                 )
-
+                self._from_hdf5()
+                self._to_file_cache()
+                self._from_file_cache()
             # If the .hdf5 file didn't exist or the checksum didn't match, we will next see if the .gz file exists
             # If it doesn't, we will download it. Fortuitously, download_from_url will do both these functions for us
             # so we can just use a single else statement.
             else:
-
+                log.debug(
+                    f"hdf5 file {self.hdf5_data_file_dict['file_name']} not found."
+                )
                 download_from_url(
                     url=self.url,
                     md5_checksum=self.gz_data_file_dict["md5"],
@@ -438,6 +447,10 @@ class HDF5Dataset:
                     force_download=self.force_download,
                 )
                 self._ungzip_hdf5()
+                self._from_hdf5()
+                self._to_file_cache()
+                self._from_file_cache()
+
         # if we are using a local yaml file, we will not download
         # we will just check if the hdf5 file exists and has the right checksum
         # Note: I think we still should require the checksum to be defined in the local yaml to ensure that the
@@ -450,10 +463,9 @@ class HDF5Dataset:
                 raise ValueError(
                     f"File {self.hdf5_data_file_dict['name']} does not exist in {self.dataset_cache_dir} or the checksum does not match."
                 )
-
-        self._from_hdf5()
-        self._to_file_cache()
-        self._from_file_cache()
+                self._from_hdf5()
+                self._to_file_cache()
+                self._from_file_cache()
 
     @property
     def atomic_self_energies(self):
@@ -588,32 +600,30 @@ class HDF5Dataset:
         """
         import gzip
         import shutil
+        from modelforge.utils.misc import OpenWithLock
+        import os
 
-        with gzip.open(
-            f"{self.dataset_cache_dir}/{self.gz_data_file_dict['file_name']}", "rb"
-        ) as gz_file:
-            from modelforge.utils.misc import OpenWithLock
+        with OpenWithLock(
+            f"{self.dataset_cache_dir}/{self.gz_data_file_dict['file_name']}.lockfile",
+            "w",
+        ) as lock_file_gz:
+            with gzip.open(
+                f"{self.dataset_cache_dir}/{self.gz_data_file_dict['file_name']}", "rb"
+            ) as gz_file:
 
-            # rather than locking the file we are writing, we will create a lockfile.  the _from_hdf5 function will
-            # try to open the same lockfile before reading, so this should prevent issues
-            # The use of a lockfile is necessary because h5py will exit immediately if it tries to open a file that is
-            # locked by another process.
-            with OpenWithLock(
-                f"{self.dataset_cache_dir}/{self.hdf5_data_file_dict['file_name']}.lockfile",
-                "w",
-            ) as lock_file:
-                with open(
-                    f"{self.dataset_cache_dir}/{self.hdf5_data_file_dict['file_name']}",
-                    "wb",
-                ) as out_file:
-                    shutil.copyfileobj(gz_file, out_file)
-
-            # now that the file is written we can safely remove the lockfile
-            import os
-
-            os.remove(
-                f"{self.dataset_cache_dir}/{self.hdf5_data_file_dict['file_name']}.lockfile"
-            )
+                # rather than locking the file we are writing, we will create a lockfile.  the _from_hdf5 function will
+                # try to open the same lockfile before reading, so this should prevent issues
+                # The use of a lockfile is necessary because h5py will exit immediately if it tries to open a file that is
+                # locked by another process.
+                with OpenWithLock(
+                    f"{self.dataset_cache_dir}/{self.hdf5_data_file_dict['file_name']}.lockfile",
+                    "w",
+                ) as lock_file:
+                    with open(
+                        f"{self.dataset_cache_dir}/{self.hdf5_data_file_dict['file_name']}",
+                        "wb",
+                    ) as out_file:
+                        shutil.copyfileobj(gz_file, out_file)
 
     def _check_lists(self, list_1: List, list_2: List) -> bool:
         """
@@ -692,7 +702,6 @@ class HDF5Dataset:
                             f"Checksum for hdf5 file used to generate npz file does not match current file in dataloader."
                         )
                         return False
-            os.remove(f"{file_path}/{file_name}.lockfile")
         return True
 
     @staticmethod
@@ -719,26 +728,30 @@ class HDF5Dataset:
         bool
             True if the file exists and the checksum matches, False otherwise.
         """
+        from modelforge.utils.misc import OpenWithLock
+
         if file_path is not None:
             file_path = os.path.expanduser(file_path)
             full_file_path = f"{file_path}/{file_name}"
         else:
             full_file_path = os.path.expanduser(file_name)
-        if not os.path.exists(full_file_path):
-            log.debug(f"File {full_file_path} does not exist.")
-            return False
-        elif checksum is not None:
-            from modelforge.utils.remote import calculate_md5_checksum
 
-            calculated_checksum = calculate_md5_checksum(file_name, file_path)
-            if calculated_checksum != checksum:
-                log.warning(
-                    f"Checksum mismatch for file {file_path}/{file_name}. Expected {calculated_checksum}, found {checksum}."
-                )
+        with OpenWithLock(f"{full_file_path}.lockfile", "w") as lock_file:
+            if not os.path.exists(full_file_path):
+                log.debug(f"File {full_file_path} does not exist.")
                 return False
-            return True
-        else:
-            return True
+            elif checksum is not None:
+                from modelforge.utils.remote import calculate_md5_checksum
+
+                calculated_checksum = calculate_md5_checksum(file_name, file_path)
+                if calculated_checksum != checksum:
+                    log.warning(
+                        f"Checksum mismatch for file {file_path}/{file_name}. Expected {calculated_checksum}, found {checksum}."
+                    )
+                    return False
+                return True
+            else:
+                return True
 
     def _satisfy_element_filter(self, data):
         result = True
@@ -797,22 +810,6 @@ class HDF5Dataset:
             # we will expand the path to handle ~ if provided
             temp_hdf5_file = os.path.expanduser(self.hdf5_data_file_dict["file_name"])
 
-        # validation is already called in the _acquire dataset function so I'm not sure this is necessary
-        # if self._file_validation(
-        #     self.hdf5_data_file["name"],
-        #     self.local_cache_dir,
-        #     self.hdf5_data_file["md5"],
-        # ):
-        #     log.debug(f"Loading unzipped hdf5 file from {temp_hdf5_file}")
-        # else:
-        #     from modelforge.utils.remote import calculate_md5_checksum
-        #
-        #     checksum = calculate_md5_checksum(
-        #         self.hdf5_data_file["name"], self.local_cache_dir
-        #     )
-        #     raise ValueError(
-        #         f"Checksum mismatch for unzipped data file {temp_hdf5_file}. Found {checksum}, Expected {self.hdf5_data_file['md5']}"
-        #     )
         from modelforge.utils.misc import OpenWithLock
 
         log.debug(f"Reading data from {temp_hdf5_file}")
@@ -1011,11 +1008,6 @@ class HDF5Dataset:
 
             self.hdf5data = data
 
-        # we can safely remove the lockfile now that we have read the file
-        import os
-
-        os.remove(f"{temp_hdf5_file}.lockfile")
-
     def _from_file_cache(self) -> None:
         """
         Loads the processed data from cache.
@@ -1051,10 +1043,7 @@ class HDF5Dataset:
                     self.numpy_data = np.load(
                         f"{self.local_cache_dir}/{self.processed_data_file}"
                     )
-                # we can safely remove the lockfile
-                import os
 
-                os.remove(f"{self.local_cache_dir}/{self.processed_data_file}.lockfile")
         else:
             raise ValueError(
                 f"Processed data file {self.local_cache_dir}/{self.processed_data_file} not found."
@@ -1094,7 +1083,6 @@ class HDF5Dataset:
         # we can safely remove the lockfile
         import os
 
-        os.remove(f"{self.local_cache_dir}/{self.processed_data_file}.lockfile")
         import datetime
 
         # we will generate a simple metadata file to list which data keys were used to generate the npz file

@@ -109,6 +109,7 @@ def test_ani(prep_temp_dir):
     import torch
     import torchani
 
+    local_cache_dir = str(prep_temp_dir) + "/ani2x_test"
     # NOTE: in the following the input data is scaled to provide both
     # torchani and modelforge ani the same input but in different units
     # NOTE: output unit is Hartree
@@ -166,7 +167,7 @@ def test_ani(prep_temp_dir):
         potential_seed=42,
         potential_name="ani2x",
         jit=False,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
     )
     # load the original ani2x parameter set
     potential.load_state_dict(torch.load(file_path))
@@ -192,6 +193,7 @@ def test_ani(prep_temp_dir):
 def test_ani_against_torchani_reference(prep_temp_dir):
     import torch
 
+    local_cache_dir = str(prep_temp_dir) + "/ani2x_test_against_torchani_reference"
     # get input
     species, coordinates, device, mf_input = setup_two_methanes()
 
@@ -202,7 +204,7 @@ def test_ani_against_torchani_reference(prep_temp_dir):
         potential_seed=42,
         potential_name="ani2x",
         jit=False,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
     )
     # load the original ani2x parameter set
     potential.load_state_dict(torch.load(file_path))
@@ -232,12 +234,13 @@ def test_ani_against_torchani_reference(prep_temp_dir):
 
 
 @pytest.mark.parametrize("mode", ["inference", "training"])
-def test_forward_and_backward(mode):
+def test_forward_and_backward(mode, prep_temp_dir):
     # Test modelforge ANI implementation
     # Test forward and backward pass
 
     import torch
 
+    local_cache_dir = str(prep_temp_dir) + "/ani2x_test_forward_and_backward"
     model = setup_potential_for_test(
         use=mode,
         potential_seed=42,
@@ -245,6 +248,7 @@ def test_forward_and_backward(mode):
         simulation_environment="PyTorch",
         use_training_mode_neighborlist=True,
         jit=False,
+        local_cache_dir=local_cache_dir,
     )
 
     _, _, _, mf_input = setup_two_methanes()

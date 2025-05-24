@@ -7,7 +7,7 @@ def prep_temp_dir(tmp_path_factory):
     return fn
 
 
-def test_datamodule(prep_temp_dir):
+def test_datamodule(prep_temp_dir, dataset_temp_dir):
     # This is an example script that trains an implemented model on the QM9 dataset.
     from modelforge.dataset.dataset import DataModule
 
@@ -17,4 +17,5 @@ def test_datamodule(prep_temp_dir):
         name="QM9",
         batch_size=512,
         local_cache_dir=str(prep_temp_dir),
+        dataset_cache_dir=str(dataset_temp_dir),
     )

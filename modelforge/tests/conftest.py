@@ -17,6 +17,15 @@ def pytest_addoption(parser):
     )
 
 
+# create a temporary directory for storing the downloaded datasets
+# so we do not need to re-download the datasets for each of the tests
+#
+@pytest.fixture(scope="session")
+def dataset_temp_dir(tmp_path_factory):
+    fn = tmp_path_factory.mktemp("dataset_dir")
+    return fn
+
+
 def pytest_collection_modifyitems(config, items):
     if config.getoption("--run_data_download"):
         # --runslow given in cli: do not skip slow tests

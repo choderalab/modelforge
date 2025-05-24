@@ -35,6 +35,7 @@ class DataSetName(CaseInsensitiveEnum):
     SPICE1 = "SPICE1"
     SPICE2 = "SPICE2"
     SPICE1_OPENFF = "SPICE1_OPENFF"
+    SPICE2_OPENFF = "SPICE2_OPENFF"
     PHALKETHOH = "PhAlkEthOH"
     TMQM = "tmQM"
     TMQM_XTB = "TMQM_XTB"
@@ -77,7 +78,7 @@ class DatasetParameters(BaseModel):
         use_enum_values=True, arbitrary_types_allowed=True, validate_assignment=True
     )
 
-    dataset_name: DataSetName
+    dataset_name: str
     version_select: str
     num_workers: int = Field(gt=0)
     pin_memory: bool
@@ -85,6 +86,28 @@ class DatasetParameters(BaseModel):
     properties_of_interest: List[str]
     properties_assignment: PropertiesDefinition
     element_filter: List[tuple] = None
+    local_yaml_file: Optional[str] = None
+
+    # we are going to check if the datasetname is in the DataSetName enum
+    # if not, local_yaml_file should be set to the path of the yaml file
+    @model_validator(mode="after")
+    def validate_dataset_name(self) -> Self:
+        """
+        Validate that the dataset name is in the DataSetName enum.
+        """
+        if self.local_yaml_file is None:
+
+            try:
+                DataSetName(self.dataset_name)
+            except ValueError:
+                msg = (
+                    f"Dataset name {self.dataset_name} is not available in modelforge."
+                )
+
+                msg += "Please provide a path to the yaml file with parameters by setting local_yaml_file."
+                raise ValueError(msg)
+
+        return self
 
     @model_validator(mode="after")
     def validate_properties(self) -> Self:

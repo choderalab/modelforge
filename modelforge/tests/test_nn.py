@@ -10,17 +10,21 @@ def prep_temp_dir(tmp_path_factory):
     return fn
 
 
-def test_embedding(single_batch_with_batchsize, prep_temp_dir):
+def test_embedding(single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir):
     # test the input featurization, including:
     # - nuclear charge embedding
     # - total charge mixing
 
     import torch  # noqa: F401
 
+    local_cache_dir = str(prep_temp_dir) + "/test_embedding"
+    dataset_cache_dir = str(dataset_temp_dir)
+
     batch = single_batch_with_batchsize(
         batch_size=64,
         dataset_name="QM9",
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
 
     nnp_input = batch.nnp_input
@@ -75,16 +79,22 @@ def test_embedding(single_batch_with_batchsize, prep_temp_dir):
     )  # nr_of_atoms, nr_of_per_atom_features (the total charge is mixed in)
 
 
-def test_add_per_molecule_value(prep_temp_dir, single_batch_with_batchsize):
+def test_add_per_molecule_value(
+    prep_temp_dir, single_batch_with_batchsize, dataset_temp_dir
+):
     from modelforge.potential.featurization import AddPerMoleculeValue
 
     temp_prop = AddPerMoleculeValue(key="per_system_total_charge")
     assert temp_prop.key == "per_system_total_charge"
 
+    local_cache_dir = str(prep_temp_dir) + "/test_add_per_molecule_value"
+    dataset_cache_dir = str(dataset_temp_dir)
+
     batch = single_batch_with_batchsize(
         batch_size=1,
         dataset_name="SPICE2",
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
 
     number_of_per_atom_features = 10
@@ -101,16 +111,22 @@ def test_add_per_molecule_value(prep_temp_dir, single_batch_with_batchsize):
     assert embedding_tensor.shape[1] == number_of_per_atom_features + 1
 
 
-def test_add_per_atom_value(prep_temp_dir, single_batch_with_batchsize):
+def test_add_per_atom_value(
+    prep_temp_dir, single_batch_with_batchsize, dataset_temp_dir
+):
     from modelforge.potential.featurization import AddPerAtomValue
 
     temp_prop = AddPerAtomValue(key="per_atom_partial_charge")
     assert temp_prop.key == "per_atom_partial_charge"
 
+    local_cache_dir = str(prep_temp_dir) + "/test_add_per_atom_value"
+    dataset_cache_dir = str(dataset_temp_dir)
+
     batch = single_batch_with_batchsize(
         batch_size=1,
         dataset_name="SPICE2",
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
     # we need to set the per_atom_partial_charge to a tensor of some values
     # because by default we don't load in the values from the spice dataset
@@ -132,11 +148,17 @@ def test_add_per_atom_value(prep_temp_dir, single_batch_with_batchsize):
     assert embedding_tensor.shape[1] == number_of_per_atom_features + 1
 
 
-def test_group_and_period_embedding(prep_temp_dir, single_batch_with_batchsize):
+def test_group_and_period_embedding(
+    prep_temp_dir, single_batch_with_batchsize, dataset_temp_dir
+):
+    local_cache_dir = str(prep_temp_dir) + "/test_group_and_period_embedding"
+    dataset_cache_dir = str(dataset_temp_dir)
+
     batch = single_batch_with_batchsize(
         batch_size=1,
         dataset_name="tmqm",
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
 
     number_of_per_atom_features = 10
@@ -182,7 +204,7 @@ def test_group_and_period_embedding(prep_temp_dir, single_batch_with_batchsize):
     )
 
 
-def test_featurization_input(prep_temp_dir, single_batch_with_batchsize):
+def test_featurization_input(single_batch_with_batchsize):
     # less exhaustive test, than test_embedding, but should be sufficient
     # to make sure that atomic period and group embedding can be setup
     from modelforge.potential.featurization import FeaturizeInput

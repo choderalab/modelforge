@@ -138,13 +138,19 @@ def test_radial_symmetry_function_regression():
     assert torch.allclose(modelforge_aimnet2_outputs, regression_outputs, atol=1e-4)
 
 
-def test_forward(single_batch_with_batchsize, prep_temp_dir):
+def test_forward(single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir):
     """Test initialization of the AIMNet2 model."""
     # read default parameters
     aimnet = setup_potential_for_test("aimnet2", "training", potential_seed=42)
 
     assert aimnet is not None, "Aimnet model should be initialized."
-    batch = single_batch_with_batchsize(64, "QM9", str(prep_temp_dir))
+    local_cache_dir = str(prep_temp_dir) + "/aimnet2_forward"
+    batch = single_batch_with_batchsize(
+        batch_size=64,
+        dataset_name="QM9",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_temp_dir,
+    )
 
     y_hat = aimnet(batch.nnp_input)
 

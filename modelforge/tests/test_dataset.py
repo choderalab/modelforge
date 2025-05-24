@@ -24,21 +24,6 @@ def test_dataset_imported():
     assert "modelforge.dataset" in sys.modules
 
 
-testing_version = {
-    "tmqm_xtb": "nc_1000_v1.1",
-    "fe_ii": "nc_1000_v1.1",
-    "qm9": "nc_1000_v1.1",
-    "ani1x": "nc_1000_v1.1",
-    "ani2x": "nc_1000_v1.1",
-    "spice1": "nc_1000_v1.1",
-    "spice1_openff": "nc_1000_v2.1",
-    "spice2_openff": "nc_1000_v1.1",
-    "spice2": "nc_1000_v1.1",
-    "phalkethoh": "nc_1000_v1.1",
-    "tmqm": "nc_1000_v1.1",
-}
-
-
 def test_dataset_basic_operations():
     atomic_subsystem_counts = np.array([3, 4])
     n_confs = np.array([2, 1])
@@ -116,11 +101,12 @@ def test_dataset_basic_operations():
 
 
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
-def test_get_properties(dataset_name, single_batch_with_batchsize, prep_temp_dir):
+def test_get_properties(
+    dataset_name, single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
+):
 
-    version = testing_version[dataset_name.lower()]
     local_cache_dir = str(prep_temp_dir) + "/test_get_properties"
-    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
+    dataset_cache_dir = str(dataset_temp_dir)
     batch = single_batch_with_batchsize(
         batch_size=16,
         dataset_name=dataset_name,
@@ -136,12 +122,15 @@ def test_get_properties(dataset_name, single_batch_with_batchsize, prep_temp_dir
     assert len(raw_data_item.metadata.__slots__) == 6  # 6 properties are returned
 
 
-def test_get_different_properties_of_interest(load_test_dataset, prep_temp_dir):
+def test_get_different_properties_of_interest(
+    load_test_dataset, prep_temp_dir, dataset_temp_dir
+):
     # since we have switched from separate classses to using yaml files with a single class
     # we need to test the properties of interest of a single dataset
 
     local_cache_dir = str(prep_temp_dir) + "/data_test"
-    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
+    dataset_cache_dir = str(dataset_temp_dir)
+    dataset_cache_dir = str(dataset_temp_dir)
 
     from modelforge.dataset import HDF5Dataset
 
@@ -185,13 +174,13 @@ def test_get_different_properties_of_interest(load_test_dataset, prep_temp_dir):
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_file_existence_after_initialization(
-    dataset_name, load_test_dataset, prep_temp_dir
+    dataset_name, load_test_dataset, prep_temp_dir, dataset_temp_dir
 ):
     """Test if files are created after dataset initialization."""
     import contextlib
 
     local_cache_dir = str(prep_temp_dir) + "/test_init"
-    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
+    dataset_cache_dir = str(dataset_temp_dir)
 
     data = load_test_dataset(
         "qm9", local_cache_dir=local_cache_dir, dataset_cache_dir=dataset_cache_dir
@@ -219,6 +208,7 @@ def test_caching(dataset_name, load_test_dataset, prep_temp_dir):
     import contextlib
 
     local_cache_dir = str(prep_temp_dir) + "/local_output"
+    # since we will be deleting datasets, use our own temp dir not the global one
     dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir2"
 
     data = load_test_dataset(
@@ -350,13 +340,13 @@ def test_caching(dataset_name, load_test_dataset, prep_temp_dir):
     assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file}")
 
 
-def test_metadata_validation(prep_temp_dir, load_test_dataset):
+def test_metadata_validation(prep_temp_dir, load_test_dataset, dataset_temp_dir):
     """When we generate an .npz file, we also write out metadata in a .json file
     which is used to validate if we can use .npz file, or we need to
     regenerate it."""
 
     local_cache_dir = str(prep_temp_dir) + "/local_output"
-    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
+    dataset_cache_dir = str(dataset_temp_dir)
 
     data = load_test_dataset(
         "qm9", local_cache_dir=local_cache_dir, dataset_cache_dir=dataset_cache_dir
@@ -458,23 +448,20 @@ def test_metadata_validation(prep_temp_dir, load_test_dataset):
 
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 def test_data_item_format_of_datamodule(
-    dataset_name, datamodule_factory, prep_temp_dir
+    dataset_name, datamodule_factory, prep_temp_dir, dataset_temp_dir
 ):
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
     """Test the format of individual data items in the dataset."""
     from typing import Dict
 
-    local_cache_dir = str(prep_temp_dir)
-    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
-
-    version = testing_version[dataset_name.lower()]
+    local_cache_dir = str(prep_temp_dir) + "/item_format"
+    dataset_cache_dir = str(dataset_temp_dir)
 
     dm = datamodule_factory(
         dataset_name=dataset_name,
         batch_size=512,
         local_cache_dir=local_cache_dir,
-        version_select=version,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         dataset_cache_dir=dataset_cache_dir,
     )
@@ -496,12 +483,14 @@ from modelforge.potential import _Implemented_NNPs
 
 @pytest.mark.parametrize("dataset_name", ["QM9", "PHALKETHOH"])
 # @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
-def test_removal_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir):
+def test_removal_of_self_energy(
+    dataset_name, datamodule_factory, prep_temp_dir, dataset_temp_dir
+):
     # test the self energy calculation on the QM9 dataset
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
     local_cache_dir = f"{str(prep_temp_dir)}/self_energy"
-    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
+    dataset_cache_dir = str(dataset_temp_dir)
 
     # prepare reference value
     dm = datamodule_factory(
@@ -534,12 +523,12 @@ def test_removal_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir)
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
 def test_dataset_neighborlist(
-    potential_name, single_batch_with_batchsize, prep_temp_dir
+    potential_name, single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
 ):
     """Test the neighborlist."""
 
     local_cache_dir = str(prep_temp_dir) + "/test_neigh"
-    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
+    dataset_cache_dir = str(dataset_temp_dir)
 
     # we will simply load up qm9
     batch = single_batch_with_batchsize(
@@ -636,12 +625,14 @@ def test_dataset_neighborlist(
 
 
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
-def test_dataset_generation(dataset_name, datamodule_factory, prep_temp_dir):
+def test_dataset_generation(
+    dataset_name, datamodule_factory, prep_temp_dir, dataset_temp_dir
+):
     """Test the splitting of the dataset."""
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
     local_cache_dir = str(prep_temp_dir) + "/dataset_generation"
-    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
+    dataset_cache_dir = str(dataset_temp_dir)
 
     dataset = datamodule_factory(
         dataset_name=dataset_name,
@@ -701,9 +692,10 @@ def test_dataset_splitting(
     datamodule_factory,
     get_dataset_container_fix,
     prep_temp_dir,
+    dataset_temp_dir,
 ):
     local_cache_dir = str(prep_temp_dir) + "/dataset_splitting"
-    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
+    dataset_cache_dir = str(dataset_temp_dir)
 
     """Test random_split on the the dataset."""
     dm = datamodule_factory(
@@ -769,14 +761,16 @@ def test_dataset_splitting(
 
 # @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 @pytest.mark.parametrize("dataset_name", ["QM9"])
-def test_numpy_dataset_assignment(dataset_name, load_test_dataset, prep_temp_dir):
+def test_numpy_dataset_assignment(
+    dataset_name, load_test_dataset, prep_temp_dir, dataset_temp_dir
+):
     """
     Test if the numpy_dataset attribute is correctly assigned after processing or loading.
     """
     from modelforge.dataset import _ImplementedDatasets
 
     local_cache_dir = str(prep_temp_dir) + "/numpy_test"
-    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
+    dataset_cache_dir = str(dataset_temp_dir)
 
     data = load_test_dataset(
         dataset_name,
@@ -790,7 +784,7 @@ def test_numpy_dataset_assignment(dataset_name, load_test_dataset, prep_temp_dir
     assert isinstance(data.numpy_data, np.lib.npyio.NpzFile)
 
 
-def test_energy_postprocessing(datamodule_factory, prep_temp_dir):
+def test_energy_postprocessing(datamodule_factory, prep_temp_dir, dataset_temp_dir):
     # test that the mean and stddev of the dataset
     # are correct
     from modelforge.dataset.dataset import DataModule
@@ -799,7 +793,7 @@ def test_energy_postprocessing(datamodule_factory, prep_temp_dir):
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
     local_cache_dir = str(prep_temp_dir) + "/energy_postprocessing"
-    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
+    dataset_cache_dir = str(dataset_temp_dir)
 
     # -------------------------------#
     # Test that we can calculate the normalize energies correctly
@@ -871,12 +865,14 @@ def test_energy_postprocessing(datamodule_factory, prep_temp_dir):
 
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])
-def test_function_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir):
+def test_function_of_self_energy(
+    dataset_name, datamodule_factory, prep_temp_dir, dataset_temp_dir
+):
     # test the self energy calculation on the QM9 dataset
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
     local_cache_dir = str(prep_temp_dir) + "/self_energy_qm9"
-    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
+    dataset_cache_dir = str(dataset_temp_dir)
 
     # prepare reference value
     dm = datamodule_factory(
@@ -1022,9 +1018,11 @@ def test_function_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir
         assert np.isclose(methane_energy_reference, methane_energy_offset + methane_ase)
 
 
-def test_shifting_center_of_mass_to_origin(prep_temp_dir, datamodule_factory):
+def test_shifting_center_of_mass_to_origin(
+    prep_temp_dir, datamodule_factory, dataset_temp_dir
+):
     local_cache_dir = f"{str(prep_temp_dir)}/test_shift_com"
-    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
+    dataset_cache_dir = str(dataset_temp_dir)
 
     from modelforge.dataset.dataset import initialize_datamodule
     from openff.units.elements import MASSES
@@ -1171,9 +1169,11 @@ def test_shifting_center_of_mass_to_origin(prep_temp_dir, datamodule_factory):
 
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])
-def test_element_filter(dataset_name, load_test_dataset, prep_temp_dir):
+def test_element_filter(
+    dataset_name, load_test_dataset, prep_temp_dir, dataset_temp_dir
+):
     local_cache_dir = str(prep_temp_dir) + "/data_test"
-    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
+    dataset_cache_dir = str(dataset_temp_dir)
 
     atomic_number = np.array(
         [
@@ -1294,9 +1294,9 @@ def test_element_filter(dataset_name, load_test_dataset, prep_temp_dir):
         assert e.args[0] == "Please use atomic number to refer to element types!"
 
 
-def test_element_filter_setting(prep_temp_dir, load_test_dataset):
+def test_element_filter_setting(prep_temp_dir, load_test_dataset, dataset_temp_dir):
     local_cache_dir = str(prep_temp_dir) + "/element_filter"
-    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir"
+    dataset_cache_dir = str(dataset_temp_dir)
 
     dataset_name = "qm9"
     # test filter setting

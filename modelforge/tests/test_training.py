@@ -367,7 +367,7 @@ def test_train_from_single_toml_file_element_filter():
     from modelforge.tests import data
     from modelforge.train.training import read_config_and_train
 
-    config_path = resources.files(data) / f"config.toml"
+    config_path = resources.files(data) / f"config_element_filter.toml"
 
     from modelforge.potential.potential import NeuralNetworkPotentialFactory
     from modelforge.train.training import read_config

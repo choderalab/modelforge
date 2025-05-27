@@ -87,14 +87,19 @@ def calculate_md5_checksum(file_name: str, file_path: str) -> str:
     import os
 
     # make sure we can handle a path with a ~ in it
-    file_path = os.path.expanduser(file_path)
+
+    if file_path is not None:
+        file_path = os.path.expanduser(file_path)
+        full_file_path = f"{file_path}/{file_name}"
+    else:
+        full_file_path = file_name
 
     from modelforge.utils.misc import OpenWithLock
 
     # we will use the OpenWithLock context manager to open the file
     # because we do not want to calculate the checksum if the file is still being written
-    with OpenWithLock(f"{file_path}/{file_name}_checksum.lockfile", "w") as fl:
-        with open(f"{file_path}/{file_name}", "rb") as f:
+    with OpenWithLock(f"{full_file_path}_checksum.lockfile", "w") as fl:
+        with open(f"{full_file_path}", "rb") as f:
             file_hash = hashlib.md5()
             while chunk := f.read(8192):
                 file_hash.update(chunk)

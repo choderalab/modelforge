@@ -456,16 +456,18 @@ class HDF5Dataset:
         # Note: I think we still should require the checksum to be defined in the local yaml to ensure that the
         # user is actually using the correct file.
         else:
+            log.debug("Using local yaml file for dataset.")
+            print(self.hdf5_data_file_dict)
             if not self._file_validation(
                 file_name=self.hdf5_data_file_dict["file_name"],
                 checksum=self.hdf5_data_file_dict["md5"],
             ):
                 raise ValueError(
-                    f"File {self.hdf5_data_file_dict['name']} does not exist in {self.dataset_cache_dir} or the checksum does not match."
+                    f"File {self.hdf5_data_file_dict['file_name']} does not exist in {self.dataset_cache_dir} or the checksum does not match."
                 )
-                self._from_hdf5()
-                self._to_file_cache()
-                self._from_file_cache()
+            self._from_hdf5()
+            self._to_file_cache()
+            self._from_file_cache()
 
     @property
     def atomic_self_energies(self):
@@ -475,52 +477,6 @@ class HDF5Dataset:
             return None
 
         return AtomicSelfEnergies(energies=self._ase)
-
-    # def __init__(
-    #     self,
-    #     url: str,
-    #     gz_data_file: Dict[str, str],
-    #     hdf5_data_file: Dict[str, str],
-    #     processed_data_file: Dict[str, str],
-    #     local_cache_dir: str,
-    #     force_download: bool = False,
-    #     regenerate_cache: bool = False,
-    #     element_filter: List[tuple] = None,
-    # ):
-    #     """
-    #     Initializes the HDF5Dataset with paths to raw and processed data files.
-    #
-    #     Parameters
-    #     ----------
-    #     url : str
-    #         URL of the hdf5.gz data file.
-    #     gz_data_file : Dict[str, str]
-    #         Name of the gzipped data file (name) and checksum (md5).
-    #     hdf5_data_file : Dict[str, str]
-    #         Name of the hdf5 data file (name) and checksum (md5).
-    #     processed_data_file : Dict[str, str]
-    #         Name of the processed npz data file (name) and checksum (md5).
-    #     local_cache_dir : str
-    #         Directory to store the files.
-    #     force_download : bool, optional
-    #         If set to True, the data will be downloaded even if it already exists. Default is False.
-    #     regenerate_cache : bool, optional
-    #         If set to True, the cache file will be regenerated even if it already exists. Default is False.
-    #     """
-    #     self.url = url
-    #     self.gz_data_file = gz_data_file
-    #     self.hdf5_data_file = hdf5_data_file
-    #     self.processed_data_file = processed_data_file
-    #     import os
-    #
-    #     # make sure we can handle a path with a ~ in it
-    #     self.local_cache_dir = os.path.expanduser(local_cache_dir)
-    #     self.force_download = force_download
-    #     self.regenerate_cache = regenerate_cache
-    #     self.element_filter = element_filter
-    #
-    #     self.hdf5data: Optional[Dict[str, List[np.ndarray]]] = None
-    #     self.numpy_data: Optional[np.ndarray] = None
 
     @property
     def properties_of_interest(self) -> List[str]:
@@ -736,6 +692,7 @@ class HDF5Dataset:
         else:
             full_file_path = os.path.expanduser(file_name)
 
+        print(f"Validating file {full_file_path}")
         with OpenWithLock(f"{full_file_path}.lockfile", "w") as lock_file:
             if not os.path.exists(full_file_path):
                 log.debug(f"File {full_file_path} does not exist.")
@@ -746,7 +703,7 @@ class HDF5Dataset:
                 calculated_checksum = calculate_md5_checksum(file_name, file_path)
                 if calculated_checksum != checksum:
                     log.warning(
-                        f"Checksum mismatch for file {file_path}/{file_name}. Expected {calculated_checksum}, found {checksum}."
+                        f"Checksum mismatch for file {file_path}/{file_name}. Expected {checksum}, found {calculated_checksum}."
                     )
                     return False
                 return True
@@ -1088,11 +1045,11 @@ class HDF5Dataset:
         # we will generate a simple metadata file to list which data keys were used to generate the npz file
         # and the checksum of the hdf5 file used to create the npz
         # we can also add in the date of generation so we can report on when the datafile was generated when we load the npz
+
         metadata = {
             "data_keys": list(self.hdf5data.keys()),
             "element_filter": str(self.element_filter),
             "hdf5_checksum": self.hdf5_data_file_dict["md5"],
-            "hdf5_gz_checkusm": self.gz_data_file_dict["md5"],
             "date_generated": str(datetime.datetime.now()),
         }
         import json

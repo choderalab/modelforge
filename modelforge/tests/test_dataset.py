@@ -1314,3 +1314,43 @@ def test_element_filter_setting(prep_temp_dir, load_test_dataset, dataset_temp_d
         dataset_cache_dir=dataset_cache_dir,
     )
     assert data.element_filter is None
+
+
+def test_local_dataset(prep_temp_dir):
+
+    from modelforge.dataset.dataset import initialize_datamodule
+
+    from importlib import resources
+    from modelforge.tests.data import local_dataset
+    import toml
+    import os
+
+    local_cache_dir = str(prep_temp_dir) + "/local_dataset_test"
+
+    toml_file = resources.files(local_dataset) / f"local_dataset.toml"
+
+    # check to ensure the yaml file exists
+    if not os.path.exists(toml_file):
+        raise FileNotFoundError(
+            f"Dataset toml file {toml_file} not found. Please check the dataset name."
+        )
+
+    config_dict = toml.load(toml_file)
+
+    version_select = config_dict["dataset"]["version_select"]
+    dataset_name = config_dict["dataset"]["dataset_name"]
+
+    dm = initialize_datamodule(
+        dataset_name=dataset_name,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        batch_size=1,
+        version_select=version_select,
+        properties_of_interest=config_dict["dataset"]["properties_of_interest"],
+        properties_assignment=config_dict["dataset"]["properties_assignment"],
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=local_cache_dir,
+        remove_self_energies=False,
+        local_yaml_file=config_dict["dataset"]["local_yaml_file"],
+    )
+
+    assert os.path.exists(f"{local_cache_dir}/{dataset_name.lower()}.npz")

@@ -1,8 +1,0 @@
-dataset_name: qm9
-latest: v_0
-v_0:
-  version: 0
-  dataset_download_url: https://springernature.figshare.com/ndownloader/files/3195389
-  dataset_md5_checksum: ad1ebd51ee7f5b3a6e32e974e5d54012
-  dataset_length: 86144227
-  dataset_filename: dsgdb9nsd.xyz.tar.bz2

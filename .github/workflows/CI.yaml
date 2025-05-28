@@ -33,7 +33,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macOS-latest, ubuntu-latest]
+        # note: mac os isn't really supported by modelforge,
+        # and mac SI is really slow, so we only run on ubuntu
+        #os: [macOS-latest, ubuntu-latest]
+        os: [ubuntu-latest]
         python-version: ["3.10", "3.11"]
         include:
           - os: ubuntu-latest

@@ -47,5 +47,5 @@ nc_10_v1.1:
   hdf5_schema: 2
   local_dataset:
     hdf5_data_file:
-      file_name: ./data/local_dataset/qm9_dataset_v1.1_ntc_10.hdf5 # note in general this should be the full path to the file
+      file_name: path_to_file/qm9_dataset_v1.1_ntc_10.hdf5 # note in general this should be the full path to the file
       md5: bc688faaa39edf644c5cc05a283cd5af

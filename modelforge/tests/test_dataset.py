@@ -1327,7 +1327,15 @@ def test_local_dataset(prep_temp_dir):
 
     local_cache_dir = str(prep_temp_dir) + "/local_dataset_test"
 
-    toml_file = resources.files(local_dataset) / f"local_dataset.toml"
+    # ensure the local cache directory exists
+    os.makedirs(local_cache_dir, exist_ok=True)
+
+    # for some reason resources.files(local_dataset) is returning MultiplexedPath instead of a string
+    # so we need to great _path[0] to get the actual path we can convert to string
+    path_to_local_dataset_dir = str(resources.files(local_dataset)._paths[0])
+
+    # read the toml file
+    toml_file = f"{path_to_local_dataset_dir}/local_dataset.toml"
 
     # check to ensure the yaml file exists
     if not os.path.exists(toml_file):
@@ -1336,21 +1344,65 @@ def test_local_dataset(prep_temp_dir):
         )
 
     config_dict = toml.load(toml_file)
-
     version_select = config_dict["dataset"]["version_select"]
     dataset_name = config_dict["dataset"]["dataset_name"]
+    properties_of_interest = config_dict["dataset"]["properties_of_interest"]
+    properties_assignment = config_dict["dataset"]["properties_assignment"]
+
+    # we will use the local cache directory to store the local dataset files
+    # Loading a local dataset requires providing the full path to the yaml file in the toml file and
+    # the full path to the hdf5 file in the yaml file.
+    # to make this work in the context where we don't actually know what the full file path will be (i.e., on CI or
+    # just on a different machine), we will copy the files over to the local cache directory
+    # and modify the .toml and yaml files accordingly (use simple string replacement substitution of {{path_to_file}})
+
+    # copy the hdf5 file to the local cache directory
+    import shutil
+
+    shutil.copy(
+        f"{path_to_local_dataset_dir}/qm9_dataset_v1.1_ntc_10.hdf5", local_cache_dir
+    )
+
+    # we will read in the yaml file and then update the path to the hdf5 file
+    # write this to the local_cache_dir
+    import yaml
+
+    yaml_file_path_in = config_dict["dataset"]["local_yaml_file"].replace(
+        "path_to_file", path_to_local_dataset_dir
+    )
+
+    yaml_file_path_out = config_dict["dataset"]["local_yaml_file"].replace(
+        "path_to_file", local_cache_dir
+    )
+
+    with open(yaml_file_path_in, "r") as yaml_file:
+        yaml_content = yaml.safe_load(yaml_file)
+
+    yaml_content[version_select]["local_dataset"]["hdf5_data_file"][
+        "file_name"
+    ] = yaml_content[version_select]["local_dataset"]["hdf5_data_file"][
+        "file_name"
+    ].replace(
+        "path_to_file", local_cache_dir
+    )
+
+    with open(yaml_file_path_out, "w") as yaml_file:
+        yaml.safe_dump(yaml_content, yaml_file)
+
+    # we need to read in the yaml file and replace the {{path_to_file}} with the local cache directory
+    # then write that back to file
 
     dm = initialize_datamodule(
         dataset_name=dataset_name,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         batch_size=1,
         version_select=version_select,
-        properties_of_interest=config_dict["dataset"]["properties_of_interest"],
-        properties_assignment=config_dict["dataset"]["properties_assignment"],
+        properties_of_interest=properties_of_interest,
+        properties_assignment=properties_assignment,
         local_cache_dir=local_cache_dir,
         dataset_cache_dir=local_cache_dir,
         remove_self_energies=False,
-        local_yaml_file=config_dict["dataset"]["local_yaml_file"],
+        local_yaml_file=yaml_file_path_out,
     )
 
     assert os.path.exists(f"{local_cache_dir}/{dataset_name.lower()}.npz")

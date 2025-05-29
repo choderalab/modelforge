@@ -49,7 +49,7 @@ def setup_potential_for_test(
     dataset_cache_dir: Optional[str] = None,
 ):
     from modelforge.potential import NeuralNetworkPotentialFactory
-    from modelforge.tests.test_potentials import load_configs_into_pydantic_models
+    from modelforge.utils.misc import load_configs_into_pydantic_models
 
     if simulation_environment == "JAX":
         assert use == "inference", "JAX only supports inference mode"

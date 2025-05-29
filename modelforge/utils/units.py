@@ -55,7 +55,7 @@ unit.add_context(chem_context)
 
 def _convert_str_or_unit_to_unit_length(val: Union[unit.Quantity, str]) -> float:
     """
-    Convert a string or unit.Quantity representation of a length to nanometers.
+    Convert a string or unit.Quantity representation of a length to Global length unit (default nanometers).
 
     This function ensures that any input, whether a string or an OpenFF
     unit.Quantity, is converted to a unit.Quantity in nanometers and returns the
@@ -69,7 +69,7 @@ def _convert_str_or_unit_to_unit_length(val: Union[unit.Quantity, str]) -> float
     Returns
     -------
     float
-        The value in nanometers.
+        The value in the Global length units (default: nanometers).
 
     Examples
     --------
@@ -80,7 +80,7 @@ def _convert_str_or_unit_to_unit_length(val: Union[unit.Quantity, str]) -> float
     """
     if isinstance(val, str):
         val = unit.Quantity(val)
-    return val.to(unit.nanometer).m
+    return val.to(GlobalUnitSystem.get_units("length")).m
 
 
 def _convert_str_to_unit(val: Union[unit.Quantity, str]) -> unit.Quantity:

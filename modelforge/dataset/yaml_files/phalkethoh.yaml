@@ -34,9 +34,11 @@ atomic_self_energies:
   O: -75.11317840410095 * hartree
 
 full_dataset_v1.1:
-  about: This provides a curated hdf5 file for the PhAlkEthOH dataset designed to
+  about: 'This provides a curated hdf5 file for the PhAlkEthOH dataset designed to
     be compatible with modelforge. This dataset contains 10301 unique records for
-    1188691 total configurations.
+    1188691 total configurations.  This excludes any configurations where the magnitude of any forces 
+    on the atoms are greater than 1 hartree/bohr.'
+
   available_properties:
   - atomic_numbers
   - positions

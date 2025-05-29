@@ -206,10 +206,28 @@ Below is a fictional example of a metadata to demonstrate the key fields which i
 To specify metadata for a local dataset, the `remote_dataset` field can be omitted and replaced with the field `local_dataset` as shown below:
 
 .. code-block:: yaml
+    dataset: fictional_dataset_name
+    latest: full_dataset_v1.1
+    latest_test: nc_1000_v1.1
 
+    description: "A description of the dataset."
+
+    atomic_self_energies:
+      H: -1400.0 * kilojoule_per_mole
+      C: -10000.0 * kilojoule_per_mole
+
+    full_dataset_v1.1:
+      about: "This provides a curated hdf5 file for the fictional dataset designed to be compatible
+        with modelforge. This dataset contains 1234 unique records for 123456 total
+        configurations."
+      hdf5_schema: 2
+      available_properties:
+      - atomic_numbers
+      - positions
+      - dft_energy
       local_dataset:
         hdf5_data_file:
-          file_name: path_to_file/local_fictional_dataset_v1.1_ntc_10.hdf5 =
+          file_name: path_to_file/local_fictional_dataset_v1.1_ntc_10.hdf5
           md5: hdf5_checksum_value
 
 

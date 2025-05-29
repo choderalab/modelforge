@@ -1645,6 +1645,7 @@ class PotentialTrainer:
             properties_of_interest=self.dataset_parameter.properties_of_interest,
             properties_assignment=self.dataset_parameter.properties_assignment.model_dump(),
             element_filter=self.dataset_parameter.element_filter,
+            dataset_cache_dir=self.dataset_parameter.dataset_cache_dir,
         )
         dm.prepare_data()
         dm.setup()

@@ -72,6 +72,16 @@ class DatasetParameters(BaseModel):
         The properties of interest to load from the hdf5 file.
     properties_assignment : PropertiesDefinition
         Association between the properties of interest and the internal naming convention
+    element_filter : List[tuple], optional
+        A list of tuples containing the atomic numbers and their corresponding stoichiometry.
+        This is used to filter the dataset to only include elements of interest.
+    local_yaml_file : Optional[str]
+        The path to the local yaml file with parameters for the dataset.
+        If not provided, the dataset_name will be used to load an modelforge dataset.
+    dataset_cache_dir : Optional[str]= "./"
+        The directory where the dataset cache is stored.
+        If not provided, the default cache directory will be used.
+
     """
 
     model_config = ConfigDict(
@@ -87,6 +97,7 @@ class DatasetParameters(BaseModel):
     properties_assignment: PropertiesDefinition
     element_filter: List[tuple] = None
     local_yaml_file: Optional[str] = None
+    dataset_cache_dir: Optional[str] = "./"
 
     # we are going to check if the datasetname is in the DataSetName enum
     # if not, local_yaml_file should be set to the path of the yaml file

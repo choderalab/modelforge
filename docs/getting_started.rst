@@ -71,6 +71,7 @@ Before training a model, consider the following:
     * PhysNet
     * TensorNet
     * SAKE
+    * AimNet2
 
 These architectures can be trained on the following datasets (distributed via zenodo https://zenodo.org/communities/modelforge/ ):
 
@@ -78,9 +79,13 @@ These architectures can be trained on the following datasets (distributed via ze
 - Ani2x
 - PHALKETOH
 - QM9
-- SPICE1 (/openff)
+- SPICE1
+- SPICE1 OpenFF
 - SPICE2
+- SPICE2 OpenFF
 - tmQM
+- tmQM_xtb
+- Fe II
 
 By default, potentials predict the total energy  and per-atom forces within a given cutoff radius and can be trained on energies and forces.
 
@@ -132,6 +137,15 @@ The following TOML file defines the ANI1x dataset, allowing users to specify a s
     version_select = "latest"
     num_workers = 4
     pin_memory = true
+    properties_of_interest = ["positions", "atomic_numbers", "wb97x_dz_energy", "wb97x_dz_forces"]
+    element_filter = []
+    dataset_cache_dir = "~/modelforge_datasets"  # Directory to cache the dataset
+
+    [dataset.properties_assignment]
+    atomic_numbers="atomic_numbers"
+    positions="positions"
+    E="wb97x_dz_energy"
+    F="wb97x_dz_forces"
 
 
 Defining the Training Routine

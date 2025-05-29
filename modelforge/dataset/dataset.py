@@ -1070,9 +1070,12 @@ from modelforge.custom_types import DatasetType
 
 
 class DataModule(pl.LightningDataModule):
+
     def __init__(
         self,
         name: str,
+        properties_of_interest: List[str],
+        properties_assignment: Dict[str, str],
         splitting_strategy: SplittingStrategy = RandomRecordSplittingStrategy(),
         batch_size: int = 64,
         remove_self_energies: bool = True,
@@ -1084,8 +1087,6 @@ class DataModule(pl.LightningDataModule):
         version_select: str = "latest",
         local_cache_dir: str = "./",
         dataset_cache_dir: str = "./",
-        properties_of_interest: Optional[PropertyNames] = None,
-        properties_assignment: Optional[Dict[str, str]] = None,
         element_filter: Optional[List[tuple]] = None,
         local_yaml_file: Optional[str] = None,
     ):
@@ -1101,6 +1102,10 @@ class DataModule(pl.LightningDataModule):
         ---------
             name: Literal["QM9", "ANI1X", "ANI2X", "SPICE1", "SPICE2", "SPICE1_OPENFF"]
                 The name of the dataset to use.
+            properties_of_interest : List[str]
+                The properties to include in the dataset.
+            properties_assignment : Dict[str, str]
+                The properties of interest from the hdf5 dataset to associate with internal properties with the code.
             splitting_strategy : SplittingStrategy, defaults to RandomRecordSplittingStrategy
                 The strategy to use for splitting the dataset into train, test, and validation sets. .
             batch_size : int, defaults to 64.
@@ -1126,10 +1131,7 @@ class DataModule(pl.LightningDataModule):
                 Directory to store the files associated/specific with a given dataset/training run.
             dataset_cache_dir : str, defaults to "./"
                 Directory to store the dataset files,
-            properties_of_interest : Optional[PropertyNames]
-                The properties to include in the dataset.
-            properties_assignment : Optional[Dict[str, str]]
-                The properties of interest from the hdf5 dataset to associate with internal properties with the code.
+
             local_yaml_file : Optional[str]
                 Path to the local yaml file to use for the dataset. If not provided, the code will search for a
                 yaml file associated with the dataset name in the modelforge.dataset.yaml_files directory.

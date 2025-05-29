@@ -5,7 +5,7 @@ latest_test: nc_1000_v1.1
 description: "This dataset contains 384 unique systems with a total of 28,834 configurations
     (note, the original publication states 383 unique systems).
 
-    The full Fe(II) dataset includes 28834 total configurations Fe(II) organometallic complexes.
+    The full Fe(II) dataset includes 28834 total configurations of Fe(II) organometallic complexes.
     Specifically, this includes 15568 HS geometries and 13266 LS geometries.
     These complexes originate from the Cambridge Structural Database (CSD) as curated by Nandy, et al.
     (Journal of Physical Chemistry Letters (2023), 14 (25), 10.1021/acs.jpclett.3c01214),

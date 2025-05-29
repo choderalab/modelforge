@@ -3,62 +3,24 @@ Datasets
 
 The dataset module in modelforge provides a  suite of functions and classes designed to retrieve and transform quantum mechanics (QM) datasets into a format compatible with `torch.utils.data.Dataset <https://pytorch.org/docs/stable/data.html#torch.utils.data.Dataset>`_, facilitating the training of machine learning potentials. The module supports actions related to data storage, caching, retrieval, and the conversion of stored modelforge curated HDF5 files into PyTorch-compatible datasets for training purposes.
 
-Available Datasets
-------------------
 Modelforge currently provides a host of datasets containing a variety of molecular structures and properties. These datasets are curated into HDF5 formated files designed to be compatible with modelforge and hosted on zenodo.org (see the `zenodo modelforge community <https://zenodo.org/communities/modelforge/records>`_), making them easily accessible for training machine learning models. These datasets can easily specified and all the relevant files downloaded and cached using the :class:`~modelforge.dataset.HDF5Dataset` class. In all cases, a 1000 configuration test dataset is provided for each dataset; several datasets also provide various subsets (e.g., limited to a subset of elements). The specific version can be specified; version information is embedded in .yaml files in the dataset directory (`~modelforge/dataset/yaml_files`).
 
 Local datasets can also be used, assuming they are stored in the modelforge compatible HDF5 format.  These can be specified by providing a path to a yaml file that contains the dataset metadata in the dataset configuration file.
 
 
-The following datasets are available as part of `modelforge` (dataset names used to specify the dataset in modelforge are provided in parentheses):
+The following datasets are available as part of `modelforge` (dataset names used to specify the dataset in modelforge are provided in parentheses); additional details of each dataset, including the corresponding yaml files (which provide a list of available versions of each dataset) are provided at the end of this page:
 
-- **QM9 (qm9)**: A dataset of 134k small organic molecules, each containing up to 9 heavy atoms (C, O, N, F) and up to 29 atoms in total. It includes properties such as energies, forces, and dipole moments.
-
-    Ramakrishnan, R., Dral, P., Rupp, M. et al. 'Quantum chemistry structures and properties of 134 kilo molecules.'Sci Data 1, 140022 (2014). https://doi.org/10.1038/sdata.2014.22
-
-- **ANI1x (ani1x)**:  dataset includes ~5 million density function theory calculations for small organic molecules containing H, C, N, and O. A subset of ~500k are computed with accurate coupled cluster methods.
-
-    ANI-1x dataset:
-        Smith, J. S.; Nebgen, B.; Lubbers, N.; Isayev, O.; Roitberg, A. E. Less Is More: Sampling Chemical Space with Active Learning. J. Chem. Phys. 2018, 148 (24), 241733. https://doi.org/10.1063/1.5023802
-
-    ANI-1ccx dataset:
-        Smith, J. S.; Nebgen, B. T.; Zubatyuk, R.; Lubbers, N.; Devereux, C.; Barros, K.; Tretiak, S.; Isayev, O.; Roitberg, A. E. Approaching Coupled Cluster Accuracy with a General-Purpose Neural Network Potential through Transfer Learning. Nat. Commun. 2019, 10 (1), 2903. https://doi.org/10.1038/s41467-019-10827-4
-
-    ωB97x/def2-TZVPP data:
-        Zubatyuk, R.; Smith, J. S.; Leszczynski, J.; Isayev, O. Accurate and Transferable Multitask Prediction of Chemical Properties with an Atoms-in-Molecules Neural Network. Sci. Adv. 2019, 5 (8), eaav6490. https://doi.org/10.1126/sciadv.aav6490
-
-- **ANI2X (ani2x)**: The ANI-2x data set includes properties for small organic molecules that contain H, C, N, O, S, F, and Cl.  This dataset contains 9651712 conformers for nearly 200,000 molecules. This will fetch data generated with the ωB97X/631Gd level of theory used in the original ANI-2x paper, calculated using Gaussian 09.
-
-    Devereux, C, Zubatyuk, R., Smith, J. et al. Extending the applicability of the ANI deep learning molecular potential to sulfur and halogens. Journal of Chemical Theory and Computation 16.7 (2020): 4192-4202. https://doi.org/10.1021/acs.jctc.0c00121
-
-- **SPICE 1 (spice1)**: The SPICE dataset contains 1.1 million conformations for a 19238 unique small molecules, dimers, dipeptides, and solvated amino acids. It includes 15 elements  (H, Li, C, N, O, F, Na, Mg, P, S, Cl, K, Ca, Br, I)., charged and uncharged molecules, and a wide range of covalent and non-covalent interactions. It provides both forces and energies calculated at the ωB97M-D3(BJ)/def2-TZVPPD level of theory, using Psi4 1.4.1 along with other useful quantities such as multipole moments and bond orders.
-
-    Eastman, P., Behara, P.K., Dotson, D.L. et al. SPICE, A Dataset of Drug-like Molecules and Peptides for Training Machine Learning Potentials. Sci Data 10, 11 (2023). https://doi.org/10.1038/s41597-022-01882-6
-
-- **SPICE 2 (spice2)**: The SPICE2 dataset contains conformations for a diverse set of small molecules, dimers, dipeptides, and solvated amino acids. It includes 17 elements (H, Li, B, C, N, O, F, Na, Mg, Si, P, S, Cl, K, Ca, Br, I), charged and uncharged molecules, and a wide range of covalent and non-covalent interactions. It provides both forces and energies calculated at the ωB97M-D3(BJ)/def2-TZVPPD level of theory, using Psi4 along with other useful quantities such as multipole moments and bond orders.
-
-    Eastman, P., Pritchard, B. P., Chodera, J. D., & Markland, T. E. Nutmeg and SPICE: models and data for biomolecular machine learning. Journal of chemical theory and computation, 20(19), 8583-8593 (2024). https://doi.org/10.1021/acs.jctc.4c00794
-
-- **SPICE 1 OpenFF (spice1_openff)**: The full SPICE 1 OpenFF dataset is a subset of the SPICE 1 dataset, and includes 18782 unique records for 1106949 total configurations for 14 different elements (H, Li, C, N, O, F, Na, Mg, P, S, Cl, K, Ca, Br). All QM datapoints were generated using B3LYP-D3BJ/DZVP level of theory as this is the default theory used for force field development by the Open Force Field Initiative.
-  was generated using ωB97M-D3(BJ)/def2-TZVPPD level of theory.
-
-- **SPICE 2 OpenFF (spice2_openff)**: The SPICE 2 OpenFF dataset is a subset of the SPICE 2 dataset, and includes 112628 unique records for 1971769 total configurations for 16 elements (H, Li, B, C, N, O, F, Na, Mg, Si, P, S, Cl, K, Ca, Br) in both charged and uncharged molecules, and a wide range of covalent and non-covalent interactions. All QM datapoints were generated using B3LYP-D3BJ/DZVP level of theory as this is the default theory used for force field development by the Open Force Field Initiative.
-
-- **Fe II (fe_ii)**:  The Fe(II) dataset includes 28834 total configurations of 384 unique Fe(II) organometallic complexes. Specifically, this includes 15568 HS geometries and 13266 LS geometries. These complexes originate from the Cambridge Structural Database (CSD) as curated by Nandy, et al. (Journal of Physical Chemistry Letters (2023), 14 (25), 10.1021/acs.jpclett.3c01214), and were filtered into “computation-ready” complexes, (those where both oxidation states and charges are already specified without hydrogen atoms missing in the structures), following the procedure outlined by Arunachalam, et al. (Journal of Chemical Physics (2022), 157 (18), 10.1063/5.0125700).
-
-    Hongni Jin and Kenneth M. Merz Jr, Modeling Fe(II) Complexes Using Neural Networks. Journal of Chemical Theory and Computation 2024 20 (6), 2551-2558 https://dx.doi.org/10.1021/acs.jctc.4c00063
-
-- **tmQM (tmqm)**: The tmQM dataset contains the geometries and properties of 108,541 mononuclear complexes extracted from the Cambridge Structural Database, including Werner, bioinorganic, and organometallic complexes based on a large variety of organic ligands and 30 transition metals (the 3d, 4d, and 5d from groups 3 to 12). All complexes are closed-shell, with a formal charge in the range {+1, 0, −1}e
-
-    David Balcells and Bastian Bjerkem Skjelstad, tmQM Dataset—Quantum Geometries and Properties of 86k Transition Metal Complexes. Journal of Chemical Information and Modeling 2020 60 (12), 6135-6146 https://dx.doi.org/10.1021/acs.jcim.0c01041"
-
-- **tmQM-xtb (tmqm_xtb)**: The tmQM-xtb dataset include configurations generated using GFN2-xTB-based MD simulations starting from the energy-minimized geometries in the tmQM dataset. Energies, forces, charges, and dipole moments were calculated using the GFN2-xTB method. Several variants of the dataset are available, generated using different temperatures for MD sampling.
-
-- **PhAlkEthOH (PhAlkEthOH)**: PhAlkEthOH: Phenyls, Alkanes, Ethers, and Alcohols (OH). The PhAlkEthOH dataset contains a collection of optimized trajectories of linear and cyclic molecules containing phyl rings, small alkanes, ethers, and alcohols containing only elements carbon, oxygen and hydrogen. For each unique system, configurations correspond to snapshots from the optimization trajectory. All QM datapoints were generated using B3LYP-D3BJ/DZVP level of theory, the default theory used for force field development by the Open Force Field Initiative.
-
-    Bannan CC, Mobley D. ChemPer: An Open Source Tool for Automatically Generating SMIRKS Patterns. ChemRxiv. 2019; https://dx.doi.org/10.26434/chemrxiv.8304578.v1
-
-    Wang Y, Fass J, Kaminow B, Herr JE, Rufa D, Zhang I, Pulido I, Henry M, Macdonald HE, Takaba K, Chodera JD. End-to-end differentiable construction of molecular mechanics force fields. Chemical Science. 2022;13(41):12016-33. https://dx.doi.org/10.1039/d2sc02739a
+- **QM9 (qm9)**
+- **ANI1x (ani1x)**
+- **ANI2X (ani2x)**
+- **SPICE 1 (spice1)**
+- **SPICE 2 (spice2)**
+- **SPICE 1 OpenFF (spice1_openff)**
+- **SPICE 2 OpenFF (spice2_openff)**
+- **Fe II (fe_ii)**
+- **tmQM (tmqm)**
+- **tmQM-xtb (tmqm_xtb)**
+- **PhAlkEthOH (PhAlkEthOH)**
 
 
 Postprocessing of dataset entries
@@ -231,50 +193,100 @@ To specify metadata for a local dataset, the `remote_dataset` field can be omitt
           md5: hdf5_checksum_value
 
 
-yaml Metadata Files for Available Datasets
-------------------------------------------
+Available Datasets and Versions
+----------------------------------
 
-Below is a list of the available datasets and their corresponding metadata yaml files. These files can be found in the `~modelforge/dataset/yaml_files` directory, and they provide detailed information about each dataset, including its version, properties, and download URLs.
+Below is a description of the available datasets and their corresponding metadata yaml files. These files can be found in the `~modelforge/dataset/yaml_files` directory, and they provide detailed information about each dataset, including its version, properties, and download URLs.  As previously mentioned, for each dataset, multiple versions may be available.  A 1000 configuration test dataset is provided for each dataset primarily useful for testing; several datasets also provide various subsets (e.g., limited to a subset of elements).
+
+- **ANI1x (ani1x)**:  dataset includes ~5 million density function theory calculations for small organic molecules containing H, C, N, and O. A subset of ~500k are computed with accurate coupled cluster methods.
+
+    ANI-1x dataset:
+        Smith, J. S.; Nebgen, B.; Lubbers, N.; Isayev, O.; Roitberg, A. E. Less Is More: Sampling Chemical Space with Active Learning. J. Chem. Phys. 2018, 148 (24), 241733. https://doi.org/10.1063/1.5023802
+
+    ANI-1ccx dataset:
+        Smith, J. S.; Nebgen, B. T.; Zubatyuk, R.; Lubbers, N.; Devereux, C.; Barros, K.; Tretiak, S.; Isayev, O.; Roitberg, A. E. Approaching Coupled Cluster Accuracy with a General-Purpose Neural Network Potential through Transfer Learning. Nat. Commun. 2019, 10 (1), 2903. https://doi.org/10.1038/s41467-019-10827-4
+
+    ωB97x/def2-TZVPP data:
+        Zubatyuk, R.; Smith, J. S.; Leszczynski, J.; Isayev, O. Accurate and Transferable Multitask Prediction of Chemical Properties with an Atoms-in-Molecules Neural Network. Sci. Adv. 2019, 5 (8), eaav6490. https://doi.org/10.1126/sciadv.aav6490
 
 .. literalinclude:: ../modelforge/dataset/yaml_files/ani1x.yaml
     :language: yaml
     :caption: ANI1x Dataset yaml Metadata
 
+- **ANI2X (ani2x)**: The ANI-2x data set includes properties for small organic molecules that contain H, C, N, O, S, F, and Cl.  This dataset contains 9651712 conformers for nearly 200,000 molecules. This will fetch data generated with the ωB97X/631Gd level of theory used in the original ANI-2x paper, calculated using Gaussian 09.
+
+    Devereux, C, Zubatyuk, R., Smith, J. et al. Extending the applicability of the ANI deep learning molecular potential to sulfur and halogens. Journal of Chemical Theory and Computation 16.7 (2020): 4192-4202. https://doi.org/10.1021/acs.jctc.0c00121
+
 .. literalinclude:: ../modelforge/tdataset/yaml_files/ani2x.yaml
     :language: yaml
     :caption: ANI2x Dataset yaml Metadata
+
+- **Fe II (fe_ii)**:  The Fe(II) dataset includes 28834 total configurations of 384 unique Fe(II) organometallic complexes. Specifically, this includes 15568 HS geometries and 13266 LS geometries. These complexes originate from the Cambridge Structural Database (CSD) as curated by Nandy, et al. (Journal of Physical Chemistry Letters (2023), 14 (25), 10.1021/acs.jpclett.3c01214), and were filtered into “computation-ready” complexes, (those where both oxidation states and charges are already specified without hydrogen atoms missing in the structures), following the procedure outlined by Arunachalam, et al. (Journal of Chemical Physics (2022), 157 (18), 10.1063/5.0125700).
+
+    Hongni Jin and Kenneth M. Merz Jr, Modeling Fe(II) Complexes Using Neural Networks. Journal of Chemical Theory and Computation 2024 20 (6), 2551-2558 https://dx.doi.org/10.1021/acs.jctc.4c00063
 
 .. literalinclude:: ../modelforge/dataset/yaml_files/fe_ii.yaml
     :language: yaml
     :caption: Fe II Dataset yaml Metadata
 
+- **PhAlkEthOH (PhAlkEthOH)**: PhAlkEthOH: Phenyls, Alkanes, Ethers, and Alcohols (OH). The PhAlkEthOH dataset contains a collection of optimized trajectories of linear and cyclic molecules containing phyl rings, small alkanes, ethers, and alcohols containing only elements carbon, oxygen and hydrogen. For each unique system, configurations correspond to snapshots from the optimization trajectory. All QM datapoints were generated using B3LYP-D3BJ/DZVP level of theory, the default theory used for force field development by the Open Force Field Initiative.
+
+    Bannan CC, Mobley D. ChemPer: An Open Source Tool for Automatically Generating SMIRKS Patterns. ChemRxiv. 2019; https://dx.doi.org/10.26434/chemrxiv.8304578.v1
+
+    Wang Y, Fass J, Kaminow B, Herr JE, Rufa D, Zhang I, Pulido I, Henry M, Macdonald HE, Takaba K, Chodera JD. End-to-end differentiable construction of molecular mechanics force fields. Chemical Science. 2022;13(41):12016-33. https://dx.doi.org/10.1039/d2sc02739a
+
 .. literalinclude:: ../modelforge/dataset/yaml_files/phalkethoh.yaml
     :language: yaml
     :caption: PhAlkEthOH Dataset yaml Metadata
+
+**QM9 (qm9)**: A dataset of 134k small organic molecules, each containing up to 9 heavy atoms (C, O, N, F) and up to 29 atoms in total. It includes properties such as energies, forces, and dipole moments.
+
+    Ramakrishnan, R., Dral, P., Rupp, M. et al. 'Quantum chemistry structures and properties of 134 kilo molecules.'Sci Data 1, 140022 (2014). https://doi.org/10.1038/sdata.2014.22
 
 .. literalinclude:: ../modelforge/dataset/yaml_files/qm9.yaml
     :language: yaml
     :caption: QM9 Dataset yaml Metadata
 
+- **SPICE 1 (spice1)**: The SPICE dataset contains 1.1 million conformations for a 19238 unique small molecules, dimers, dipeptides, and solvated amino acids. It includes 15 elements  (H, Li, C, N, O, F, Na, Mg, P, S, Cl, K, Ca, Br, I)., charged and uncharged molecules, and a wide range of covalent and non-covalent interactions. It provides both forces and energies calculated at the ωB97M-D3(BJ)/def2-TZVPPD level of theory, using Psi4 1.4.1 along with other useful quantities such as multipole moments and bond orders.
+
+    Eastman, P., Behara, P.K., Dotson, D.L. et al. SPICE, A Dataset of Drug-like Molecules and Peptides for Training Machine Learning Potentials. Sci Data 10, 11 (2023). https://doi.org/10.1038/s41597-022-01882-6
+
 .. literalinclude:: ../modelforge/dataset/yaml_files/spice1.yaml
     :language: yaml
     :caption: SPICE 1 Dataset yaml Metadata
+
+- **SPICE 1 OpenFF (spice1_openff)**: The full SPICE 1 OpenFF dataset is a subset of the SPICE 1 dataset, and includes 18782 unique records for 1106949 total configurations for 14 different elements (H, Li, C, N, O, F, Na, Mg, P, S, Cl, K, Ca, Br). All QM datapoints were generated using B3LYP-D3BJ/DZVP level of theory as this is the default theory used for force field development by the Open Force Field Initiative.
+  was generated using ωB97M-D3(BJ)/def2-TZVPPD level of theory.
+
 
 .. literalinclude:: ../modelforge/dataset/yaml_files/spice1_openff.yaml
     :language: yaml
     :caption: SPICE 1 OpenFF Dataset yaml Metadata
 
+- **SPICE 2 (spice2)**: The SPICE2 dataset contains conformations for a diverse set of small molecules, dimers, dipeptides, and solvated amino acids. It includes 17 elements (H, Li, B, C, N, O, F, Na, Mg, Si, P, S, Cl, K, Ca, Br, I), charged and uncharged molecules, and a wide range of covalent and non-covalent interactions. It provides both forces and energies calculated at the ωB97M-D3(BJ)/def2-TZVPPD level of theory, using Psi4 along with other useful quantities such as multipole moments and bond orders.
+
+    Eastman, P., Pritchard, B. P., Chodera, J. D., & Markland, T. E. Nutmeg and SPICE: models and data for biomolecular machine learning. Journal of chemical theory and computation, 20(19), 8583-8593 (2024). https://doi.org/10.1021/acs.jctc.4c00794
+
 .. literalinclude:: ../modelforge/dataset/yaml_files/spice2.yaml
     :language: yaml
     :caption: SPICE 2 Dataset yaml Metadata
+
+- **SPICE 2 OpenFF (spice2_openff)**: The SPICE 2 OpenFF dataset is a subset of the SPICE 2 dataset, and includes 112628 unique records for 1971769 total configurations for 16 elements (H, Li, B, C, N, O, F, Na, Mg, Si, P, S, Cl, K, Ca, Br) in both charged and uncharged molecules, and a wide range of covalent and non-covalent interactions. All QM datapoints were generated using B3LYP-D3BJ/DZVP level of theory as this is the default theory used for force field development by the Open Force Field Initiative.
 
 .. literalinclude:: ../modelforge/dataset/yaml_files/spice2_openff.yaml
     :language: yaml
     :caption: SPICE 2 OpenFF Dataset yaml Metadata
 
+- **tmQM (tmqm)**: The tmQM dataset contains the geometries and properties of 108,541 mononuclear complexes extracted from the Cambridge Structural Database, including Werner, bioinorganic, and organometallic complexes based on a large variety of organic ligands and 30 transition metals (the 3d, 4d, and 5d from groups 3 to 12). All complexes are closed-shell, with a formal charge in the range {+1, 0, −1}e
+
+    David Balcells and Bastian Bjerkem Skjelstad, tmQM Dataset—Quantum Geometries and Properties of 86k Transition Metal Complexes. Journal of Chemical Information and Modeling 2020 60 (12), 6135-6146 https://dx.doi.org/10.1021/acs.jcim.0c01041"
+
 .. literalinclude:: ../modelforge/dataset/yaml_files/tmqm.yaml
     :language: yaml
     :caption: tmQM Dataset yaml Metadata
+
+- **tmQM-xtb (tmqm_xtb)**: The tmQM-xtb dataset include configurations generated using GFN2-xTB-based MD simulations starting from the energy-minimized geometries in the tmQM dataset. Energies, forces, charges, and dipole moments were calculated using the GFN2-xTB method. Several variants of the dataset are available, generated using different temperatures for MD sampling.
+
 
 .. literalinclude:: ../modelforge/dataset/yaml_files/tmqm_xtb.yaml
     :language: yaml

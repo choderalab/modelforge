@@ -70,6 +70,8 @@ class DatasetParameters(BaseModel):
         Whether to regenerate the processed cache.
     properties_of_interest : List[str]
         The properties of interest to load from the hdf5 file.
+    regression_ase : Optional[bool]= False
+        If true, self-energies will be regressed from the dataset. defaults to False.
     properties_assignment : PropertiesDefinition
         Association between the properties of interest and the internal naming convention
     element_filter : List[tuple], optional
@@ -93,6 +95,7 @@ class DatasetParameters(BaseModel):
     num_workers: int = Field(gt=0)
     pin_memory: bool
     regenerate_processed_cache: bool = False
+    regression_ase: Optional[bool] = False
     properties_of_interest: List[str]
     properties_assignment: PropertiesDefinition
     element_filter: List[tuple] = None

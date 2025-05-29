@@ -1,52 +1,74 @@
-Datasets
+Dataset Module
 ===============
 
-The dataset module in modelforge provides a  suite of functions and classes designed to retrieve and transform quantum mechanics (QM) datasets into a format compatible with `torch.utils.data.Dataset <https://pytorch.org/docs/stable/data.html#torch.utils.data.Dataset>`_, facilitating the training of machine learning potentials. The module supports actions related to data storage, caching, retrieval, and the conversion of stored modelforge curated HDF5 files into PyTorch-compatible datasets for training purposes.
+The dataset module in modelforge provides a  suite of functions and classes designed to retrieve and transform quantum mechanics (QM) datasets into a format compatible with `torch.utils.data.Dataset <https://pytorch.org/docs/stable/data.html#torch.utils.data.Dataset>`_ as well as Pytorch Lightning `LightningDataModule <https://lightning.ai/docs/pytorch/stable/data/datamodule.html#lightningdatamodule>`_,  facilitating the training of machine learning potentials. The module supports actions related to data storage, caching, retrieval, and the conversion of stored modelforge curated HDF5 files into PyTorch-compatible datasets for training purposes.
 
-Modelforge currently provides a host of datasets containing a variety of molecular structures and properties. These datasets are curated into HDF5 formated files designed to be compatible with modelforge and hosted on zenodo.org (see the `zenodo modelforge community <https://zenodo.org/communities/modelforge/records>`_), making them easily accessible for training machine learning models. These datasets can easily specified and all the relevant files downloaded and cached using the :class:`~modelforge.dataset.HDF5Dataset` class. In all cases, a 1000 configuration test dataset is provided for each dataset; several datasets also provide various subsets (e.g., limited to a subset of elements). The specific version can be specified; version information is embedded in .yaml files in the dataset directory (`~modelforge/dataset/yaml_files`).
-
-Local datasets can also be used, assuming they are stored in the modelforge compatible HDF5 format.  These can be specified by providing a path to a yaml file that contains the dataset metadata in the dataset configuration file.
+Modelforge currently provides a host of datasets containing a variety of molecular structures and properties. These datasets are curated into HDF5 formated files designed to be compatible with modelforge and hosted on zenodo.org (see the `zenodo modelforge community <https://zenodo.org/communities/modelforge/records>`_); the udnerlying :class:`~modelforge.dataset.HDF5Dataset` class provides a framework to download, cache, and process these files into a format compatible with `torch.utils.data.Dataset`, as previously noted. Local datasets can also be used that are stored in modelforge compatible HDF5 formats, allowing users to work with their own datasets without needing to upload them to a remote server or modifying the modelforge source.  These can be specified by providing a configuration file, as will be described below.
 
 
-The following datasets are available as part of `modelforge` (dataset names used to specify the dataset in modelforge are provided in parentheses); additional details of each dataset, including the corresponding yaml files (which provide a list of available versions of each dataset) are provided at the end of this page:
+Dataset Configuration TOML file
+------------------------------------
 
-- **QM9 (qm9)**
-- **ANI1x (ani1x)**
-- **ANI2X (ani2x)**
-- **SPICE 1 (spice1)**
-- **SPICE 2 (spice2)**
-- **SPICE 1 OpenFF (spice1_openff)**
-- **SPICE 2 OpenFF (spice2_openff)**
-- **Fe II (fe_ii)**
-- **tmQM (tmqm)**
-- **tmQM-xtb (tmqm_xtb)**
-- **PhAlkEthOH (PhAlkEthOH)**
+Dataset input configuration is typically managed using a TOML file. This configuration file is crucial during the training process as it provides values that need to be specified  for the :class:`~modelforge.dataset.DataModule` class, ensuring a flexible and customizable setup.
+
+Below is a minimal example of a dataset configuration for the QM9 dataset.
+
+.. literalinclude:: ../modelforge/tests/data/dataset_defaults/qm9.toml
+   :language: toml
+   :caption: QM9 Dataset Configuration
+
+.. warning::
+    The ``version_select`` field in the example indicates the use of a small subset of the QM9 dataset. To utilize the full dataset, set this variable to ``latest``.
+
+
+Explanation of the possible fields in the dataset configuration file:
+
+- `dataset_name`: Specifies the name of the dataset. For this example, it is QM9.
+- `version_select`: Indicates the version of the dataset to use. In this example, it points to a small subset of the dataset for quick testing. To use the full QM9 dataset, set this variable to `latest`.
+- `number_of_worker`: Determines the number of worker threads for data loading. Increasing the number of workers can speed up data loading but requires more memory. Must be 1 or greater.
+- `pin_memory`: A boolean flag indicating whether to pin memory for faster data transfer to the GPU. This is useful when training on a GPU and can improve performance by reducing data transfer times. Defaults to `True`.
+- `properties_of_interest`: Lists the properties of interest to load from the hdf5 file. This should include the properties that are relevant for training the model. The properties listed here must match those available in the dataset metadata; otherwise, a validation error will be raised. Loading properties that will not be used during training will use more memory.
+- `properties_assignment`: Maps the properties of interest to the corresponding fields in the dataset. This mapping is crucial for the correct loading of properties during training; note, many datasets contain multiple properties can potentially be swapped (e.g., energy calculated with or without dispersion corrections, different charge population schemes, different levels of theory, etc.).  Any properties listed here must appear in the properties of interest list; the code will raise a validation error if this condition is not met.  The possible fields  to assign are defined by the :class:`~modelforge.utils.prop.PropertyNames`, which is listed below. Note, by default atomic_numbers, positions, and energy (E) are always required to be set.
+
+.. code-block:: python
+
+    class PropertyNames:
+        atomic_numbers: str # atomic numbers
+        positions: str  # Positions
+        E: str  # Energy
+        F: Optional[str] = None  # Forces
+        total_charge: Optional[str] = None  # Total charge
+        dipole_moment: Optional[str] = None  # Dipole moment
+        S: Optional[str] = None  # Spin multiplicity,
+
+- `element_filter`: A filter to select systems with or without certain elements, which are denoted by atomic numbers. If a positive number is provided, then a datapoint that includes that element will be included. A negative values indicates which elements to exclude. For example, [[29]], selects all systems containing copper (29). [[29, -17]] selects all systems containing copper (29), but excludes from that list any that also contain chlorine (17). [[29, 1, -17]] would select all systems that contain copper (29) and hydrogen (H), and do not include chlorine (17). Everything contain within the same brackets acts as an "and" (i.e., all criteria must be satisfied). Providing two separate sublists acts as an "or". For example, [[29,1], [78,-17]], states that a molecule can either have [copper (29) and hydrogen (1)] OR [platinum (78) and not chlorine (17)]. Leaving this field as an empty list or remove it will disable this element filtering feature.
+- `regression_ase`: A boolean flag indicating whether to use the atomic self-energies provided by the dataset (if available) or to calculate them via regression. If set to `True`, the atomic self-energies will be used as provided in the dataset metadata; if set to `False`, the self-energies will be calculated via regression. This is Optional and defaults to `False`.
+
+Other fields that can be specified in the dataset configuration file include:
+- `local_yaml_file`: A path to a local dataset yaml file. This is Optional and defaults to `None`. If specified, it will be used to load the dataset metadata instead of the default metadata files provided by modelforge. This allows users to work with their own datasets without needing to upload them to a remote server or modifying the modelforge source.
+- `dataset_cache_dir`: Specifies the directory where the dataset files will be cached. This is useful for storing the dataset files locally to avoid downloading them multiple times; can be shared between multiple training runs.
 
 
 Postprocessing of dataset entries
 -----------------------------------
 
-Two common postprocessing operations are performed for training machine learned potentials:
+Other common operations that are performed on the dataset as part of training machine learned potentials include:
 
-- *Removing Self-Energies*: Self-energies are per-element offsets added to the
-  total energy of a system. These offsets are not useful for training
-  machine-learned potentials and can be removed to provide cleaner training
-  data.
-- *Normalization and Scaling*: Normalize the energies and other properties to
-  ensure they are on a comparable scale, which can improve the stability and
+- *Removing Self-Energies*: Self-energies are per-element offsets added to the total energy of a system. These offsets are not useful for training
+  machine-learned potentials and can be removed to provide cleaner training data.
+- *Splitting the Dataset*: The dataset are split into training, validation, and test sets. This is crucial for evaluating the performance of the machine learning model and ensuring that it generalizes well to unseen data. Various schemes can be used to specify this
+- *Shifting the center of mass*: The center of mass of the system can be shifted to the origin to enable calculation of the dipole moment.
+- *Normalization and Scaling*: Normalize the energies and other properties to ensure they are on a comparable scale, which can improve the stability and
   performance of the machine learning model. Note that this is done when atomic energies are predicted, i.e. the atomic energy (`E_i`) is scaled using the atomic energy distribution obtained from the training dataset: `E_i = E_i_stddev * E_i_pred + E_i_mean`.
 
+However, note that these operations are defined within the dataset configuration; these are specified in the training (self-energy, splitting, shifting COM) and potential (normalization) configuration TOML files.
 
 Interacting with the Dataset Module
 -----------------------------------
 
-The dataset module provides a :class:`~modelforge.dataset.DataModule` class for
-preparing and setting up datasets for training. Designed to integrate seamlessly
-with PyTorch Lightning, the :class:`~modelforge.dataset.DataModule` class
-provides a user-friendly interface for dataset preparation and loading.
+Here, we provide a brief overview of the :class:`~modelforge.dataset.DataModule` class. Note, users will typically interact with this portion of the code indirectly via the TOML configuration files. The :class:`~modelforge.dataset.DataModule` class handles preparing and setting up datasets for training. and is designed to integrate seamlessly with PyTorch Lightning, providing a user-friendly interface for dataset preparation and loading.
 
-The following example demonstrates how to use the :class:`~modelforge.dataset.DataModule` class to prepare and set up a dataset for training:
-
+The following example demonstrates how to use the :class:`~modelforge.dataset.DataModule` class to prepare and set up a dataset for training, where the similarity to the TOML configuration file should be evident.
 
 .. code-block:: python
 
@@ -85,59 +107,19 @@ The following example demonstrates how to use the :class:`~modelforge.dataset.Da
 
 .. _dataset-configuration:
 
-`version_select` specifies the version of the dataset to use and `properties_of_interest` specifes the keys within the dataset to read; a full list of version and available properties for each version can be found in the dataset metadata yaml file (e.g., `qm9.yaml` for the QM9 dataset). The `properties_assignment` dictionary maps these properties to the variables used internally as part of the :class:`~modelforge.utils.prop.PropertyNames` class.
-
-.. code-block:: python
-
-    class PropertyNames:
-        atomic_numbers: str
-        positions: str  # Positions
-        E: str  # Energy
-        F: Optional[str] = None  # Forces
-        total_charge: Optional[str] = None  # Total charge
-        dipole_moment: Optional[str] = None  # Dipole moment
-        S: Optional[str] = None  # Spin multiplicity,
-
-The `splitting_strategy` determines how the dataset is split into training, validation, and test sets; in this case, it uses :class:`modelforge.dataset.utils.RandomRecordSplittingStrategy`, where splitting operates on the unique systems/records (i.e., keeping configurations of the same system together). Other splitting strategies include :class:`modelforge.dataset.utils.RandomSplittingStrategy` which splits the dataset randomly across all configurations (i.e., not group configurations of the same system together), and :class:`modelforge.dataset.utils.FirstComeFirstServeSplittingStrategy` which splits the configurations in the order they are encountered in the dataset. The `batch_size` specifies the number of configurations to include in each batch during training. The `remove_self_energies` flag indicates whether to remove self-energies from the dataset (i.e. summing up the total atomic self energies and subtracting from the system). The `regression_ase` flag indicates whether to use the atomic self energies provided (in the metadata yaml file, if available) or to calculate them via regression. `local_cache_dir` specifies the directory where files generated during training will be saved.  `dataset_cache_dir` specifies the directory where the dataset files will be cached.  The reason to separate local_cache_dir and dataset_cache_dir is that it enables hdf5 files can be shared in a central location across multiple training runs (saving storage space and avoiding additional time spent downloading files), while allowing each run to have its own local cache directory for temporary files and results.
-
-Dataset Configuration
-------------------------------------
-
-Dataset input configuration is typically managed using a TOML file. This configuration file is crucial during the training process as it provides values that need to be specified  for the :class:`~modelforge.dataset.DataModule` class, ensuring a flexible and customizable setup.
-
-Below is a minimal example of a dataset configuration for the QM9 dataset.
-
-.. literalinclude:: ../modelforge/tests/data/dataset_defaults/qm9.toml
-   :language: toml
-   :caption: QM9 Dataset Configuration
-
-.. warning::
-    The ``version_select`` field in the example indicates the use of a small subset of the QM9 dataset. To utilize the full dataset, set this variable to ``latest``.
-
-
-Explanation of fields in `qm9.toml`:
-
-- `dataset_name`: Specifies the name of the dataset. For this example, it is QM9.
-- `number_of_worker`: Determines the number of worker threads for data loading. Increasing the number of workers can speed up data loading but requires more memory.
-- `version_select`: Indicates the version of the dataset to use. In this example, it points to a small subset of the dataset for quick testing. To use the full QM9 dataset, set this variable to `latest`.
-- `properties_of_interest`: Lists the properties of interest to load from the hdf5 file.
-- `properties_assignment`: Maps the properties of interest to the corresponding fields in the dataset. This mapping is crucial for the correct loading of properties during training; note, many datasets contain multiple properties can potentially be swapped (e.g., energy calculated with or without dispersion corrections, different charge population schemes, different levels of theory, etc.).  Any properties listed here must appear in the properties of interest list; the code will raise a validation error if this condition is not met.
-- `element_filter`: A filter to select systems with or without certain elements, which are denoted by atomic numbers. If a positive number is provided, then a datapoint that includes that element will be included. A negative values indicates which elements to exclude. For example, [[29]], selects all systems containing copper (29). [[29, -17]] selects all systems containing copper (29), but excludes from that list any that also contain chlorine (17). [[29, 1, -17]] would select all systems that contain copper (29) and hydrogen (H), and do not include chlorine (17). Everything contain within the same brackets acts as an "and" (i.e., all criteria must be satisfied). Providing two separate sublists acts as an "or". For example, [[29,1], [78,-17]], states that a molecule can either have [copper (29) and hydrogen (1)] OR [platinum (78) and not chlorine (17)]. Leaving this field as an empty list or remove it will disable this element filtering feature.
-
-Note, to use a local dataset, you can specify the path to the dataset yaml file by adding `local_yaml_file` to the toml file and setting it to the path of the yaml file.
 
 yaml Metadata File Structure
 ------------------------------------
 
-The aforementioned datasets are accompanied by metadata files in YAML format, which provide essential information about the dataset, including its version, properties, and other relevant details, along with the downloard url used to fetch the dataset. These metadata files are stored in the `~modelforge/dataset/yaml_files` directory.
+The :class:`~modelforge.dataset.HDF5Dataset` class is designed to provide a generic class for loading in modelforge compatible HDF5 files. This relies upon reading in a YAML file which provide essential information about a given dataset, including the available versions, properties, and other relevant details, along with the downloard url used to fetch the dataset. These YAML metadata files are stored in the `~modelforge/dataset/yaml_files` directory for the datasets provided by modelforge.
 
-Below is a fictional example of a metadata to demonstrate the key fields which includes the dataset name, version, description, atomic self-energies, and available properties.
+Below is a fictional example of a metadata YAML to demonstrate the key fields which includes the dataset name, version, description, atomic self-energies, and available properties.
 
 .. code-block:: yaml
 
     dataset: fictional_dataset_name
-    latest: full_dataset_v1.1
-    latest_test: nc_1000_v1.1
+    latest: full_dataset_v1.1 # an alias for the lastest version of the full dataset
+    latest_test: nc_1000_v1.1 # an alias for the lastest version of the 1000 configuration test dataset
 
     description: "A description of the dataset."
 
@@ -149,21 +131,23 @@ Below is a fictional example of a metadata to demonstrate the key fields which i
       about: "This provides a curated hdf5 file for the fictional dataset designed to be compatible
         with modelforge. This dataset contains 1234 unique records for 123456 total
         configurations."
-      hdf5_schema: 2
-      available_properties:
+      hdf5_schema: 2 # This specifies which modelforge HDF5 schema the version uses.
+      available_properties: # list of properties keys available in the dataset
       - atomic_numbers
       - positions
       - dft_energy
       remote_dataset:
-        doi: 10.1234/fictional_dataset.v1.1
-        url: https://zenodo.org/records/record_id/files/fictional_dataset_v1.1.hdf5.gz
+        doi: 10.1234/fictional_dataset.v1.1 # The DOI for the zenodo record of the dataset
+        url: https://zenodo.org/records/record_id/files/fictional_dataset_v1.1.hdf5.gz # The URL to download the gzipped HDF5 file
         gz_data_file:
-          file_name: fictional_dataset_v1.1.hdf5.gz
-          length: 123456 # Length of the gzipped file in bytes
-          md5: gzip_checksum_value
+          file_name: fictional_dataset_v1.1.hdf5.gz #name of the gzipped file that will be saved locally
+          length: 123456 # Length of the gzipped file in bytes, used for the progress bar
+          md5: gzip_checksum_value # The MD5 checksum of the gzipped file, used to verify the integrity of the downloaded file
         hdf5_data_file:
-          file_name: fictional_dataset_v1.1.hdf5
-          md5: hdf5_checksum_value
+          file_name: fictional_dataset_v1.1.hdf5 # The name of the HDF5 file that will be saved locally after unzipping
+          md5: hdf5_checksum_value # The MD5 checksum of the HDF5 file, used to verify the integrity of the downloaded file
+
+Note, HDF5 datafile stored on zenodo.org are stored as gzipped files to save space and bandwidth when downloading.
 
 To specify metadata for a local dataset, the `remote_dataset` field can be omitted and replaced with the field `local_dataset` as shown below:
 
@@ -196,7 +180,9 @@ To specify metadata for a local dataset, the `remote_dataset` field can be omitt
 Available Datasets and Versions
 ----------------------------------
 
-Below is a description of the available datasets and their corresponding metadata yaml files. These files can be found in the `~modelforge/dataset/yaml_files` directory, and they provide detailed information about each dataset, including its version, properties, and download URLs.  As previously mentioned, for each dataset, multiple versions may be available.  A 1000 configuration test dataset is provided for each dataset primarily useful for testing; several datasets also provide various subsets (e.g., limited to a subset of elements).
+Below is a description of the curated datasets currently available for modelforge and their corresponding metadata yaml files. These files can be found in the `~modelforge/dataset/yaml_files` directory.  The YAML files provide detailed information about each dataset, including the versions, properties, self energies and download URLs.  As previously mentioned, for each dataset, multiple versions may be available.  A 1000 configuration test dataset is provided for each dataset primarily useful for testing; several datasets also provide various subsets (e.g., limited to a subset of elements).
+
+The dataset names used to specify the dataset in modelforge are provided in parentheses:
 
 - **ANI1x (ani1x)**:  dataset includes ~5 million density function theory calculations for small organic molecules containing H, C, N, and O. A subset of ~500k are computed with accurate coupled cluster methods.
 

@@ -1636,6 +1636,7 @@ class PotentialTrainer:
             shift_center_of_mass_to_origin=self.training_parameter.shift_center_of_mass_to_origin,
             version_select=self.dataset_parameter.version_select,
             local_cache_dir=self.runtime_parameter.local_cache_dir,
+            regression_ase=self.dataset_parameter.regression_ase,
             splitting_strategy=REGISTERED_SPLITTING_STRATEGIES[
                 self.training_parameter.splitting_strategy.name
             ](

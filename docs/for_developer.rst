@@ -29,8 +29,33 @@ Units are also provided in the TOML files. For example, the following TOML file 
         maximum_interaction_radius = "5.1 angstrom"
 
 
-Internally, when units are removed, we use the openmm units system 
+Internally, when units are removed, by default we use the openmm units system defined
 `here <http://docs.openmm.org/latest/userguide/theory/01_introduction.html#units/>`_.
+
+Modelforge provides a :class:`~modelforge.utils.units.GlobalUnitSystem` class that specifies the units used throughout the package.  This package should be used when stripping units from values, rather than hard coding in conversions to a specific unit.  For example, to convert a value to the default unit system, use:
+
+.. code-block:: python
+
+        from modelforge.utils.units import GlobalUnitSystem
+        from openff.units import unit
+
+        # Convert a value of length to the global unit system's default units
+
+        cutoff = 5.1 * unit.angstrom
+
+        # Convert the cutoff to the default units defined in GlobalUnitSystem, which in this case is nanometers
+        value_in_default_units = cutoff.to(GlobalUnitSystem.get_units("length"))
+
+Note to convert from units such as hartree to kilojoules per mole, you must specify the custom chemical context defined within `modelforge.utils.units.chem_context` to enable conversion from energy to energy per mole.  For example:
+
+.. code-block:: python
+
+        from modelforge.utils.units import chem_context
+        from openff.units import unit
+
+        # Convert a value of energy to kilojoules per mole
+        energy = 1.0 * unit.hartree
+        value_in_kilojoules_per_mole = energy.to(unit.kilojoules_per_mole, "chem")
 
 
 Base structure of machine learned potentials

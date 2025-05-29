@@ -70,7 +70,7 @@ def test_unzip_file(prep_temp_dir):
     from importlib import resources
     from modelforge.tests import data
 
-    file_input_path = str(resources.files(data).joinpath(""))
+    file_input_path = str(resources.files(data)._paths[0])
 
     ungzip_file(file_input_path, "test_file.txt.gz", prep_temp_dir)
     assert os.path.isfile(str(prep_temp_dir) + "/test_file.txt")

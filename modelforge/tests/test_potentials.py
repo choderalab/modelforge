@@ -481,11 +481,11 @@ def test_state_dict_saving_and_loading(potential_name, prep_temp_dir):
 #     reason="checkpoint file needs to be updated now that non_unique_pairs is registered in nlist"
 # )
 def test_loading_from_checkpoint_file():
-    from modelforge.utils.io import resources
+    from modelforge.utils.io import get_path_string
     from modelforge.tests import data
 
     # checkpoint file is saved in tests/data
-    ckpt_file = get_path_string(data) + "/best_SchNet-PhAlkEthOH-epoch=00.ckpt")
+    ckpt_file = get_path_string(data) + "/best_SchNet-PhAlkEthOH-epoch=00.ckpt"
     print(ckpt_file)
 
     from modelforge.potential.potential import load_inference_model_from_checkpoint

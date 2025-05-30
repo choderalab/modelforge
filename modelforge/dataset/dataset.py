@@ -295,7 +295,7 @@ class HDF5Dataset:
             from modelforge.utils.io import get_path_string
             from modelforge.dataset import yaml_files
 
-            yaml_file = get_path_string(yaml_files) / f"{dataset_name.lower()}.yaml"
+            yaml_file = get_path_string(yaml_files) + f"/{dataset_name.lower()}.yaml"
 
             # check to ensure the yaml file exists
             if not os.path.exists(yaml_file):

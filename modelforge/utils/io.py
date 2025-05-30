@@ -291,12 +291,16 @@ def get_path_string(module) -> str:
     """
 
     from importlib import resources
+    from importlib.readers import MultiplexedPath
 
     temp_path = resources.files(module)
     # see if we have a MultiplexedPath object
 
-    if len(temp_path._paths) == 0:
-        raise ValueError(f"No paths found for module {module}")
+    if isinstance(temp_path, MultiplexedPath):
+        if len(temp_path._paths) == 0:
+            raise ValueError(f"No paths found for module {module}")
 
-    # return the first path, which is to the directory, as a string
-    return str(temp_path._paths[0])
+        # return the first path, which is to the directory, as a string
+        return str(temp_path._paths[0])
+    else:  # return the path as a string
+        return str(temp_path)

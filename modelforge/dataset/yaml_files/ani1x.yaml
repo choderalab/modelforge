@@ -1,6 +1,6 @@
 dataset: ani1x
 latest: full_dataset_v1.1
-latest_test: nc_1000_v1.1[
+latest_test: nc_1000_v1.1
 description: "ANI1x  dataset includes ~5 million density function theory calculations
         for small organic molecules containing H, C, N, and O.
         A subset of ~500k are computed with accurate coupled cluster methods.

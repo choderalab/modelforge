@@ -216,7 +216,7 @@ def test_representation(prep_temp_dir):
 
     import pickle
 
-    reference_batch = resources.files(data) / "nnp_input.pkl"
+    reference_batch = get_path_string(data) + "/nnp_input.pkl"
     nnp_input = pickle.load(open(reference_batch, "rb"))
     # -------------------------------#
     # -------------------------------#

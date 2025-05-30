@@ -273,3 +273,34 @@ def parse_devices(value: str) -> Union[int, List[int]]:
         return list(ast.literal_eval(value))
     else:
         return int(value)
+
+
+def get_path_string(module) -> str:
+    """
+    Get the path as a string to an imported module.
+
+    Parameters
+    ----------
+    module : module
+        The module to get the path of.
+
+    Returns
+    -------
+    str
+        The path of the module as a string.
+    """
+
+    from importlib import resources
+
+    temp_path = resources.files(module)
+    # see if we have a MultiplexedPath object
+    if isinstance(temp_path, resources.readers.MultiplexedPath):
+
+        # if so, we need to get the first path
+        if len(temp_path._paths) == 0:
+            raise ValueError(f"No paths found for module {module}")
+
+        # return the first path, which is to the directory, as a string
+        return str(temp_path._paths[0])
+
+    return str(temp_path)

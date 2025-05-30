@@ -96,6 +96,7 @@ class DatasetParameters(BaseModel):
     pin_memory: bool
     regenerate_processed_cache: bool = False
     regression_ase: Optional[bool] = False
+    regression_ase: Optional[bool] = False
     properties_of_interest: List[str]
     properties_assignment: PropertiesDefinition
     element_filter: List[tuple] = None

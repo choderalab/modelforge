@@ -292,10 +292,10 @@ class HDF5Dataset:
         # if we did not specify a local yaml file, we will look in the yaml_files directory in datasets
         if self.local_yaml_file is None:
 
-            from importlib import resources
+            from modelforge.utils.io import get_path_string
             from modelforge.dataset import yaml_files
 
-            yaml_file = resources.files(yaml_files) / f"{dataset_name.lower()}.yaml"
+            yaml_file = get_path_string(yaml_files) / f"{dataset_name.lower()}.yaml"
 
             # check to ensure the yaml file exists
             if not os.path.exists(yaml_file):

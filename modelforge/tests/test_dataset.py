@@ -1320,7 +1320,7 @@ def test_local_dataset(prep_temp_dir):
 
     from modelforge.dataset.dataset import initialize_datamodule
 
-    from importlib import resources
+    from modelforge.utils.io import get_path_string
     from modelforge.tests.data import local_dataset
     import toml
     import os
@@ -1332,7 +1332,7 @@ def test_local_dataset(prep_temp_dir):
 
     # for some reason resources.files(local_dataset) is returning MultiplexedPath instead of a string
     # so we need to great _path[0] to get the actual path we can convert to string
-    path_to_local_dataset_dir = str(resources.files(local_dataset)._paths[0])
+    path_to_local_dataset_dir = get_path_string(local_dataset)
 
     # read the toml file
     toml_file = f"{path_to_local_dataset_dir}/local_dataset.toml"

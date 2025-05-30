@@ -20,7 +20,7 @@ def prep_temp_dir(tmp_path_factory):
 def load_configs_into_pydantic_models(
     potential_name: str, dataset_name: str, local_cache_dir: str
 ):
-    from importlib import resources
+    from modelforge.utils.io import get_path_string
 
     import toml
 
@@ -32,11 +32,11 @@ def load_configs_into_pydantic_models(
     )
 
     potential_path = (
-        resources.files(potential_defaults) / f"{potential_name.lower()}.toml"
+        get_path_string(potential_defaults) + f"/{potential_name.lower()}.toml"
     )
-    dataset_path = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
-    training_path = resources.files(training_defaults) / f"default.toml"
-    runtime_path = resources.files(runtime_defaults) / "runtime.toml"
+    dataset_path = get_path_string(dataset_defaults) + f"/{dataset_name.lower()}.toml"
+    training_path = get_path_string(training_defaults) + f"/default.toml"
+    runtime_path = get_path_string(runtime_defaults) + "/runtime.toml"
 
     training_config_dict = toml.load(training_path)
     dataset_config_dict = toml.load(dataset_path)
@@ -350,24 +350,24 @@ def test_train_with_lightning(loss, potential_name, dataset_name, prep_temp_dir)
 
 
 def test_train_from_single_toml_file(prep_temp_dir):
-    from importlib import resources
+    from modelforge.utils.io import get_path_string
 
     from modelforge.tests import data
     from modelforge.train.training import read_config_and_train
 
-    config_path = resources.files(data) / f"config.toml"
+    config_path = get_path_string(data) + f"/config.toml"
 
     local_cache_dir = str(prep_temp_dir) + "/test_train_from_single_toml_file"
     read_config_and_train(config_path, local_cache_dir=local_cache_dir)
 
 
 def test_train_from_single_toml_file_element_filter():
-    from importlib import resources
+    from modelforge.utils.io import get_path_string
 
     from modelforge.tests import data
     from modelforge.train.training import read_config_and_train
 
-    config_path = resources.files(data) / f"config_element_filter.toml"
+    config_path = get_path_string(data) + f"/config_element_filter.toml"
 
     from modelforge.potential.potential import NeuralNetworkPotentialFactory
     from modelforge.train.training import read_config

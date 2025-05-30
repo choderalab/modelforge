@@ -75,13 +75,13 @@ def test_input(prep_temp_dir):
         local_cache_dir=local_cache_dir,
     )
 
-    from importlib import resources
+    from modelforge.utils.io import get_path_string
 
     from modelforge.tests import data
 
     # load reference data
-    reference_data = resources.files(data) / "tensornet_input.pt"
-    reference_batch = resources.files(data) / "nnp_input.pkl"
+    reference_data = get_path_string(data) + "/tensornet_input.pt"
+    reference_batch = get_path_string(data) + "/nnp_input.pkl"
     import pickle
 
     mf_input = pickle.load(open(reference_batch, "rb"))
@@ -138,11 +138,11 @@ def test_compare_radial_symmetry_features():
 
     seed = 0
     torch.manual_seed(seed)
-    from importlib import resources
+    from modelforge.utils.io import get_path_string
 
     from modelforge.tests import data
 
-    reference_data = resources.files(data) / "tensornet_radial_symmetry_features.pt"
+    reference_data = get_path_string(data) + "/tensornet_radial_symmetry_features.pt"
 
     # generate a random list of distances, all < 5
     d_ij = unit.Quantity(
@@ -172,11 +172,11 @@ def test_compare_radial_symmetry_features():
     rcut_ij = cutoff_module(d_ij.to(unit.nanometer).m)  # torch.Size([5, 1])
     mf_r = (mf_r * rcut_ij).unsqueeze(1)
 
-    from importlib import resources
+    from modelforge.utils.io import get_path_string
 
     from modelforge.tests import data
 
-    reference_data = resources.files(data) / "tensornet_radial_symmetry_features.pt"
+    reference_data = get_path_string(data) + "/tensornet_radial_symmetry_features.pt"
 
     if reference_data:
         tn_r = torch.load(reference_data)
@@ -194,7 +194,7 @@ def test_compare_radial_symmetry_features():
 
 
 def test_representation(prep_temp_dir):
-    from importlib import resources
+    from modelforge.utils.io import get_path_string
 
     import torch
     from openff.units import unit
@@ -204,7 +204,7 @@ def test_representation(prep_temp_dir):
     from modelforge.tests import data
 
     local_cache_dir = str(prep_temp_dir) + "/tensornet_representation"
-    reference_data = resources.files(data) / "tensornet_representation.pt"
+    reference_data = get_path_string(data) + "/tensornet_representation.pt"
 
     number_of_per_atom_features = 8
     num_rbf = 16
@@ -269,7 +269,7 @@ def test_representation(prep_temp_dir):
 
 def test_interaction(prep_temp_dir):
     import pickle
-    from importlib import resources
+    from modelforge.utils.io import get_path_string
 
     import torch
     from openff.units import unit
@@ -284,9 +284,9 @@ def test_interaction(prep_temp_dir):
     seed = 0
 
     local_cache_dir = str(prep_temp_dir) + "/tensornet_interaction"
-    reference_data = resources.files(data) / "tensornet_interaction.pt"
+    reference_data = get_path_string(data) + "/tensornet_interaction.pt"
 
-    reference_batch = resources.files(data) / "nnp_input.pkl"
+    reference_batch = get_path_string(data) + "/nnp_input.pkl"
     nnp_input = pickle.load(open(reference_batch, "rb"))
 
     number_of_per_atom_features = 8

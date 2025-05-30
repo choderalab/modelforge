@@ -143,12 +143,13 @@ def test_convert_str_to_unit():
 def test_potential_parameter_model(potential_name):
     from modelforge.tests.data import potential_defaults
 
-    from importlib import resources
+    from modelforge.utils.io import get_path_string
     import toml
 
     potential_path = (
-        resources.files(potential_defaults) / f"{potential_name.lower()}.toml"
+        get_path_string(potential_defaults) + f"/{potential_name.lower()}.toml"
     )
+
     potential_config_dict = toml.load(potential_path)
 
     from modelforge.potential import _Implemented_NNP_Parameters
@@ -165,10 +166,10 @@ def test_runtime_parameter_model():
     from modelforge.train.parameters import RuntimeParameters
     from modelforge.tests.data import runtime_defaults
 
-    from importlib import resources
+    from modelforge.utils.io import get_path_string
     import toml
 
-    runtime_path = resources.files(runtime_defaults) / "runtime.toml"
+    runtime_path = get_path_string(runtime_defaults) + "/runtime.toml"
     runtime_config_dict = toml.load(runtime_path)
 
     # test to ensure we can properly initialize
@@ -191,10 +192,10 @@ def test_training_parameter_model():
     from modelforge.train.parameters import TrainingParameters
     from modelforge.tests.data import training_defaults
 
-    from importlib import resources
+    from modelforge.utils.io import get_path_string
     import toml
 
-    training_path = resources.files(training_defaults) / "default.toml"
+    training_path = get_path_string(training_defaults) + "/default.toml"
     training_config_dict = toml.load(training_path)
 
     # test to ensure we can properly initialize

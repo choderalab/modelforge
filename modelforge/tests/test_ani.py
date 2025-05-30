@@ -1,9 +1,9 @@
 import pytest
 from modelforge.tests.helper_functions import setup_potential_for_test
-from importlib import resources
+from modelforge.utils.io import get_path_string
 from modelforge.tests import data
 
-file_path = resources.files(data) / f"torchani_parameters2.state"
+file_path = get_path_string(data) / f"torchani_parameters2.state"
 
 
 @pytest.fixture(scope="session")

@@ -110,7 +110,7 @@ def main():
     version_name = f"nc_1000_v{version}"
     about = f"""This provides a curated hdf5 file for a subset of the Fe (II) dataset designed
     to be compatible with modelforge. This dataset contains {n_total_records} unique records 
-    for {n_total_configs} total configurations witha  maximum of 10 configurations per record."""
+    for {n_total_configs} total configurations with a maximum of 10 configurations per record."""
 
     metadata = VersionMetadata(
         version_name=version_name,

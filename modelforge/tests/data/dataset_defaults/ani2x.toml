@@ -1,13 +1,13 @@
 [dataset]
 dataset_name = "ANI2x"
-version_select = "nc_1000_v0"
+version_select = "nc_1000_v1.1"
 num_workers = 4
 pin_memory = true
-properties_of_interest = ["atomic_numbers", "geometry", "energies", "forces"]
+properties_of_interest = ["atomic_numbers", "positions", "energies", "forces"]
 element_filter = []
 
 [dataset.properties_assignment]
 atomic_numbers = "atomic_numbers"
-positions = "geometry"
+positions = "positions"
 E = "energies"
 F = "forces"

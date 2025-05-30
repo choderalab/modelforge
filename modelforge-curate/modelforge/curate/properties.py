@@ -16,12 +16,15 @@ from typing_extensions import Self
 from modelforge.curate.utils import (
     NdArray,
     _convert_list_to_ndarray,
-    _convert_unit_str_to_unit_unit,
 )
 from loguru import logger as log
 
 from openff.units import unit
-from modelforge.curate.units import GlobalUnitSystem, chem_context
+from modelforge.utils.units import (
+    GlobalUnitSystem,
+    _convert_unit_str_to_unit_unit,
+    chem_context,
+)
 
 # # Define a custom config for the BaseModel to avoid extra duplication of code
 # class CurateBase(BaseModel):

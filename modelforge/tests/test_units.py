@@ -1,10 +1,7 @@
 import pytest
-import numpy as np
 from openff.units import unit
 
-from modelforge.curate import Record, SourceDataset
-from modelforge.curate.units import GlobalUnitSystem
-from modelforge.curate.properties import *
+from modelforge.utils.units import GlobalUnitSystem
 
 
 def test_units_representation(capsys):
@@ -101,7 +98,7 @@ def test_set_global_units():
 
 
 def test_conversion():
-    from modelforge.curate.utils import _convert_unit_str_to_unit_unit
+    from modelforge.utils.units import _convert_unit_str_to_unit_unit
 
     output = _convert_unit_str_to_unit_unit("nanometer")
     assert output.is_compatible_with(unit.nanometer)

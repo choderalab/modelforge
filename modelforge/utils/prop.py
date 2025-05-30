@@ -6,7 +6,6 @@ from dataclasses import dataclass
 import torch
 from typing import NamedTuple, Optional
 from loguru import logger as log
-from openff.units import unit
 
 
 @dataclass
@@ -18,17 +17,6 @@ class PropertyNames:
     total_charge: Optional[str] = None  # Total charge
     dipole_moment: Optional[str] = None  # Dipole moment
     S: Optional[str] = None  # Spin multiplicity
-
-
-PropertyUnits = {
-    "atomic_numbers": "dimensionless",
-    "positions": unit.nanometer,
-    "E": unit.kilojoule_per_mole,
-    "F": unit.kilojoule_per_mole / unit.nanometer,
-    "total_charge": unit.elementary_charge,
-    "dipole_moment": unit.elementary_charge * unit.nanometer,
-    "S": "dimensionless",
-}
 
 
 class SpeciesEnergies(NamedTuple):

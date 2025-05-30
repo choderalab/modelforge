@@ -67,10 +67,10 @@ def test_filelocking(prep_temp_dir):
 def test_unzip_file(prep_temp_dir):
     from modelforge.utils.misc import ungzip_file
 
-    from importlib import resources
+    from modelforge.utils.io import get_path_string
     from modelforge.tests import data
 
-    file_input_path = str(resources.files(data).joinpath(""))
+    file_input_path = get_path_string(data)
 
     ungzip_file(file_input_path, "test_file.txt.gz", prep_temp_dir)
     assert os.path.isfile(str(prep_temp_dir) + "/test_file.txt")

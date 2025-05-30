@@ -32,7 +32,7 @@ def main():
     # We'll want to provide some simple means of versioning
     # if we make updates to either the underlying dataset, curation modules, or parameters given to the code
     version = "0"
-    version_out = "1.0"
+    version_out = "1.1"
     # version of the dataset to curate
     version_select = f"v_{version}"
 
@@ -105,7 +105,7 @@ def main():
     # same dataset but with only 1000 total_configurations
 
     total_records, total_configs = tmqm.to_hdf5(
-        hdf5_file_name=f"tmqm_dataset_PdZnFeCu_CHPSONFClBr_v{version_out}_ntc_1000.hdf5",
+        hdf5_file_name=f"tmqm_dataset_PdZnFeCu_CHPSONFClBr_ntc_1000_v{version_out}.hdf5",
         output_file_dir=output_file_dir,
         atomic_species_to_limit=[
             "Pd",
@@ -163,7 +163,7 @@ def main():
 
     # same dataset but with only 1000 total_configurations total
     total_records, total_configs = tmqm.to_hdf5(
-        hdf5_file_name=f"tmqm_dataset_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr_v{version_out}.hdf5",
+        hdf5_file_name=f"tmqm_dataset_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr_ntc_1000_v{version_out}.hdf5",
         output_file_dir=output_file_dir,
         atomic_species_to_limit=[
             "Pd",

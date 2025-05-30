@@ -1,9 +1,0 @@
-dataset_name: spice1
-latest: v_0
-v_0:
-  version: 0
-  notes: SPICE 1.1.4 release
-  dataset_download_url: https://zenodo.org/records/8222043/files/SPICE-1.1.4.hdf5
-  dataset_md5_checksum: f27d4c81da0e37d6547276bf6b4ae6a1
-  dataset_length: 16058156944
-  dataset_filename: SPICE-1.1.4.hdf5

@@ -1,31 +1,69 @@
 dataset: ani2x
-latest: full_dataset_v0
-latest_test: nc_1000_v0
-full_dataset_v0:
-  version: 0
-  doi: 10.5281/zenodo.11642744
-  gz_data_file:
-    length: 5083521300
-    md5: 9c1c3d977b043cc3491dbe59f68e1a8d
-    name: ani2x_dataset_v0.hdf5.gz
-  hdf5_data_file:
-    md5: 39dde98fbd47d08cfd6f80e6b5e29ef4
-    name: ani2x_dataset_v0.hdf5
-  processed_data_file:
-    md5: null
-    name: ani2x_dataset_v0_processed.npz
-  url: https://zenodo.org/records/11642744/files/ani2x_dataset_v0.hdf5.gz
-nc_1000_v0:
-  version: 0
-  doi: 10.5281/zenodo.12059090
-  gz_data_file:
-    length: 174025
-    md5: c6b01060d164cf98497b6927da49dd07
-    name: ani2x_dataset_v0_nc_1000.hdf5.gz
-  hdf5_data_file:
-    md5: ef52d8414326c4b73171a5fa300df654
-    name: ani2x_dataset_v0_nc_1000.hdf5
-  processed_data_file:
-    md5: null
-    name: ani2x_dataset_v0_nc_1000_processed.npz
-  url: https://zenodo.org/records/12059090/files/ani2x_dataset_v0_ntc_1000.hdf5.gz
+latest: full_dataset_v1.1
+latest_test: nc_1000_v1.1
+
+description: "The ANI-2x data set includes properties for small organic molecules that contain
+    H, C, N, O, S, F, and Cl.  This dataset contains 9651712 conformers for nearly 200,000 molecules.
+    This will fetch data generated with the wB97X/631Gd level of theory used in the original ANI-2x paper,
+    calculated using Gaussian 09.  
+
+    Citation: Devereux, C, Zubatyuk, R., Smith, J. et al.
+                Extending the applicability of the ANI deep learning molecular potential to sulfur and halogens.
+                Journal of Chemical Theory and Computation 16.7 (2020): 4192-4202.
+                https://doi.org/10.1021/acs.jctc.0c00121
+
+    DOI for the original dataset: 10.5281/zenodo.10108941"
+
+atomic_self_energies:
+  H: -0.5978583943827134 * hartree
+  C: -38.08933878049795 * hartree
+  N: -54.711968298621066 * hartree
+  O: -75.19106774742086 * hartree
+  S: -398.1577125334925 * hartree
+  F: -99.80348506781634 * hartree
+  Cl: -460.1681939421027 * hartree
+
+full_dataset_v1.1:
+  hdf5_schema: 2
+  available_properties:
+    - atomic_numbers
+    - positions
+    - energies
+    - forces
+  about: "This provides a curated hdf5 file for the ANI-2x dataset designed to be compatible with modelforge. 
+         This dataset contains 16514 unique records for 9651712 total configurations. Note, configurations are partitioned 
+         into entries based on the array of atomic species appearing in sequence in the source data file."
+  remote_dataset:
+    doi: 10.5281/zenodo.15346224
+    url: https://zenodo.org/records/15346224/files/ani2x_dataset_v1.1.hdf5.gz
+    gz_data_file:
+      length: 5084638320
+      md5: 695b788bd5dd8b861053f11f6bf2c8f3
+      file_name: ani2x_dataset_v1.1.hdf5.gz
+    hdf5_data_file:
+      md5: 9e165fdeb9d8dc0cb21307dedec4936a
+      file_name: ani2x_dataset_v1.1.hdf5
+
+
+nc_1000_v1.1:
+  hdf5_schema: 2
+  available_properties:
+    - atomic_numbers
+    - positions
+    - energies
+    - forces
+  about: "This provides a curated hdf5 file for a subset of the ANI-2x dataset designed to be compatible with modelforge. 
+         This dataset contains 101 unique records for 1000 total configurations with a maximum of 10 configurations per record. 
+         
+         The 1000 configuration subset is useful for testing. 
+         "
+  remote_dataset:
+    doi:  10.5281/zenodo.15346340
+    url: https://zenodo.org/records/15346340/files/ani2x_dataset_v1.1_ntc_1000.hdf5.gz?download=1
+    gz_data_file:
+      length: 179312
+      md5: 574cb77f5089019965607f7c7110d4c2
+      file_name: ani2x_dataset_nc_1000_v1.1.hdf5.gz
+    hdf5_data_file:
+      md5: 5be0f654ce8c7bc13ade8141ba53134e
+      file_name: ani2x_dataset_nc_1000_v1.1.hdf5

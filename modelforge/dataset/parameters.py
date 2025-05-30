@@ -35,6 +35,7 @@ class DataSetName(CaseInsensitiveEnum):
     SPICE1 = "SPICE1"
     SPICE2 = "SPICE2"
     SPICE1_OPENFF = "SPICE1_OPENFF"
+    SPICE2_OPENFF = "SPICE2_OPENFF"
     PHALKETHOH = "PhAlkEthOH"
     TMQM = "tmQM"
     TMQM_XTB = "TMQM_XTB"
@@ -69,22 +70,59 @@ class DatasetParameters(BaseModel):
         Whether to regenerate the processed cache.
     properties_of_interest : List[str]
         The properties of interest to load from the hdf5 file.
+    regression_ase : Optional[bool]= False
+        If true, self-energies will be regressed from the dataset. defaults to False.
     properties_assignment : PropertiesDefinition
         Association between the properties of interest and the internal naming convention
+    element_filter : List[tuple], optional
+        A list of tuples containing the atomic numbers and their corresponding stoichiometry.
+        This is used to filter the dataset to only include elements of interest.
+    local_yaml_file : Optional[str]
+        The path to the local yaml file with parameters for the dataset.
+        If not provided, the dataset_name will be used to load an modelforge dataset.
+    dataset_cache_dir : Optional[str]= "./"
+        The directory where the dataset cache is stored.
+        If not provided, the default cache directory will be used.
+
     """
 
     model_config = ConfigDict(
         use_enum_values=True, arbitrary_types_allowed=True, validate_assignment=True
     )
 
-    dataset_name: DataSetName
+    dataset_name: str
     version_select: str
     num_workers: int = Field(gt=0)
     pin_memory: bool
     regenerate_processed_cache: bool = False
+    regression_ase: Optional[bool] = False
+    regression_ase: Optional[bool] = False
     properties_of_interest: List[str]
     properties_assignment: PropertiesDefinition
     element_filter: List[tuple] = None
+    local_yaml_file: Optional[str] = None
+    dataset_cache_dir: Optional[str] = "./"
+
+    # we are going to check if the datasetname is in the DataSetName enum
+    # if not, local_yaml_file should be set to the path of the yaml file
+    @model_validator(mode="after")
+    def validate_dataset_name(self) -> Self:
+        """
+        Validate that the dataset name is in the DataSetName enum.
+        """
+        if self.local_yaml_file is None:
+
+            try:
+                DataSetName(self.dataset_name)
+            except ValueError:
+                msg = (
+                    f"Dataset name {self.dataset_name} is not available in modelforge."
+                )
+
+                msg += "Please provide a path to the yaml file with parameters by setting local_yaml_file."
+                raise ValueError(msg)
+
+        return self
 
     @model_validator(mode="after")
     def validate_properties(self) -> Self:

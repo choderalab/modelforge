@@ -20,13 +20,13 @@ def prep_temp_dir(tmp_path_factory):
     return fn
 
 
-def test_init():
+def test_init(prep_temp_dir):
     """Test initialization of the SAKE neural network potential."""
-
+    local_cache_dir = str(prep_temp_dir) + "/sake"
     sake = setup_potential_for_test(
         "sake",
         "training",
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
     )
 
     assert sake is not None, "SAKE model should be initialized."
@@ -35,23 +35,25 @@ def test_init():
 from openff.units import unit
 
 
-def test_forward(single_batch_with_batchsize, prep_temp_dir):
+def test_forward(single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir):
     """
     Test the forward pass of the SAKE model.
     """
     # get methane input
+    local_cache_dir = str(prep_temp_dir) + "/sake_forward"
+    dataset_cache_dir = str(dataset_temp_dir)
     batch = single_batch_with_batchsize(
         batch_size=64,
         dataset_name="QM9",
-        local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
     methane = batch.nnp_input
 
     sake = setup_potential_for_test(
         "sake",
         "training",
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
     )
     energy = sake(methane)["per_system_energy"]
     nr_of_mols = methane.atomic_subsystem_indices.unique().shape[0]
@@ -94,12 +96,14 @@ def test_interaction_forward():
 @pytest.mark.parametrize("eq_atol", [3e-1])
 @pytest.mark.parametrize("h_atol", [8e-2])
 def test_layer_equivariance(
-    h_atol, eq_atol, single_batch_with_batchsize, prep_temp_dir
+    h_atol, eq_atol, single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
 ):
     from dataclasses import replace
 
     import torch
 
+    local_cache_dir = str(prep_temp_dir) + "/sake_layer_equivariance"
+    dataset_cache_dir = str(dataset_temp_dir)
     # Model parameters
     torch.manual_seed(1884)
 
@@ -117,14 +121,15 @@ def test_layer_equivariance(
     nnp_input = single_batch_with_batchsize(
         batch_size=64,
         dataset_name="QM9",
-        local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     ).nnp_input
+
     ref_nnp_input = single_batch_with_batchsize(
         batch_size=64,
         dataset_name="QM9",
-        local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     ).nnp_input
 
     nnp_input.positions = torch.matmul(nnp_input.positions, rotation_matrix)
@@ -422,26 +427,29 @@ def test_sake_layer_against_reference(include_self_pairs, v_is_none):
 import pytest
 
 
-def test_model_invariance(single_batch_with_batchsize, prep_temp_dir):
+def test_model_invariance(single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir):
     from dataclasses import replace
+
+    local_cache_dir = str(prep_temp_dir) + "/sake_model_invariance"
+    dataset_cache_dir = str(dataset_temp_dir)
 
     sake = setup_potential_for_test(
         "sake",
         "training",
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
     )
     # get methane input
     methane = single_batch_with_batchsize(
         batch_size=1,
         dataset_name="QM9",
-        local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     ).nnp_input
     reference_methane = single_batch_with_batchsize(
         batch_size=1,
         dataset_name="QM9",
-        local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     ).nnp_input
 
     rotation_matrix = torch.tensor([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])

@@ -1,115 +1,237 @@
 dataset: tmqm
-latest: full_dataset_v0
-latest_test: nc_1000_v0
-full_dataset_v0:
-  version: 0
-  doi:  10.5281/zenodo.14188396
-  gz_data_file:
-    length: 312400661
-    md5: 7ab79438493818755889f10be4c01d2d
-    name: tmqm_dataset_v0.hdf5.gz
-  hdf5_data_file:
-    md5: 8df27de8c06a12be1683bacbc5fe07f0
-    name: tmqm_dataset_v0.hdf5
-  processed_data_file:
-    md5: null
-    name: tmqm_dataset_v0_processed.npz
-  url: https://zenodo.org/records/14188396/files/tmqm_dataset_v0.hdf5.gz
-nc_1000_v0:
-  version: 0
-  doi:  10.5281/zenodo.14188628
-  gz_data_file:
-    length: 3444799
-    md5: f39f838c6539e68c86ba2a4b0caa6021
-    name: tmqm_dataset_v0_nc_1000.hdf5.gz
-  hdf5_data_file:
-    md5: 56e96001199fc65f506d1373f6e13976
-    name: tmqm_dataset_v0_nc_1000.hdf5
-  processed_data_file:
-    md5: null
-    name: tmqm_dataset_v0_nc_1000_processed.npz
-  url: https://zenodo.org/records/14188628/files/tmqm_dataset_v0_ntc_1000.hdf5.gz
-subset_v0_PdZnFeCu:
-  version: 0
-  doi: 10.5281/zenodo.14662046
-  gz_data_file:
-    length: 328369864
-    md5: ac6238ed997edf3c5dd004c65948938e
-    name: tmqm_dataset_v0_PdZnFeCu.hdf5.gz
-  hdf5_data_file:
-    md5: 473c51eb0a7f7aa505b5b2f6d8ab7a2e
-    name: tmqm_dataset_v0_PdZnFeCu.hdf5
-  processed_data_file:
-    md5: null
-    name: tmqm_dataset_v0_PdZnFeCu_processed.npz
-  url: https://zenodo.org/records/14662046/files/tmqm_dataset_PdZnFeCu_v0.hdf5.gz
-subset_v0_PdZnFeCu_CHPSONFClBr:
-  version: 0
-  doi: 10.5281/zenodo.14662151
-  gz_data_file:
-    length: 219402320
-    md5: 3848feb003ee0741a9605b80dd0442e0
-    name: tmqm_dataset_v0_PdZnFeCu_CHPSONFClBr.hdf5.gz
-  hdf5_data_file:
-    md5: 6b347b14a99dfaff0806e27c3eb95822
-    name: tmqm_dataset_v0_PdZnFeCu_CHPSONFClBr.hdf5
-  processed_data_file:
-    md5: null
-    name: tmqm_dataset_v0_PdZnFeCu_CHPSONFClBr_processed.npz
-  url: https://zenodo.org/records/14662151/files/tmqm_dataset_PdZnFeCu_CHPSONFClBr_v0.hdf5.gz
-subset_v0_PdZnFeCuNiPtIrRhCrAg:
-  version: 0
-  doi: 10.5281/zenodo.14662309
-  gz_data_file:
-    length: 718394696
-    md5: 574f18b68f61d1d8a2390e31fb821836
-    name: tmqm_dataset_v0_PdZnFeCuNiPtIrRhCrAg.hdf5.gz
-  hdf5_data_file:
-    md5: 868757f857992f9ae1deba6988852bde
-    name: tmqm_dataset_v0_PdZnFeCuNiPtIrRhCrAg.hdf5
-  processed_data_file:
-    md5: null
-    name: tmqm_dataset_v0_PdZnFeCuNiPtIrRhCrAg_processed.npz
-  url: https://zenodo.org/records/14662309/files/tmqm_dataset_PdZnFeCuNiPtIrRhCrAg_v0.hdf5.gz
-subset_v0_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr:
-  version: 0
-  doi: 10.5281/zenodo.14662340
-  gz_data_file:
-    length: 483656824
-    md5: 5afa78ba84f575332dc10b4c9aa5c924
-    name: tmqm_dataset_v0_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr.hdf5.gz
-  hdf5_data_file:
-    md5: 413fe18c26c2962620f491d8b5b248bf
-    name: tmqm_dataset_v0_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr.hdf5
-  processed_data_file:
-    md5: null
-    name: tmqm_dataset_v0_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr_processed.npz
-  url: https://zenodo.org/records/14662340/files/tmqm_dataset_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr_v0.hdf5.gz
-subset_v1_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr:
-  version: 1
-  doi:  10.5281/zenodo.14796762
-  gz_data_file:
-    length: 142964216
-    md5: 9043a4e0569518df3b6b1c9d91571276
-    name: tmqm_dataset_v1_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr.hdf5.gz
-  hdf5_data_file:
-    md5: 1fc8d53e2159d211cd472fbac56308bf
-    name: tmqm_dataset_v1_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr.hdf5
-  processed_data_file:
-    md5: null
-    name: tmqm_dataset_v1_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr_processed.npz
-  url: https://zenodo.org/records/14796762/files/tmqm_dataset_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr_v1.hdf5.gz
-subset_v1_PdZnFeCu_CHPSONFClBr:
-  version: 1
-  doi:  10.5281/zenodo.14796780
-  gz_data_file:
-    length: 64821522
-    md5: f06ad890c8f4d4b177a7e4c93c605393
-    name: tmqm_dataset_v1_PdZnFeCu_CHPSONFClBr.hdf5.gz
-  hdf5_data_file:
-    md5: e5c6dc7bf9dd1d07a58d139857aab5a7
-    name: tmqm_dataset_v1_PdZnFeCu_CHPSONFClBr.hdf5
-  processed_data_file:
-    md5: null
-    name: tmqm_dataset_v1_PdZnFeCu_CHPSONFClBr_processed.npz
-  url: https://zenodo.org/records/14796780/files/tmqm_dataset_PdZnFeCu_CHPSONFClBr_v1.hdf5.gz
+latest: full_dataset_v1.1
+latest_test: nc_1000_v1.1
+
+description: "The tmQM dataset contains the geometries and properties of 108,541 (86,665 in the original published set) 
+    mononuclear complexes extracted from the Cambridge Structural Database, including Werner, bioinorganic, 
+    and organometallic complexes based on a large variety of organic ligands and 30 transition metals 
+    (the 3d, 4d, and 5d from groups 3 to 12). 
+    
+    All complexes are closed-shell, with a formal charge in the range {+1, 0, −1}e
+
+    Original Citation:
+
+    David Balcells and Bastian Bjerkem Skjelstad,
+    tmQM Dataset—Quantum Geometries and Properties of 86k Transition Metal Complexes
+    Journal of Chemical Information and Modeling 2020 60 (12), 6135-6146
+    DOI: 10.1021/acs.jcim.0c01041"
+
+atomic_self_energies:
+  H: -1588.690123425219 * kilojoule_per_mole
+  B: -65302.33351128112 * kilojoule_per_mole
+  C: -100005.01654855655 * kilojoule_per_mole
+  N: -143654.56892638578 * kilojoule_per_mole
+  O: -197361.76171021158 * kilojoule_per_mole
+  F: -261926.20424903592 * kilojoule_per_mole
+  Si: -760035.7764038445 * kilojoule_per_mole
+  P: -896075.6280215026 * kilojoule_per_mole
+  S: -1045229.0663264447 * kilojoule_per_mole
+  Cl: -1208038.6914349555 * kilojoule_per_mole
+  Sc: -1997181.018901612 * kilojoule_per_mole
+  Ti: -2230278.4864245243 * kilojoule_per_mole
+  V: -2478389.354471244 * kilojoule_per_mole
+  Cr: -2741967.2994972193 * kilojoule_per_mole
+  Mn: -3021546.098466564 * kilojoule_per_mole
+  Fe: -3317395.5973328506 * kilojoule_per_mole
+  Co: -3629935.0938135427 * kilojoule_per_mole
+  Ni: -3959571.3270608196 * kilojoule_per_mole
+  Cu: -4306402.576897981 * kilojoule_per_mole
+  Zn: -4671113.922983311 * kilojoule_per_mole
+  As: -5869526.931994888 * kilojoule_per_mole
+  Se: -6304454.897949699 * kilojoule_per_mole
+  Br: -6757541.6132786125 * kilojoule_per_mole
+  Y: -100773.37555590154 * kilojoule_per_mole
+  Zr: -123709.71011983423 * kilojoule_per_mole
+  Nb: -149762.5718722473 * kilojoule_per_mole
+  Mo: -179149.19860244964 * kilojoule_per_mole
+  Tc: -212135.93903845942 * kilojoule_per_mole
+  Ru: -248990.05884762504 * kilojoule_per_mole
+  Rh: -290061.85478664236 * kilojoule_per_mole
+  Pd: -335541.5978772224 * kilojoule_per_mole
+  Ag: -385322.4473000328 * kilojoule_per_mole
+  Cd: -440036.922094555 * kilojoule_per_mole
+  I: -781538.4859057926 * kilojoule_per_mole
+  La: -82991.16536291114 * kilojoule_per_mole
+  Hf: -126278.27589562583 * kilojoule_per_mole
+  Ta: -149779.8577882084 * kilojoule_per_mole
+  W: -176248.83619057274 * kilojoule_per_mole
+  Re: -205660.78711122595 * kilojoule_per_mole
+  Os: -237930.364964837 * kilojoule_per_mole
+  Ir: -273916.6051998535 * kilojoule_per_mole
+  Pt: -313193.3625088413 * kilojoule_per_mole
+  Au: -356039.1883931112 * kilojoule_per_mole
+  Hg: -402551.5785347049 * kilojoule_per_mole
+
+full_dataset_v1.1:
+  hdf5_schema: 2
+  available_properties:
+    - atomic_numbers
+    - positions
+    - partial_charges
+    - total_Charge
+    - spin_multiplicities
+    - electronic_energy
+    - dispersion_energy
+    - total_energy
+    - dipole_moment_magnitude
+    - dipole_moment_computed
+    - dipole_moment_computed_scaled
+    - energy_of_lumo
+    - energy_of_homo
+    - homo_lumo_gap
+  about:
+    "This dataset contains 108541 unique systems with 108541 total configurations (1 configuration per system).
+     The original tmQM repository (https://github.com/uiocompcat/tmQM) was forked and a release made that corresponds 
+     to the data committed on 13 August 2024 (https://github.com/chrisiacovella/tmQM/releases/tag/2024Aug13)."
+  remote_dataset:
+    doi: 10.5281/zenodo.15331686
+    url: https://zenodo.org/records/15331686/files/tmqm_dataset_v1.1.hdf5.gz
+    gz_data_file:
+      length: 328729880
+      md5: 16332938d98f71023a963b36e7ae2191
+      file_name: tmqm_dataset_v1.1.hdf5.gz
+    hdf5_data_file:
+      md5: b9454280213b488081955d46ebb378eb
+      file_name: tmqm_dataset_v1.1.hdf5
+
+nc_1000_v1.1:
+  hdf5_schema: 2
+  available_properties:
+    - atomic_numbers
+    - positions
+    - partial_charges
+    - total_Charge
+    - spin_multiplicities
+    - electronic_energy
+    - dispersion_energy
+    - total_energy
+    - dipole_moment_magnitude
+    - dipole_moment_computed
+    - dipole_moment_computed_scaled
+    - energy_of_lumo
+    - energy_of_homo
+    - homo_lumo_gap
+  about:
+    "This dataset contains 108541 unique systems with 108541 total configurations (1 configuration per system).
+     The original tmQM repository (https://github.com/uiocompcat/tmQM) was forked and a release made that corresponds 
+     to the data committed on 13 August 2024 (https://github.com/chrisiacovella/tmQM/releases/tag/2024Aug13)."
+  remote_dataset:
+    doi: 10.5281/zenodo.15331808
+    url: https://zenodo.org/records/15331808/files/tmqm_dataset_v1.1_ntc_1000.hdf5.gz
+    gz_data_file:
+      length: 3605547
+      md5: d9bfdccaa16b440d5c95c90be6480dab
+      file_name: tmqm_dataset_nc_1000_v1.1.hdf5.gz
+    hdf5_data_file:
+      md5: d7fe366ecf8fee0264fcfac17e0b0b87
+      file_name: tmqm_dataset_nc_1000_v1.1.hdf5
+
+PdZnFeCu_CHPSONFClBr_nc_1000_v1.1:
+  hdf5_schema: 2
+  available_properties:
+    - atomic_numbers
+    - positions
+    - partial_charges
+    - total_Charge
+    - spin_multiplicities
+    - electronic_energy
+    - dispersion_energy
+    - total_energy
+    - dipole_moment_magnitude
+    - dipole_moment_computed
+    - dipole_moment_computed_scaled
+    - energy_of_lumo
+    - energy_of_homo
+    - homo_lumo_gap
+  about:
+    "This dataset contains 1000 unique systems with 1000 total configurations (1 configuration per system).
+    This is a 1000 conformer test system.
+     
+     This dataset is limited to systems that contain transition metals Pd, Zn, Fe, or Cu, 
+     and also only contain elements C, H, P, S, O, N, F, Cl, or Br.
+     
+     The original tmQM repository (https://github.com/uiocompcat/tmQM) was forked and a release made that corresponds 
+     to the data committed on 13 August 2024 (https://github.com/chrisiacovella/tmQM/releases/tag/2024Aug13)."
+  remote_dataset:
+    doi: 10.5281/zenodo.15345571
+    url: https://zenodo.org/records/15345571/files/tmqm_dataset_PdZnFeCu_CHPSONFClBr_ntc_1000_v1.1.hdf5.gz
+    gz_data_file:
+      length: 3137141
+      md5: 672025a093b4adf3233186be1c8393f4
+      file_name: tmqm_dataset_PdZnFeCu_CHPSONFClBr_nc_1000_v1.1.hdf5.gz
+    hdf5_data_file:
+      md5: 531977896b6074912098a0ec36baa665
+      file_name: tmqm_dataset_PdZnFeCu_CHPSONFClBr_nc_1000_v1.1.hdf5
+
+
+PdZnFeCu_CHPSONFClBr_v1.1:
+  hdf5_schema: 2
+  available_properties:
+    - atomic_numbers
+    - positions
+    - partial_charges
+    - total_Charge
+    - spin_multiplicities
+    - electronic_energy
+    - dispersion_energy
+    - total_energy
+    - dipole_moment_magnitude
+    - dipole_moment_computed
+    - dipole_moment_computed_scaled
+    - energy_of_lumo
+    - energy_of_homo
+    - homo_lumo_gap
+  about:
+    "This dataset contains 23183 unique systems with 23183 total configurations (1 configuration per system).
+     
+     This dataset is limited to systems that contain transition metals Pd, Zn, Fe, or Cu, 
+     and also only contain elements C, H, P, S, O, N, F, Cl, or Br.
+     
+     The original tmQM repository (https://github.com/uiocompcat/tmQM) was forked and a release made that corresponds 
+     to the data committed on 13 August 2024 (https://github.com/chrisiacovella/tmQM/releases/tag/2024Aug13)."
+  remote_dataset:
+    doi: 10.5281/zenodo.15345127
+    url: https://zenodo.org/records/15345127/files/tmqm_dataset_PdZnFeCu_CHPSONFClBr_v1.1.hdf5.gz
+    gz_data_file:
+      length: 69495572
+      md5: ebd0ab2f6ab569980e2a2ce5c273146f
+      file_name: tmqm_dataset_PdZnFeCu_CHPSONFClBr_v1.1.hdf5.gz
+    hdf5_data_file:
+      md5: 4a0127a5c12c8c8a88c87eba058821ed
+      file_name: tmqm_dataset_PdZnFeCu_CHPSONFClBr_v1.1.hdf5
+
+PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr_v1.1:
+  hdf5_schema: 2
+  available_properties:
+    - atomic_numbers
+    - positions
+    - partial_charges
+    - total_Charge
+    - spin_multiplicities
+    - electronic_energy
+    - dispersion_energy
+    - total_energy
+    - dipole_moment_magnitude
+    - dipole_moment_computed
+    - dipole_moment_computed_scaled
+    - energy_of_lumo
+    - energy_of_homo
+    - homo_lumo_gap
+  about:
+    "This dataset contains 51258 unique systems with 51258 total configurations (1 configuration per system).
+     
+     This dataset is limited to systems that contain transition metals Pd, Zn, Fe, Cu, Ni, Pt, Ir, Rh, Cr, or Ag  
+     and also only contain elements C, H, P, S, O, N, F, Cl, or Br.
+     
+     The original tmQM repository (https://github.com/uiocompcat/tmQM) was forked and a release made that corresponds 
+     to the data committed on 13 August 2024 (https://github.com/chrisiacovella/tmQM/releases/tag/2024Aug13)."
+  remote_dataset:
+    doi: 10.5281/zenodo.15345149
+    url: https://zenodo.org/records/15345149/files/tmqm_dataset_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr_v1.1.hdf5.gz
+    gz_data_file:
+      length: 153375735
+      md5: 4add21b5612b9132d7ce4b7d232dfe3e
+      file_name: tmqm_dataset_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr_v1.1.hdf5.gz
+    hdf5_data_file:
+      md5: b0702a256be4f5cf581441ac35c7d7af
+      file_name: tmqm_dataset_PdZnFeCuNiPtIrRhCrAg_CHPSONFClBr_v1.1.hdf5

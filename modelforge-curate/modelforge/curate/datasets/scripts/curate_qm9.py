@@ -16,6 +16,9 @@ Citation: Ramakrishnan, R., Dral, P., Rupp, M. et al.
 DOI for dataset: 10.6084/m9.figshare.c.978904.v5
 """
 
+from modelforge.curate.datasets.qm9_curation import QM9Curation
+from modelforge.curate.utils import VersionMetadata
+
 
 def main():
     # define the location where to store and output the files
@@ -27,30 +30,74 @@ def main():
 
     # We'll want to provide some simple means of versioning
     # if we make updates to either the underlying dataset, curation modules, or parameters given to the code
-    version = "1.0"
+    version = "1.1"
     # version of the dataset to curate
     version_select = f"v_0"
     # Curate the test dataset with 1000 total conformers
-    from modelforge.curate.datasets.qm9_curation import QM9Curation
-
+    # only a single config per record
     qm9_dataset = QM9Curation(
         dataset_name="qm9",
         local_cache_dir=local_cache_dir,
         version_select=version_select,
     )
-    qm9_dataset.process(force_download=False)
+    qm9_dataset.load_from_db(local_cache_dir, "qm9.sqlite")
+    # qm9_dataset.process(force_download=False)
 
+    ###############
+    # full dataset
+    ##############
     # Curates the full dataset
     hdf5_file_name = f"qm9_dataset_v{version}.hdf5"
 
     n_total_records, n_total_configs = qm9_dataset.to_hdf5(
         hdf5_file_name=hdf5_file_name, output_file_dir=output_file_dir
     )
+
+    version_name = f"full_dataset_v{version}"
+    about = f"""This provides a curated hdf5 file for the qm9  dataset designed
+        to be compatible with modelforge. This dataset contains {n_total_records} unique records 
+        for {n_total_configs} total configurations.  Note, the dataset contains only a single 
+        configuration per record."""
+
+    metadata = VersionMetadata(
+        version_name=version_name,
+        about=about,
+        hdf5_file_name=hdf5_file_name,
+        hdf5_file_dir=output_file_dir,
+        available_properties=[
+            "atomic_numbers",
+            "positions",
+            "partial_charges",
+            "polarizability",
+            "dipole_moment_per_system",
+            "dipole_moment_scalar_per_system",
+            "energy_of_homo",
+            "lumo-homo_gap",
+            "zero_point_vibrational_energy",
+            "internal_energy_at_298.15K",
+            "internal_energy_at_0K",
+            "enthalpy_at_298.15K",
+            "free_energy_at_298.15K",
+            "heat_capacity_at_298.15K",
+            "rotational_constants",
+            "harmonic_vibrational_frequencies",
+            "electronic_spatial_extent",
+        ],
+    )
+
+    # this will also compress the hdf5 file
+    metadata.to_yaml(
+        file_name=f"{version_name}_metadata.yaml", file_path=output_file_dir
+    )
+
     print("full dataset")
     print(f"Total records: {n_total_records}")
     print(f"Total configs: {n_total_configs}")
 
-    # Curates the test dataset with 1000 total conformers
+    #################
+    # 1000 configuration version
+    #################
+    # Curates the test dataset with 1000 total configurations
     # only a single config per record
 
     hdf5_file_name = f"qm9_dataset_v{version}_ntc_1000.hdf5"
@@ -59,7 +106,97 @@ def main():
         output_file_dir=output_file_dir,
         total_configurations=1000,
     )
+    version_name = f"nc_1000_v{version}"
+    about = f"""This provides a curated hdf5 file for a subset of the qm9 dataset designed
+        to be compatible with modelforge. This dataset contains {n_total_records} unique records 
+        for {n_total_configs} total configurations. Note, the dataset contains only a single 
+        configuration per record."""
+
+    metadata = VersionMetadata(
+        version_name=version_name,
+        about=about,
+        hdf5_file_name=hdf5_file_name,
+        hdf5_file_dir=output_file_dir,
+        available_properties=[
+            "atomic_numbers",
+            "positions",
+            "partial_charges",
+            "polarizability",
+            "dipole_moment_per_system",
+            "dipole_moment_scalar_per_system",
+            "energy_of_homo",
+            "lumo-homo_gap",
+            "zero_point_vibrational_energy",
+            "internal_energy_at_298.15K",
+            "internal_energy_at_0K",
+            "enthalpy_at_298.15K",
+            "free_energy_at_298.15K",
+            "heat_capacity_at_298.15K",
+            "rotational_constants",
+            "harmonic_vibrational_frequencies",
+            "electronic_spatial_extent",
+        ],
+    )
+
+    # we need to compress the hdf5 file to get the checksum and length for the gzipped file
+    metadata.to_yaml(
+        file_name=f"{version_name}_metadata.yaml", file_path=output_file_dir
+    )
+
     print(" 1000 configuration subset")
+    print(f"Total records: {n_total_records}")
+    print(f"Total configs: {n_total_configs}")
+
+    #################
+    # 1 configuration version
+    #################
+    # Curates the test dataset with 1 total configuration
+
+    hdf5_file_name = f"qm9_dataset_v{version}_ntc_10.hdf5"
+    n_total_records, n_total_configs = qm9_dataset.to_hdf5(
+        hdf5_file_name=hdf5_file_name,
+        output_file_dir=output_file_dir,
+        total_configurations=10,
+    )
+    version_name = f"nc_10_v{version}"
+    about = f"""This provides a curated hdf5 file for a subset of the qm9 dataset designed
+        to be compatible with modelforge. This dataset contains {n_total_records} unique records 
+        for {n_total_configs} total configurations. Note, the dataset contains only a single 
+        configuration per record."""
+
+    metadata = VersionMetadata(
+        version_name=version_name,
+        about=about,
+        hdf5_file_name=hdf5_file_name,
+        hdf5_file_dir=output_file_dir,
+        remote_dataset=False,
+        available_properties=[
+            "atomic_numbers",
+            "positions",
+            "partial_charges",
+            "polarizability",
+            "dipole_moment_per_system",
+            "dipole_moment_scalar_per_system",
+            "energy_of_homo",
+            "lumo-homo_gap",
+            "zero_point_vibrational_energy",
+            "internal_energy_at_298.15K",
+            "internal_energy_at_0K",
+            "enthalpy_at_298.15K",
+            "free_energy_at_298.15K",
+            "heat_capacity_at_298.15K",
+            "rotational_constants",
+            "harmonic_vibrational_frequencies",
+            "electronic_spatial_extent",
+        ],
+    )
+
+    # we need to compress the hdf5 file to get the checksum and length for the gzipped file
+    metadata.to_yaml(
+        file_name=f"{version_name}_metadata.yaml", file_path=output_file_dir
+    )
+
+    print("1 configuration subset")
     print(f"Total records: {n_total_records}")
     print(f"Total configs: {n_total_configs}")
 

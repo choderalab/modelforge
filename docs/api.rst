@@ -8,5 +8,5 @@ API Documentation
     modelforge.potential
     modelforge.dataset
     modelforge.utils
-    modelforge.curation
+
 

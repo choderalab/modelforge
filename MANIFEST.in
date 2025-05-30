@@ -4,5 +4,8 @@ include modelforge/dataset/yaml_files/*.yaml
 include modelforge/curation/yaml_files/*.yaml
 include modelforge/tests/data/potential_defaults/*.toml
 include modelforge/tests/data/training_defaults/*.toml
+include modelforge/tests/data/local_datasets/*.toml
+include modelforge/tests/data/local_datasets/*.yaml
+include modelforge/tests/data/local_datasets/*.hdf5
 
 global-exclude *.py[cod] __pycache__ *.so

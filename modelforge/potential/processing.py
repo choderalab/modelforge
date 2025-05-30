@@ -149,6 +149,7 @@ class AtomicSelfEnergies:
 
     def __getitem__(self, key):
         from modelforge.utils.units import chem_context
+        from modelforge.utils.units import GlobalUnitSystem
 
         if isinstance(key, int):
             # Convert atomic number to element symbol
@@ -157,7 +158,11 @@ class AtomicSelfEnergies:
                 raise KeyError(f"Atomic number {key} not found.")
             if self.energies.get(element) is None:
                 return None
-            return self.energies.get(element).to(unit.kilojoule_per_mole, "chem").m
+            return (
+                self.energies.get(element)
+                .to(GlobalUnitSystem.get_units("energy"), "chem")
+                .m
+            )
         elif isinstance(key, str):
             # Directly access by element symbol
             if key not in self.energies:
@@ -165,7 +170,7 @@ class AtomicSelfEnergies:
             if self.energies[key] is None:
                 return None
 
-            return self.energies[key].to(unit.kilojoule_per_mole, "chem").m
+            return self.energies[key].to(GlobalUnitSystem.get_units("energy"), "chem").m
         else:
             raise TypeError(
                 "Key must be an integer (atomic number) or string (element name)."
@@ -174,10 +179,14 @@ class AtomicSelfEnergies:
     def __iter__(self) -> Iterator[Dict[str, float]]:
         """Iterate over the energies dictionary."""
         from modelforge.utils.units import chem_context
+        from modelforge.utils.units import GlobalUnitSystem
 
         for element, energy in self.energies.items():
             atomic_number = self.element_to_atomic_number(element)
-            yield (atomic_number, energy.to(unit.kilojoule_per_mole, "chem").m)
+            yield (
+                atomic_number,
+                energy.to(GlobalUnitSystem.get_units("energy"), "chem").m,
+            )
 
     def __len__(self) -> int:
         """Return the number of element-energy pairs."""

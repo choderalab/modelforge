@@ -30,15 +30,15 @@ calculate_molecular_self_energy = true
 
 [dataset]
 dataset_name = "QM9"
-version_select = "nc_1000_v0"
+version_select = "nc_1000_v1.1"
 num_workers = 4
 pin_memory = true
-properties_of_interest = ["atomic_numbers", "geometry", "internal_energy_at_0K", "dipole_moment"]
-element_filter = [[6, 1]]
+properties_of_interest = ["atomic_numbers", "positions", "internal_energy_at_0K", "dipole_moment_per_system"]
+element_filter = []
 
 [dataset.properties_assignment]
 atomic_numbers = "atomic_numbers"
-positions = "geometry"
+positions = "positions"
 E = "internal_energy_at_0K"
 
 [training]

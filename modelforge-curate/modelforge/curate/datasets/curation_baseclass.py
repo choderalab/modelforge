@@ -297,7 +297,7 @@ class DatasetCuration(ABC):
         if max_force is not None:
             if not isinstance(max_force, unit.Quantity):
                 raise ValueError("max_force must be a unit.Quantity.")
-            from modelforge.curate.units import chem_context
+            from modelforge.utils.units import chem_context
 
             if not max_force.is_compatible_with(
                 unit.kilojoule_per_mole / unit.nanometer, "chem"

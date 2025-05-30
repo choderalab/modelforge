@@ -313,13 +313,16 @@ def remove_units_from_dataset_statistics(
 ) -> Dict[str, Dict[str, float]]:
 
     from modelforge.utils.units import chem_context
+    from modelforge.utils.units import GlobalUnitSystem
 
     dataset_statistic_without_units = {}
     for key, value in dataset_statistic.items():
         dataset_statistic_without_units[key] = {}
         for sub_key, sub_value in value.items():
             dataset_statistic_without_units[key][sub_key] = (
-                unit.Quantity(sub_value).to(unit.kilojoule_per_mole, "chem").m
+                unit.Quantity(sub_value)
+                .to(GlobalUnitSystem.get_units("energy"), "chem")
+                .m
             )
     return dataset_statistic_without_units
 

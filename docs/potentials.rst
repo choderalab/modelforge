@@ -47,12 +47,12 @@ Implemented Models
    * PhysNet
    * TensorNet
    * SAKE
+   * AimNet2 (available, but certain features still under development)
 
 Additionally, the following models are currently under development and can be expected in the near future:
 
 - SpookyNet
 - DimeNet
-- AimNet2 (available, but certain features still under development)
 
 Each potential currently implements the total energy prediction with per-atom
 forces within a given cutoff radius. The models can be trained on energies and forces. PaiNN and PhysNet can also predict partial charges and

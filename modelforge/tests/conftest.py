@@ -17,6 +17,15 @@ def pytest_addoption(parser):
     )
 
 
+# create a temporary directory for storing the downloaded datasets
+# so we do not need to re-download the datasets for each of the tests
+#
+@pytest.fixture(scope="session")
+def dataset_temp_dir(tmp_path_factory):
+    fn = tmp_path_factory.mktemp("dataset_dir")
+    return fn
+
+
 def pytest_collection_modifyitems(config, items):
     if config.getoption("--run_data_download"):
         # --runslow given in cli: do not skip slow tests
@@ -32,8 +41,65 @@ def pytest_collection_modifyitems(config, items):
 # datamodule fixture
 @pytest.fixture
 def datamodule_factory():
-    def create_datamodule(**kwargs):
-        return initialize_datamodule(**kwargs)
+    def create_datamodule(
+        dataset_name: str,
+        batch_size: int,
+        local_cache_dir: str,
+        splitting_strategy,
+        dataset_cache_dir: Optional[str] = None,
+        remove_self_energies: Optional[bool] = True,
+        element_filter: Optional[str] = None,
+        local_yaml_file: Optional[str] = None,
+        shift_center_of_mass_to_origin: bool = True,
+        version_select: Optional[str] = None,
+        regression_ase: Optional[bool] = False,
+    ):
+
+        # for simplicity of writing tests, we will have this accept the dataset name
+        # and then use the toml files to load the properties of interests and association
+        # and use the appropriate version of the dataset.
+        # this will make it so we only have to change things in one spot if we have an
+        # update to the test dataset.
+        # note if version_select is not provided, we will use the test listed in the toml file in the test/data/datasets
+        # directory.
+        # The only reason to provide a version_select is if you want to test a specific version of the dataset
+        # in the testing; e.g., the subset for spice so we can test on ani2x NNP
+
+        from importlib import resources
+        from modelforge.tests.data import dataset_defaults
+        import toml
+        import os
+
+        toml_file = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
+
+        # check to ensure the yaml file exists
+        if not os.path.exists(toml_file):
+            raise FileNotFoundError(
+                f"Dataset toml file {toml_file} not found. Please check the dataset name."
+            )
+
+        config_dict = toml.load(toml_file)
+
+        if dataset_cache_dir is None:
+            dataset_cache_dir = local_cache_dir
+
+        if version_select is None:
+            version_select = config_dict["dataset"]["version_select"]
+        return initialize_datamodule(
+            dataset_name=dataset_name,
+            splitting_strategy=splitting_strategy,
+            batch_size=batch_size,
+            version_select=version_select,
+            properties_of_interest=config_dict["dataset"]["properties_of_interest"],
+            properties_assignment=config_dict["dataset"]["properties_assignment"],
+            local_cache_dir=local_cache_dir,
+            dataset_cache_dir=dataset_cache_dir,
+            remove_self_energies=remove_self_energies,
+            element_filter=element_filter,
+            local_yaml_file=local_yaml_file,
+            shift_center_of_mass_to_origin=shift_center_of_mass_to_origin,
+            regression_ase=regression_ase,
+        )
 
     return create_datamodule
 
@@ -61,16 +127,94 @@ def single_batch_with_batchsize():
     """
 
     def _create_single_batch(
-        batch_size: int, dataset_name: str, local_cache_dir: str, version_select: str
+        batch_size: int,
+        dataset_name: str,
+        local_cache_dir: str,
+        dataset_cache_dir: Optional[str] = None,
+        version_select: Optional[str] = None,
     ):
+        # for simplicity of writing tests, we will have this accept the dataset name
+        # and then use the toml files to load the properties of interests and association
+        # and use the appropriate version of the dataset.
+        # this will make it so we only have to change things in one spot if we have an
+        # update to the test dataset.
+
+        from importlib import resources
+        from modelforge.tests.data import dataset_defaults
+        import toml
+        import os
+
+        toml_file = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
+
+        # check to ensure the yaml file exists
+        if not os.path.exists(toml_file):
+            raise FileNotFoundError(
+                f"Dataset toml file {toml_file} not found. Please check the dataset name."
+            )
+
+        config_dict = toml.load(toml_file)
+
+        if dataset_cache_dir is None:
+            dataset_cache_dir = local_cache_dir
+
+        if version_select is None:
+            version_select = config_dict["dataset"]["version_select"]
         return single_batch(
             batch_size=batch_size,
             dataset_name=dataset_name,
             local_cache_dir=local_cache_dir,
+            dataset_cache_dir=dataset_cache_dir,
             version_select=version_select,
+            properties_of_interest=config_dict["dataset"]["properties_of_interest"],
+            properties_assignment=config_dict["dataset"]["properties_assignment"],
         )
 
     return _create_single_batch
+
+
+@pytest.fixture(scope="session")
+def load_test_dataset():
+    """
+    Fixture to load a test dataset.
+    """
+
+    def _load_test_dataset(
+        dataset_name: str,
+        local_cache_dir: str,
+        dataset_cache_dir: Optional[str] = None,
+        element_filter: Optional[list] = None,
+    ):
+        from modelforge.dataset import HDF5Dataset
+
+        from importlib import resources
+        from modelforge.tests.data import dataset_defaults
+        import toml
+        import os
+
+        toml_file = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
+
+        # check to ensure the yaml file exists
+        if not os.path.exists(toml_file):
+            raise FileNotFoundError(
+                f"Dataset toml file {toml_file} not found. Please check the dataset name."
+            )
+
+        config_dict = toml.load(toml_file)
+        if dataset_cache_dir is None:
+            dataset_cache_dir = local_cache_dir
+
+        return HDF5Dataset(
+            dataset_name=dataset_name,
+            force_download=False,
+            version_select=config_dict["dataset"]["version_select"],
+            properties_of_interest=config_dict["dataset"]["properties_of_interest"],
+            properties_assignment=config_dict["dataset"]["properties_assignment"],
+            local_cache_dir=local_cache_dir,
+            dataset_cache_dir=dataset_cache_dir,
+            element_filter=element_filter,
+        )
+
+    return _load_test_dataset
 
 
 # @pytest.fixture(scope="session")
@@ -99,7 +243,7 @@ dataset_container: Dict[str, DataSetContainer] = {
     "QM9": DataSetContainer(
         name="QM9",
         expected_properties_of_interest=[
-            "geometry",
+            "positions",
             "atomic_numbers",
             "internal_energy_at_0K",
             "charges",
@@ -110,10 +254,10 @@ dataset_container: Dict[str, DataSetContainer] = {
     "ANI1X": DataSetContainer(
         name="ANI1x",
         expected_properties_of_interest=[
-            "geometry",
+            "positions",
             "atomic_numbers",
-            "wb97x_dz.energy",
-            "wb97x_dz.forces",
+            "wb97x_dz_energy",
+            "wb97x_dz_forces",
         ],
         expected_E_random_split=-1652066.552014041,
         expected_E_fcfs_split=-1015736.8142089575,

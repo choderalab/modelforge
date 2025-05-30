@@ -294,13 +294,9 @@ def get_path_string(module) -> str:
 
     temp_path = resources.files(module)
     # see if we have a MultiplexedPath object
-    if isinstance(temp_path, resources.readers.MultiplexedPath):
 
-        # if so, we need to get the first path
-        if len(temp_path._paths) == 0:
-            raise ValueError(f"No paths found for module {module}")
+    if len(temp_path._paths) == 0:
+        raise ValueError(f"No paths found for module {module}")
 
-        # return the first path, which is to the directory, as a string
-        return str(temp_path._paths[0])
-
-    return str(temp_path)
+    # return the first path, which is to the directory, as a string
+    return str(temp_path._paths[0])

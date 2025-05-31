@@ -488,7 +488,7 @@ class SpinMultiplicitiesPerSystem(PropertyBaseModel):
 
     """
 
-    name: str = "spin_multiplicities"
+    name: str = "spin_multiplicities_per_system"
     value: NdArray
     units: unit.Unit = unit.dimensionless
     classification: PropertyClassification = PropertyClassification.per_system

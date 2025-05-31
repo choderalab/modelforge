@@ -442,6 +442,37 @@ def test_initialize_dipole_moment_per_atom():
         )
 
 
+def test_initialize_dipole_moment_per_system():
+    quadrupole_moment_per_system = QuadrupoleMomentPerSystem(
+        value=np.array([[[0.1, 0.1, 0.1], [0.1, 0.1, 0.1], [0.1, 0.1, 0.1]]]),
+        units=unit.debye * unit.nanometer,
+    )
+    assert quadrupole_moment_per_system.value.shape == (1, 3, 3)
+    assert quadrupole_moment_per_system.units == unit.debye * unit.nanometer
+    assert quadrupole_moment_per_system.classification == "per_system"
+    assert quadrupole_moment_per_system.name == "quadrupole_moment_per_system"
+    assert quadrupole_moment_per_system.property_type == "quadrupole_moment"
+    with pytest.raises(ValueError):
+        quadrupole_moment_per_system = QuadrupoleMomentPerSystem(
+            value=np.array(
+                [[[0.1, 0.1, 0.1, 0.1], [0.1, 0.1, 0.1, 0.1], [0.1, 0.1, 0.1, 0.1]]]
+            ),
+            units=unit.debye * unit.nanometer,
+        )
+    with pytest.raises(ValueError):
+        quadrupole_moment_per_system = QuadrupoleMomentPerSystem(
+            value=np.array([[[0.1, 0.1, 0.1], [0.1, 0.1, 0.1], [0.1, 0.1, 0.1]]]),
+            units=unit.debye * unit.nanometer,
+            classification="per_atom",
+        )
+    with pytest.raises(ValueError):
+        quadrupole_moment_per_system = QuadrupoleMomentPerSystem(
+            value=np.array([[[0.1, 0.1, 0.1], [0.1, 0.1, 0.1], [0.1, 0.1, 0.1]]]),
+            units=unit.debye * unit.nanometer,
+            property_type="energy",
+        )
+
+
 def test_initialize_quadrupole_moment_per_atom():
     quadrupole_moment_per_atom = QuadrupoleMomentPerAtom(
         value=np.array(
@@ -697,11 +728,11 @@ def test_initialize_polarizability():
         )
 
 
-def test_spin_multiplicities():
+def test_spin_multiplicities_per_system():
     spin_multiplicity = SpinMultiplicitiesPerSystem(value=np.array([[1]]))
     assert spin_multiplicity.value.shape == (1, 1)
     assert spin_multiplicity.classification == "per_system"
-    assert spin_multiplicity.name == "spin_multiplicities"
+    assert spin_multiplicity.name == "spin_multiplicities_per_system"
     assert spin_multiplicity.property_type == "dimensionless"
     assert spin_multiplicity.n_configs == 1
 
@@ -720,6 +751,34 @@ def test_spin_multiplicities():
         spin_multiplicity = SpinMultiplicitiesPerSystem(
             value=np.array([[1]]), property_type="energy"
         )
+
+
+def test_spin_multiplicities_per_atom():
+    spin_multiplicity = SpinMultiplicitiesPerAtom(value=np.array([[[1], [2]]]))
+    assert spin_multiplicity.value.shape == (1, 2, 1)
+    assert spin_multiplicity.classification == "per_atom"
+    assert spin_multiplicity.name == "spin_multiplicities_per_atom"
+
+    assert spin_multiplicity.property_type == "dimensionless"
+    assert spin_multiplicity.n_atoms == 2
+
+    with pytest.raises(ValueError):
+        spin_multiplicity = SpinMultiplicitiesPerAtom(value=np.array([1, 2, 3, 4]))
+    with pytest.raises(ValueError):
+        spin_multiplicity = SpinMultiplicitiesPerAtom(value=np.array([[1, 2, 3, 4]]))
+    with pytest.raises(ValueError):
+        spin_multiplicity = SpinMultiplicitiesPerAtom(value=np.array([[1]]))
+    with pytest.raises(ValueError):
+        spin_multiplicity = SpinMultiplicitiesPerAtom(
+            value=np.array([[[1], [2]]]), classification="per_system"
+        )
+    with pytest.raises(ValueError):
+        spin_multiplicity = SpinMultiplicitiesPerAtom(
+            value=np.array([[[1], [2]]]), property_type="energy"
+        )
+
+
+import numpy as np
 
 
 def test_initialize_base_model():

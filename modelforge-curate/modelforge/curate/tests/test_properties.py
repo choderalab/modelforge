@@ -698,7 +698,7 @@ def test_initialize_polarizability():
 
 
 def test_spin_multiplicities():
-    spin_multiplicity = SpinMultiplicities(value=np.array([[1]]))
+    spin_multiplicity = SpinMultiplicitiesPerSystem(value=np.array([[1]]))
     assert spin_multiplicity.value.shape == (1, 1)
     assert spin_multiplicity.classification == "per_system"
     assert spin_multiplicity.name == "spin_multiplicities"
@@ -706,18 +706,18 @@ def test_spin_multiplicities():
     assert spin_multiplicity.n_configs == 1
 
     with pytest.raises(ValueError):
-        spin_multiplicity = SpinMultiplicities(value=np.array([1, 2, 3, 4]))
+        spin_multiplicity = SpinMultiplicitiesPerSystem(value=np.array([1, 2, 3, 4]))
     with pytest.raises(ValueError):
-        spin_multiplicity = SpinMultiplicities(value=np.array([[1, 2, 3, 4]]))
+        spin_multiplicity = SpinMultiplicitiesPerSystem(value=np.array([[1, 2, 3, 4]]))
     with pytest.raises(ValueError):
-        spin_multiplicity = SpinMultiplicities(value=np.array([[[1]]]))
+        spin_multiplicity = SpinMultiplicitiesPerSystem(value=np.array([[[1]]]))
 
     with pytest.raises(ValueError):
-        spin_multiplicity = SpinMultiplicities(
+        spin_multiplicity = SpinMultiplicitiesPerSystem(
             value=np.array([[1]]), classification="per_atom"
         )
     with pytest.raises(ValueError):
-        spin_multiplicity = SpinMultiplicities(
+        spin_multiplicity = SpinMultiplicitiesPerSystem(
             value=np.array([[1]]), property_type="energy"
         )
 

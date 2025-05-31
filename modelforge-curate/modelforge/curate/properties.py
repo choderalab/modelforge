@@ -467,9 +467,9 @@ class TotalCharge(PropertyBaseModel):
         return self
 
 
-class SpinMultiplicities(PropertyBaseModel):
+class SpinMultiplicitiesPerSystem(PropertyBaseModel):
     """
-    Class to define the spin multiplicities of a record.
+    Class to define the per system spin multiplicities of a record.
 
     The spin multiplicities must be a 2d array of shape (n_configs, 1).
 
@@ -509,6 +509,55 @@ class SpinMultiplicities(PropertyBaseModel):
         if self.classification != PropertyClassification.per_system:
             raise ValueError(
                 f"Classification of spin multiplicities should be per_system, found {self.classification}"
+            )
+        if self.property_type != PropertyType.dimensionless:
+            raise ValueError(
+                f"Property type of spin multiplicities should be dimensionless, found {self.property_type}"
+            )
+
+        return self
+
+
+class SpinMultiplicitiesPerAtom(PropertyBaseModel):
+    """
+    Class to define the per atom spin multiplicities of a record
+
+    The spin multiplicities must be a 3d array of shape (n_configs, n_atoms, 1).
+    Parameters
+    ----------
+    name : str, default="spin_multiplicities_per_atom"
+        The name of the property
+    value : np.ndarray
+        The array of spin multiplicities
+    units : unit.Unit
+        The units of the spin multiplicities
+    classification : PropertyClassification, default=PropertyClassification.per_atom
+        The classification of the property
+    property_type : PropertyType, default=PropertyType.dimensionless
+        The type of the property
+    """
+
+    name: str = "spin_multiplicities_per_atom"
+    value: NdArray
+    units: unit.Unit = unit.dimensionless
+    classification: PropertyClassification = PropertyClassification.per_atom
+    property_type: PropertyType = PropertyType.dimensionless
+
+    # specific validation of the value array, which must be 3d for spin multiplicities, with shape [n_configs, n_atoms, 1]
+    @model_validator(mode="after")
+    def _check_spin_multiplicity_shape(self) -> Self:
+        if len(self.value.shape) != 3:
+            raise ValueError(
+                f"Shape of spin multiplicities should be 3d, found {len(self.value.shape)}"
+            )
+        if self.value.shape[2] != 1:
+            raise ValueError(
+                f"Shape of spin multiplicities should be [n_configs, n_atoms, 1], found {self.value.shape}"
+            )
+        # check to ensure the classification and property type have not been changed
+        if self.classification != PropertyClassification.per_atom:
+            raise ValueError(
+                f"Classification of spin multiplicities should be per_atom, found {self.classification}"
             )
         if self.property_type != PropertyType.dimensionless:
             raise ValueError(
@@ -710,6 +759,60 @@ class DipoleMomentPerAtom(PropertyBaseModel):
             raise ValueError(
                 f"Property type of dipole moment should be dipole_moment, found {self.property_type}"
             )
+        return self
+
+
+class QuadrupoleMomentPerSystem(PropertyBaseModel):
+    """
+    Class to define the per-system quadrupole moment of a record.
+
+    The per-system quadrupole moment must be a 2d array of shape (n_configs, 3, 3).
+
+    Parameters
+    ----------
+    name : str, default="quadrupole_moment_per_system"
+        The name of the property
+    value : np.ndarray
+        The array of quadrupole moments
+    units : unit.Unit
+        The units of the quadrupole moments
+    classification : PropertyClassification, default=PropertyClassification.per_system
+        The classification of the property
+    property_type : PropertyType, default=PropertyType.quadrupole_moment
+        The type of the property
+
+    """
+
+    name: str = "quadrupole_moment_per_system"
+    value: NdArray
+    units: unit.Unit
+    classification: PropertyClassification = PropertyClassification.per_system
+    property_type: PropertyType = PropertyType.quadrupole_moment
+
+    @model_validator(mode="after")
+    def _check_quadrupole_moment_shape(self) -> Self:
+        if len(self.value.shape) != 3:
+            raise ValueError(
+                f"Shape of quadrupole moment should be [n_configs, 3, 3], found {self.value.shape}"
+            )
+        if self.value.shape[1] != 3:
+            raise ValueError(
+                f"Shape of quadrupole moment should be [n_configs, 3, 3], found {self.value.shape}"
+            )
+        if self.value.shape[2] != 3:
+            raise ValueError(
+                f"Shape of quadrupole moment should be [n_configs, 3, 3], found {self.value.shape}"
+            )
+        # check to ensure the classification and property type have not been changed
+        if self.classification != PropertyClassification.per_system:
+            raise ValueError(
+                f"Classification of quadrupole moment should be per_system, found {self.classification}"
+            )
+        if self.property_type != PropertyType.quadrupole_moment:
+            raise ValueError(
+                f"Property type of quadrupole moment should be quadrupole_moment, found {self.property_type}"
+            )
+
         return self
 
 

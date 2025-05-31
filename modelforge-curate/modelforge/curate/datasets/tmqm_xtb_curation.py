@@ -9,7 +9,7 @@ from modelforge.curate.properties import (
     TotalCharge,
     MetaData,
     DipoleMomentPerSystem,
-    SpinMultiplicities,
+    SpinMultiplicitiesPerSystem,
 )
 from modelforge.curate.record import infer_bonds, calculate_max_bond_length_change
 
@@ -207,7 +207,7 @@ class tmQMXTBCuration(DatasetCuration):
                     record.add_property(total_charge)
 
                     # extract spin multiplicities
-                    spin_multiplicities = SpinMultiplicities(
+                    spin_multiplicities = SpinMultiplicitiesPerSystem(
                         value=f[key]["spin_multiplicity"][()].reshape(-1, 1),
                     )
                     record.add_property(spin_multiplicities)

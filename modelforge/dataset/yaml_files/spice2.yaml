@@ -166,8 +166,8 @@ nc_1000_HCNOFClS_v1.1:
 
 full_dataset_HCNOF_v1.1:
   about: This provides a curated hdf5 file for the SPICE2 dataset designed to be compatible
-    with modelforge. This dataset contains 113985 unique records for 2008126 total
-    configurations. The dataset is limited to the elements ['H', 'C', 'N', 'O', 'F'].
+    with modelforge. This dataset contains 57037 unique records for 928073 total configurations.
+    The dataset is limited to the elements ['H', 'C', 'N', 'O', 'F'].
   available_properties:
     - atomic_numbers
     - positions
@@ -183,12 +183,11 @@ full_dataset_HCNOF_v1.1:
     - scf_quadrupole
   hdf5_schema: 2
   remote_dataset:
-    doi: 10.5281/zenodo.15429193
-    url: https://zenodo.org/records/15429193/files/spice_2_dataset_v1.1_HCNOF.hdf5.gz
-    gz_data_file:
+    doi: 10.5281/zenodo.15579090
+    url: https://zenodo.org/records/15579090/files/spice_2_dataset_v1.1_HCNOF.hdf5.gz
       file_name: spice_2_dataset_v1.1_HCNOF.hdf5.gz
-      length: 25532396069
-      md5: 36d5939535abcf666d8cf1a1bfae8845
+      length: 11712091901
+      md5: 56d109fdb026f8a1224dfff76abbd79a
     hdf5_data_file:
       file_name: spice_2_dataset_v1.1_HCNOF.hdf5
-      md5: e2628a66e1f8f428151bcdbbfb1c41a7
+      md5: afa15240f07082517ec6155cc35093e7

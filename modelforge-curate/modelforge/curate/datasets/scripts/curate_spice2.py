@@ -270,7 +270,9 @@ def main():
     hdf5_file_name = f"spice_2_dataset_v{version}_HCNOF.hdf5"
 
     total_records, total_configs = spice2_dataset.to_hdf5(
-        hdf5_file_name=hdf5_file_name, output_file_dir=output_file_dir
+        hdf5_file_name=hdf5_file_name,
+        output_file_dir=output_file_dir,
+        atomic_species_to_limit=qm9_elements,
     )
 
     version_name = f"full_dataset_HCNOF_v{version}"

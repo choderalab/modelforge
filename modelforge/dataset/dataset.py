@@ -308,6 +308,7 @@ class HDF5Dataset:
         if self.local_yaml_file is not None:
             yaml_file = self.local_yaml_file
             # make sure the file exists
+            # make sure the file exists
             if not os.path.exists(yaml_file):
                 raise FileNotFoundError(
                     f"Local dataset yaml file {yaml_file} not found."
@@ -1250,6 +1251,7 @@ class DataModule(pl.LightningDataModule):
         training_dataset_statistics = calculate_mean_and_variance(torch_dataset)
 
         # wrap everything in a dictionary and save it to disk
+
         dataset_statistic = {
             "atomic_self_energies": atomic_self_energies.energies,
             "training_dataset_statistics": training_dataset_statistics,

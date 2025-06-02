@@ -185,6 +185,7 @@ full_dataset_HCNOF_v1.1:
   remote_dataset:
     doi: 10.5281/zenodo.15579090
     url: https://zenodo.org/records/15579090/files/spice_2_dataset_v1.1_HCNOF.hdf5.gz
+    gz_data_file:
       file_name: spice_2_dataset_v1.1_HCNOF.hdf5.gz
       length: 11712091901
       md5: 56d109fdb026f8a1224dfff76abbd79a

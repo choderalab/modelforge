@@ -28,9 +28,7 @@ class tmQMOpenFFCuration(DatasetCuration):
     """
     Fetches the OpenFF tmQM dataset from the MOLSSI QCArchive and processes it into a local dataset.
 
-    The tmQM openff dataset provides   The tmQM-xtb dataset performed MD-based sampling
-    of the structures in the tmQM dataset using GFN2-XTB.  The tmQM openff dataset is a subset of the tmQM-xtb dataset
-    focused on systems with
+    The tmQM openff dataset provides DFT calculations of the tmQM-xtb dataset at high and low spin multiplicities.
 
 
     Parameters

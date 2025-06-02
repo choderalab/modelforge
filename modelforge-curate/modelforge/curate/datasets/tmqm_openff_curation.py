@@ -215,7 +215,7 @@ class tmQMOpenFFCuration(DatasetCuration):
                 for key in db_keys:
                     if db_default[key]["status"].value == "complete":
                         non_error_keys.append(key)
-                print(len(non_error_keys))
+                logger.debug(f"completed keys {len(non_error_keys)}")
 
                 with SqliteDict(
                     input_file_name, tablename="entry", autocommit=False
@@ -237,6 +237,7 @@ class tmQMOpenFFCuration(DatasetCuration):
                         ################################
                         if not mol_name in dataset.records.keys():
 
+                            dataset.create_record(mol_name)
                             atomic_numbers = []
                             for element in entry_val["molecule"]["symbols"]:
                                 atomic_numbers.append(
@@ -256,31 +257,21 @@ class tmQMOpenFFCuration(DatasetCuration):
                             )
                             dataset.add_property(mol_name, molecular_formula)
 
-                            canonical_isomeric_explicit_hydrogen_mapped_smiles = MetaData(
-                                name="canonical_isomeric_explicit_hydrogen_mapped_smiles",
-                                value=entry_val["molecule"]["extras"][
-                                    "canonical_isomeric_explicit_hydrogen_mapped_smiles"
-                                ],
-                            )
-                            dataset.add_property(
-                                mol_name,
-                                canonical_isomeric_explicit_hydrogen_mapped_smiles,
-                            )
                         ##############################
                         # per configuration properties
                         ##############################
-                        # molecular_hash is unique for each conformer
-                        molecule_hash = MetaData(
-                            name="molecule_hash",
-                            value=entry_val["molecule"]["identifiers"]["molecule_hash"],
-                        )
-                        dataset.add_property(mol_name, molecule_hash)
-
-                        # add the identifier from qcarchive
-                        identifier = MetaData(
-                            name="id", value=entry_val["molecule"]["identifiers"]["id"]
-                        )
-                        dataset.add_property(mol_name, identifier)
+                        # # molecular_hash is unique for each conformer
+                        # molecule_hash = MetaData(
+                        #     name="molecule_hash",
+                        #     value=entry_val["molecule"]["identifiers"]["molecule_hash"],
+                        # )
+                        # dataset.add_property(mol_name, molecule_hash)
+                        #
+                        # # add the identifier from qcarchive
+                        # identifier = MetaData(
+                        #     name="id", value=entry_val["molecule"]["id"]
+                        # )
+                        # dataset.add_property(mol_name, identifier)
 
                         # add the total charge
                         total_charge = TotalCharge(
@@ -335,7 +326,7 @@ class tmQMOpenFFCuration(DatasetCuration):
                         dipole_moment = DipoleMomentPerSystem(
                             name="scf_dipole",
                             value=np.array(
-                                record_val["properties"]["scf dipole moment"]
+                                record_val["properties"]["scf dipole"]
                             ).reshape(1, 3),
                             units=unit.elementary_charge * unit.bohr,
                         )
@@ -345,7 +336,7 @@ class tmQMOpenFFCuration(DatasetCuration):
                         quadrupole_moment = QuadrupoleMomentPerSystem(
                             name="scf_quadrupole",
                             value=np.array(
-                                record_val["properties"]["scf quadrupole moment"]
+                                record_val["properties"]["scf quadrupole"]
                             ).reshape(1, 3, 3),
                             units=unit.elementary_charge * unit.bohr**2,
                         )
@@ -356,7 +347,7 @@ class tmQMOpenFFCuration(DatasetCuration):
                             name="mulliken_partial_charges",
                             value=np.array(
                                 record_val["properties"]["mulliken charges"]
-                            ).reshape(1, -1),
+                            ).reshape(1, -1, 1),
                             units=unit.elementary_charge,
                         )
                         dataset.add_property(mol_name, mulliken_charges)
@@ -366,25 +357,37 @@ class tmQMOpenFFCuration(DatasetCuration):
                             name="lowdin_partial_charges",
                             value=np.array(
                                 record_val["properties"]["lowdin charges"]
-                            ).reshape(1, -1),
+                            ).reshape(1, -1, 1),
                             units=unit.elementary_charge,
                         )
                         dataset.add_property(mol_name, lowdin_charges)
 
                         # extract the lowdin spin multiplicity
                         n_atoms = forces.n_atoms
-                        spins = self._process_log_for_spin(
-                            log=record_val["compute_history_"][0]["outputs_"]["stdout"][
-                                "data_"
-                            ],
-                            n_atoms=n_atoms,
-                        )
-                        spin_multiplicity_per_atom = SpinMultiplicitiesPerAtom(
-                            name="spin_multiplicity_per_atom",
-                            value=spins,
-                            units=unit.dimensionless,
-                        )
-                        dataset.add_property(mol_name, spin_multiplicity_per_atom)
+                        try:
+                            spins = self._process_log_for_spin(
+                                log=record_val["compute_history_"][0]["outputs_"][
+                                    "stdout"
+                                ]["data_"],
+                                n_atoms=n_atoms,
+                            )
+                            spin_multiplicity_per_atom = SpinMultiplicitiesPerAtom(
+                                name="spin_multiplicity_per_atom",
+                                value=spins.reshape(1, n_atoms, 1),
+                                units=unit.dimensionless,
+                            )
+                            dataset.add_property(mol_name, spin_multiplicity_per_atom)
+                        except:
+                            logger.warning(
+                                f"Failed to extract per atom spin multiplicity for {key}. Will log as NaN."
+                            )
+                            spins = np.full((1, n_atoms, 1), np.nan)
+                            spin_multiplicity_per_atom = SpinMultiplicitiesPerAtom(
+                                name="spin_multiplicity_per_atom",
+                                value=spins,
+                                units=unit.dimensionless,
+                            )
+                            dataset.add_property(mol_name, spin_multiplicity_per_atom)
 
         return dataset
 

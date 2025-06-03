@@ -81,25 +81,29 @@ for the neural network, while the `postprocessing_parameter` section contains
 the parameters for the postprocessing operations. Explanation of fields in
 `physnet.toml`:
 
+* `potential_name`: Specifies the type of potential to use, in this case, PhysNet.
+
 `core_parameter`:
 
-* `potential_name`: Specifies the type of potential to use, in this case, PhysNet.
 * `number_of_radial_basis_functions`: Number of radial basis functions.
 * `maximum_interaction_radius`: Cutoff radius for considering neighboring atoms.
 * `number_of_interaction_residual`: PhysNet hyperparamter defining the depth of the network.
 * `number_of_modules`: PhysNet hyperparamter defining the depth of the network;which scales with (number_of_interaction_residual * number_of_modules).
+* `predicted_properties`: List of properties to predict from the network. Currently, must always include `per_atom_energy`. Other properties can be aded to this list, such as `per_atom_charge`. While this can, in theory, can accept any property, these predicted properties may not be meaningful if they are not able to be assessed by the loss function.
+* `predicted_dim`: List of integers that correspond to the length of each predicted property.  For example, if `predicted_properties` is `['per_atom_energy', 'per_atom_charge']`, then `predicted_dim` should be `[1, 1]` for a single scalar value for each property.
 * `featurization.properties_to_featurize`: List of properties to featurize. Currently, must always include `atomic_number`. Other properties can be added to this list.
 * `featurization.atomic_number.maximum_atomic_number```: Maximum atomic number in the dataset.
 * `featurization.atomic_number.number_of_per_atom_features`: Number of features for each atom used for the embedding. This is the number of features that are used to represent each atom in the neural network.
 * `activation_function_parameter.activation_function_name`: Activation function used in the neural network.
 
 `postprocessing_parameter`:
+
 * `properties_to_process`: List of properties to process. Currently, must always include `per_atom_energy`. Other properties can be added to this list, so as 'per_atom_charge', 'electrostatic_potential' and 'zbl_potential'.
 * `per_atom_energy.normalize`: Whether to normalize energies for training. If this is set to true the mean and standard deviation of the energies are calculated and used to normalize the energies.
 * `per_atom_energy.from_atom_to_system_reduction`: Whether to reduce the per-atom properties to per-molecule properties.
 * `per_atom_energy.keep_per_atom_property`: If this is set to true the per-atom energies are returned as well.
 * `per_atom_charge.conserve`: Whether to conserve the total charge of the system if charges are predicted (i.e. 'per_atom_charge' is in the 'properties_to_process'. If this is set to true the total charge of the system is calculated and used to normalize the per-atom charges.
-*`per_atom_charge.conserve_strategy`: The strategy used to conserve the total charge of the system. Currently, only 'default' is implemented, which uses the default strategy.
+* `per_atom_charge.conserve_strategy`: The strategy used to conserve the total charge of the system. Currently, only 'default' is implemented, which uses the default strategy.
 * `electrostatic_potential.electrostatic_strategy`: The strategy used to calculate the electrostatic potential. Currently, only 'coulomb' is implemented, which uses the Coulomb potential. Note, to use this option the `per_atom_charge` property must be included in the list of properties to process (as this relies upon the partial charges).
 * `electrostatic_potential.maximum_interaction_radius`: Cutoff radius for considering neighboring atoms for the electrostatic potential. Note: this may be different than the cutoff used for the core model.
 * `zbl_potential.calculate_zbl_potential`: This is a postprocessing operation that calculates the Ziegler-Biersack-Littmark (ZBL) potential. This is a very short-range potential that is used to prevent overlap of atoms.

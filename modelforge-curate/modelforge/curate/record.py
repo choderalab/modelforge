@@ -1,4 +1,4 @@
-from modelforge.curate.units import GlobalUnitSystem, chem_context
+from modelforge.utils.units import GlobalUnitSystem, chem_context
 from modelforge.curate.properties import (
     PropertyBaseModel,
     PropertyClassification,

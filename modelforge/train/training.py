@@ -1636,16 +1636,18 @@ class PotentialTrainer:
             shift_center_of_mass_to_origin=self.training_parameter.shift_center_of_mass_to_origin,
             version_select=self.dataset_parameter.version_select,
             local_cache_dir=self.runtime_parameter.local_cache_dir,
+            regression_ase=self.dataset_parameter.regression_ase,
             splitting_strategy=REGISTERED_SPLITTING_STRATEGIES[
                 self.training_parameter.splitting_strategy.name
             ](
                 seed=self.training_parameter.splitting_strategy.seed,
                 split=self.training_parameter.splitting_strategy.data_split,
             ),
-            regenerate_processed_cache=self.dataset_parameter.regenerate_processed_cache,
             properties_of_interest=self.dataset_parameter.properties_of_interest,
             properties_assignment=self.dataset_parameter.properties_assignment.model_dump(),
             element_filter=self.dataset_parameter.element_filter,
+            dataset_cache_dir=self.dataset_parameter.dataset_cache_dir,
+            local_yaml_file=self.dataset_parameter.local_yaml_file,
         )
         dm.prepare_data()
         dm.setup()

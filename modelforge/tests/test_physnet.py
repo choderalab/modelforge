@@ -16,16 +16,19 @@ def test_init():
     assert model is not None, "PhysNet model should be initialized."
 
 
-def test_forward(single_batch_with_batchsize, prep_temp_dir):
+def test_forward(single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir):
     import torch
+
+    local_cache_dir = str(prep_temp_dir) + "/physnet"
+    dataset_cache_dir = str(dataset_temp_dir)
 
     model = setup_potential_for_test("physnet", "training")
     print(model)
     batch = single_batch_with_batchsize(
         batch_size=64,
         dataset_name="QM9",
-        local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
 
     yhat = model(batch.nnp_input.to_dtype(dtype=torch.float32))

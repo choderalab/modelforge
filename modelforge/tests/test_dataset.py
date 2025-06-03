@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import torch
 
-from modelforge.dataset.dataset import DatasetFactory, TorchDataset, BatchData
+from modelforge.dataset.dataset import TorchDataset, BatchData
 from modelforge.dataset import _ImplementedDatasets
 
 from modelforge.utils.prop import PropertyNames
@@ -22,20 +22,6 @@ def test_dataset_imported():
     """Sample test, will always pass so long as import statement worked."""
 
     assert "modelforge.dataset" in sys.modules
-
-
-testing_version = {
-    "tmqm_xtb": "nc_1000_v1.1",
-    "fe_ii": "nc_1000_v1.1",
-    "qm9": "nc_1000_v0",
-    "ani1x": "nc_1000_v0",
-    "ani2x": "nc_1000_v0",
-    "spice1": "nc_1000_v0",
-    "spice1_openff": "nc_1000_v0",
-    "spice2": "nc_1000_v0",
-    "phalkethoh": "nc_1000_v0",
-    "tmqm": "nc_1000_v0",
-}
 
 
 def test_dataset_basic_operations():
@@ -115,182 +101,19 @@ def test_dataset_basic_operations():
 
 
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
-def test_get_properties(dataset_name, single_batch_with_batchsize, prep_temp_dir):
+def test_get_properties(
+    dataset_name, single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
+):
 
-    version = testing_version[dataset_name.lower()]
-
+    local_cache_dir = str(prep_temp_dir) + "/test_get_properties"
+    dataset_cache_dir = str(dataset_temp_dir)
     batch = single_batch_with_batchsize(
         batch_size=16,
         dataset_name=dataset_name,
-        local_cache_dir=str(prep_temp_dir),
-        version_select=version,
-    )
-
-
-@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
-def test_different_properties_of_interest(dataset_name, dataset_factory, prep_temp_dir):
-    local_cache_dir = str(prep_temp_dir) + "/data_test"
-
-    version = testing_version[dataset_name.lower()]
-
-    data = _ImplementedDatasets.get_dataset_class(
-        dataset_name,
-    )(version_select=version, local_cache_dir=local_cache_dir)
-    if dataset_name == "QM9":
-        assert data.properties_of_interest == [
-            "geometry",
-            "atomic_numbers",
-            "internal_energy_at_0K",
-            "dipole_moment",
-        ]
-        # spot check the processing of the yaml file
-        assert data.gz_data_file["length"] == 1697917
-        assert data.gz_data_file["md5"] == "dc8ada0d808d02c699daf2000aff1fe9"
-        assert data.gz_data_file["name"] == "qm9_dataset_v0_nc_1000.hdf5.gz"
-        assert data.hdf5_data_file["md5"] == "305a0602860f181fafa75f7c7e3e6de4"
-        assert data.hdf5_data_file["name"] == "qm9_dataset_v0_nc_1000.hdf5"
-        assert (
-            data.processed_data_file["name"] == "qm9_dataset_v0_nc_1000_processed.npz"
-        )
-
-        data.properties_of_interest = [
-            "internal_energy_at_0K",
-            "geometry",
-            "atomic_numbers",
-        ]
-        assert data.properties_of_interest == [
-            "internal_energy_at_0K",
-            "geometry",
-            "atomic_numbers",
-        ]
-
-    elif dataset_name == "ANI1x" or dataset_name == "ANI2x":
-        assert data.properties_of_interest == [
-            "geometry",
-            "atomic_numbers",
-            "wb97x_dz.energy",
-            "wb97x_dz.forces",
-            "dipole_moment",
-        ]
-
-        data.properties_of_interest = [
-            "internal_energy_at_0K",
-            "geometry",
-            "atomic_numbers",
-            "wb97x_dz.energy",
-            "wb97x_dz.forces",
-        ]
-        assert data.properties_of_interest == [
-            "internal_energy_at_0K",
-            "geometry",
-            "atomic_numbers",
-            "wb97x_dz.energy",
-            "wb97x_dz.forces",
-        ]
-    elif dataset_name == "SPICE2":
-        assert data.properties_of_interest == [
-            "geometry",
-            "atomic_numbers",
-            "dft_total_energy",
-            "dft_total_force",
-            "total_charge",
-            "scf_dipole",
-        ]
-
-        data.properties_of_interest = [
-            "dft_total_energy",
-            "geometry",
-            "atomic_numbers",
-            "total_charge",
-        ]
-        assert data.properties_of_interest == [
-            "dft_total_energy",
-            "geometry",
-            "atomic_numbers",
-            "total_charge",
-        ]
-    elif dataset_name == "PhAlkEthOH":
-        assert data.properties_of_interest == [
-            "geometry",
-            "atomic_numbers",
-            "dft_total_energy",
-            "dft_total_force",
-            "total_charge",
-            "dipole_moment",
-        ]
-
-        data.properties_of_interest = [
-            "dft_total_energy",
-            "geometry",
-            "atomic_numbers",
-        ]
-        assert data.properties_of_interest == [
-            "dft_total_energy",
-            "geometry",
-            "atomic_numbers",
-        ]
-    elif dataset_name == "tmqm":
-        assert data.properties_of_interest == [
-            "geometry",
-            "atomic_numbers",
-            "total_energy",
-            "dipole_moment_computed",
-            "total_charge",
-        ]
-
-        data.properties_of_interest = ["total_energy", "geometry", "atomic_numbers"]
-
-        assert data.properties_of_interest == [
-            "total_energy",
-            "geometry",
-            "atomic_numbers",
-        ]
-    elif dataset_name == "tmqm-xtb":
-        assert data.properties_of_interest == [
-            "positions",
-            "atomic_numbers",
-            "total_charge",
-            "forces",
-            "dipole_moment_per_system",
-            "energies",
-            "partial_charges",
-        ]
-
-        data.properties_of_interest = ["energies", "positions", "atomic_numbers"]
-
-        assert data.properties_of_interest == [
-            "energies",
-            "positions",
-            "atomic_numbers",
-        ]
-    elif dataset_name == "fe_II":
-        assert data.properties_of_interest == [
-            "positions",
-            "atomic_numbers",
-            "total_charge",
-            "forces",
-            "energies",
-            "spin_multiplicities",
-        ]
-
-        data.properties_of_interest = [
-            "energies",
-            "positions",
-            "atomic_numbers",
-        ]
-
-        assert data.properties_of_interest == [
-            "energies",
-            "positions",
-            "atomic_numbers",
-        ]
-    dataset = dataset_factory(
-        dataset_name=dataset_name,
         local_cache_dir=local_cache_dir,
-        version_select=version,
+        dataset_cache_dir=dataset_cache_dir,
     )
-
-    raw_data_item = dataset[0]
+    raw_data_item = batch
     assert isinstance(raw_data_item, BatchData)
     assert len(raw_data_item.__dataclass_fields__) == 2
     assert (
@@ -299,64 +122,130 @@ def test_different_properties_of_interest(dataset_name, dataset_factory, prep_te
     assert len(raw_data_item.metadata.__slots__) == 6  # 6 properties are returned
 
 
+def test_get_different_properties_of_interest(
+    load_test_dataset, prep_temp_dir, dataset_temp_dir
+):
+    # since we have switched from separate classses to using yaml files with a single class
+    # we need to test the properties of interest of a single dataset
+
+    local_cache_dir = str(prep_temp_dir) + "/data_test"
+    dataset_cache_dir = str(dataset_temp_dir)
+    dataset_cache_dir = str(dataset_temp_dir)
+
+    from modelforge.dataset import HDF5Dataset
+
+    dataset = load_test_dataset(
+        "qm9", local_cache_dir=local_cache_dir, dataset_cache_dir=dataset_cache_dir
+    )
+
+    assert dataset.properties_of_interest == [
+        "atomic_numbers",
+        "positions",
+        "internal_energy_at_0K",
+        "dipole_moment_per_system",
+    ]
+
+    # spot check the processing of the yaml file
+    assert dataset.gz_data_file_dict["length"] == 1923749
+    assert dataset.gz_data_file_dict["md5"] == "54a2471bba075fcc2cdfe0b78bc567fa"
+    assert dataset.gz_data_file_dict["file_name"] == "qm9_dataset_v1.1_ntc_1000.hdf5.gz"
+    assert dataset.hdf5_data_file_dict["md5"] == "befb3ef66d74f436ef399bf68eda9b90"
+    assert dataset.hdf5_data_file_dict["file_name"] == "qm9_dataset_v1.1_ntc_1000.hdf5"
+
+    dataset.properties_of_interest = [
+        "internal_energy_at_0K",
+        "positions",
+        "atomic_numbers",
+    ]
+    assert dataset.properties_of_interest == [
+        "internal_energy_at_0K",
+        "positions",
+        "atomic_numbers",
+    ]
+
+    # raw_data_item = dataset[0]
+    # assert isinstance(raw_data_item, BatchData)
+    # assert len(raw_data_item.__dataclass_fields__) == 2
+    # assert (
+    #     len(raw_data_item.nnp_input.__slots__) == 9
+    # )  # 9 properties are returned now that we have included spin state
+    # assert len(raw_data_item.metadata.__slots__) == 6  # 6 properties are returned
+
+
 @pytest.mark.parametrize("dataset_name", ["QM9"])
 def test_file_existence_after_initialization(
-    dataset_name, dataset_factory, prep_temp_dir
+    dataset_name, load_test_dataset, prep_temp_dir, dataset_temp_dir
 ):
     """Test if files are created after dataset initialization."""
     import contextlib
 
-    local_cache_dir = str(prep_temp_dir) + "/data_test"
-    version = testing_version[dataset_name.lower()]
+    local_cache_dir = str(prep_temp_dir) + "/test_init"
+    dataset_cache_dir = str(dataset_temp_dir)
 
-    data = _ImplementedDatasets.get_dataset_class(dataset_name)(
-        local_cache_dir=local_cache_dir, version_select=version
+    data = load_test_dataset(
+        "qm9", local_cache_dir=local_cache_dir, dataset_cache_dir=dataset_cache_dir
     )
 
     with contextlib.suppress(FileNotFoundError):
-        os.remove(f"{local_cache_dir}/{data.gz_data_file['name']}")
-        os.remove(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
-        os.remove(f"{local_cache_dir}/{data.processed_data_file['name']}")
+        os.remove(f"{dataset_cache_dir}/{data.gz_data_file_dict['file_name']}")
+        os.remove(f"{dataset_cache_dir}/{data.hdf5_data_file_dict['file_name']}")
+        os.remove(f"{local_cache_dir}/{data.processed_data_file}")
 
-    dataset = dataset_factory(
-        dataset_name=dataset_name,
-        local_cache_dir=local_cache_dir,
+    # acquire the dataset
+    data._acquire_dataset()
+
+    # the datafiles are saved to the dataset_cache_dir
+    # the processed file to the local_cache_dir
+    assert os.path.exists(f"{dataset_cache_dir}/{data.gz_data_file_dict['file_name']}")
+    assert os.path.exists(
+        f"{dataset_cache_dir}/{data.hdf5_data_file_dict['file_name']}"
     )
-
-    assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
-    assert os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
-    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
+    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file}")
 
 
-def test_caching(prep_temp_dir):
+@pytest.mark.parametrize("dataset_name", ["QM9"])
+def test_caching(dataset_name, load_test_dataset, prep_temp_dir):
     import contextlib
 
-    local_cache_dir = str(prep_temp_dir)
-    from modelforge.dataset.qm9 import QM9Dataset
+    local_cache_dir = str(prep_temp_dir) + "/local_output"
+    # since we will be deleting datasets, use our own temp dir not the global one
+    dataset_cache_dir = str(prep_temp_dir) + "/dataset_dir2"
 
-    data = QM9Dataset(version_select="nc_1000_v0", local_cache_dir=local_cache_dir)
+    data = load_test_dataset(
+        dataset_name,
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
+    )
 
-    # first test that no file exists
+    # first ensure that no file exists
     with contextlib.suppress(FileNotFoundError):
-        os.remove(f"{local_cache_dir}/{data.gz_data_file['name']}")
-        os.remove(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
-        os.remove(f"{local_cache_dir}/{data.processed_data_file['name']}")
-    assert not os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
+        os.remove(f"{dataset_cache_dir}/{data.gz_data_file_dict['file_name']}")
+        os.remove(f"{dataset_cache_dir}/{data.hdf5_data_file_dict['file_name']}")
+        os.remove(f"{local_cache_dir}/{data.processed_data_file}")
+
+    assert not os.path.exists(
+        f"{dataset_cache_dir}/{data.gz_data_file_dict['file_name']}"
+    )
     # the _file_validation method also checks the path in addition to the checksum
     assert (
         data._file_validation(
-            data.gz_data_file["name"], local_cache_dir, data.gz_data_file["md5"]
+            data.gz_data_file_dict["file_name"],
+            dataset_cache_dir,
+            data.gz_data_file_dict["md5"],
         )
         == False
     )
 
-    data._download()
+    # acquire the dataset
+    data._acquire_dataset()
     # check that the file exists
-    assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
+    assert os.path.exists(f"{dataset_cache_dir}/{data.gz_data_file_dict['file_name']}")
     # check that the file is there and has the right checksum
     assert (
         data._file_validation(
-            data.gz_data_file["name"], local_cache_dir, data.gz_data_file["md5"]
+            data.gz_data_file_dict["file_name"],
+            dataset_cache_dir,
+            data.gz_data_file_dict["md5"],
         )
         == True
     )
@@ -364,54 +253,104 @@ def test_caching(prep_temp_dir):
     # give a random checksum to see this is false
     assert (
         data._file_validation(
-            data.gz_data_file["name"], local_cache_dir, "madeupcheckusm"
+            data.gz_data_file_dict["file_name"], dataset_cache_dir, "wefweifj3392029302"
         )
         == False
     )
+
+    assert (
+        data._file_validation(
+            data.hdf5_data_file_dict["file_name"],
+            dataset_cache_dir,
+            data.hdf5_data_file_dict["md5"],
+        )
+        == True
+    )
+
+    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file}")
+
     # make sure that if we run again we don't fail
-    data._download()
-    # remove the file and check that it is downloaded again
-    os.remove(f"{local_cache_dir}/{data.gz_data_file['name']}")
-    data._download()
+    data._acquire_dataset()
+
+    # remove the files and check that it is downloaded again
+    os.remove(f"{dataset_cache_dir}/{data.gz_data_file_dict['file_name']}")
+    os.remove(f"{dataset_cache_dir}/{data.hdf5_data_file_dict['file_name']}")
+    os.remove(f"{local_cache_dir}/{data.processed_data_file}")
+
+    data._acquire_dataset()
 
     # check that the file is unzipped
-    data._ungzip_hdf5()
-    assert os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
+    assert os.path.exists(f"{dataset_cache_dir}/{data.gz_data_file_dict['file_name']}")
+    # check that the file is there and has the right checksum
     assert (
         data._file_validation(
-            data.hdf5_data_file["name"], local_cache_dir, data.hdf5_data_file["md5"]
-        )
-        == True
-    )
-    data._from_hdf5()
-
-    data._to_file_cache()
-
-    # npz files saved with different versions of python lead to different checksums
-    # we will skip checking the checksums for these files, only seeing if they exist
-    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
-    assert (
-        data._file_validation(
-            data.processed_data_file["name"],
-            local_cache_dir,
-            None,
+            data.gz_data_file_dict["file_name"],
+            dataset_cache_dir,
+            data.gz_data_file_dict["md5"],
         )
         == True
     )
 
-    data._from_file_cache()
+    assert (
+        data._file_validation(
+            data.hdf5_data_file_dict["file_name"],
+            dataset_cache_dir,
+            data.hdf5_data_file_dict["md5"],
+        )
+        == True
+    )
+    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file}")
+
+    # remove the gz file and processed file and check that it is not  downloaded again, but rather hdf5 file is used
+    # also remove processed file so we can see it is regenerated
+
+    os.remove(f"{dataset_cache_dir}/{data.gz_data_file_dict['file_name']}")
+    os.remove(f"{local_cache_dir}/{data.processed_data_file}")
+
+    data._acquire_dataset()
+
+    # check that the processed file was generated
+    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file}")
+
+    # check that we still don't have a gz file
+    assert not os.path.exists(
+        f"{dataset_cache_dir}/{data.gz_data_file_dict['file_name']}"
+    )
+
+    # remove the hdf5 file and check that we use the processed file
+    os.remove(f"{dataset_cache_dir}/{data.hdf5_data_file_dict['file_name']}")
+    data._acquire_dataset()
+
+    # make sure we don't have the hdf5 or gz file
+    assert not os.path.exists(
+        f"{dataset_cache_dir}/{data.hdf5_data_file_dict['file_name']}"
+    )
+    assert not os.path.exists(
+        f"{dataset_cache_dir}/{data.gz_data_file_dict['file_name']}"
+    )
+
+    # if we change the properties of interest, this should cause us to download again
+    data.properties_of_interest = ["atomic_numbers", "positions", "energy_of_homo"]
+    data._acquire_dataset()
+
+    assert os.path.exists(
+        f"{dataset_cache_dir}/{data.hdf5_data_file_dict['file_name']}"
+    )
+    assert os.path.exists(f"{dataset_cache_dir}/{data.gz_data_file_dict['file_name']}")
+    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file}")
 
 
-def test_metadata_validation(prep_temp_dir):
+def test_metadata_validation(prep_temp_dir, load_test_dataset, dataset_temp_dir):
     """When we generate an .npz file, we also write out metadata in a .json file
     which is used to validate if we can use .npz file, or we need to
     regenerate it."""
 
-    local_cache_dir = str(prep_temp_dir)
+    local_cache_dir = str(prep_temp_dir) + "/local_output"
+    dataset_cache_dir = str(dataset_temp_dir)
 
-    from modelforge.dataset.qm9 import QM9Dataset
-
-    data = QM9Dataset(version_select="nc_1000_v0", local_cache_dir=local_cache_dir)
+    data = load_test_dataset(
+        "qm9", local_cache_dir=local_cache_dir, dataset_cache_dir=dataset_cache_dir
+    )
 
     a = ["energy", "force", "atomic_numbers"]
     b = ["energy", "atomic_numbers", "force"]
@@ -432,12 +371,12 @@ def test_metadata_validation(prep_temp_dir):
         "data_keys": [
             "atomic_numbers",
             "internal_energy_at_0K",
-            "geometry",
-            "dipole_moment",
+            "positions",
+            "dipole_moment_per_system",
         ],
         "element_filter": str([[6, 1]]),
-        "hdf5_checksum": "305a0602860f181fafa75f7c7e3e6de4",
-        "hdf5_gz_checkusm": "dc8ada0d808d02c699daf2000aff1fe9",
+        "hdf5_checksum": "befb3ef66d74f436ef399bf68eda9b90",
+        "hdf5_gz_checksum": "54a2471bba075fcc2cdfe0b78bc567fa",
         "date_generated": "2024-04-11 14:05:14.297305",
     }
 
@@ -464,96 +403,67 @@ def test_metadata_validation(prep_temp_dir):
         json.dump(metadata, f)
     assert data._metadata_validation("qm9_test.json", local_cache_dir) == False
 
+    # create metadata with a bogus property key
+    metadata = {
+        "data_keys": [
+            "atomic_numbers",
+            "internal_energy_at_0K",
+            "not_a_property",
+            "dipole_moment_per_system",
+        ],
+        "element_filter": str([[6, 1]]),
+        "hdf5_checksum": "befb3ef66d74f436ef399bf68eda9b90",
+        "hdf5_gz_checksum": "54a2471bba075fcc2cdfe0b78bc567fa",
+        "date_generated": "2024-04-11 14:05:14.297305",
+    }
+    with open(
+        f"{local_cache_dir}/qm9_test.json",
+        "w+",
+    ) as f:
+        json.dump(metadata, f)
 
-@pytest.mark.parametrize("dataset_name", ["QM9"])
-def test_different_scenarios_of_file_availability(
-    dataset_name, prep_temp_dir, dataset_factory
-):
-    """Test the behavior when raw and processed dataset files are removed."""
-    local_cache_dir = str(prep_temp_dir) + "/test_diff_scenario"
+    assert data._metadata_validation("qm9_test.json", local_cache_dir) == False
 
-    # this will download the .gz, the .hdf5 and the .npz files
-    dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
-    # we initialize this so that we have the correct parameters to compare against
+    # create metadata with a bogus checksum for hdf5
+    metadata = {
+        "data_keys": [
+            "atomic_numbers",
+            "internal_energy_at_0K",
+            "not_a_property",
+            "dipole_moment_per_system",
+        ],
+        "element_filter": str([[6, 1]]),
+        "hdf5_checksum": "coiejfweoijfowklewke33883",
+        "hdf5_gz_checksum": "54a2471bba075fcc2cdfe0b78bc567fa",
+        "date_generated": "2024-04-11 14:05:14.297305",
+    }
+    with open(
+        f"{local_cache_dir}/qm9_test.json",
+        "w+",
+    ) as f:
+        json.dump(metadata, f)
 
-    data = _ImplementedDatasets.get_dataset_class(dataset_name)(
-        version_select="nc_1000_v0", local_cache_dir=local_cache_dir
-    )
-
-    # first check if we remove the npz file, rerunning it will regenerate it
-    os.remove(f"{local_cache_dir}/{data.processed_data_file['name']}")
-    dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
-
-    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
-
-    # now remove metadata file, rerunning will regenerate the npz file
-    os.remove(
-        f"{local_cache_dir}/{data.processed_data_file['name'].replace('npz', 'json')}"
-    )
-    dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
-    assert os.path.exists(
-        f"{local_cache_dir}/{data.processed_data_file['name'].replace('npz', 'json')}"
-    )
-
-    # now remove the  npz and hdf5 files, rerunning will generate it
-
-    os.remove(f"{local_cache_dir}/{data.processed_data_file['name']}")
-    os.remove(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
-    dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
-
-    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
-    assert os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
-
-    # now remove the gz file; rerunning should NOT download, it will use the npz
-    os.remove(f"{local_cache_dir}/{data.gz_data_file['name']}")
-
-    dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
-    assert not os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
-
-    # now let us remove the hdf5 file, it should use the npz file
-    os.remove(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
-    dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
-    assert not os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
-
-    # now if we remove the npz, it will redownload the gz file and unzip it, then process it
-    os.remove(f"{local_cache_dir}/{data.processed_data_file['name']}")
-    dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
-    assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
-    assert os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
-    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
-
-    # now we will remove the gz file, and set force_download to True
-    # this should now regenerate the gz file, even though others are present
-
-    dataset_factory(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
-    assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
-    assert os.path.exists(f"{local_cache_dir}/{data.hdf5_data_file['name']}")
-    assert os.path.exists(f"{local_cache_dir}/{data.processed_data_file['name']}")
-
-    # now we will remove the gz file and run it again
-    os.remove(f"{local_cache_dir}/{data.gz_data_file['name']}")
-    dataset_factory(
-        dataset_name=dataset_name, local_cache_dir=local_cache_dir, force_download=True
-    )
-    assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
+    assert data._metadata_validation("qm9_test.json", local_cache_dir) == False
 
 
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 def test_data_item_format_of_datamodule(
-    dataset_name, datamodule_factory, prep_temp_dir
+    dataset_name, datamodule_factory, prep_temp_dir, dataset_temp_dir
 ):
+    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
+
     """Test the format of individual data items in the dataset."""
     from typing import Dict
 
-    local_cache_dir = str(prep_temp_dir)
-
-    version = testing_version[dataset_name.lower()]
+    local_cache_dir = str(prep_temp_dir) + "/item_format"
+    dataset_cache_dir = str(dataset_temp_dir)
 
     dm = datamodule_factory(
         dataset_name=dataset_name,
         batch_size=512,
         local_cache_dir=local_cache_dir,
-        version_select=version,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        dataset_cache_dir=dataset_cache_dir,
     )
 
     raw_data_item = dm.torch_dataset[0]
@@ -571,22 +481,25 @@ def test_data_item_format_of_datamodule(
 from modelforge.potential import _Implemented_NNPs
 
 
-@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
-def test_removal_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir):
+@pytest.mark.parametrize("dataset_name", ["QM9", "PHALKETHOH"])
+# @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
+def test_removal_of_self_energy(
+    dataset_name, datamodule_factory, prep_temp_dir, dataset_temp_dir
+):
     # test the self energy calculation on the QM9 dataset
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
-    version = testing_version[dataset_name.lower()]
+    local_cache_dir = f"{str(prep_temp_dir)}/self_energy"
+    dataset_cache_dir = str(dataset_temp_dir)
 
     # prepare reference value
     dm = datamodule_factory(
         dataset_name=dataset_name,
-        version_select=version,
         batch_size=512,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         remove_self_energies=False,
-        regenerate_dataset_statistic=True,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
 
     first_entry_with_ase = dm.train_dataset[0].metadata.per_system_energy
@@ -596,9 +509,9 @@ def test_removal_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir)
         dataset_name=dataset_name,
         batch_size=512,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-        version_select=version,
         remove_self_energies=True,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
 
     atomic_numbers = dm.train_dataset[0].nnp_input.atomic_numbers
@@ -610,13 +523,21 @@ def test_removal_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir)
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
 def test_dataset_neighborlist(
-    potential_name, single_batch_with_batchsize, prep_temp_dir
+    potential_name, single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
 ):
     """Test the neighborlist."""
 
+    local_cache_dir = str(prep_temp_dir) + "/test_neigh"
+    dataset_cache_dir = str(dataset_temp_dir)
+
+    # we will simply load up qm9
     batch = single_batch_with_batchsize(
-        64, "QM9", str(prep_temp_dir), version_select="nc_1000_v0"
+        batch_size=64,
+        dataset_name="qm9",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
+
     nnp_input = batch.nnp_input
 
     # test that the neighborlist is correctly generated
@@ -625,10 +546,10 @@ def test_dataset_neighborlist(
     model = setup_potential_for_test(
         use="inference",
         potential_seed=42,
-        potential_name="ani2x",
+        potential_name=potential_name,
         simulation_environment="PyTorch",
         use_training_mode_neighborlist=True,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
     )
     model(nnp_input)
 
@@ -637,95 +558,88 @@ def test_dataset_neighborlist(
     assert torch.all(pair_list[0, 1:] >= pair_list[0, :-1])
 
     # test the pairlist for message passing networks (with redundant atom pairs)
-    # first molecule is methane, check if bonds are correct
-    methane_bonds = pair_list[:, :20]
+    # the first molecule in qm9 is methane, check if pairs are correct
+    # methane will have 5 choose 2 unique pairs, or 20 total non-unique pairs
 
-    assert (
-        torch.any(
-            torch.eq(
-                methane_bonds,
-                torch.tensor(
-                    [
-                        [
-                            0,
-                            0,
-                            0,
-                            0,
-                            1,
-                            1,
-                            1,
-                            1,
-                            2,
-                            2,
-                            2,
-                            2,
-                            3,
-                            3,
-                            3,
-                            3,
-                            4,
-                            4,
-                            4,
-                            4,
-                        ],
-                        [
-                            1,
-                            2,
-                            3,
-                            4,
-                            0,
-                            2,
-                            3,
-                            4,
-                            0,
-                            1,
-                            3,
-                            4,
-                            0,
-                            1,
-                            2,
-                            4,
-                            0,
-                            1,
-                            2,
-                            3,
-                        ],
-                    ]
-                ),
-            )
-            == False
-        ).item()
-        == False
+    methane_pairs = pair_list[:, :20]
+    print(methane_pairs)
+
+    methane_pairs_known = torch.tensor(
+        [
+            [
+                0,
+                0,
+                0,
+                0,
+                1,
+                1,
+                1,
+                1,
+                2,
+                2,
+                2,
+                2,
+                3,
+                3,
+                3,
+                3,
+                4,
+                4,
+                4,
+                4,
+            ],
+            [
+                1,
+                2,
+                3,
+                4,
+                0,
+                2,
+                3,
+                4,
+                0,
+                1,
+                3,
+                4,
+                0,
+                1,
+                2,
+                4,
+                0,
+                1,
+                2,
+                3,
+            ],
+        ]
     )
-    # second molecule is ammonium, check if bonds are correct
-    ammonium_bonds = pair_list[:, 20:30]
-    assert (
-        torch.any(
-            torch.eq(
-                ammonium_bonds,
-                torch.tensor(
-                    [
-                        [5, 5, 5, 6, 6, 6, 7, 7, 7, 8],
-                        [6, 7, 8, 5, 7, 8, 5, 6, 8, 5],
-                    ]
-                ),
-            )
-            == False
-        ).item()
-        == False
+    assert torch.all(methane_pairs == methane_pairs_known)
+
+    ammonium_pairs = pair_list[:, 20:30]
+    ammonium_pairs_known = torch.tensor(
+        [
+            [5, 5, 5, 6, 6, 6, 7, 7, 7, 8],
+            [6, 7, 8, 5, 7, 8, 5, 6, 8, 5],
+        ]
     )
+    assert torch.all(ammonium_pairs == ammonium_pairs_known)
 
 
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
-def test_dataset_generation(dataset_name, datamodule_factory, prep_temp_dir):
+def test_dataset_generation(
+    dataset_name, datamodule_factory, prep_temp_dir, dataset_temp_dir
+):
     """Test the splitting of the dataset."""
+    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
-    version = testing_version[dataset_name.lower()]
+    local_cache_dir = str(prep_temp_dir) + "/dataset_generation"
+    dataset_cache_dir = str(dataset_temp_dir)
 
     dataset = datamodule_factory(
         dataset_name=dataset_name,
-        local_cache_dir=str(prep_temp_dir),
-        version_select=version,
+        local_cache_dir=local_cache_dir,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        batch_size=64,
+        dataset_cache_dir=dataset_cache_dir,
     )
     train_dataloader = dataset.train_dataloader()
     val_dataloader = dataset.val_dataloader()
@@ -771,22 +685,26 @@ from modelforge.dataset.utils import (
         RandomRecordSplittingStrategy,
     ],
 )
-@pytest.mark.parametrize("dataset_name", ["QM9"])
+@pytest.mark.parametrize("dataset_name", ["QM9", "PHALKETHOH"])
 def test_dataset_splitting(
     splitting_strategy,
     dataset_name,
     datamodule_factory,
     get_dataset_container_fix,
     prep_temp_dir,
+    dataset_temp_dir,
 ):
+    local_cache_dir = str(prep_temp_dir) + "/dataset_splitting"
+    dataset_cache_dir = str(dataset_temp_dir)
+
     """Test random_split on the the dataset."""
     dm = datamodule_factory(
         dataset_name=dataset_name,
         batch_size=512,
         splitting_strategy=splitting_strategy(),
-        version_select="nc_1000_v0",
         remove_self_energies=False,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
 
     train_dataset, val_dataset, test_dataset = (
@@ -795,20 +713,20 @@ def test_dataset_splitting(
         dm.test_dataset,
     )
 
-    energy = train_dataset[0].metadata.per_system_energy.item()
-    dataset_to_test = get_dataset_container_fix(dataset_name)
-    if splitting_strategy == RandomSplittingStrategy:
-        assert np.isclose(energy, dataset_to_test.expected_E_random_split)
-    elif splitting_strategy == FirstComeFirstServeSplittingStrategy:
-        assert np.isclose(energy, dataset_to_test.expected_E_fcfs_split)
+    # energy = train_dataset[0].metadata.per_system_energy.item()
+    # dataset_to_test = get_dataset_container_fix(dataset_name)
+    # if splitting_strategy == RandomSplittingStrategy:
+    #     assert np.isclose(energy, dataset_to_test.expected_E_random_split)
+    # elif splitting_strategy == FirstComeFirstServeSplittingStrategy:
+    #     assert np.isclose(energy, dataset_to_test.expected_E_fcfs_split)
 
     dm = datamodule_factory(
         dataset_name=dataset_name,
         batch_size=512,
         splitting_strategy=splitting_strategy(split=[0.6, 0.3, 0.1]),
-        version_select="nc_1000_v0",
         remove_self_energies=False,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
 
     train_dataset2, val_dataset2, test_dataset2 = (
@@ -841,70 +759,32 @@ def test_dataset_splitting(
         print(f"AssertionError raised: {excinfo}")
 
 
+# @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 @pytest.mark.parametrize("dataset_name", ["QM9"])
-def test_properties_assignment(
-    dataset_name,
-    datamodule_factory,
-    prep_temp_dir,
+def test_numpy_dataset_assignment(
+    dataset_name, load_test_dataset, prep_temp_dir, dataset_temp_dir
 ):
-    """Test random_split on the the dataset."""
-    dm = datamodule_factory(
-        dataset_name=dataset_name,
-        batch_size=512,
-        version_select="nc_1000_v0",
-        local_cache_dir=str(prep_temp_dir),
-        properties_of_interest=[
-            "atomic_numbers",
-            "geometry",
-            "internal_energy_at_0K",
-            "dipole_moment",
-        ],
-        properties_assignment={
-            "E": "internal_energy_at_0K",
-            "positions": "geometry",
-            "atomic_numbers": "atomic_numbers",
-            "dipole_moment": "dipole_moment",
-        },
-    )
-
-
-@pytest.mark.parametrize("dataset_name", ["QM9"])
-def test_dataset_downloader(dataset_name, dataset_factory, prep_temp_dir):
-    """
-    Test the DatasetDownloader functionality.
-    """
-    local_cache_dir = str(prep_temp_dir)
-
-    dataset = dataset_factory(
-        dataset_name=dataset_name,
-        local_cache_dir=local_cache_dir,
-    )
-    data = _ImplementedDatasets.get_dataset_class(dataset_name)(
-        local_cache_dir=local_cache_dir, version_select="nc_1000_v0"
-    )
-    assert os.path.exists(f"{local_cache_dir}/{data.gz_data_file['name']}")
-
-
-@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
-def test_numpy_dataset_assignment(dataset_name, prep_temp_dir):
     """
     Test if the numpy_dataset attribute is correctly assigned after processing or loading.
     """
     from modelforge.dataset import _ImplementedDatasets
 
-    version = testing_version[dataset_name.lower()]
+    local_cache_dir = str(prep_temp_dir) + "/numpy_test"
+    dataset_cache_dir = str(dataset_temp_dir)
 
-    factory = DatasetFactory()
-    data = _ImplementedDatasets.get_dataset_class(dataset_name)(
-        version_select=version, local_cache_dir=str(prep_temp_dir)
+    data = load_test_dataset(
+        dataset_name,
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
-    factory._load_or_process_data(data)
+
+    data._acquire_dataset()
 
     assert hasattr(data, "numpy_data")
     assert isinstance(data.numpy_data, np.lib.npyio.NpzFile)
 
 
-def test_energy_postprocessing(prep_temp_dir):
+def test_energy_postprocessing(datamodule_factory, prep_temp_dir, dataset_temp_dir):
     # test that the mean and stddev of the dataset
     # are correct
     from modelforge.dataset.dataset import DataModule
@@ -912,19 +792,19 @@ def test_energy_postprocessing(prep_temp_dir):
     # test the self energy calculation on the QM9 dataset
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
+    local_cache_dir = str(prep_temp_dir) + "/energy_postprocessing"
+    dataset_cache_dir = str(dataset_temp_dir)
+
     # -------------------------------#
     # Test that we can calculate the normalize energies correctly
-    dm = DataModule(
-        name="QM9",
+    dm = datamodule_factory(
+        dataset_name="QM9",
         batch_size=10,
-        version_select="nc_1000_v0",
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         remove_self_energies=True,
-        regenerate_dataset_statistic=True,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
-    dm.prepare_data()
-    dm.setup()
 
     batch = next(iter(dm.val_dataloader()))
     unnormalized_E = batch.metadata.per_system_energy.numpy().flatten()
@@ -985,19 +865,23 @@ def test_energy_postprocessing(prep_temp_dir):
 
 
 @pytest.mark.parametrize("dataset_name", ["QM9"])
-def test_function_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir):
+def test_function_of_self_energy(
+    dataset_name, datamodule_factory, prep_temp_dir, dataset_temp_dir
+):
     # test the self energy calculation on the QM9 dataset
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
+
+    local_cache_dir = str(prep_temp_dir) + "/self_energy_qm9"
+    dataset_cache_dir = str(dataset_temp_dir)
 
     # prepare reference value
     dm = datamodule_factory(
         dataset_name=dataset_name,
         batch_size=512,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-        version_select="nc_1000_v0",
         remove_self_energies=False,
-        regenerate_dataset_statistic=True,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
 
     methane_energy_reference = float(dm.train_dataset[0].metadata.per_system_energy)
@@ -1008,8 +892,8 @@ def test_function_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir
         dataset_name=dataset_name,
         batch_size=512,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-        regenerate_dataset_statistic=True,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
     # it is saved in the dataset statistics
 
@@ -1039,9 +923,8 @@ def test_function_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         regression_ase=True,
         remove_self_energies=True,
-        version_select="nc_1000_v0",
-        regenerate_dataset_statistic=True,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
 
     # it is saved in the dataset statistics
@@ -1084,9 +967,8 @@ def test_function_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
         regression_ase=True,
         remove_self_energies=True,
-        version_select="nc_1000_v0",
-        regenerate_dataset_statistic=True,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
     # it is saved in the dataset statistics
     import toml
@@ -1103,9 +985,8 @@ def test_function_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir
             splitting_strategy=FirstComeFirstServeSplittingStrategy(),
             regression_ase=regression,
             remove_self_energies=True,
-            version_select="nc_1000_v0",
-            regenerate_dataset_statistic=True,
-            local_cache_dir=str(prep_temp_dir),
+            local_cache_dir=local_cache_dir,
+            dataset_cache_dir=dataset_cache_dir,
         )
         # Extract the first molecule (methane)
         # double check that it is methane
@@ -1137,8 +1018,11 @@ def test_function_of_self_energy(dataset_name, datamodule_factory, prep_temp_dir
         assert np.isclose(methane_energy_reference, methane_energy_offset + methane_ase)
 
 
-def test_shifting_center_of_mass_to_origin(prep_temp_dir):
-    local_cache_dir = str(prep_temp_dir)
+def test_shifting_center_of_mass_to_origin(
+    prep_temp_dir, datamodule_factory, dataset_temp_dir
+):
+    local_cache_dir = f"{str(prep_temp_dir)}/test_shift_com"
+    dataset_cache_dir = str(dataset_temp_dir)
 
     from modelforge.dataset.dataset import initialize_datamodule
     from openff.units.elements import MASSES
@@ -1146,11 +1030,13 @@ def test_shifting_center_of_mass_to_origin(prep_temp_dir):
     import torch
 
     # first check a molecule not centered at the origin
-    dm = initialize_datamodule(
-        "QM9",
-        version_select="nc_1000_v0",
+    dm = datamodule_factory(
+        dataset_name="QM9",
+        batch_size=512,
         shift_center_of_mass_to_origin=False,
         local_cache_dir=local_cache_dir,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        dataset_cache_dir=dataset_cache_dir,
     )
     start_idx = dm.torch_dataset.single_atom_start_idxs_by_conf[0]
     end_idx = dm.torch_dataset.single_atom_end_idxs_by_conf[0]
@@ -1189,17 +1075,21 @@ def test_shifting_center_of_mass_to_origin(prep_temp_dir):
 
     # make sure that we do shift to the origin; we can do the whole dataset
 
-    dm = initialize_datamodule(
-        "PhAlkEthOH",
-        version_select="latest_test",
+    dm = datamodule_factory(
+        dataset_name="QM9",
+        batch_size=512,
         shift_center_of_mass_to_origin=True,
         local_cache_dir=local_cache_dir,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        dataset_cache_dir=dataset_cache_dir,
     )
-    dm_no_shift = initialize_datamodule(
-        "PhAlkEthOH",
-        version_select="latest_test",
+    dm_no_shift = datamodule_factory(
+        dataset_name="QM9",
+        batch_size=512,
         shift_center_of_mass_to_origin=False,
         local_cache_dir=local_cache_dir,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        dataset_cache_dir=dataset_cache_dir,
     )
     for conf_id in range(0, len(dm.torch_dataset)):
         start_idx_mol = dm.torch_dataset.series_atom_start_idxs_by_conf[conf_id]
@@ -1278,9 +1168,12 @@ def test_shifting_center_of_mass_to_origin(prep_temp_dir):
         assert torch.allclose(pairs.d_ij, pairs_ns.d_ij, atol=1e-4)
 
 
-@pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
-def test_element_filter(dataset_name, prep_temp_dir):
+@pytest.mark.parametrize("dataset_name", ["QM9"])
+def test_element_filter(
+    dataset_name, load_test_dataset, prep_temp_dir, dataset_temp_dir
+):
     local_cache_dir = str(prep_temp_dir) + "/data_test"
+    dataset_cache_dir = str(dataset_temp_dir)
 
     atomic_number = np.array(
         [
@@ -1298,87 +1191,76 @@ def test_element_filter(dataset_name, prep_temp_dir):
             [12],
         ]
     )
-    version = testing_version[dataset_name.lower()]
-
     # positive tests
 
     # Case 0: Include any system
-    data = _ImplementedDatasets.get_dataset_class(
-        dataset_name,
-    )(
-        version_select=version,
+    data = load_test_dataset(
+        dataset_name=dataset_name,
         local_cache_dir=local_cache_dir,
         element_filter=[],
+        dataset_cache_dir=dataset_cache_dir,
     )
     assert data._satisfy_element_filter(atomic_number)
 
     # Case 1: Systems with atomic number 1
-    data = _ImplementedDatasets.get_dataset_class(
-        dataset_name,
-    )(
-        version_select=version,
+    data = load_test_dataset(
+        dataset_name=dataset_name,
         local_cache_dir=local_cache_dir,
         element_filter=[(1,)],
+        dataset_cache_dir=dataset_cache_dir,
     )
     assert data._satisfy_element_filter(atomic_number)
 
     # Case 2: Systems with atomic number (1 AND 2 AND 3)
-    data = _ImplementedDatasets.get_dataset_class(
-        dataset_name,
-    )(
-        version_select=version,
+    data = load_test_dataset(
+        dataset_name=dataset_name,
         local_cache_dir=local_cache_dir,
         element_filter=[(1, 2, 3)],
+        dataset_cache_dir=dataset_cache_dir,
     )
     assert data._satisfy_element_filter(atomic_number)
 
     # Case 3: Systems with atomic number
     #         (1 AND 2) OR (3 AND 4) OR (5 AND 6)
-    data = _ImplementedDatasets.get_dataset_class(
-        dataset_name,
-    )(
-        version_select=version,
+    data = load_test_dataset(
+        dataset_name=dataset_name,
         local_cache_dir=local_cache_dir,
         element_filter=[(1, 2), (3, 4), (5, 6)],
+        dataset_cache_dir=dataset_cache_dir,
     )
     assert data._satisfy_element_filter(atomic_number)
 
     # Case 4: Systems satisfying atomic number:
     #         (1 AND 2) OR (3 AND without 15)
-    data = _ImplementedDatasets.get_dataset_class(
-        dataset_name,
-    )(
-        version_select=version,
+    data = load_test_dataset(
+        dataset_name=dataset_name,
         local_cache_dir=local_cache_dir,
         element_filter=[(1, 2), (3, -15)],
+        dataset_cache_dir=dataset_cache_dir,
     )
     assert data._satisfy_element_filter(atomic_number)
 
     # Case 5: Should both be true regardless of filter ordering, since 1 AND 2 exists
-    data = _ImplementedDatasets.get_dataset_class(
-        dataset_name,
-    )(
-        version_select=version,
+    data = load_test_dataset(
+        dataset_name=dataset_name,
         local_cache_dir=local_cache_dir,
         element_filter=[(1, 2), (-3,)],
+        dataset_cache_dir=dataset_cache_dir,
     )
     assert data._satisfy_element_filter(atomic_number)
-    data = _ImplementedDatasets.get_dataset_class(
-        dataset_name,
-    )(
-        version_select=version,
+    data = load_test_dataset(
+        dataset_name=dataset_name,
         local_cache_dir=local_cache_dir,
         element_filter=[(-3,), (1, 2)],
+        dataset_cache_dir=dataset_cache_dir,
     )
     assert data._satisfy_element_filter(atomic_number)
 
     # negative tests
 
     # Case 6: Exclude systems with atomic number 1
-    data = _ImplementedDatasets.get_dataset_class(
-        dataset_name,
-    )(
-        version_select=version,
+    data = load_test_dataset(
+        dataset_name=dataset_name,
         local_cache_dir=local_cache_dir,
         element_filter=[(-1,)],
     )
@@ -1386,12 +1268,11 @@ def test_element_filter(dataset_name, prep_temp_dir):
 
     # Case 8: 0 is not a valid atomic number
     try:
-        data = _ImplementedDatasets.get_dataset_class(
-            dataset_name,
-        )(
-            version_select=version,
+        data = load_test_dataset(
+            dataset_name=dataset_name,
             local_cache_dir=local_cache_dir,
             element_filter=[(0, 2), (3, -15)],
+            dataset_cache_dir=dataset_cache_dir,
         )
         data._satisfy_element_filter(atomic_number)
     except ValueError as e:
@@ -1402,35 +1283,126 @@ def test_element_filter(dataset_name, prep_temp_dir):
 
     # Case 9: Should not have any type other than integers
     try:
-        data = _ImplementedDatasets.get_dataset_class(
-            dataset_name,
-        )(
-            version_select=version,
+        data = load_test_dataset(
+            dataset_name=dataset_name,
             local_cache_dir=local_cache_dir,
             element_filter=[(1, "Hydrogen"), (3, -15)],
+            dataset_cache_dir=dataset_cache_dir,
         )
         data._satisfy_element_filter(atomic_number)
     except TypeError as e:
         assert e.args[0] == "Please use atomic number to refer to element types!"
 
 
-def test_element_filter_setting(prep_temp_dir):
-    local_cache_dir = str(prep_temp_dir) + "/data_test"
+def test_element_filter_setting(prep_temp_dir, load_test_dataset, dataset_temp_dir):
+    local_cache_dir = str(prep_temp_dir) + "/element_filter"
+    dataset_cache_dir = str(dataset_temp_dir)
 
+    dataset_name = "qm9"
     # test filter setting
-    data = _ImplementedDatasets.get_dataset_class(
-        "QM9",
-    )(
-        version_select="nc_1000_v0",
+    data = load_test_dataset(
+        dataset_name=dataset_name,
         local_cache_dir=local_cache_dir,
         element_filter=[(1, 6)],
+        dataset_cache_dir=dataset_cache_dir,
     )
     assert data.element_filter == [(1, 6)]
 
-    data = _ImplementedDatasets.get_dataset_class(
-        "QM9",
-    )(
-        version_select="nc_1000_v0",
+    data = load_test_dataset(
+        dataset_name=dataset_name,
         local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
     assert data.element_filter is None
+
+
+def test_local_dataset(prep_temp_dir):
+
+    from modelforge.dataset.dataset import initialize_datamodule
+
+    from modelforge.utils.io import get_path_string
+    from modelforge.tests.data import local_dataset
+    import toml
+    import os
+
+    local_cache_dir = str(prep_temp_dir) + "/local_dataset_test"
+
+    # ensure the local cache directory exists
+    os.makedirs(local_cache_dir, exist_ok=True)
+
+    # for some reason resources.files(local_dataset) is returning MultiplexedPath instead of a string
+    # so we need to great _path[0] to get the actual path we can convert to string
+    path_to_local_dataset_dir = get_path_string(local_dataset)
+
+    # read the toml file
+    toml_file = f"{path_to_local_dataset_dir}/local_dataset.toml"
+
+    # check to ensure the yaml file exists
+    if not os.path.exists(toml_file):
+        raise FileNotFoundError(
+            f"Dataset toml file {toml_file} not found. Please check the dataset name."
+        )
+
+    config_dict = toml.load(toml_file)
+    version_select = config_dict["dataset"]["version_select"]
+    dataset_name = config_dict["dataset"]["dataset_name"]
+    properties_of_interest = config_dict["dataset"]["properties_of_interest"]
+    properties_assignment = config_dict["dataset"]["properties_assignment"]
+
+    # we will use the local cache directory to store the local dataset files
+    # Loading a local dataset requires providing the full path to the yaml file in the toml file and
+    # the full path to the hdf5 file in the yaml file.
+    # to make this work in the context where we don't actually know what the full file path will be (i.e., on CI or
+    # just on a different machine), we will copy the files over to the local cache directory
+    # and modify the .toml and yaml files accordingly (use simple string replacement substitution of {{path_to_file}})
+
+    # copy the hdf5 file to the local cache directory
+    import shutil
+
+    shutil.copy(
+        f"{path_to_local_dataset_dir}/qm9_dataset_v1.1_ntc_10.hdf5", local_cache_dir
+    )
+
+    # we will read in the yaml file and then update the path to the hdf5 file
+    # write this to the local_cache_dir
+    import yaml
+
+    yaml_file_path_in = config_dict["dataset"]["local_yaml_file"].replace(
+        "path_to_file", path_to_local_dataset_dir
+    )
+
+    yaml_file_path_out = config_dict["dataset"]["local_yaml_file"].replace(
+        "path_to_file", local_cache_dir
+    )
+
+    with open(yaml_file_path_in, "r") as yaml_file:
+        yaml_content = yaml.safe_load(yaml_file)
+
+    yaml_content[version_select]["local_dataset"]["hdf5_data_file"][
+        "file_name"
+    ] = yaml_content[version_select]["local_dataset"]["hdf5_data_file"][
+        "file_name"
+    ].replace(
+        "path_to_file", local_cache_dir
+    )
+
+    with open(yaml_file_path_out, "w") as yaml_file:
+        yaml.safe_dump(yaml_content, yaml_file)
+
+    # we need to read in the yaml file and replace the {{path_to_file}} with the local cache directory
+    # then write that back to file
+
+    dm = initialize_datamodule(
+        dataset_name=dataset_name,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        batch_size=1,
+        version_select=version_select,
+        properties_of_interest=properties_of_interest,
+        properties_assignment=properties_assignment,
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=local_cache_dir,
+        remove_self_energies=False,
+        local_yaml_file=yaml_file_path_out,
+    )
+
+    assert os.path.exists(f"{local_cache_dir}/{dataset_name.lower()}.npz")

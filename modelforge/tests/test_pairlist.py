@@ -1,3 +1,12 @@
+import pytest
+
+
+@pytest.fixture(scope="session")
+def prep_temp_dir(tmp_path_factory):
+    fn = tmp_path_factory.mktemp("test_dataset_temp")
+    return fn
+
+
 def test_pairlist_logic():
     import torch
 
@@ -292,22 +301,22 @@ def test_pairlist_precomputation():
     assert np.all(nr_pairs == [6, 12, 20])
 
 
-def test_pairlist_on_dataset():
+def test_pairlist_on_dataset(datamodule_factory, prep_temp_dir, dataset_temp_dir):
     # Set up a dataset
     from modelforge.dataset.dataset import DataModule
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
-    # prepare reference value
-    dataset = DataModule(
-        name="QM9",
+    local_cache_dir = str(prep_temp_dir) + "/test_pairlist"
+    dataset_cache_dir = str(dataset_temp_dir)
+
+    dataset = datamodule_factory(
+        dataset_name="QM9",
         batch_size=1,
-        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-        remove_self_energies=True,
-        regression_ase=False,
+        dataset_cache_dir=dataset_cache_dir,
     )
-    dataset.prepare_data()
-    dataset.setup()
+
     # -------------------------------#
     # -------------------------------#
     # get methane input
@@ -326,16 +335,14 @@ def test_pairlist_on_dataset():
     )
 
     # test that the pairlist of 2 molecules is correct (which can then be expected also to be true for N molecules)
-    dataset = DataModule(
-        name="QM9",
+    dataset = datamodule_factory(
+        dataset_name="QM9",
         batch_size=2,
-        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-        remove_self_energies=True,
-        regression_ase=False,
+        dataset_cache_dir=dataset_cache_dir,
     )
-    dataset.prepare_data()
-    dataset.setup()
+
     # -------------------------------#
     # -------------------------------#
     # get methane input

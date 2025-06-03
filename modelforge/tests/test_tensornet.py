@@ -11,7 +11,7 @@ def prep_temp_dir(tmp_path_factory):
 
 def test_init(prep_temp_dir):
     """Test initialization of the TensorNet model."""
-
+    local_cache_dir = str(prep_temp_dir) + "/tensornet"
     # load default parameters
     # read default parameters
     model = setup_potential_for_test(
@@ -19,21 +19,23 @@ def test_init(prep_temp_dir):
         potential_seed=42,
         potential_name="tensornet",
         simulation_environment="JAX",
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
     )
     assert model is not None, "TensorNet model should be initialized."
 
 
 @pytest.mark.parametrize("simulation_environment", ["PyTorch", "JAX"])
 def test_forward_with_inference_model(
-    simulation_environment, single_batch_with_batchsize, prep_temp_dir
+    simulation_environment, single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
 ):
 
+    local_cache_dir = str(prep_temp_dir) + "/tensornet_forward"
+    dataset_cache_dir = str(dataset_temp_dir)
     nnp_input = single_batch_with_batchsize(
         batch_size=32,
         dataset_name="QM9",
-        local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     ).nnp_input
 
     # load default parameters
@@ -43,7 +45,7 @@ def test_forward_with_inference_model(
         potential_name="tensornet",
         simulation_environment=simulation_environment,
         use_training_mode_neighborlist=True,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
     )
 
     if simulation_environment == "JAX":
@@ -62,6 +64,7 @@ def test_input(prep_temp_dir):
         prepare_values_for_test_tensornet_input,
     )
 
+    local_cache_dir = str(prep_temp_dir) + "/tensornet_input"
     # setup model
     model = setup_potential_for_test(
         use="inference",
@@ -69,16 +72,16 @@ def test_input(prep_temp_dir):
         potential_name="tensornet",
         simulation_environment="PyTorch",
         use_training_mode_neighborlist=True,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
     )
 
-    from importlib import resources
+    from modelforge.utils.io import get_path_string
 
     from modelforge.tests import data
 
     # load reference data
-    reference_data = resources.files(data) / "tensornet_input.pt"
-    reference_batch = resources.files(data) / "nnp_input.pkl"
+    reference_data = get_path_string(data) + "/tensornet_input.pt"
+    reference_batch = get_path_string(data) + "/nnp_input.pkl"
     import pickle
 
     mf_input = pickle.load(open(reference_batch, "rb"))
@@ -135,11 +138,11 @@ def test_compare_radial_symmetry_features():
 
     seed = 0
     torch.manual_seed(seed)
-    from importlib import resources
+    from modelforge.utils.io import get_path_string
 
     from modelforge.tests import data
 
-    reference_data = resources.files(data) / "tensornet_radial_symmetry_features.pt"
+    reference_data = get_path_string(data) + "/tensornet_radial_symmetry_features.pt"
 
     # generate a random list of distances, all < 5
     d_ij = unit.Quantity(
@@ -169,11 +172,11 @@ def test_compare_radial_symmetry_features():
     rcut_ij = cutoff_module(d_ij.to(unit.nanometer).m)  # torch.Size([5, 1])
     mf_r = (mf_r * rcut_ij).unsqueeze(1)
 
-    from importlib import resources
+    from modelforge.utils.io import get_path_string
 
     from modelforge.tests import data
 
-    reference_data = resources.files(data) / "tensornet_radial_symmetry_features.pt"
+    reference_data = get_path_string(data) + "/tensornet_radial_symmetry_features.pt"
 
     if reference_data:
         tn_r = torch.load(reference_data)
@@ -191,7 +194,7 @@ def test_compare_radial_symmetry_features():
 
 
 def test_representation(prep_temp_dir):
-    from importlib import resources
+    from modelforge.utils.io import get_path_string
 
     import torch
     from openff.units import unit
@@ -200,7 +203,8 @@ def test_representation(prep_temp_dir):
     from modelforge.potential.tensornet import TensorNetRepresentation
     from modelforge.tests import data
 
-    reference_data = resources.files(data) / "tensornet_representation.pt"
+    local_cache_dir = str(prep_temp_dir) + "/tensornet_representation"
+    reference_data = get_path_string(data) + "/tensornet_representation.pt"
 
     number_of_per_atom_features = 8
     num_rbf = 16
@@ -212,7 +216,7 @@ def test_representation(prep_temp_dir):
 
     import pickle
 
-    reference_batch = resources.files(data) / "nnp_input.pkl"
+    reference_batch = get_path_string(data) + "/nnp_input.pkl"
     nnp_input = pickle.load(open(reference_batch, "rb"))
     # -------------------------------#
     # -------------------------------#
@@ -224,7 +228,7 @@ def test_representation(prep_temp_dir):
         potential_name="tensornet",
         simulation_environment="PyTorch",
         use_training_mode_neighborlist=True,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
     )
     pairlist_output = model.neighborlist.forward(nnp_input)
 
@@ -265,7 +269,7 @@ def test_representation(prep_temp_dir):
 
 def test_interaction(prep_temp_dir):
     import pickle
-    from importlib import resources
+    from modelforge.utils.io import get_path_string
 
     import torch
     from openff.units import unit
@@ -279,9 +283,10 @@ def test_interaction(prep_temp_dir):
 
     seed = 0
 
-    reference_data = resources.files(data) / "tensornet_interaction.pt"
+    local_cache_dir = str(prep_temp_dir) + "/tensornet_interaction"
+    reference_data = get_path_string(data) + "/tensornet_interaction.pt"
 
-    reference_batch = resources.files(data) / "nnp_input.pkl"
+    reference_batch = get_path_string(data) + "/nnp_input.pkl"
     nnp_input = pickle.load(open(reference_batch, "rb"))
 
     number_of_per_atom_features = 8
@@ -299,7 +304,7 @@ def test_interaction(prep_temp_dir):
         potential_name="tensornet",
         simulation_environment="PyTorch",
         use_training_mode_neighborlist=True,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
     )
 
     ################ modelforge TensorNet ################

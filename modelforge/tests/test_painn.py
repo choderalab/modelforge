@@ -33,15 +33,19 @@ def setup_painn_model(potential_seed: int):
     return trainer_painn
 
 
-def test_forward(single_batch_with_batchsize, prep_temp_dir):
+def test_forward(single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir):
     """Test initialization of the PaiNN neural network potential."""
     trainer_painn = setup_painn_model(42)
     assert trainer_painn is not None, "PaiNN model should be initialized."
+
+    local_cache_dir = str(prep_temp_dir) + "/test_forward"
+    dataset_cache_dir = str(dataset_temp_dir)
+
     batch = single_batch_with_batchsize(
         batch_size=64,
         dataset_name="QM9",
-        local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
 
     nnp_input = batch.to_dtype(dtype=torch.float32).nnp_input

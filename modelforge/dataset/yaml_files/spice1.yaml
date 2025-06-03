@@ -1,116 +1,153 @@
 dataset: spice1
-latest: full_dataset_v1
-latest_test: nc_1000_v1
+latest: full_dataset_v1.1
+latest_test: nc_1000_v1.1
 
-full_dataset_v1:
-  version: 1
-  doi: 10.5281/zenodo.13883667
-  gz_data_file:
-    length: 11218036423
-    md5: eb94c7d8d8bf06cd3c6f9bf13be4c364
-    name: SPICE114_dataset_v1.hdf5.gz
-  hdf5_data_file:
-    md5: 4bb4e8f638b86096ee2dd83685d8d494
-    name: SPICE114_dataset_v1.hdf5
-  processed_data_file:
-    md5: null
-    name: SPICE114_dataset_v1_processed.npz
-  url: https://zenodo.org/records/13883667/files/spice_114_dataset_v1.hdf5.gz
-nc_1000_v1:
-  version: 1
-  doi: 10.5281/zenodo.13883550
-  gz_data_file:
-    length: 15165095
-    md5: dabdff24358c303f82f04c6599ac53d0
-    name: SPICE114_dataset_v1_nc_1000.hdf5.gz
-  hdf5_data_file:
-    md5: 33d2d04bb14d59fc54ad538e1083ea9e
-    name: SPICE114_dataset_v1_nc_1000.hdf5
-  processed_data_file:
-    md5: null
-    name: SPICE114_dataset_v1_nc_1000_processed.npz
-  url: https://zenodo.org/records/13883550/files/spice_114_dataset_v1_ntc_1000.hdf5.gz
-full_dataset_v1_HCNOFClS:
-  version: 1
-  doi: 10.5281/zenodo.13883617
-  gz_data_file:
-    length: 10046842576
-    md5: d17383d4c2cf51aec790036c9fe98c04
-    name: SPICE114_dataset_v1_HCNOFClS.hdf5.gz
-  hdf5_data_file:
-    md5: aae832f44a748a4bc9932bbed6ee4c7e
-    name: SPICE114_dataset_v1_HCNOFClS.hdf5
-  processed_data_file:
-    md5: null
-    name: SPICE114_dataset_v1_HCNOFClS_processed.npz
-  url: https://zenodo.org/records/13883617/files/spice_114_dataset_v1_HCNOFClS.hdf5.gz
-nc_1000_v1_HCNOFClS:
-  version: 1
-  doi: 10.5281/zenodo.13883112
-  gz_data_file:
-    length: 14782035
-    md5: a9c327a5e86dae548c93918cd4f5a821
-    name: SPICE114_dataset_v1_nc_1000_HCNOFClS.hdf5.gz
-  hdf5_data_file:
-    md5: dc143bd509287f5f015c46058430a8fd
-    name: SPICE114_dataset_v1_nc_1000_HCNOFClS.hdf5
-  processed_data_file:
-    md5: null
-    name: SPICE114_dataset_v1_nc_1000_HCNOFClS_processed.npz
-  url: https://zenodo.org/records/13883112/files/spice_114_dataset_v1_ntc_1000_HCNOFClS.hdf5.gz
-full_dataset_v0:
-  version: 0
-  doi: 10.5281/zenodo.11583341
-  gz_data_file:
-    length: 11193528261
-    md5: c56ce0830d5eca105e195b24dc8613f9
-    name: SPICE114_dataset_v0.hdf5.gz
-  hdf5_data_file:
-    md5: 943a3df3bef247c8cffbb55d913c0bba
-    name: SPICE114_dataset_v0.hdf5
-  processed_data_file:
-    md5: null
-    name: SPICE114_dataset_v0_processed.npz
-  url: https://zenodo.org/records/11583341/files/spice_114_dataset_v0.hdf5.gz
-nc_1000_v0:
-  version: 0
-  doi: 10.5281/zenodo.11607708
-  gz_data_file:
-    length: 15166190
-    md5: 9dda62b4971923a1fd5172048db17320
-    name: SPICE114_dataset_v0_nc_1000.hdf5.gz
-  hdf5_data_file:
-    md5: 885e17826e65011559ff6fae2b2b44e3
-    name: SPICE114_dataset_v0_nc_1000.hdf5
-  processed_data_file:
-    md5: null
-    name: SPICE114_dataset_v0_nc_1000_processed.npz
-  url: https://zenodo.org/records/11607708/files/spice_114_dataset_v0_ntc_1000.hdf5.gz
-full_dataset_v0_HCNOFClS:
-  version: 0
-  doi: 10.5281/zenodo.11622328
-  gz_data_file:
-    length: 10046809694
-    md5: bade338461de88e4dc04f252b37b804b
-    name: SPICE114_dataset_v0_HCNOFClS.hdf5.gz
-  hdf5_data_file:
-    md5: ee9431a6ff712e346dbea311ea3310fc
-    name: SPICE114_dataset_v0_HCNOFClS.hdf5
-  processed_data_file:
-    md5: null
-    name: SPICE114_dataset_v0_HCNOFClS_processed.npz
-  url: https://zenodo.org/records/11622328/files/spice_114_dataset_v0_HCNOFClS.hdf5.gz
-nc_1000_v0_HCNOFClS:
-  version: 0
-  doi: 10.5281/zenodo.11625408
-  gz_data_file:
-    length: 14778658
-    md5: be1699a7e610ca7c5aef814ed0e0b6e9
-    name: SPICE114_dataset_v0_nc_1000_HCNOFClS.hdf5.gz
-  hdf5_data_file:
-    md5: d0d7c297fe7a9087e994106e1cfb0993
-    name: SPICE114_dataset_v0_nc_1000_HCNOFClS.hdf5
-  processed_data_file:
-    md5: null
-    name: SPICE114_dataset_v0_nc_1000_HCNOFClS_processed.npz
-  url: https://zenodo.org/records/11625408/files/spice_114_dataset_v0_ntc_1000_HCNOFClS.hdf5.gz
+description: "The SPICE dataset contains 1.1 million conformations for a diverse set of small molecules,
+    dimers, dipeptides, and solvated amino acids. It includes 15 elements (H, Li, C, N, O, F, Na, Mg, P, S, Cl, K, Ca, Br, I), 
+    charged and uncharged molecules, and a wide range of covalent and non-covalent interactions.
+    It provides both forces and energies calculated at the ωB97M-D3(BJ)/def2-TZVPPD level of theory,
+    using Psi4 1.4.1 along with other useful quantities such as multipole moments and bond orders.
+
+    Reference:
+    Eastman, P., Behara, P.K., Dotson, D.L. et al. SPICE,
+    A Dataset of Drug-like Molecules and Peptides for Training Machine Learning Potentials.
+    Sci Data 10, 11 (2023). https://doi.org/10.1038/s41597-022-01882-6
+
+    Dataset DOI:
+    https://doi.org/10.5281/zenodo.8222043"
+
+atomic_self_energies:
+  Br: -2574.1167240829964 * hartree
+  C: -37.87264507233593 * hartree
+  Ca: -676.9528465198214 * hartree
+  Cl: -460.1988762285739 * hartree
+  F: -99.78611622985483 * hartree
+  H: -0.498760510048753 * hartree
+  I: -297.76228914445625 * hartree
+  K: -599.8025677513111 * hartree
+  Li: -7.285254714046546 * hartree
+  Mg: -199.2688420040449 * hartree
+  N: -54.62327513368922 * hartree
+  Na: -162.11366478783253 * hartree
+  O: -75.11317840410095 * hartree
+  P: -341.3059197024934 * hartree
+  S: -398.1599636677874 * hartree
+
+full_dataset_v1.1:
+  about: 'This provides a curated hdf5 file for the SPICE1 dataset designed to be
+    compatible with modelforge. This dataset contains 19238 unique records for 1110165
+    total configurations. '
+  available_properties:
+  - atomic_numbers
+  - positions
+  - total_charge
+  - dft_total_energy
+  - dft_total_force
+  - formation_energy
+  - mbis_charges
+  - mbis_dipoles
+  - mbis_quadrupoles
+  - mbis_octupoles
+  - scf_dipole
+  - scf_quadrupole
+  hdf5_schema: 2
+  remote_dataset:
+    doi: 10.5281/zenodo.15455029
+    gz_data_file:
+      file_name: spice_1_dataset_v1.1.hdf5.gz
+      length: 10843511030
+      md5: da9f4902d64fe957e1f3dd0a6a2463d0
+    hdf5_data_file:
+      file_name: spice_1_dataset_v1.1.hdf5
+      md5: ff7583aeafd7991bc7c04505a5c0ee02
+    url: https://zenodo.org/records/15455029/files/spice_1_dataset_v1.1.hdf5.gz
+
+nc_1000_v1.1:
+  about: 'This provides a curated hdf5 file for the SPICE1 dataset designed to be
+    compatible with modelforge. This dataset contains 100 unique records for 1000
+    total configurations, with a maximum of 10 configurations per record. '
+  available_properties:
+  - atomic_numbers
+  - positions
+  - total_charge
+  - dft_total_energy
+  - dft_total_force
+  - formation_energy
+  - mbis_charges
+  - mbis_dipoles
+  - mbis_quadrupoles
+  - mbis_octupoles
+  - scf_dipole
+  - scf_quadrupole
+  hdf5_schema: 2
+  remote_dataset:
+    url: https://zenodo.org/records/15461060/files/spice_1_dataset_v1.1_ntc_1000.hdf5.gz
+    doi: 10.5281/zenodo.15461060
+    gz_data_file:
+      file_name: spice_1_dataset_v1.1_ntc_1000.hdf5.gz
+      length: 14716353
+      md5: 4d2dc9fd7b498f5f6bba6e8f4a5ffcfc
+    hdf5_data_file:
+      file_name: spice_1_dataset_v1.1_ntc_1000.hdf5
+      md5: 193f675e419bdf92883e1c4606b240c5
+
+nc_1000_HCNOFClS_v1.1:
+  about: 'This provides a curated hdf5 file for a subset of the SPICE1 dataset designed
+    to be compatible with modelforge. This dataset contains 100 unique records for
+    1000 total configurations, with a maximum of 10 configurations per record. The
+    dataset is limited to the elements that are compatible with ANI2x: [H, C,
+    N, O, F, Cl, S]'
+  available_properties:
+  - atomic_numbers
+  - positions
+  - total_charge
+  - dft_total_energy
+  - dft_total_force
+  - formation_energy
+  - mbis_charges
+  - mbis_dipoles
+  - mbis_quadrupoles
+  - mbis_octupoles
+  - scf_dipole
+  - scf_quadrupole
+  hdf5_schema: 2
+  remote_dataset:
+    doi: 10.5281/zenodo.15461463
+    gz_data_file:
+      file_name: spice_1_dataset_v1.1_ntc_1000_HCNOFClS.hdf5.gz
+      length: 14328739
+      md5: 5a7e76f17694b1eb7f6368230589b586
+    hdf5_data_file:
+      file_name: spice_1_dataset_v1.1_ntc_1000_HCNOFClS.hdf5
+      md5: 3864fe361fdaa178a9582b8e6afff5c4
+    url: https://zenodo.org/records/15461463/files/spice_1_dataset_v1.1_ntc_1000_HCNOFClS.hdf5.gz
+
+full_dataset_HCNOFClS_v1.1:
+  about: 'This provides a curated hdf5 file for the SPICE1 dataset designed to be
+    compatible with modelforge. This dataset contains 16565 unique records for 976408
+    total configurations. The dataset is limited to the elements that are compatible
+    with ANI2x: [H, C, N, O, F, Cl, S].'
+  available_properties:
+  - atomic_numbers
+  - positions
+  - total_charge
+  - dft_total_energy
+  - dft_total_force
+  - formation_energy
+  - mbis_charges
+  - mbis_dipoles
+  - mbis_quadrupoles
+  - mbis_octupoles
+  - scf_dipole
+  - scf_quadrupole
+  hdf5_schema: 2
+  remote_dataset:
+    doi: 10.5281/zenodo.15461488
+    gz_data_file:
+      file_name: spice_1_dataset_v1.1_HCNOFClS.hdf5.gz
+      length: 9712216033
+      md5: 961a71318f1bf6ef7e5d042d7aa4fc1c
+    hdf5_data_file:
+      file_name: spice_1_dataset_v1.1_HCNOFClS.hdf5
+      md5: 28e1c57d6552be297e2accb3c35172c0
+    url: https://zenodo.org/records/15461488/files/spice_1_dataset_v1.1_HCNOFClS.hdf5.gz

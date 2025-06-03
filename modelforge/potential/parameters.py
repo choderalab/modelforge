@@ -4,7 +4,7 @@ This module contains pydantic models for storing the parameters of the potential
 
 from enum import Enum
 from typing import List, Optional, Type, Union
-
+from openff.units import unit
 import torch
 from pydantic import (
     BaseModel,
@@ -164,6 +164,8 @@ class PerAtomCharge(ParametersBase):
 
 class ElectrostaticPotential(ParametersBase):
     electrostatic_strategy: str = "coulomb"
+    # note maximum interaction radius should be passed as a string with units or unit.Quantity;
+    # it will be converted to float in appropriate unit system
     maximum_interaction_radius: float = 0.5
 
     converted_units = field_validator(
@@ -190,6 +192,8 @@ class PostProcessingParameter(ParametersBase):
 class AimNet2Parameters(ParametersBase):
     class CoreParameter(CoreParameterBase):
         number_of_radial_basis_functions: int
+        # note maximum interaction radius should be passed as a string with units or unit.Quantity;
+        # it will be converted to float in appropriate unit system
         maximum_interaction_radius: float
         number_of_interaction_modules: int
         activation_function_parameter: ActivationFunctionConfig
@@ -211,9 +215,13 @@ class AimNet2Parameters(ParametersBase):
 class ANI2xParameters(ParametersBase):
     class CoreParameter(CoreParameterBase):
         angle_sections: int
+        # note maximum/minimum interaction radius should be passed as a string with units or unit.Quantity;
+        # it will be converted to float in appropriate unit system
         maximum_interaction_radius: float
         minimum_interaction_radius: float
         number_of_radial_basis_functions: int
+        # note these distances should be a string with units or unit.Quantity;
+        # it will be converted to float in appropriate unit system
         maximum_interaction_radius_for_angular_features: float
         minimum_interaction_radius_for_angular_features: float
         angular_dist_divisions: int
@@ -239,6 +247,8 @@ class ANI2xParameters(ParametersBase):
 class SchNetParameters(ParametersBase):
     class CoreParameter(CoreParameterBase):
         number_of_radial_basis_functions: int
+        # note maximum interaction radius should be passed as a string with units or unit.Quantity;
+        # it will be converted to float in appropriate unit system
         maximum_interaction_radius: float
         number_of_interaction_modules: int
         number_of_filters: int
@@ -264,6 +274,8 @@ class TensorNetParameters(ParametersBase):
         number_of_per_atom_features: int
         number_of_interaction_layers: int
         number_of_radial_basis_functions: int
+        # note maximum/minimum interaction radius should be passed as a string with units or unit.Quantity;
+        # it will be converted to float in appropriate unit system
         maximum_interaction_radius: float
         minimum_interaction_radius: float
         maximum_atomic_number: int
@@ -287,6 +299,8 @@ class PaiNNParameters(ParametersBase):
     class CoreParameter(CoreParameterBase):
 
         number_of_radial_basis_functions: int
+        # note maximum interaction radius should be passed as a string with units or unit.Quantity;
+        # it will be converted to float in appropriate unit system
         maximum_interaction_radius: float
         number_of_interaction_modules: int
         shared_interactions: bool
@@ -311,6 +325,8 @@ class PhysNetParameters(ParametersBase):
     class CoreParameter(CoreParameterBase):
 
         number_of_radial_basis_functions: int
+        # note maximum interaction radius should be passed as a string with units or unit.Quantity;
+        # it will be converted to float in appropriate unit system
         maximum_interaction_radius: float
         number_of_interaction_residual: int
         number_of_modules: int
@@ -334,6 +350,8 @@ class SAKEParameters(ParametersBase):
     class CoreParameter(CoreParameterBase):
 
         number_of_radial_basis_functions: int
+        # note maximum interaction radius should be passed as a string with units or unit.Quantity;
+        # it will be converted to float in appropriate unit system
         maximum_interaction_radius: float
         number_of_interaction_modules: int
         number_of_spatial_attention_heads: int

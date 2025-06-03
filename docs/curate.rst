@@ -11,7 +11,7 @@ Each instance of the `Record` class contains properties.  Properties are defined
 
 The use of pydantic models allows for considerable validation of the input properties.  The entire API is designed to put an emphasis on validation at the time of dataset construction, rather than at the time of dataset loading. This includes checking for compatibility of units and ensuring consistent number of atoms and configurations with a record.
 
-The following example demonstrates how to use the curate API to create a dataset, using fictious data.
+The following example demonstrates how to use the curate API to create a dataset, using fictitious data.
 
 
 .. code-block:: python
@@ -53,7 +53,7 @@ The following example demonstrates how to use the curate API to create a dataset
 The above code creates a dataset with a single record.  The record contains the atomic numbers, positions, energies, and a metadata field for the SMILES string.  The dataset is then validated and written to an hdf5 file.  The checksum of the file is returned.  Jupyter notebooks are provided in the examples folder to  demonstrate more comprehensive usage.
 
 
-Note, this module also includes classes for curating individual datasets that inherit from a `DatasetCuration` baseclass in curation_baseclass.py file.
+Note, this module also includes classes for curating individual datasets that inherit from a `DatasetCuration` baseclass in curation_baseclass.py file.  This baseclass provides a common interface for curating the datasets, specifically providing a wrapper to make it easier to gather subsets of a dataset and impose other restrictions on the dataset at the time of writing to an hdf5 file.
 
 Examples
 **************

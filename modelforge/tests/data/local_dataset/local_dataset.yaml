@@ -1,0 +1,51 @@
+dataset: local_qm9
+latest: nc_10_v1.1
+latest_test: nc_10_v1.1
+
+description: "The QM9 dataset includes 133,885 organic molecules with up to nine total heavy atoms (C,O,N,or F; excluding H).
+              All properties were calculated at the B3LYP/6-31G(2df,p) level of quantum chemistry.
+              
+              Citation: 
+              
+              Ramakrishnan, R., Dral, P., Rupp, M. et al.
+              'Quantum chemistry structures and properties of 134 kilo molecules.'
+              Sci Data 1, 140022 (2014).
+              https://doi.org/10.1038/sdata.2014.22
+              
+              DOI for dataset: 10.6084/m9.figshare.c.978904.v5"
+
+atomic_self_energies:
+  H: -1313.4668615546 * kilojoule_per_mole
+  C: -99366.70745535441 * kilojoule_per_mole
+  N: -143309.9379722722 * kilojoule_per_mole
+  O: -197082.0671774158 * kilojoule_per_mole
+  F: -261811.54555874597 * kilojoule_per_mole
+
+nc_10_v1.1:
+  about: This provides a curated hdf5 file for a subset of the qm9 dataset designed
+    to be compatible with modelforge. This dataset contains 10 unique records for 10
+    total configurations. Note, the dataset contains only a single configuration per
+    record.
+  available_properties:
+  - atomic_numbers
+  - positions
+  - partial_charges
+  - polarizability
+  - dipole_moment_per_system
+  - dipole_moment_scalar_per_system
+  - energy_of_homo
+  - lumo-homo_gap
+  - zero_point_vibrational_energy
+  - internal_energy_at_298.15K
+  - internal_energy_at_0K
+  - enthalpy_at_298.15K
+  - free_energy_at_298.15K
+  - heat_capacity_at_298.15K
+  - rotational_constants
+  - harmonic_vibrational_frequencies
+  - electronic_spatial_extent
+  hdf5_schema: 2
+  local_dataset:
+    hdf5_data_file:
+      file_name: path_to_file/qm9_dataset_v1.1_ntc_10.hdf5 # note in general this should be the full path to the file
+      md5: bc688faaa39edf644c5cc05a283cd5af

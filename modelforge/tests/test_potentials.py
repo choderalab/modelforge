@@ -22,20 +22,6 @@ def prep_temp_dir(tmp_path_factory):
     return fn
 
 
-testing_version = {
-    "tmqm_xtb": "nc_1000_v1.1",
-    "fe_ii": "nc_1000_v1.1",
-    "qm9": "nc_1000_v0",
-    "ani1x": "nc_1000_v0",
-    "ani2x": "nc_1000_v0",
-    "spice1": "nc_1000_v0",
-    "spice1_openff": "nc_1000_v0",
-    "spice2": "nc_1000_v0",
-    "phalkethoh": "nc_1000_v0",
-    "tmqm": "nc_1000_v0",
-}
-
-
 def initialize_model(
     simulation_environment: Literal["PyTorch", "JAX"], config, jit: bool
 ):
@@ -279,13 +265,18 @@ def test_zbl_potential():
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
-def test_JAX_wrapping(potential_name, single_batch_with_batchsize, prep_temp_dir):
+def test_JAX_wrapping(
+    potential_name, single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
+):
+
+    local_cache_dir = f"{str(prep_temp_dir)}/{potential_name.lower()}_test_jax"
+    dataset_cache_dir = str(dataset_temp_dir)
 
     batch = single_batch_with_batchsize(
         batch_size=1,
         dataset_name="QM9",
-        local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
 
     # read default parameters
@@ -294,7 +285,7 @@ def test_JAX_wrapping(potential_name, single_batch_with_batchsize, prep_temp_dir
         potential_seed=42,
         potential_name=potential_name,
         simulation_environment="JAX",
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
     )
     from modelforge.jax import convert_NNPInput_to_jax
 
@@ -314,13 +305,18 @@ def test_JAX_wrapping(potential_name, single_batch_with_batchsize, prep_temp_dir
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
 def test_model_factory(potential_name, prep_temp_dir):
+
+    local_cache_dir = (
+        f"{str(prep_temp_dir)}/{potential_name.lower()}_test_model_factory"
+    )
+
     # inference model
     potential = setup_potential_for_test(
         use="inference",
         potential_seed=42,
         potential_name=potential_name,
         simulation_environment="PyTorch",
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
     )
     assert (
         potential_name.upper() in str(type(potential.core_network)).upper()
@@ -333,7 +329,7 @@ def test_model_factory(potential_name, prep_temp_dir):
         simulation_environment="PyTorch",
         jit=True,
         use_default_dataset_statistic=False,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
     )
 
     # trainers model
@@ -342,7 +338,7 @@ def test_model_factory(potential_name, prep_temp_dir):
         potential_seed=42,
         potential_name=potential_name,
         simulation_environment="PyTorch",
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
     )
     assert (
         potential_name.upper() in str(type(trainer.core_network)).upper()
@@ -354,9 +350,14 @@ def test_model_factory(potential_name, prep_temp_dir):
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
 def test_energy_scaling_and_offset(
-    potential_name, single_batch_with_batchsize, prep_temp_dir
+    potential_name, single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
 ):
     from modelforge.potential.potential import NeuralNetworkPotentialFactory
+
+    local_cache_dir = (
+        f"{str(prep_temp_dir)}/{potential_name.lower()}_test_energy_scaling_and_offset"
+    )
+    dataset_cache_dir = str(dataset_temp_dir)
 
     # read default parameters
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
@@ -374,8 +375,8 @@ def test_energy_scaling_and_offset(
     batch = single_batch_with_batchsize(
         batch_size=1,
         dataset_name="QM9",
-        local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
     methane = batch.nnp_input
 
@@ -480,11 +481,11 @@ def test_state_dict_saving_and_loading(potential_name, prep_temp_dir):
 #     reason="checkpoint file needs to be updated now that non_unique_pairs is registered in nlist"
 # )
 def test_loading_from_checkpoint_file():
-    from importlib import resources
+    from modelforge.utils.io import get_path_string
     from modelforge.tests import data
 
     # checkpoint file is saved in tests/data
-    ckpt_file = str(resources.files(data) / "best_SchNet-PhAlkEthOH-epoch=00.ckpt")
+    ckpt_file = get_path_string(data) + "/best_SchNet-PhAlkEthOH-epoch=00.ckpt"
     print(ckpt_file)
 
     from modelforge.potential.potential import load_inference_model_from_checkpoint
@@ -497,7 +498,9 @@ def test_loading_from_checkpoint_file():
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
-def test_dataset_statistic(potential_name, prep_temp_dir):
+def test_dataset_statistic(
+    potential_name, datamodule_factory, prep_temp_dir, dataset_temp_dir
+):
     # Test that the scaling parmaeters are propagated from the dataset to the
     # runtime_defaults model and then via the state_dict to the inference model
 
@@ -505,8 +508,12 @@ def test_dataset_statistic(potential_name, prep_temp_dir):
     import torch
     from openff.units import unit
 
-    from modelforge.dataset.dataset import DataModule
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
+
+    local_cache_dir = (
+        f"{str(prep_temp_dir)}/{potential_name.lower()}_test_dataset_statistic"
+    )
+    dataset_cache_dir = str(dataset_temp_dir)
 
     # read default parameters
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
@@ -517,21 +524,17 @@ def test_dataset_statistic(potential_name, prep_temp_dir):
     dataset_parameter = config["dataset"]
     runtime_parameter = config["runtime"]
 
-    runtime_parameter.local_cache_dir = str(prep_temp_dir)
+    runtime_parameter.local_cache_dir = local_cache_dir
 
     # test the self energy calculation on the QM9 dataset
-    dataset = DataModule(
-        name="QM9",
+
+    dataset = datamodule_factory(
+        dataset_name="QM9",
         batch_size=64,
-        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
-        remove_self_energies=True,
-        regression_ase=False,
-        regenerate_dataset_statistic=True,
-        local_cache_dir=str(prep_temp_dir),
+        dataset_cache_dir=dataset_cache_dir,
     )
-    dataset.prepare_data()
-    dataset.setup()
 
     # load dataset stastics from file
     from modelforge.potential.utils import read_dataset_statistics
@@ -590,11 +593,12 @@ def test_energy_between_simulation_environments(
     # compare that the energy is the same for the JAX and PyTorch Model
     import numpy as np
 
+    local_cache_dir = f"{str(prep_temp_dir)}/{potential_name.lower()}_test_energy_between_simulation_environments"
+
     batch = single_batch_with_batchsize(
         batch_size=64,
         dataset_name="QM9",
-        local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
     )
     nnp_input = batch.nnp_input
     # test the forward pass through each of the models
@@ -605,7 +609,7 @@ def test_energy_between_simulation_environments(
         potential_seed=42,
         potential_name=potential_name,
         simulation_environment="PyTorch",
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
     )
     output_torch = potential(nnp_input)["per_system_energy"]
 
@@ -614,7 +618,7 @@ def test_energy_between_simulation_environments(
         potential_seed=42,
         potential_name=potential_name,
         simulation_environment="JAX",
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
     )
     from modelforge.jax import convert_NNPInput_to_jax
 
@@ -630,32 +634,67 @@ def test_energy_between_simulation_environments(
 )
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 def test_forward_pass_with_all_datasets(
-    potential_name, dataset_name, datamodule_factory, prep_temp_dir
+    potential_name, dataset_name, datamodule_factory, prep_temp_dir, dataset_temp_dir
 ):
     """Test forward pass with all datasets."""
     import toml
     import torch
 
     from modelforge.potential.potential import NeuralNetworkPotentialFactory
+    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 
     # -------------------------------#
     # setup dataset
     # use a subset of the SPICE2 dataset for ANI2x
 
-    version = testing_version[dataset_name.lower()]
+    local_cache_dir = f"{str(prep_temp_dir)}/{potential_name.lower()}_test_forward_pass_with_all_datasets"
+    dataset_cache_dir = str(dataset_temp_dir)
 
-    if dataset_name.lower().startswith("spice"):
-        version = "nc_1000_v0_HCNOFClS"
+    # if we are running ani2x we need to use a different version of the dataset
+    # we created subsets for the spice datasets that will work
+    # note tmqm and fe_ii will not work at all given they feature unsupported elements as a key feature
+    if potential_name.lower() == "ani2x":
 
-    dataset = datamodule_factory(
-        dataset_name=dataset_name,
-        local_cache_dir=str(prep_temp_dir),
-        version_select=version,
-    )
-    if dataset_name.lower().startswith("tmqm") and potential_name.lower() == "ani2x":
-        pytest.skip("Ani2x cannot be trained with the TMQM/TMQM-xtb dataset")
-    if dataset_name.lower().startswith("fe_ii") and potential_name.lower() == "ani2x":
-        pytest.skip("Ani2x cannot be trained with the fe_II dataset")
+        if dataset_name.lower().startswith("tmqm"):
+            pytest.skip("Ani2x cannot be trained with the TMQM/TMQM-xtb dataset")
+        if dataset_name.lower().startswith("fe_ii"):
+            pytest.skip("Ani2x cannot be trained with the fe_II dataset")
+
+        if dataset_name.lower().startswith("spice"):
+
+            versions = {
+                "spice1": "nc_1000_HCNOFClS_v1.1",
+                "spice2": "nc_1000_HCNOFClS_v1.1",
+                "spice1_openff": "nc_1000_HCNOFClS_v2.1",
+                "spice2_openff": "nc_1000_HCNOFClS_v1.1",
+            }
+
+            dataset = datamodule_factory(
+                dataset_name=dataset_name,
+                batch_size=64,
+                splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+                local_cache_dir=local_cache_dir,
+                dataset_cache_dir=dataset_cache_dir,
+                version_select=versions[dataset_name.lower()],
+            )
+        else:
+            dataset = datamodule_factory(
+                dataset_name=dataset_name,
+                batch_size=64,
+                splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+                local_cache_dir=local_cache_dir,
+                dataset_cache_dir=dataset_cache_dir,
+            )
+
+    else:
+
+        dataset = datamodule_factory(
+            dataset_name=dataset_name,
+            batch_size=64,
+            splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+            local_cache_dir=local_cache_dir,
+            dataset_cache_dir=dataset_cache_dir,
+        )
 
     dataset_statistic = toml.load(dataset.dataset_statistic_filename)
     train_dataloader = dataset.train_dataloader()
@@ -695,13 +734,17 @@ def test_forward_pass_with_all_datasets(
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
-def test_jit(potential_name, single_batch_with_batchsize, prep_temp_dir):
+def test_jit(
+    potential_name, single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
+):
     # setup dataset
+    local_cache_dir = f"{str(prep_temp_dir)}/{potential_name.lower()}_test_jit"
+    dataset_cache_dir = str(dataset_temp_dir)
     batch = single_batch_with_batchsize(
         batch_size=1,
         dataset_name="qm9",
-        local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
     nnp_input = batch.nnp_input
 
@@ -723,17 +766,30 @@ def test_jit(potential_name, single_batch_with_batchsize, prep_temp_dir):
 )
 @pytest.mark.parametrize("mode", ["training", "inference"])
 def test_chemical_equivalency(
-    dataset_name, potential_name, mode, single_batch_with_batchsize, prep_temp_dir
+    dataset_name,
+    potential_name,
+    mode,
+    single_batch_with_batchsize,
+    prep_temp_dir,
+    dataset_temp_dir,
 ):
+    local_cache_dir = (
+        f"{str(prep_temp_dir)}/{potential_name.lower()}_test_chemical_equivalency"
+    )
+    dataset_cache_dir = str(dataset_temp_dir)
+
     nnp_input = single_batch_with_batchsize(
-        32, dataset_name, str(prep_temp_dir), version_select="nc_1000_v0"
+        batch_size=32,
+        dataset_name=dataset_name,
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     ).nnp_input
 
     potential = setup_potential_for_test(
         potential_name,
         mode,
         potential_seed=42,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
     )
 
     output = potential(nnp_input)
@@ -744,12 +800,22 @@ def test_chemical_equivalency(
 @pytest.mark.parametrize("dataset_name", ["QM9"])
 @pytest.mark.parametrize("potential_name", ["SchNet"])
 def test_different_neighborlists_for_inference(
-    dataset_name, potential_name, single_batch_with_batchsize, prep_temp_dir
+    dataset_name,
+    potential_name,
+    single_batch_with_batchsize,
+    prep_temp_dir,
+    dataset_temp_dir,
 ):
 
-    # NOTE: the training pairlist only works for a batchsize of 1
+    local_cache_dir = f"{str(prep_temp_dir)}/{potential_name.lower()}_test_different_neighborlists_for_inference"
+    dataset_cache_dir = str(dataset_temp_dir)
+
+    # NOTE: the training pairlist test only works for a batchsize of 1
     nnp_input = single_batch_with_batchsize(
-        1, dataset_name, str(prep_temp_dir), version_select="nc_1000_v0"
+        batch_size=1,
+        dataset_name=dataset_name,
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     ).nnp_input
 
     potential = setup_potential_for_test(
@@ -757,7 +823,7 @@ def test_different_neighborlists_for_inference(
         "inference",
         potential_seed=42,
         use_training_mode_neighborlist=True,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
     )
 
     output_1 = potential(nnp_input)
@@ -767,7 +833,7 @@ def test_different_neighborlists_for_inference(
         "inference",
         potential_seed=42,
         use_training_mode_neighborlist=False,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
     )
 
     output_2 = potential(nnp_input)
@@ -794,14 +860,25 @@ def test_multiple_output_heads(
     single_batch_with_batchsize,
     jit,
     prep_temp_dir,
+    dataset_temp_dir,
 ):
     """Test models with multiple output heads."""
+
+    local_cache_dir = (
+        f"{str(prep_temp_dir)}/{potential_name.lower()}_test_multiple_output_heads"
+    )
+    dataset_cache_dir = str(dataset_temp_dir)
     # Get input and set up model
     nnp_input = single_batch_with_batchsize(
-        32, dataset_name, str(prep_temp_dir), version_select="nc_1000_v0"
+        batch_size=32,
+        dataset_name=dataset_name,
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     ).nnp_input
+
     config = load_configs_into_pydantic_models(f"{potential_name.lower()}", "qm9")
-    config["runtime"].local_cache_dir = str(prep_temp_dir)
+    config["runtime"].local_cache_dir = local_cache_dir
+
     # Modify the config based on the energy expression
     config = _add_per_atom_charge_to_predicted_properties(config)
     if energy_expression == "short_range_and_long_range_electrostatic":
@@ -843,13 +920,21 @@ def test_forward_pass(
     simulation_environment,
     single_batch_with_batchsize,
     prep_temp_dir,
+    dataset_temp_dir,
 ):
     # this test sends a single batch from different datasets through the model
 
+    local_cache_dir = f"{str(prep_temp_dir)}/{potential_name.lower()}_test_forward_pass"
+    dataset_cache_dir = str(dataset_temp_dir)
+
     # get input and set up model
     nnp_input = single_batch_with_batchsize(
-        64, dataset_name, str(prep_temp_dir), version_select="nc_1000_v0"
+        batch_size=64,
+        dataset_name=dataset_name,
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     ).nnp_input
+
     nr_of_mols = nnp_input.atomic_subsystem_indices.unique().shape[0]
 
     potential = setup_potential_for_test(
@@ -858,7 +943,7 @@ def test_forward_pass(
         potential_seed=42,
         use_training_mode_neighborlist=True,
         simulation_environment=simulation_environment,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
     )
     nnp_input = prepare_input_for_model(nnp_input, potential)
 
@@ -882,12 +967,18 @@ IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
-def test_vis(potential_name, single_batch_with_batchsize, prep_temp_dir):
+def test_vis(
+    potential_name, single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
+):
+
+    local_cache_dir = f"{str(prep_temp_dir)}/{potential_name.lower()}_test_vis"
+    dataset_cache_dir = str(dataset_temp_dir)
+
     batch = single_batch_with_batchsize(
         batch_size=32,
         dataset_name="SPICE2",
-        local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
     nnp_input = batch.nnp_input
     from modelforge.utils.vis import visualize_model
@@ -899,18 +990,21 @@ def test_vis(potential_name, single_batch_with_batchsize, prep_temp_dir):
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
 def test_calculate_energies_and_forces(
-    potential_name, single_batch_with_batchsize, prep_temp_dir
+    potential_name, single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
 ):
     """
     Test the calculation of energies and forces for a molecule.
     """
     import torch
 
+    local_cache_dir = f"{str(prep_temp_dir)}/{potential_name.lower()}_test_calculate_energies_and_forces"
+    dataset_cache_dir = str(dataset_temp_dir)
+
     batch = single_batch_with_batchsize(
         batch_size=32,
         dataset_name="SPICE2",
-        local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
     nnp_input = batch.nnp_input
 
@@ -919,7 +1013,7 @@ def test_calculate_energies_and_forces(
         potential_name,
         "training",
         potential_seed=42,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
     )
     # get energy and force
     E_training = trainer(nnp_input)["per_system_energy"]
@@ -934,7 +1028,7 @@ def test_calculate_energies_and_forces(
         potential_seed=42,
         use_training_mode_neighborlist=True,
         jit=False,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
     )
 
     # get energy and force
@@ -965,8 +1059,8 @@ def test_calculate_energies_and_forces(
     batch = single_batch_with_batchsize(
         batch_size=1,
         dataset_name="SPICE2",
-        local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
     nnp_input = batch.nnp_input
 
@@ -978,7 +1072,7 @@ def test_calculate_energies_and_forces(
         potential_seed=42,
         use_training_mode_neighborlist=False,
         jit=True,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
     )
 
     # get energy and force
@@ -1028,7 +1122,7 @@ def get_nr_of_mols(nnp_input):
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
 def test_calculate_energies_and_forces_with_jax(
-    potential_name, single_batch_with_batchsize, prep_temp_dir
+    potential_name, single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
 ):
     """
     Test the calculation of energies and forces for a molecule.
@@ -1036,15 +1130,18 @@ def test_calculate_energies_and_forces_with_jax(
     import torch
     from modelforge.jax import convert_NNPInput_to_jax
 
+    local_cache_dir = f"{str(prep_temp_dir)}/{potential_name.lower()}_test_calculate_energies_and_forces_with_jax"
+    dataset_cache_dir = str(dataset_temp_dir)
+
     # get input and set up model
     batch = single_batch_with_batchsize(
         batch_size=1,
         dataset_name="QM9",
-        local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
 
-    # conver tinput to jax
+    # convert input to jax
     nnp_input = convert_NNPInput_to_jax(batch.nnp_input)
 
     potential = setup_potential_for_test(
@@ -1054,7 +1151,7 @@ def test_calculate_energies_and_forces_with_jax(
         use_training_mode_neighborlist=False,
         jit=False,
         simulation_environment="JAX",
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
     )
 
     # forward pass
@@ -1079,16 +1176,22 @@ def test_calculate_energies_and_forces_with_jax(
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
-def test_casting(potential_name, single_batch_with_batchsize, prep_temp_dir):
+def test_casting(
+    potential_name, single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
+):
     # test dtype casting
     import torch
+
+    local_cache_dir = f"{str(prep_temp_dir)}/{potential_name.lower()}_test_casting"
+    dataset_cache_dir = str(dataset_temp_dir)
 
     batch = single_batch_with_batchsize(
         batch_size=64,
         dataset_name="QM9",
-        local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
+
     batch_ = batch.to_dtype(dtype=torch.float64)
     assert batch_.nnp_input.positions.dtype == torch.float64
     batch_ = batch_.to_dtype(dtype=torch.float32)
@@ -1136,6 +1239,7 @@ def test_equivariant_energies_and_forces(
     single_batch_with_batchsize,
     equivariance_utils,
     prep_temp_dir,
+    dataset_temp_dir,
 ):
     """
     Test the calculation of energies and forces for a molecule.
@@ -1146,13 +1250,16 @@ def test_equivariant_energies_and_forces(
     precision = torch.float64
     simulation_environment: Literal["PyTorch", "JAX"]
 
+    local_cache_dir = f"{str(prep_temp_dir)}/{potential_name.lower()}_test_equivariant_energies_and_forces"
+    dataset_cache_dir = str(dataset_temp_dir)
+
     # initialize the models
     potential = setup_potential_for_test(
         use="inference",
         potential_seed=42,
         potential_name=potential_name,
         simulation_environment=simulation_environment,
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
     ).to(dtype=precision)
 
     # define the symmetry operations
@@ -1166,8 +1273,8 @@ def test_equivariant_energies_and_forces(
     nnp_input = single_batch_with_batchsize(
         batch_size=64,
         dataset_name="QM9",
-        local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     ).nnp_input.to_dtype(dtype=precision)
 
     reference_result = potential(nnp_input)["per_system_energy"]
@@ -1182,8 +1289,8 @@ def test_equivariant_energies_and_forces(
     nnp_input = single_batch_with_batchsize(
         batch_size=64,
         dataset_name="QM9",
-        local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     ).nnp_input.to_dtype(dtype=precision)
     translation_nnp_input = nnp_input.to_dtype(dtype=precision)
     translation_nnp_input.positions = translation(translation_nnp_input.positions)
@@ -1216,8 +1323,8 @@ def test_equivariant_energies_and_forces(
     nnp_input = single_batch_with_batchsize(
         batch_size=64,
         dataset_name="QM9",
-        local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     ).nnp_input.to_dtype(dtype=precision)
     rotation_input_data = nnp_input.to_dtype(dtype=precision)
     rotation_input_data.positions = rotation(rotation_input_data.positions)
@@ -1254,8 +1361,8 @@ def test_equivariant_energies_and_forces(
     nnp_input = single_batch_with_batchsize(
         batch_size=64,
         dataset_name="QM9",
-        local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     ).nnp_input.to_dtype(dtype=precision)
     reflection_input_data = nnp_input.to_dtype(dtype=precision)
     reflection_input_data.positions = reflection(reflection_input_data.positions)

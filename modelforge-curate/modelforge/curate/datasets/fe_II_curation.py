@@ -9,7 +9,7 @@ from modelforge.curate.properties import (
     TotalCharge,
     MetaData,
     DipoleMomentPerSystem,
-    SpinMultiplicities,
+    SpinMultiplicitiesPerSystem,
 )
 from modelforge.curate.record import (
     infer_bonds,
@@ -212,7 +212,7 @@ class FeIICuration(DatasetCuration):
                     charge = TotalCharge(value=charge_tmp, units="elementary_charge")
 
                     spin_tmp = np.array(pickled["spin"]).reshape(1, 1)
-                    spin = SpinMultiplicities(value=spin_tmp)
+                    spin = SpinMultiplicitiesPerSystem(value=spin_tmp)
 
                     sid = pickled["sid"]
                     molid = sid.split("_")[0]

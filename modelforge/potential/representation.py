@@ -11,8 +11,8 @@ class PhysNetAttenuationFunction(nn.Module):
 
         Parameters
         ----------
-        cutoff : unit.Quantity
-            The cutoff distance.
+        cutoff : float
+            The cutoff distance in internal units (default nanometers).
         """
         super().__init__()
         self.register_buffer("cutoff", torch.tensor([cutoff]))
@@ -39,8 +39,8 @@ class CosineAttenuationFunction(nn.Module):
 
         Parameters:
         -----------
-        cutoff: unit.Quantity
-            The cutoff distance.
+        cutoff: float
+            The cutoff distance in internal units (default nanometers).
 
         """
         super().__init__()
@@ -49,7 +49,7 @@ class CosineAttenuationFunction(nn.Module):
     def forward(self, d_ij: torch.Tensor):
         """
         Compute the cosine cutoff for a distance tensor.
-        NOTE: the cutoff function doesn't care about units as long as they are consisten,
+        NOTE: the cutoff function doesn't care about units as long as they are consistent,
 
         Parameters
         -----------
@@ -334,13 +334,13 @@ class GaussianRadialBasisFunctionWithScaling(RadialBasisFunction):
         ---------
         number_of_radial_basis_functions: int
             Number of radial basis functions to use.
-        max_distance: unit.Quantity
+        max_distance: float
             Maximum distance to consider for symmetry functions.
-        min_distance: unit.Quantity
+        min_distance: float, default 0.0
             Minimum distance to consider.
         dtype: torch.dtype, default None
             Data type for computations.
-        prefactor: float
+        prefactor: float, default 1.0
             Scalar factor by which to multiply output of radial basis functions.
         trainable_prefactor: bool, default False
             Whether prefactor is trainable
@@ -357,7 +357,7 @@ class GaussianRadialBasisFunctionWithScaling(RadialBasisFunction):
         self.number_of_radial_basis_functions = number_of_radial_basis_functions
         self.dtype = dtype
         self.trainable_centers_and_scale_factors = trainable_centers_and_scale_factors
-        # convert to nanometer
+
         _max_distance_in_nanometer = max_distance
         _min_distance_in_nanometer = min_distance
 
@@ -434,9 +434,9 @@ class SchnetRadialBasisFunction(GaussianRadialBasisFunctionWithScaling):
         ---------
         number_of_radial_basis_functions: int
             Number of radial basis functions to use.
-        max_distance: unit.Quantity
+        max_distance: float
             Maximum distance to consider for symmetry functions.
-        min_distance: unit.Quantity
+        min_distance: float, default 0.0
             Minimum distance to consider.
         dtype: torch.dtype, default None
             Data type for computations.
@@ -576,7 +576,7 @@ class PhysNetRadialBasisFunction(RadialBasisFunction):
         max_distance : float
             Maximum distance to consider for symmetry functions.
         min_distance : float
-            Minimum distance to consider, by default 0.0 * unit.nanometer.
+            Minimum distance to consider, by default 0.0 * unit length, which by default is nanometer.
         alpha: float
             Scale factor used to nondimensionalize the input to all exp calls. The PhysNet paper implicitly divides by 1
             Angstrom within exponentials. Note that this is distinct from the unitless scale factors used outside the

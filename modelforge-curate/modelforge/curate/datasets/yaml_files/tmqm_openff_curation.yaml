@@ -1,0 +1,6 @@
+dataset_name: tmqm_openff
+latest: v_0
+v_0:
+  version: 0
+  collection_names:
+  - 419

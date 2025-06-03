@@ -9,7 +9,7 @@ from modelforge.curate.properties import (
     TotalCharge,
     MetaData,
     DipoleMomentScalarPerSystem,
-    SpinMultiplicities,
+    SpinMultiplicitiesPerSystem,
 )
 
 from modelforge.utils.units import chem_context
@@ -234,7 +234,7 @@ class tmQMCuration(DatasetCuration):
             stoichiometry = MetaData(
                 name="stoichiometry", value=properties["Stoichiometry"]
             )
-            spin_multiplicity = SpinMultiplicities(
+            spin_multiplicity = SpinMultiplicitiesPerSystem(
                 value=np.array(properties["S"]).reshape(1, 1)
             )
             metal_n_ligands = MetaData(

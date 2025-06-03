@@ -1,4 +1,4 @@
-from modelforge.curate.units import GlobalUnitSystem, chem_context
+from modelforge.utils.units import GlobalUnitSystem, chem_context
 from modelforge.curate.properties import (
     PropertyBaseModel,
     PropertyClassification,
@@ -53,6 +53,7 @@ class SourceDataset:
         self.records = {}
         self.append_property = append_property
         self.local_db_dir = local_db_dir
+        os.makedirs(self.local_db_dir, exist_ok=True)
 
         if local_db_name is None:
             self.local_db_name = name.replace(" ", "_") + ".sqlite"
@@ -844,7 +845,7 @@ class SourceDataset:
                 }
 
             for prop in record.meta_data.keys():
-                temp_props[prop] = "meta_data"
+                temp_props[prop] = {"classification": "meta_data"}
 
             output_dict["properties"] = temp_props
 
@@ -893,7 +894,8 @@ class SourceDataset:
 
         Returns
         -------
-
+        chksum: str
+            MD5 checksum of the hdf5_ file.
         """
         import h5py
         import os

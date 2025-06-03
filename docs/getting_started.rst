@@ -8,9 +8,16 @@ This page details how to get started with *modelforge*, a library designed for t
 Installation
 **************
 
+First, clone the source code from the GitHub repository
+
+
+.. code-block:: bash
+
+    git clone https://github.com/choderalab/modelforge
 
 To ensure a clean environment for *modelforge*, we recommend creating a new conda environment using the provided environment YAML file located in the devtools directory of the *modelforge* repository.
 
+Navigate to the top level of the *modelforge* directory and run the following command to create a new conda environment with all necessary dependencies installed:
 
 .. code-block:: bash
 
@@ -18,14 +25,9 @@ To ensure a clean environment for *modelforge*, we recommend creating a new cond
 
 This command will create a new conda environment named *modelforge* with all necessary dependencies installed. Note, this package has currently been tested and validated with Python 3.10 and 3.11.
 
-Next, clone the source code from the GitHub repository:
 
 
-.. code-block:: bash
-
-    git clone https://github.com/choderalab/modelforge
-
-Navigate to the top level of the *modelforge* directory and install the package using pip:
+From the top level of the *modelforge* directory, install the package using pip:
 
 .. code-block:: bash
    
@@ -71,18 +73,23 @@ Before training a model, consider the following:
     * PhysNet
     * TensorNet
     * SAKE
+    * AimNet2
 
-These architectures can be trained on the following datasets (distributed via zenodo https://zenodo.org/communities/modelforge/ ):
+These architectures can be trained on the following datasets that have been curated into modelforge compatible HDF5 files (distributed via zenodo https://zenodo.org/communities/modelforge/ and accessible via the `modelforge.datasets` module):
 
 - Ani1x
 - Ani2x
 - PHALKETOH
 - QM9
-- SPICE1 (/openff)
+- SPICE1
+- SPICE1 OpenFF
 - SPICE2
+- SPICE2 OpenFF
 - tmQM
+- tmQM_xtb
+- Fe II
 
-By default, potentials predict the total energy  and per-atom forces within a given cutoff radius and can be trained on energies and forces.
+By default, the NNPs predict the total energy within a given cutoff radius and can be trained on energies and forces.
 
 .. note:: PaiNN and PhysNet can also predict partial charges and calculate long-range interactions. PaiNN can additionally use multipole expansions. These features will introduce additional terms to the loss function.
 
@@ -91,7 +98,7 @@ In the following example, we will train a SchNet model on the ANI1x dataset with
 Defining the Potential
 +++++++++++++++++++++++++++++++++++++++
 
-The potential architecture and relevant parameters are defined in a TOML configuration file. Here is an example of a potential definition for a SchNet model. Note that we use 16 radial basis functions, a maximum interaction radius of 5.0 angstroms, and 16 filters. We use a `ShiftedSoftplus`` activation (the fully differentiable version of ReLu) function and featurize the atomic number of the atoms in the dataset. Finally, we normalize the per-atom energy and reduce the per-atom energy to the per-molecule energy (which will then be returned)..
+The potential architecture and relevant parameters are defined in a TOML configuration file. Here is an example of a potential definition for a SchNet model. Note that in this example, 16 radial basis functions, a maximum interaction radius of 5.0 angstroms, and 16 filters are used along with `ShiftedSoftplus`` activation (the fully differentiable version of ReLu) function and featurize the atomic number of the atoms in the dataset. Finally, we normalize the per-atom energy and reduce the per-atom energy to the per-molecule energy (which will then be returned).
 
 
 .. code-block:: toml
@@ -123,7 +130,7 @@ The potential architecture and relevant parameters are defined in a TOML configu
 Defining the Dataset
 +++++++++++++++++++++++++++++++++++++++
 
-The following TOML file defines the ANI1x dataset, allowing users to specify a specific version, as well as parameters used by the torch dataloaders (num_workers and pin_memory):
+TOML configuration files are also used to define which dataset and various properties associated with the dataset.  The following TOML file defines the ANI1x dataset, allowing users to specify a specific version, as well as parameters used by the torch dataloaders (num_workers and pin_memory).  Here, we must also specified the properties of interest (i.e., which properties to load from the HDF5 datafile), as well as define the asssociation between these properties and the internal variables (via dataset.properties_assignment). Optionally, we can define filters for the elements in the dataset (e.g., to only include certain elements or exclude others). The dataset cache directory is also specified, which is where the dataset will be saved locally after it is downloaded; this directory  can be used by multiple separate training runs to avoid having to save multiple copies or spending time downloading the dataset multiple times.
 
 .. code-block:: toml
 
@@ -132,11 +139,19 @@ The following TOML file defines the ANI1x dataset, allowing users to specify a s
     version_select = "latest"
     num_workers = 4
     pin_memory = true
+    properties_of_interest = ["positions", "atomic_numbers", "wb97x_dz_energy", "wb97x_dz_forces"]
+    element_filter = []
+    dataset_cache_dir = "~/modelforge_datasets"  # Directory to cache the dataset
+
+    [dataset.properties_assignment]
+    atomic_numbers="atomic_numbers"
+    positions="positions"
+    E="wb97x_dz_energy"
+    F="wb97x_dz_forces"
 
 
 Defining the Training Routine
 +++++++++++++++++++++++++++++++++++++++
-
 
 The training TOML file includes the number of epochs, batch size, learning rate, logger, callback parameters, and other training parameters (including dataset splitting).
 Each of these settings plays a crucial role in the training process.
@@ -198,7 +213,7 @@ Here is an example of a training routine definition:
 Defining Runtime Variables
 +++++++++++++++++++++++++++++++++++++++
 
-To define various aspects of the compute environment, various runtime parameters can be set. Here is an example of a runtime variable definition:
+To define aspects of the compute environment, various runtime parameters can be set. Here is an example of a runtime variable definition:
 
 .. code-block:: toml
 
@@ -213,7 +228,7 @@ To define various aspects of the compute environment, various runtime parameters
     simulation_environment = "PyTorch"  # Simulation environment
     log_every_n_steps = 50  # Frequency of logging steps
 
-All of the above TOML files can be passed invididually or combined into a single TOML file that defines the training run. Assuming the combined TOML file is called `training.toml`, start the training by passing the TOML file to the perform_training.py script.
+All of the above TOML files can be passed individually or combined into a single TOML file that defines the training run. Assuming the combined TOML file is called `training.toml`, start the training by passing the TOML file to the perform_training.py script.
 
 
 .. code-block:: bash
@@ -234,13 +249,14 @@ All training runs performed with *modelforge* are logged in a `wandb` project. Y
 Investigating Hyperparameter Impact on Model Performance
 ========================================================
 
-For each supported architecture, modelforge provides reasonable priors for hyperparameters. Hyperparameter optimization is conducted using `Ray`.
+For each supported architecture, modelforge attempts provides reasonable priors for hyperparameters. Hyperparameter optimization can be performed manually or using `Ray`.
+
+..warning:: Tuning with Ray is currently a work in progress and may not be fully functional.
 
 .. autoclass:: modelforge.train.tuning.RayTuner
     :noindex:
 
 
-*Modelforge* offers the :py:class:`~modelforge.train.tuning.RayTuner` class, which facilitates the exploration of hyperparameter impacts on model performance given specific training and dataset parameters within a defined computational budget.
 
 
 

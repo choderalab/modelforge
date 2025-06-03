@@ -20,7 +20,7 @@ def prep_temp_dir(tmp_path_factory):
 def load_configs_into_pydantic_models(
     potential_name: str, dataset_name: str, local_cache_dir: str
 ):
-    from importlib import resources
+    from modelforge.utils.io import get_path_string
 
     import toml
 
@@ -32,11 +32,11 @@ def load_configs_into_pydantic_models(
     )
 
     potential_path = (
-        resources.files(potential_defaults) / f"{potential_name.lower()}.toml"
+        get_path_string(potential_defaults) + f"/{potential_name.lower()}.toml"
     )
-    dataset_path = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
-    training_path = resources.files(training_defaults) / f"default.toml"
-    runtime_path = resources.files(runtime_defaults) / "runtime.toml"
+    dataset_path = get_path_string(dataset_defaults) + f"/{dataset_name.lower()}.toml"
+    training_path = get_path_string(training_defaults) + f"/default.toml"
+    runtime_path = get_path_string(runtime_defaults) + "/runtime.toml"
 
     training_config_dict = toml.load(training_path)
     dataset_config_dict = toml.load(dataset_path)
@@ -292,9 +292,10 @@ def test_learning_rate_scheduler(
     """
     Test that we can train, save, and load checkpoints with different learning rate schedulers.
     """
+    local_cache_dir = str(prep_temp_dir) + "/test_learning_rate_scheduler"
     # Load the configuration into Pydantic models
     config = load_configs_into_pydantic_models(
-        potential_name, dataset_name, str(prep_temp_dir)
+        potential_name, dataset_name, local_cache_dir
     )
 
     # Get the training configuration
@@ -322,6 +323,7 @@ def test_train_with_lightning(loss, potential_name, dataset_name, prep_temp_dir)
     Test that we can train, save and load checkpoints.
     """
 
+    local_cache_dir = str(prep_temp_dir) + "/test_train_with_lightning"
     # SKIP if potential is ANI and dataset is SPICE2
     if "ANI" in potential_name and dataset_name == "SPICE2":
         pytest.skip("ANI potential is not compatible with SPICE2 dataset")
@@ -331,7 +333,7 @@ def test_train_with_lightning(loss, potential_name, dataset_name, prep_temp_dir)
         )
 
     config = load_configs_into_pydantic_models(
-        potential_name, dataset_name, str(prep_temp_dir)
+        potential_name, dataset_name, local_cache_dir
     )
 
     if "force" in loss:
@@ -348,23 +350,24 @@ def test_train_with_lightning(loss, potential_name, dataset_name, prep_temp_dir)
 
 
 def test_train_from_single_toml_file(prep_temp_dir):
-    from importlib import resources
+    from modelforge.utils.io import get_path_string
 
     from modelforge.tests import data
     from modelforge.train.training import read_config_and_train
 
-    config_path = resources.files(data) / f"config.toml"
+    config_path = get_path_string(data) + f"/config.toml"
 
-    read_config_and_train(config_path, local_cache_dir=str(prep_temp_dir))
+    local_cache_dir = str(prep_temp_dir) + "/test_train_from_single_toml_file"
+    read_config_and_train(config_path, local_cache_dir=local_cache_dir)
 
 
-def test_train_from_single_toml_file_element_filter(prep_temp_dir):
-    from importlib import resources
+def test_train_from_single_toml_file_element_filter():
+    from modelforge.utils.io import get_path_string
 
     from modelforge.tests import data
     from modelforge.train.training import read_config_and_train
 
-    config_path = resources.files(data) / f"config.toml"
+    config_path = get_path_string(data) + f"/config_element_filter.toml"
 
     from modelforge.potential.potential import NeuralNetworkPotentialFactory
     from modelforge.train.training import read_config
@@ -389,19 +392,24 @@ def test_train_from_single_toml_file_element_filter(prep_temp_dir):
     assert np.all(np.array(trainer.datamodule.element_filter) == np.array([[6, 1]]))
 
 
-def test_error_calculation(single_batch_with_batchsize, prep_temp_dir):
+def test_error_calculation(
+    single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
+):
     # test the different Loss classes
     from modelforge.train.losses import (
         ForceSquaredError,
         EnergySquaredError,
     )
 
+    local_cache_dir = str(prep_temp_dir) + "/test_error_calculation"
+    dataset_cache_dir = str(dataset_temp_dir)
+
     # generate data
     batch = single_batch_with_batchsize(
         batch_size=16,
         dataset_name="PHALKETHOH",
-        local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
 
     data = batch
@@ -449,20 +457,24 @@ def test_error_calculation(single_batch_with_batchsize, prep_temp_dir):
     assert torch.allclose(torch.mean(F_error), reference_F_error)
 
 
-def test_loss_with_dipole_moment(single_batch_with_batchsize, prep_temp_dir):
+def test_loss_with_dipole_moment(
+    single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
+):
+    local_cache_dir = str(prep_temp_dir) + "/test_loss_with_dipole_moment"
+    dataset_cache_dir = str(dataset_temp_dir)
     # Generate a batch with the specified batch size and dataset
     batch = single_batch_with_batchsize(
         batch_size=16,
         dataset_name="SPICE2",
-        local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
 
     # Get the trainer object with the specified model and dataset
     config = load_configs_into_pydantic_models(
         potential_name="schnet",
         dataset_name="SPICE2",
-        local_cache_dir=str(prep_temp_dir),
+        local_cache_dir=local_cache_dir,
     )
     add_dipole_moment_to_loss_parameter(config)
     add_force_to_loss_parameter(config)
@@ -540,14 +552,17 @@ def test_loss_with_dipole_moment(single_batch_with_batchsize, prep_temp_dir):
     ).all(), "Total loss contains non-finite values."
 
 
-def test_loss(single_batch_with_batchsize, prep_temp_dir):
+def test_loss(single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir):
     from modelforge.train.losses import Loss
+
+    local_cache_dir = str(prep_temp_dir) + "/test_loss"
+    dataset_cache_dir = str(dataset_temp_dir)
 
     batch = single_batch_with_batchsize(
         batch_size=16,
         dataset_name="PHALKETHOH",
-        local_cache_dir=str(prep_temp_dir),
-        version_select="nc_1000_v0",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
 
     loss_porperty = ["per_system_energy", "per_atom_force", "per_atom_energy"]

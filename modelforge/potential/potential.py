@@ -21,6 +21,7 @@ import lightning as pl
 import torch
 from loguru import logger as log
 from openff.units import unit
+from modelforge.utils.units import GlobalUnitSystem
 from modelforge.potential.neighbors import PairlistData
 
 from modelforge.dataset.dataset import DatasetParameters
@@ -527,8 +528,12 @@ def setup_potential(
     potential_parameter: T_NNP_Parameters,
     dataset_statistic: Dict[str, Dict[str, unit.Quantity]] = {
         "training_dataset_statistics": {
-            "per_atom_energy_mean": unit.Quantity(0.0, unit.kilojoule_per_mole),
-            "per_atom_energy_stddev": unit.Quantity(1.0, unit.kilojoule_per_mole),
+            "per_atom_energy_mean": unit.Quantity(
+                0.0, GlobalUnitSystem.get_units("energy")
+            ),
+            "per_atom_energy_stddev": unit.Quantity(
+                1.0, GlobalUnitSystem.get_units("energy")
+            ),
         }
     },
     use_training_mode_neighborlist: bool = False,
@@ -601,9 +606,6 @@ def setup_potential(
     return potential
 
 
-from openff.units import unit
-
-
 class NeuralNetworkPotentialFactory:
     @staticmethod
     def generate_potential(
@@ -613,8 +615,12 @@ class NeuralNetworkPotentialFactory:
         dataset_parameter: Optional[DatasetParameters] = None,
         dataset_statistic: Dict[str, Dict[str, float]] = {
             "training_dataset_statistics": {
-                "per_atom_energy_mean": unit.Quantity(0.0, unit.kilojoule_per_mole),
-                "per_atom_energy_stddev": unit.Quantity(1.0, unit.kilojoule_per_mole),
+                "per_atom_energy_mean": unit.Quantity(
+                    0.0, GlobalUnitSystem.get_units("energy")
+                ),
+                "per_atom_energy_stddev": unit.Quantity(
+                    1.0, GlobalUnitSystem.get_units("energy")
+                ),
             }
         },
         potential_seed: Optional[int] = None,
@@ -649,7 +655,7 @@ class NeuralNetworkPotentialFactory:
         inference_neighborlist_strategy : Optional[str], optional
             Neighborlist strategy for inference (default is "verlet_nsq"). other option is "brute_nsq".
         verlet_neighborlist_skin : Optional[float], optional
-            Skin for the Verlet neighborlist (default is 0.1, units nanometers).
+            Skin for the Verlet neighborlist (default is 0.1, internal length units which are by default nanometers).
         Returns
         -------
         Union[Potential, JAXModel]
@@ -748,8 +754,12 @@ class NeuralNetworkPotentialFactory:
         dataset_parameter: Optional[DatasetParameters] = None,
         dataset_statistic: Dict[str, Dict[str, float]] = {
             "training_dataset_statistics": {
-                "per_atom_energy_mean": unit.Quantity(0.0, unit.kilojoule_per_mole),
-                "per_atom_energy_stddev": unit.Quantity(1.0, unit.kilojoule_per_mole),
+                "per_atom_energy_mean": unit.Quantity(
+                    0.0, GlobalUnitSystem.get_units("energy")
+                ),
+                "per_atom_energy_stddev": unit.Quantity(
+                    1.0, GlobalUnitSystem.get_units("energy")
+                ),
             }
         },
         potential_seed: Optional[int] = None,

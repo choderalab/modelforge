@@ -286,6 +286,12 @@ class QM9Curation(DatasetCuration):
                 value=np.array(properties["energy_of_homo"]).reshape(1, 1),
                 units=unit.hartree,
             )
+            energy_of_lumo = Energies(
+                name="energy_of_lumo",
+                value=np.array(properties["energy_of_lumo"]).reshape(1, 1),
+                units=unit.hartree,
+            )
+
             lumo_homo_gap = Energies(
                 name="lumo-homo_gap",
                 value=np.array(properties["lumo-homo_gap"]).reshape(1, 1),

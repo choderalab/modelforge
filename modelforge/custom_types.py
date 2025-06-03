@@ -11,4 +11,6 @@ DatasetType = Literal[
     "SPICE2",
     "SPICE1_OPENFF",
     "PhAlkEthOH",
+    "TMQM",
+    "TMQM_XTB",
 ]

@@ -373,15 +373,15 @@ def load_configs_into_pydantic_models(potential_name: str, dataset_name: str):
         dataset_defaults,
         runtime_defaults,
     )
-    from importlib import resources
+    from modelforge.utils.io import get_path_string
     import toml
 
     potential_path = (
-        resources.files(potential_defaults) / f"{potential_name.lower()}.toml"
+        get_path_string(potential_defaults) + f"/{potential_name.lower()}.toml"
     )
-    dataset_path = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
-    training_path = resources.files(training_defaults) / "default.toml"
-    runtime_path = resources.files(runtime_defaults) / "runtime.toml"
+    dataset_path = get_path_string(dataset_defaults) + f"/{dataset_name.lower()}.toml"
+    training_path = get_path_string(training_defaults) + "/default.toml"
+    runtime_path = get_path_string(runtime_defaults) + "/runtime.toml"
 
     training_config_dict = toml.load(training_path)
     dataset_config_dict = toml.load(dataset_path)

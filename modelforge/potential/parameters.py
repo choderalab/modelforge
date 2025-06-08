@@ -155,6 +155,7 @@ class PerAtomEnergy(ParametersBase):
     normalize: bool = False
     from_atom_to_system_reduction: bool = False
     keep_per_atom_property: bool = False
+    add_coulombic_energy: bool = False
 
 
 class PerAtomCharge(ParametersBase):

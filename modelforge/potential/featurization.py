@@ -320,6 +320,7 @@ class FeaturizeInput(nn.Module):
         categorial_embedding = self.atomic_number_embedding(atomic_numbers)
 
         if torch.isnan(categorial_embedding).any():
+            print(f"categorial_embedding: {categorial_embedding}")
             raise ValueError("NaN values detected in categorial_embedding.")
 
         for additional_embedding in self.embeddings:

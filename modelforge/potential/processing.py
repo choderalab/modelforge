@@ -409,7 +409,18 @@ class PerAtomEnergy(torch.nn.Module):
         if per_atom_energy.get("from_atom_to_system_reduction"):
             reduction = FromAtomToMoleculeReduction()
 
-        self.reduction = reduction
+            self.reduction = reduction
+        else:
+            self.reduction = None
+
+        self.add_coulombic_energy = per_atom_energy.get("add_coulombic_energy", False)
+
+        if not per_atom_energy.get(
+            "from_atom_to_system_reduction"
+        ) and per_atom_energy.get("add_coulombic_energy", False):
+            raise ValueError(
+                "If add_coulombic_energy is True, from_atom_to_system_reduction must also be True."
+            )
 
     def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         per_atom_property, indices = (
@@ -417,11 +428,19 @@ class PerAtomEnergy(torch.nn.Module):
             data["atomic_subsystem_indices"],
         )
         scaled_values = self.scale(per_atom_property)
-        per_system_energy = self.reduction(indices, scaled_values)
 
-        data["per_system_energy"] = per_system_energy
-        data["per_atom_energy"] = data["per_atom_energy"].detach()
+        # if we have a reduction operation, we apply it
+        if self.reduction is not None:
+            per_system_energy = self.reduction(indices, scaled_values)
 
+            data["per_system_energy"] = per_system_energy
+            data["per_atom_energy"] = data["per_atom_energy"].detach()
+            if self.add_coulombic_energy:
+                # add the electrostatic energy to the per-system energy
+                data["per_system_energy"] = (
+                    data["per_system_energy"] + data["electrostatic_energy"]
+                )
+                pass
         return data
 
 

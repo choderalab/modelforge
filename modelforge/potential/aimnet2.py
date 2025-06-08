@@ -104,6 +104,11 @@ class AimNet2Core(torch.nn.Module):
 
         self.charge_conservation = ChargeConservation()
 
+        from modelforge.potential.processing import CoulombPotential
+
+        # note this will need to change when we switch to supporting multiple cutoffs
+        self.coulomb_potential = CoulombPotential(cutoff=maximum_interaction_radius)
+
     def compute_properties(
         self,
         data: NNPInput,
@@ -187,10 +192,24 @@ class AimNet2Core(torch.nn.Module):
         if torch.isnan(partial_charges).any():
             raise ValueError("NaN values detected in partial charges.")
 
+        electrostatic_energy = self.coulomb_potential(
+            {
+                "atomic_subsystem_indices": data.atomic_subsystem_indices,
+                "per_atom_charge": partial_charges,
+                "atomic_numbers": data.atomic_numbers,
+                "pair_indices": pairlist.pair_indices,
+                "d_ij": pairlist.d_ij,
+            }
+        )["electrostatic_energy"]
+        # we need to also put in per_atom_charge in the return dict so it is available
+        # in the forward pass.  Note, this is different than adding in "per_atom_charge" in
+        # the predicted_properties list, as that will create a separate output layer.
         return {
             "per_atom_scalar_representation": atomic_embedding,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
             "atomic_numbers": data.atomic_numbers,
+            "per_atom_charge": partial_charges,
+            "electrostatic_energy": electrostatic_energy,
         }
 
     def forward(
@@ -220,6 +239,9 @@ class AimNet2Core(torch.nn.Module):
         # perform the forward pass implemented in the subclass
         results = self.compute_properties(data, pairlist_output)
         atomic_embedding = results["per_atom_scalar_representation"]
+
+        # The way this is setup, we will always return per_atom_charge and electrostatic_energy
+        # as those come directly from the compute_properties method.
 
         # Compute all specified outputs
         for output_name, output_layer in self.output_layers.items():

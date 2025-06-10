@@ -3,7 +3,7 @@ This module contains utility functions and classes for processing the output of 
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, Iterator, Union
+from typing import Dict, Iterator, Union, List
 
 import torch
 from openff.units import unit
@@ -319,6 +319,74 @@ def default_charge_conservation(
     return per_atom_charge_corrected
 
 
+class SumPerSystemEnergies(torch.nn.Module):
+    def __init__(
+        self,
+        contributions: List[str],
+    ):
+        """
+        Module to specify additional energy contributions to be summed into the per_system_energy.
+
+
+        """
+        super().__init__()
+        self.contributions = contributions
+
+        def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+            """
+            Forward pass to sum the specified energy contributions.
+
+            If per_system_energy is computed (i.e., from per_atom post processing),
+            these contributions are summed into the per_system_energy.
+
+            If per_system_energy is not computed, the contributions are summed
+            and added to the data dictionary under the key "per_system_energy".
+
+            Note, if per_system_energy is already present in the data dictionary,
+            and it is listed in the contributions, it will not be double counted.
+            Parameters
+            ----------
+            data : Dict[str, torch.Tensor]
+                Input data dictionary containing the energy terms to be summed.
+
+            Returns
+            -------
+            Dict[str, torch.Tensor]
+                Updated data dictionary with the summed energy under the specified output key.
+            """
+            # Sum the specified contributions
+
+            # make sure that we have the things in the data dictionary
+            for contribution in self.contributions:
+                if contribution not in data:
+                    raise KeyError(
+                        f"Energy component '{contribution}' not found in data."
+                    )
+
+            # if per_system_energy is in the contributions list, remove it because we don't want it to be double counted
+            # This seems better than raising an error, since it could be a common user level mistake
+            if "per_system_energy" in contributions:
+                contributions.remove("per_system_energy")
+
+            # create a zero tensor to hold the sum contributions
+            summed_energy = torch.zeros_like(
+                data["per_system_energy"],
+                dtype=data["per_system_energy"].dtype,
+                device=data["per_system_energy"].device,
+            )
+
+            for contribution in self.contributions:
+                summed_energy = summed_energy + data[contribution]
+
+            # add the summed energy to the per_system_energy
+            if "per_system_energy" not in data:
+                data["per_system_energy"] = summed_energy
+            else:
+                data["per_system_energy"] = summed_energy + data["per_system_energy"]
+
+            return data
+
+
 class ChargeConservation(torch.nn.Module):
     def __init__(self, method="default"):
         """
@@ -413,8 +481,6 @@ class PerAtomEnergy(torch.nn.Module):
         else:
             self.reduction = None
 
-        self.add_coulombic_energy = per_atom_energy.get("add_coulombic_energy", False)
-
         if not per_atom_energy.get(
             "from_atom_to_system_reduction"
         ) and per_atom_energy.get("add_coulombic_energy", False):
@@ -435,12 +501,7 @@ class PerAtomEnergy(torch.nn.Module):
 
             data["per_system_energy"] = per_system_energy
             data["per_atom_energy"] = data["per_atom_energy"].detach()
-            if self.add_coulombic_energy:
-                # add the electrostatic energy to the per-system energy
-                data["per_system_energy"] = (
-                    data["per_system_energy"] + data["electrostatic_energy"]
-                )
-                pass
+
         return data
 
 
@@ -579,8 +640,8 @@ class CoulombPotential(torch.nn.Module):
         # todo:  need to add back in the multiple-cutoff neighborlist since we typically
         # want to do a longer range cutoff for electrostatics
         # this will ultimately just take an extra key for accessing the appropriate pair indices
-        idx_i, idx_j = data["pair_indices"]
-
+        idx_i = data["pair_indices"][0]
+        idx_j = data["pair_indices"][1]
         # only unique paris
         unique_pairs_mask = idx_i < idx_j
         idx_i = idx_i[unique_pairs_mask]
@@ -622,7 +683,7 @@ class CoulombPotential(torch.nn.Module):
         ) * chi_r.squeeze()
 
         # sum up the energy for pairs in the same molecule
-        data["electrostatic_energy"] = (
+        data["per_system_electrostatic_energy"] = (
             electrostatic_energy.scatter_add_(
                 0, system_indices_of_pair.long(), coulomb_interactions
             )
@@ -887,7 +948,7 @@ class ZBLPotential(torch.nn.Module):
         )
 
         # we need to scatter the energy to the correct molecules using the system_indices_of_pair
-        data["zbl_energy"] = (
+        data["per_system_zbl_energy"] = (
             torch.zeros_like(zbl_energy)
             .scatter_add_(0, system_indices_of_pair.long().unsqueeze(1), energy)
             .detach()

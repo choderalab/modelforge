@@ -107,6 +107,7 @@ from modelforge.potential.processing import (
     PerAtomCharge,
     PerAtomEnergy,
     ZBLPotential,
+    SumPerSystemEnergies,
 )
 
 
@@ -114,9 +115,10 @@ class PostProcessing(torch.nn.Module):
     _SUPPORTED_PROPERTIES = [
         "per_atom_energy",
         "per_atom_charge",
-        "electrostatic_potential",
-        "zbl_potential",
+        "per_system_electrostatic_energy",
+        "per_system_zbl_energy",
         "general_postprocessing_operation",
+        "sum_per_system_energies",
     ]
 
     def __init__(
@@ -144,16 +146,15 @@ class PostProcessing(torch.nn.Module):
         self.dataset_statistic = dataset_statistic
         properties_to_process = postprocessing_parameter["properties_to_process"]
 
-        if "per_atom_energy" in properties_to_process:
-            self.registered_chained_operations["per_atom_energy"] = PerAtomEnergy(
-                postprocessing_parameter["per_atom_energy"],
-                dataset_statistic["training_dataset_statistics"],
-            )
-            self._registered_properties.append("per_atom_energy")
-            assert all(
-                prop in PostProcessing._SUPPORTED_PROPERTIES
-                for prop in self._registered_properties
-            )
+        # note, we need to post process certain properties in a specific order
+        # for example, if we want to calculate the electrostatic potential, this will depend upon
+        # the per_atom_charge, and thus we should perform per_atom_charge operations first.
+
+        # currently, per_atom_energy needs to go last, as it has a functionality to add
+        # the electrostatic energy to the per_system_energy that results from that operations
+        # however, it may be better to create a general energy summation that takes in a list of
+        # the energies to sum (all would be per_system energies), allowing the other energy operations to
+        # be performed in any order.
 
         if "per_atom_charge" in properties_to_process:
             self.registered_chained_operations["per_atom_charge"] = PerAtomCharge(
@@ -165,22 +166,22 @@ class PostProcessing(torch.nn.Module):
                 for prop in self._registered_properties
             )
 
-        if "electrostatic_potential" in properties_to_process:
+        if "per_system_electrostatic_energy" in properties_to_process:
             if (
-                postprocessing_parameter["electrostatic_potential"][
+                postprocessing_parameter["per_system_electrostatic_energy"][
                     "electrostatic_strategy"
                 ]
                 == "coulomb"
             ):
-                self.registered_chained_operations["electrostatic_potential"] = (
-                    CoulombPotential(
-                        postprocessing_parameter["electrostatic_potential"][
-                            "maximum_interaction_radius"
-                        ],
-                    )
+                self.registered_chained_operations[
+                    "per_system_electrostatic_energy"
+                ] = CoulombPotential(
+                    postprocessing_parameter["per_system_electrostatic_energy"][
+                        "maximum_interaction_radius"
+                    ],
                 )
 
-                self._registered_properties.append("electrostatic_potential")
+                self._registered_properties.append("per_system_electrostatic_energy")
                 assert all(
                     prop in PostProcessing._SUPPORTED_PROPERTIES
                     for prop in self._registered_properties
@@ -189,13 +190,50 @@ class PostProcessing(torch.nn.Module):
                 raise NotImplementedError(
                     "Only Coulomb potential is supported for electrostatics."
                 )
-        if "zbl_potential" in properties_to_process:
-            self.registered_chained_operations["zbl_potential"] = ZBLPotential()
-            self._registered_properties.append("zbl_potential")
+        if "per_system_zbl_energy" in properties_to_process:
+            if (
+                postprocessing_parameter["per_system_zbl_energy"]["calculate_zbl"]
+                == True
+            ):
+
+                self.registered_chained_operations["per_system_zbl_energy"] = (
+                    ZBLPotential()
+                )
+                self._registered_properties.append("per_system_zbl_energy")
+                assert all(
+                    prop in PostProcessing._SUPPORTED_PROPERTIES
+                    for prop in self._registered_properties
+                )
+
+        if "per_atom_energy" in properties_to_process:
+            self.registered_chained_operations["per_atom_energy"] = PerAtomEnergy(
+                postprocessing_parameter["per_atom_energy"],
+                dataset_statistic["training_dataset_statistics"],
+            )
+            self._registered_properties.append("per_atom_energy")
             assert all(
                 prop in PostProcessing._SUPPORTED_PROPERTIES
                 for prop in self._registered_properties
             )
+
+        if "sum_per_system_energies" in properties_to_process:
+            contributions = postprocessing_parameter["sum_per_system_energies"][
+                "contributions"
+            ]
+            # if an empty list is provided, we do not register the operation
+            if len(contributions) > 0:
+                self.registered_chained_operations["sum_per_system_energies"] = (
+                    SumPerSystemEnergies(
+                        contributions=postprocessing_parameter[
+                            "sum_per_system_energies"
+                        ]["contributions"]
+                    )
+                )
+                self._registered_properties.append("sum_per_system_energies")
+                assert all(
+                    prop in PostProcessing._SUPPORTED_PROPERTIES
+                    for prop in self._registered_properties
+                )
 
     def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """

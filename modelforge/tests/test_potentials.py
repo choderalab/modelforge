@@ -196,9 +196,9 @@ def test_electrostatics():
     output = e_elec(core_output_dict)
 
     # check that the output is correct
-    assert output["electrostatic_energy"].shape == (2, 1)
+    assert output["per_system_electrostatic_energy"].shape == (2, 1)
     assert torch.allclose(
-        output["electrostatic_energy"],
+        output["per_system_electrostatic_energy"],
         torch.tensor([[277.5938], [277.5938]]),
         1e-4,
         1e-4,
@@ -223,10 +223,10 @@ def test_electrostatics():
     output = e_elec(core_output_dict)
 
     # check that the output is correct
-    assert output["electrostatic_energy"].shape == (2, 1)
+    assert output["per_system_electrostatic_energy"].shape == (2, 1)
 
     assert torch.allclose(
-        output["electrostatic_energy"],
+        output["per_system_electrostatic_energy"],
         torch.tensor(
             [[-0.4219], [-0.4219]],
         ),
@@ -252,10 +252,10 @@ def test_zbl_potential():
 
     zbl = ZBLPotential()
     zbl_output = zbl(core_output_dict)
-    assert zbl_output["zbl_energy"].shape == (5, 1)
-    print(zbl_output["zbl_energy"])
+    assert zbl_output["per_system_zbl_energy"].shape == (5, 1)
+    print(zbl_output["per_system_zbl_energy"])
     assert torch.allclose(
-        zbl_output["zbl_energy"],
+        zbl_output["per_system_zbl_energy"],
         torch.tensor([[4.6440e06], [8.5328e03], [3.3545e02], [3.3711e00], [0.0000e00]]),
         1e-3,
         1e-3,

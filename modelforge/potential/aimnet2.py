@@ -209,7 +209,7 @@ class AimNet2Core(torch.nn.Module):
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
             "atomic_numbers": data.atomic_numbers,
             "per_atom_charge": partial_charges,
-            "electrostatic_energy": electrostatic_energy,
+            "per_system_electrostatic_energy": electrostatic_energy,
         }
 
     def forward(

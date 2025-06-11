@@ -201,7 +201,7 @@ class PostProcessingParameter(ParametersBase):
     properties_to_process: List[PropertiesToProcess]
     per_atom_energy: Optional[PerAtomEnergy] = None
     per_atom_charge: Optional[PerAtomCharge] = None
-    per_system_electrostatic_energyl: Optional[ElectrostaticPotential] = None
+    per_system_electrostatic_energy: Optional[ElectrostaticPotential] = None
     per_system_zbl_energy: Optional[ZBLPotential] = None
     sum_per_system_energies: Optional[SumPerSystemEnergies] = None
     general_postprocessing_operation: Optional[GeneralPostProcessingOperation] = None

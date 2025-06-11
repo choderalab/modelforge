@@ -25,9 +25,9 @@ def _add_electrostatic_to_predicted_properties(config):
     from openff.units import unit
 
     config["potential"].postprocessing_parameter.properties_to_process.append(
-        "electrostatic_potential"
+        "per_system_electrostatic_energy"
     )
-    config["potential"].postprocessing_parameter.electrostatic_potential = (
+    config["potential"].postprocessing_parameter.per_system_electrostatic_energy = (
         ElectrostaticPotential(
             electrostatic_strategy="coulomb",
             maximum_interaction_radius=10.0 * unit.angstrom,

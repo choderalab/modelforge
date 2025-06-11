@@ -50,7 +50,7 @@ def validate_output_shapes(output, nr_of_mols: int, energy_expression: str):
     if energy_expression == "short_range_and_long_range_electrostatic":
         assert "per_atom_charge" in output
         assert "per_atom_charge_uncorrected" in output
-        assert "electrostatic_energy" in output
+        assert "per_system_electrostatic_energy" in output
 
 
 def validate_charge_conservation(

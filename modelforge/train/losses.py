@@ -199,6 +199,49 @@ class EnergySquaredError(Error):
         return per_system_square_error_scaled
 
 
+class PerAtomChargeError(Error):
+    """
+    Calculates the error for per-atom charge.
+    """
+
+    def calculate_error(
+        self,
+        per_atom_charge_predict: torch.Tensor,
+        per_atom_charge_true: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Computes the absolute difference between predicted and true per-atom charges.
+        """
+        error = torch.abs(per_atom_charge_predict - per_atom_charge_true)
+        return error  # Shape: [batch_size, num_atoms]
+
+    def forward(
+        self,
+        per_atom_charge_predict: torch.Tensor,
+        per_atom_charge_true: torch.Tensor,
+        batch: NNPInput,
+    ) -> torch.Tensor:
+        """
+        Computes the error for per-atom charge.
+
+        Parameters
+        ----------
+        per_atom_charge_predict : torch.Tensor
+            The predicted per-atom charges.
+        per_atom_charge_true : torch.Tensor
+            The true per-atom charges.
+        batch : NNPInput
+            The batch data.
+
+        Returns
+        -------
+        torch.Tensor
+            The error for per-atom charges.
+        """
+        error = self.calculate_error(per_atom_charge_predict, per_atom_charge_true)
+        return error  # No scaling needed
+
+
 class TotalChargeError(Error):
     """
     Calculates the error for total charge.
@@ -295,6 +338,7 @@ class Loss(nn.Module):
         "per_atom_force",
         "per_system_total_charge",
         "per_system_dipole_moment",
+        "per_atom_charge",
     ]
 
     def __init__(
@@ -349,6 +393,8 @@ class Loss(nn.Module):
                 self.loss_functions[prop] = TotalChargeError()
             elif prop == "per_system_dipole_moment":
                 self.loss_functions[prop] = DipoleMomentError()
+            elif prop == "per_atom_charge":
+                self.loss_functions[prop] = PerAtomChargeError()
             else:
                 raise NotImplementedError(f"Loss type {prop} not implemented.")
 

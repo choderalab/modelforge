@@ -783,7 +783,7 @@ class NeighborListForTraining(torch.nn.Module):
 
     def calculate_d_ij(self, r_ij: torch.Tensor) -> torch.Tensor:
         """
-        ompute Euclidean distances between atoms in each pair.
+        Compute Euclidean distances between atoms in each pair.
 
         Parameters
         ----------

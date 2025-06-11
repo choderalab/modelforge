@@ -192,15 +192,15 @@ class AimNet2Core(torch.nn.Module):
         if torch.isnan(partial_charges).any():
             raise ValueError("NaN values detected in partial charges.")
 
-        per_system_electrostatic_energy = self.coulomb_potential(
-            {
-                "atomic_subsystem_indices": data.atomic_subsystem_indices,
-                "per_atom_charge": partial_charges,
-                "atomic_numbers": data.atomic_numbers,
-                "pair_indices": pairlist.pair_indices,
-                "d_ij": pairlist.d_ij,
-            }
-        )["per_system_electrostatic_energy"]
+        # per_system_electrostatic_energy = self.coulomb_potential(
+        #     {
+        #         "atomic_subsystem_indices": data.atomic_subsystem_indices,
+        #         "per_atom_charge": partial_charges,
+        #         "atomic_numbers": data.atomic_numbers,
+        #         "pair_indices": pairlist.pair_indices,
+        #         "d_ij": pairlist.d_ij,
+        #     }
+        # )["per_system_electrostatic_energy"]
         # we need to also put in per_atom_charge in the return dict so it is available
         # in the forward pass.  Note, this is different than adding in "per_atom_charge" in
         # the predicted_properties list, as that will create a separate output layer.
@@ -209,7 +209,7 @@ class AimNet2Core(torch.nn.Module):
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
             "atomic_numbers": data.atomic_numbers,
             "per_atom_charge": partial_charges,
-            "per_system_electrostatic_energy": per_system_electrostatic_energy,
+            # "per_system_electrostatic_energy": per_system_electrostatic_energy,
         }
 
     def forward(

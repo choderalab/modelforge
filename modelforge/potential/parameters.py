@@ -167,7 +167,7 @@ class ElectrostaticPotential(ParametersBase):
     electrostatic_strategy: str = "coulomb"
     # note maximum interaction radius should be passed as a string with units or unit.Quantity;
     # it will be converted to float in appropriate unit system
-    maximum_interaction_radius: float = 0.5
+    maximum_interaction_radius: float
 
     converted_units = field_validator(
         "maximum_interaction_radius",

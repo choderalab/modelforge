@@ -159,6 +159,14 @@ Weights and Biases can be installed via conda:
     conda install conda-forge::wandb
     
 """
+MESSAGES[
+    "openmmtools"
+] = """
+A batteries-included toolkit for the GPU-accelerated OpenMM molecular simulation engine.
+OpenMMTools can be installed via conda:
+    conda install conda-forge::openmmtools
+    
+"""
 
 
 def import_(module: str):

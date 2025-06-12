@@ -552,6 +552,46 @@ def test_loss_with_dipole_moment(
     ).all(), "Total loss contains non-finite values."
 
 
+def test_per_atom_charge_loss(
+    single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
+):
+    from modelforge.train.losses import PerAtomChargeError
+    from modelforge.utils.prop import NNPInput, Metadata, BatchData
+
+    nnp_input = NNPInput(
+        atomic_numbers=torch.tensor([0, 0, 1, 1]),
+        positions=torch.tensor(
+            [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0]]
+        ),
+        atomic_subsystem_indices=torch.tensor([0, 0, 0, 0]),
+        per_system_total_charge=torch.tensor([[0.0]]),
+    )
+    metadata = Metadata(
+        per_system_energy=torch.tensor([[0.0]]),
+        atomic_subsystem_counts=torch.tensor([4]),
+        atomic_subsystem_indices_referencing_dataset=torch.tensor([0, 0, 0, 0]),
+        number_of_atoms=4,
+    )
+    batch = BatchData(nnp_input=nnp_input, metadata=metadata)
+
+    # predicted and true charges are all off by 0.1, so the loss should be 0.01, i.e., sum (0.1^2)/4 atoms
+    charge_predicted = torch.tensor([[1.1], [0.9], [-1.1], [-0.9]])
+    charge_true = torch.tensor([[1.0], [1.0], [-1.0], [-1.0]])
+
+    loss = PerAtomChargeError()
+
+    scaled_loss_value = loss(charge_predicted, charge_true, batch)
+
+    assert torch.allclose(scaled_loss_value, torch.tensor([[0.01]]))
+
+    # check for larger values
+    charge_predicted = torch.tensor([[2.1], [0.9], [-1.1], [-1.9]])
+    charge_true = torch.tensor([[1.0], [1.0], [-1.0], [-1.0]])
+    scaled_loss_value = loss(charge_predicted, charge_true, batch)
+
+    assert torch.allclose(scaled_loss_value, torch.tensor([[0.51]]))
+
+
 def test_loss(single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir):
     from modelforge.train.losses import Loss
 
@@ -565,13 +605,13 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir):
         dataset_cache_dir=dataset_cache_dir,
     )
 
-    loss_porperty = ["per_system_energy", "per_atom_force", "per_atom_energy"]
+    loss_property = ["per_system_energy", "per_atom_force", "per_atom_energy"]
     loss_weights = {
         "per_system_energy": torch.tensor([0.5]),
         "per_atom_force": torch.tensor([0.5]),
         "per_atom_energy": torch.tensor([0.1]),
     }
-    loss = Loss(loss_porperty, loss_weights)
+    loss = Loss(loss_property, loss_weights)
     assert loss is not None
 
     # Get the trainer object with the specified model and dataset

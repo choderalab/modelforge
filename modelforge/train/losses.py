@@ -11,7 +11,7 @@ import torch
 from torch import nn
 from loguru import logger as log
 
-from modelforge.dataset.dataset import NNPInput
+from modelforge.utils.prop import BatchData
 
 __all__ = [
     "Error",
@@ -103,7 +103,7 @@ class ForceSquaredError(Error):
         self,
         per_atom_prediction: torch.Tensor,
         per_atom_reference: torch.Tensor,
-        batch: NNPInput,
+        batch: BatchData,
     ) -> torch.Tensor:
         """
         Computes the per-atom error and aggregates it to per-system mean squared error.
@@ -114,7 +114,7 @@ class ForceSquaredError(Error):
             The predicted values.
         per_atom_reference : torch.Tensor
             The reference values provided by the dataset.
-        batch : NNPInput
+        batch : BatchData
             The batch data containing metadata and input information.
 
         Returns
@@ -167,7 +167,7 @@ class EnergySquaredError(Error):
         self,
         per_system_prediction: torch.Tensor,
         per_system_reference: torch.Tensor,
-        batch: NNPInput,
+        batch: BatchData,
     ) -> torch.Tensor:
         """
         Computes the per-system mean squared error.
@@ -178,7 +178,7 @@ class EnergySquaredError(Error):
             The predicted values.
         per_system_reference : torch.Tensor
             The true values.
-        batch : NNPInput
+        batch : BatchData
             The batch data containing metadata and input information.
 
         Returns
@@ -221,7 +221,7 @@ class PerAtomChargeError(Error):
         self,
         per_atom_prediction: torch.Tensor,
         per_atom_reference: torch.Tensor,
-        batch: NNPInput,
+        batch: BatchData,
     ) -> torch.Tensor:
         """
         Computes the per-atom error and aggregates it to per-system mean squared error.
@@ -232,7 +232,7 @@ class PerAtomChargeError(Error):
             The predicted values.
         per_atom_reference : torch.Tensor
             The reference values provided by the dataset.
-        batch : NNPInput
+        batch : BatchData
             The batch data containing metadata and input information.
 
         Returns
@@ -262,7 +262,7 @@ class PerAtomChargeError(Error):
         per_system_square_error_scaled = self.scale_by_number_of_atoms(
             per_system_squared_error,
             batch.metadata.atomic_subsystem_counts,
-            prefactor=per_atom_prediction.shape[-1],
+            prefactor=1,
         )
 
         return per_system_square_error_scaled.contiguous()
@@ -288,7 +288,7 @@ class TotalChargeError(Error):
         self,
         total_charge_predict: torch.Tensor,
         total_charge_true: torch.Tensor,
-        batch: NNPInput,
+        batch: BatchData,
     ) -> torch.Tensor:
         """
         Computes the error for total charge.
@@ -299,7 +299,7 @@ class TotalChargeError(Error):
             The predicted total charges.
         total_charge_true : torch.Tensor
             The true total charges.
-        batch : NNPInput
+        batch : BatchData
             The batch data.
 
         Returns
@@ -333,7 +333,7 @@ class DipoleMomentError(Error):
         self,
         dipole_predict: torch.Tensor,
         dipole_true: torch.Tensor,
-        batch: NNPInput,
+        batch: BatchData,
     ) -> torch.Tensor:
         """
         Computes the error for dipole moment.
@@ -344,7 +344,7 @@ class DipoleMomentError(Error):
             The predicted dipole moments.
         dipole_true : torch.Tensor
             The true dipole moments.
-        batch : NNPInput
+        batch : BatchData
             The batch data.
 
         Returns
@@ -429,7 +429,7 @@ class Loss(nn.Module):
     def forward(
         self,
         predict_target: Dict[str, torch.Tensor],
-        batch: NNPInput,
+        batch: BatchData,
         epoch_idx: int,
     ) -> Dict[str, torch.Tensor]:
         """
@@ -439,7 +439,7 @@ class Loss(nn.Module):
         ----------
         predict_target : Dict[str, torch.Tensor]
             Dictionary containing predicted and true values for energy and forces.
-        batch : NNPInput
+        batch : BatchData
             The batch data containing metadata and input information.
 
         Returns

@@ -17,6 +17,7 @@ class PropertyNames:
     total_charge: Optional[str] = None  # Total charge
     dipole_moment: Optional[str] = None  # Dipole moment
     S: Optional[str] = None  # Spin multiplicity
+    partial_charge: Optional[str] = None  # Per-atom partial charge
 
 
 class SpeciesEnergies(NamedTuple):
@@ -149,6 +150,7 @@ class Metadata:
         "number_of_atoms",
         "per_atom_force",
         "per_system_dipole_moment",
+        "per_atom_charge",
     )
 
     def __init__(
@@ -159,6 +161,7 @@ class Metadata:
         number_of_atoms: int,
         per_atom_force: torch.Tensor = None,
         per_system_dipole_moment: torch.Tensor = None,
+        per_atom_charge: torch.Tensor = None,
     ):
         self.per_system_energy = per_system_energy
         self.atomic_subsystem_counts = atomic_subsystem_counts
@@ -168,6 +171,7 @@ class Metadata:
         self.number_of_atoms = number_of_atoms
         self.per_atom_force = per_atom_force
         self.per_system_dipole_moment = per_system_dipole_moment
+        self.per_atom_charge = per_atom_charge
 
     def to_device(self, device: torch.device):
         """Move all tensors in this instance to the specified device."""
@@ -178,6 +182,7 @@ class Metadata:
             self.atomic_subsystem_indices_referencing_dataset.to(device)
         )
         self.per_system_dipole_moment = self.per_system_dipole_moment.to(device)
+        self.per_atom_charge = self.per_atom_charge.to(device)
         return self
 
     def to_dtype(self, dtype: torch.dtype):
@@ -185,6 +190,7 @@ class Metadata:
         self.per_system_energy = self.per_system_energy.to(dtype)
         self.per_atom_force = self.per_atom_force.to(dtype)
         self.per_system_dipole_moment = self.per_system_dipole_moment.to(dtype)
+        self.per_atom_charge = self.per_atom_charge.to(dtype)
         return self
 
 

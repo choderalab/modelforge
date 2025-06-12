@@ -156,7 +156,9 @@ class CalculateProperties(torch.nn.Module):
             "per_system_total_charge" in self.requested_properties
         )
         #
-        self.include_dipole_moment = "per_system_dipole_moment" in self.requested_properties
+        self.include_dipole_moment = (
+            "per_system_dipole_moment" in self.requested_properties
+        )
 
         self.include_per_atom_charges = "per_atom_charge" in self.requested_properties
 
@@ -254,8 +256,8 @@ class CalculateProperties(torch.nn.Module):
             "per_system_energy_predict": per_system_energy_predict,
         }
 
+    @staticmethod
     def _get_total_charges(
-        self,
         batch: BatchData,
         model_prediction: Dict[str, torch.Tensor],
     ) -> Dict[str, torch.Tensor]:
@@ -289,14 +291,9 @@ class CalculateProperties(torch.nn.Module):
             src=per_atom_charges_predict,
         )  # Shape: [nr_of_systems, 1]
 
-        # Predict the dipole moment
-        per_system_dipole_moment = self._predict_dipole_moment(model_prediction, batch)
-
         return {
             "per_system_total_charge_predict": per_system_total_charge_predict,
             "per_system_total_charge_true": batch.nnp_input.per_system_total_charge,
-            "per_system_dipole_moment_predict": per_system_dipole_moment,
-            "per_system_dipole_moment_true": batch.metadata.per_system_dipole_moment,
         }
 
     def _get_dipole_moment(
@@ -328,8 +325,8 @@ class CalculateProperties(torch.nn.Module):
             "per_system_dipole_moment_true": batch.metadata.per_system_dipole_moment,
         }
 
+    @staticmethod
     def _get_per_atom_charges(
-        self,
         batch: BatchData,
         model_prediction: Dict[str, torch.Tensor],
     ) -> Dict[str, torch.Tensor]:
@@ -350,6 +347,8 @@ class CalculateProperties(torch.nn.Module):
         """
         per_atom_charge_predict = model_prediction["per_atom_charge"]
         per_atom_charge_true = batch.metadata.per_atom_charge
+
+        # print the shape
 
         return {
             "per_atom_charge_predict": per_atom_charge_predict,

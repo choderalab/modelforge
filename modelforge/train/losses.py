@@ -18,6 +18,7 @@ __all__ = [
     "ForceSquaredError",
     "EnergySquaredError",
     "TotalChargeError",
+    "PerAtomChargeError",
     "DipoleMomentError",
     "Loss",
     "LossFactory",
@@ -204,42 +205,67 @@ class PerAtomChargeError(Error):
     Calculates the error for per-atom charge.
     """
 
+    """
+        Calculates the per-atom error and aggregates it to per-system mean squared error.
+        """
+
     def calculate_error(
         self,
-        per_atom_charge_predict: torch.Tensor,
-        per_atom_charge_true: torch.Tensor,
+        per_atom_prediction: torch.Tensor,
+        per_atom_reference: torch.Tensor,
     ) -> torch.Tensor:
-        """
-        Computes the absolute difference between predicted and true per-atom charges.
-        """
-        error = torch.abs(per_atom_charge_predict - per_atom_charge_true)
-        return error  # Shape: [batch_size, num_atoms]
+        """Computes the per-atom squared error."""
+        return self.calculate_squared_error(per_atom_prediction, per_atom_reference)
 
     def forward(
         self,
-        per_atom_charge_predict: torch.Tensor,
-        per_atom_charge_true: torch.Tensor,
+        per_atom_prediction: torch.Tensor,
+        per_atom_reference: torch.Tensor,
         batch: NNPInput,
     ) -> torch.Tensor:
         """
-        Computes the error for per-atom charge.
+        Computes the per-atom error and aggregates it to per-system mean squared error.
 
         Parameters
         ----------
-        per_atom_charge_predict : torch.Tensor
-            The predicted per-atom charges.
-        per_atom_charge_true : torch.Tensor
-            The true per-atom charges.
+        per_atom_prediction : torch.Tensor
+            The predicted values.
+        per_atom_reference : torch.Tensor
+            The reference values provided by the dataset.
         batch : NNPInput
-            The batch data.
+            The batch data containing metadata and input information.
 
         Returns
         -------
         torch.Tensor
-            The error for per-atom charges.
+            The aggregated per-system error.
         """
-        error = self.calculate_error(per_atom_charge_predict, per_atom_charge_true)
-        return error  # No scaling needed
+
+        # Compute per-atom squared error
+        per_atom_squared_error = self.calculate_error(
+            per_atom_prediction, per_atom_reference
+        )
+
+        # Initialize per-system squared error tensor
+        per_system_squared_error = torch.zeros_like(
+            batch.metadata.per_system_energy, dtype=per_atom_squared_error.dtype
+        )
+
+        # Aggregate error per system
+        per_system_squared_error = per_system_squared_error.scatter_add(
+            0,
+            batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
+            per_atom_squared_error,
+        )
+
+        # Scale error by number of atoms
+        per_system_square_error_scaled = self.scale_by_number_of_atoms(
+            per_system_squared_error,
+            batch.metadata.atomic_subsystem_counts,
+            prefactor=per_atom_prediction.shape[-1],
+        )
+
+        return per_system_square_error_scaled.contiguous()
 
 
 class TotalChargeError(Error):

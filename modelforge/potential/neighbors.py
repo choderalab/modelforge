@@ -32,7 +32,16 @@ class Pairlist(torch.nn.Module):
     def __init__(self, only_unique_pairs: bool = False):
         """
          Handle pair list calculations for systems, returning indices, distances
-         and distance vectors for atom pairs within a certain cutoff.
+         and distance vectors for all atom pairs in a system.
+
+         Notes:
+
+         - This does not handle periodic boundary conditions.
+         - This returns all pairs, i.e., does not take a cutoff distance into account,
+         (use the neighborlist routines for that functionality).
+         - This is primarily used for constructing the initial pair list for the systems during preprocessing.
+         - this includes a routine optimized for numpy that has better performance than PyTorch for computing single
+         system, as is done during preprocessing (i.e., precomputing the pairs).
 
         Parameters
         ----------

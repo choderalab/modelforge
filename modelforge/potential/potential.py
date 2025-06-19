@@ -361,21 +361,21 @@ class Potential(torch.nn.Module):
         # Add the pairlist to the core output
         # looping over all the cutoffs that have been defined in the pairlist_output
         core_output["local_cutoff"] = {
-            "pair_indices": pairlist_output[key].pair_indices,
-            "d_ij": pairlist_output[key].d_ij,
-            "r_ij": pairlist_output[key].r_ij,
+            "pair_indices": pairlist_output.local_cutoff.pair_indices,
+            "d_ij": pairlist_output.local_cutoff.d_ij,
+            "r_ij": pairlist_output.local_cutoff.r_ij,
         }
         if "vdw_cutoff" in pairlist_output:
             core_output["vdw_cutoff"] = {
-                "pair_indices": pairlist_output["vdw_cutoff"].pair_indices,
-                "d_ij": pairlist_output["vdw_cutoff"].d_ij,
-                "r_ij": pairlist_output["vdw_cutoff"].r_ij,
+                "pair_indices": pairlist_output.vdw_cutoff.pair_indices,
+                "d_ij": pairlist_output.vdw_cutoff.d_ij,
+                "r_ij": pairlist_output.vdw_cutoff.r_ij,
             }
         if "electrostatic_cutoff" in pairlist_output:
             core_output["electrostatic_cutoff"] = {
-                "pair_indices": pairlist_output["electrostatic_cutoff"].pair_indices,
-                "d_ij": pairlist_output["electrostatic_cutoff"].d_ij,
-                "r_ij": pairlist_output["electrostatic_cutoff"].r_ij,
+                "pair_indices": pairlist_output.electrostatic_cutoff.pair_indices,
+                "d_ij": pairlist_output.electrostatic_cutoff.d_ij,
+                "r_ij": pairlist_output.electrostatic_cutoff.r_ij,
             }
 
         return core_output
@@ -383,7 +383,6 @@ class Potential(torch.nn.Module):
     def _remove_pairlist(
         self,
         processed_output: Dict[str, torch.Tensor],
-        pairlist_output: Dict[str, PairlistData],
     ):
         """
         Remove the pairlist from the core output.
@@ -403,7 +402,8 @@ class Potential(torch.nn.Module):
             The postprocessed output with the pairlist removed.
         """
         # Remove the pairlist from the core output
-        for key in pairlist_output.keys():
+        keys = ["local_cutoff", "vdw_cutoff", "electrostatic_cutoff"]
+        for key in keys:
             if key in processed_output:
                 del processed_output[key]["pair_indices"]
                 del processed_output[key]["d_ij"]
@@ -468,7 +468,7 @@ class Potential(torch.nn.Module):
         core_output = self._add_pairlist(core_output, pairlist_output)
 
         processed_output = self.postprocessing.forward(core_output)
-        processed_output = self._remove_pairlist(processed_output, pairlist_output)
+        processed_output = self._remove_pairlist(processed_output)
         return processed_output
 
     def forward(self, input_data: NNPInput) -> Dict[str, torch.Tensor]:
@@ -490,7 +490,7 @@ class Potential(torch.nn.Module):
 
         # Step 2: Compute the core network output
         core_output = self.core_network.forward(
-            input_data, pairlist_output["local_cutoff"]
+            input_data, pairlist_output.local_cutoff
         )
 
         # Step 3: Apply postprocessing using PostProcessing
@@ -498,7 +498,7 @@ class Potential(torch.nn.Module):
         core_output = self._add_pairlist(core_output, pairlist_output)
 
         processed_output = self.postprocessing.forward(core_output)
-        processed_output = self._remove_pairlist(processed_output, pairlist_output)
+        processed_output = self._remove_pairlist(processed_output)
         return processed_output
 
     def compute_core_network_output(

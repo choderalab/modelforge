@@ -135,7 +135,7 @@ def test_layer_equivariance(
     nnp_input.positions = torch.matmul(nnp_input.positions, rotation_matrix)
 
     # prepare reference and perturbed inputs
-    neighborlist = sake.neighborlist(nnp_input)
+    neighborlist = sake.neighborlist(nnp_input).local_cutoff
     reference_v_torch = torch.randn_like(nnp_input.positions)
 
     perturbed_v_torch = torch.matmul(reference_v_torch, rotation_matrix)

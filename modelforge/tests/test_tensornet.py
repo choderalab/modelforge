@@ -86,8 +86,8 @@ def test_input(prep_temp_dir):
 
     mf_input = pickle.load(open(reference_batch, "rb"))
 
-    # calculate pairlist
-    pairlist_output = model.neighborlist.forward(mf_input)
+    # calculate pairlist, get the local cutoff values
+    pairlist_output = model.neighborlist.forward(mf_input).local_cutoff
 
     # compare to torchmd-net pairlist
     if reference_data:
@@ -230,7 +230,8 @@ def test_representation(prep_temp_dir):
         use_training_mode_neighborlist=True,
         local_cache_dir=local_cache_dir,
     )
-    pairlist_output = model.neighborlist.forward(nnp_input)
+    # calculate pairlist, get the local cutoff values
+    pairlist_output = model.neighborlist.forward(nnp_input).local_cutoff
 
     ################ modelforge TensorNet ################
     torch.manual_seed(0)
@@ -309,7 +310,8 @@ def test_interaction(prep_temp_dir):
 
     ################ modelforge TensorNet ################
     tensornet_representation_module = model.core_network.representation_module
-    pairlist_output = model.neighborlist.forward(nnp_input)
+    # get the local cutoff values
+    pairlist_output = model.neighborlist.forward(nnp_input).local_cutoff
     X, _ = tensornet_representation_module(nnp_input, pairlist_output)
 
     radial_feature_vector = tensornet_representation_module.radial_symmetry_function(

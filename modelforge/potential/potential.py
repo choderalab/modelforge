@@ -527,7 +527,7 @@ class Potential(torch.nn.Module):
         pairlist_output = self.neighborlist.forward(input_data)
 
         # Step 2: Compute the core network output
-        return self.core_network.forward(input_data, pairlist_output)
+        return self.core_network.forward(input_data, pairlist_output.local_cutoff)
 
     def load_state_dict(
         self,
@@ -665,16 +665,21 @@ def setup_potential(
     local_cutoff = potential_parameter.core_parameter.maximum_interaction_radius
     electrostatic_cutoff = -1
     vdw_cutoff = -1
+    use_vdw_cutoff = False
+    use_electrostatic_cutoff = False
+
     if "per_system_electrostatic_energy" in postprocessing._registered_properties:
         electrostatic_cutoff = (
             potential_parameter.postprocessing_parameter.per_system_electrostatic_energy.maximum_interaction_radius
         )
+        use_electrostatic_cutoff = True
 
     # note vdw isn't implemented yet, but we can add it later
     if "per_system_vdw_energy" in postprocessing._registered_properties:
         vdw_cutoff = (
             potential_parameter.postprocessing_parameter.per_system_vdw_energy.maximum_interaction_radius
         )
+        use_vdw_cutoff = True
     log.debug(
         f"Cutoffs: local_cutoff={local_cutoff}, vdw_cutoff={vdw_cutoff}, electrostatic_cutoff={electrostatic_cutoff}"
     )
@@ -686,6 +691,8 @@ def setup_potential(
             vdw_cutoff=vdw_cutoff,
             electrostatic_cutoff=electrostatic_cutoff,
             only_unique_pairs=only_unique_pairs,
+            use_vdw_cutoff=use_vdw_cutoff,
+            use_electrostatic_cutoff=use_electrostatic_cutoff,
         )
     else:
         from modelforge.potential.neighbors import OrthogonalDisplacementFunction
@@ -700,6 +707,8 @@ def setup_potential(
             electrostatic_cutoff=electrostatic_cutoff,
             displacement_function=displacement_function,
             only_unique_pairs=only_unique_pairs,
+            use_vdw_cutoff=use_vdw_cutoff,
+            use_electrostatic_cutoff=use_electrostatic_cutoff,
         )
         # we can set the strategy here before passing this to the Potential
         # this can still be modified later using Potential.set_neighborlist_strategy before it has bit JITTED
@@ -822,6 +831,7 @@ class NeuralNetworkPotentialFactory:
         version: str,
         local_cache_dir: str = "./",
         only_unique_pairs: Optional[bool] = None,
+        old_config_only_local_cutoff: Optional[bool] = False,
     ) -> Union[Potential, JAXModel]:
         """
         Load a neural network potential from a Weights & Biases run.
@@ -837,7 +847,9 @@ class NeuralNetworkPotentialFactory:
         only_unique_pairs : Optional[bool], optional
             For models trained prior to PR #299 in modelforge, this parameter is required to be able to read the model.
             This value should be True for the ANI models, False for most other models.
-
+        long_config_only_local_cutoff : Optional[bool], optional
+            For older models, this parameter is required to be able to read the model. Replaces neighborlist.cutoff with neighborlist.local_cutoff
+            and other associated parameters for vdw and electrostatic cutoffs.
         Returns
         -------
         Union[Potential, JAXModel]
@@ -851,7 +863,9 @@ class NeuralNetworkPotentialFactory:
         artifact_dir = artifact.download(root=local_cache_dir)
         checkpoint_file = f"{artifact_dir}/model.ckpt"
         potential = load_inference_model_from_checkpoint(
-            checkpoint_file, only_unique_pairs
+            checkpoint_path=checkpoint_file,
+            only_unique_pairs=only_unique_pairs,
+            old_config_only_local_cutoff=old_config_only_local_cutoff,
         )
 
         return potential
@@ -1036,6 +1050,7 @@ class PyTorch2JAXConverter:
 
 def load_inference_model_from_checkpoint(
     checkpoint_path: str,
+    old_config_only_local_cutoff: Optional[bool] = False,
     only_unique_pairs: Optional[bool] = None,
 ) -> Union[Potential, JAXModel]:
     """
@@ -1046,10 +1061,14 @@ def load_inference_model_from_checkpoint(
     ----------
     checkpoint_path : str
         The path to the checkpoint file.
+    old_config_only_local_cutoff: Optional[bool], optional
+        Old checkpoint files may have been only saved with neighborlist.cutoff .
+        this will update the checkpoint to use the new neighborlist.local_cutoff, neighborlist.vdw_cutoff, and neighborlist.electrostatic_cutoff
+        keys and set use_vdw_cutoff and use_electrostatic_cutoff to False, as required in the newly revised neighborlist module.
     only_unique_pairs : Optional[bool], optional
         If defined, this will set the only_unique_pairs key in the neighborlist module. This is only needed
         for models trained prior to PR #299 in modelforge. (default is None).
-        In the case of ANI models, this should be set to True. Typically False for other mdoels
+        In the case of ANI models, this should be set to True. Typically False for other models
     """
 
     # Load the checkpoint
@@ -1070,9 +1089,28 @@ def load_inference_model_from_checkpoint(
         potential_seed=potential_seed,
     )
     if only_unique_pairs is not None:
-        checkpoint["state_dict"]["neighborlist.only_unique_pairs"] = torch.Tensor(
-            [only_unique_pairs]
+        checkpoint["state_dict"]["potential.neighborlist.only_unique_pairs"] = (
+            torch.Tensor([only_unique_pairs])
         )
+    if old_config_only_local_cutoff:
+        cutoff = checkpoint["state_dict"].get("potential.neighborlist.cutoff")
+        # remove the old key
+        del checkpoint["state_dict"]["potential.neighborlist.cutoff"]
+
+        checkpoint["state_dict"]["potential.neighborlist.local_cutoff"] = cutoff
+        checkpoint["state_dict"]["potential.neighborlist.vdw_cutoff"] = torch.Tensor(
+            [-1.0]
+        )
+        checkpoint["state_dict"]["potential.neighborlist.electrostatic_cutoff"] = (
+            torch.Tensor([-1.0])
+        )
+        checkpoint["state_dict"]["potential.neighborlist.use_vdw_cutoff"] = (
+            torch.Tensor([False])
+        )
+        checkpoint["state_dict"]["potential.neighborlist.use_electrostatic_cutoff"] = (
+            torch.Tensor([False])
+        )
+        checkpoint["state_dict"]["potential.neighborlist.largest_cutoff"] = cutoff
 
     # Load the state dict into the model
     potential.load_state_dict(checkpoint["state_dict"])

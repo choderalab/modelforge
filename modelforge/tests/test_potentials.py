@@ -494,7 +494,9 @@ def test_loading_from_checkpoint_file():
     from modelforge.potential.potential import load_inference_model_from_checkpoint
 
     # note this is a legacy file, and thus we need to manually define only_unique_pairs
-    potential = load_inference_model_from_checkpoint(ckpt_file, only_unique_pairs=False)
+    potential = load_inference_model_from_checkpoint(
+        ckpt_file, only_unique_pairs=False, old_config_only_local_cutoff=True
+    )
     assert potential is not None
 
 

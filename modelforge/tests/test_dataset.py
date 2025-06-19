@@ -119,7 +119,7 @@ def test_get_properties(
     assert (
         len(raw_data_item.nnp_input.__slots__) == 9
     )  # 9 properties are returned now that we have included spin state
-    assert len(raw_data_item.metadata.__slots__) == 6  # 6 properties are returned
+    assert len(raw_data_item.metadata.__slots__) == 7  # 7 properties are returned
 
 
 def test_get_different_properties_of_interest(
@@ -1159,10 +1159,10 @@ def test_shifting_center_of_mass_to_origin(
         nnp_input = dm.torch_dataset[conf_id].nnp_input
         nnp_input_ns = dm_no_shift.torch_dataset[conf_id].nnp_input
 
-        nlist = NeighborListForTraining(cutoff=0.5)
+        nlist = NeighborListForTraining(local_cutoff=0.5)
 
-        pairs = nlist(nnp_input)
-        pairs_ns = nlist(nnp_input_ns)
+        pairs = nlist(nnp_input).local_cutoff
+        pairs_ns = nlist(nnp_input_ns).local_cutoff
 
         assert torch.allclose(pairs.r_ij, pairs_ns.r_ij, atol=1e-4)
         assert torch.allclose(pairs.d_ij, pairs_ns.d_ij, atol=1e-4)

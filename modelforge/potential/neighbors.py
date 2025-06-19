@@ -368,10 +368,13 @@ class NeighborlistForInference(torch.nn.Module):
         vdw_cutoff: Optional[float] = -1,
         electrostatic_cutoff: Optional[float] = -1,
         only_unique_pairs: bool = False,
+        use_vdw_cutoff: bool = False,
+        use_electrostatic_cutoff: bool = False,
     ):
         """
         Compute neighbor lists for inference, filtering pairs based on a cutoff distance.
 
+        if multiple cutoffs are used, the largest cutoff will be used for the neighbor list
 
         Parameters
         ----------
@@ -388,6 +391,10 @@ class NeighborlistForInference(torch.nn.Module):
             Whether to only use unique pairs in the pair list calculation, by
             default True. This should be set to True for all message passing
             networks.
+        use_vdw_cutoff : bool, optional
+            Whether to use the van der Waals cutoff, by default False.
+        use_electrostatic_cutoff : bool, optional
+            Whether to use the electrostatic cutoff, by default False.
         """
 
         super().__init__()
@@ -404,6 +411,12 @@ class NeighborlistForInference(torch.nn.Module):
             torch.tensor(max([local_cutoff, vdw_cutoff, electrostatic_cutoff])),
         )
         self.register_buffer("only_unique_pairs", torch.tensor(only_unique_pairs))
+
+        # If we are using the vdw or electrostatic cutoffs, we will use them
+        self.register_buffer("use_vdw_cutoff", torch.tensor(use_vdw_cutoff))
+        self.register_buffer(
+            "use_electrostatic_cutoff", torch.tensor(use_electrostatic_cutoff)
+        )
 
         self.strategy = "brute_nsq"
 
@@ -689,9 +702,10 @@ class NeighborlistForInference(torch.nn.Module):
         # loop over the cutoff names and determine those in range
 
         pair_output_local = self._in_cutoff_brute(self.local_cutoff, d_ij, r_ij)
-        if self.vdw_cutoff > 0:
+        if self.use_vdw_cutoff:
             pair_output_vdw = self._in_cutoff_brute(self.vdw_cutoff, d_ij, r_ij)
         else:
+            # if we are not using the vdw cutoff, we return an empty pair list
             pair_output_vdw = PairlistData(
                 pair_indices=torch.empty(
                     2, 0, dtype=torch.int64, device=positions.device
@@ -699,11 +713,13 @@ class NeighborlistForInference(torch.nn.Module):
                 d_ij=torch.empty(0, dtype=d_ij.dtype, device=d_ij.device),
                 r_ij=torch.empty(0, dtype=r_ij.dtype, device=r_ij.device),
             )
-        if self.electrostatic_cutoff > 0:
+        if self.use_electrostatic_cutoff:
             pair_output_electrostatic = self._in_cutoff_brute(
                 self.electrostatic_cutoff, d_ij, r_ij
             )
         else:
+            # if we are not using the electrostatic cutoff, we return an empty pair list
+            # this is necessary to ensure that the PairlistOutputs has the same structure
             pair_output_electrostatic = PairlistData(
                 pair_indices=torch.empty(
                     2, 0, dtype=torch.int64, device=positions.device
@@ -804,7 +820,7 @@ class NeighborlistForInference(torch.nn.Module):
             )
 
         pair_output_local = self._in_cutoff_verlet(self.local_cutoff, d_ij, r_ij)
-        if self.vdw_cutoff > 0:
+        if self.use_vdw_cutoff:
             pair_output_vdw = self._in_cutoff_verlet(self.vdw_cutoff, d_ij, r_ij)
         else:
             pair_output_vdw = PairlistData(
@@ -814,7 +830,7 @@ class NeighborlistForInference(torch.nn.Module):
                 d_ij=torch.empty(0, dtype=d_ij.dtype, device=d_ij.device),
                 r_ij=torch.empty(0, dtype=r_ij.dtype, device=r_ij.device),
             )
-        if self.electrostatic_cutoff > 0:
+        if self.use_electrostatic_cutoff:
             pair_output_electrostatic = self._in_cutoff_verlet(
                 self.electrostatic_cutoff, d_ij, r_ij
             )
@@ -841,6 +857,8 @@ class NeighborListForTraining(torch.nn.Module):
         vdw_cutoff: Optional[float] = -1,
         electrostatic_cutoff: Optional[float] = -1,
         only_unique_pairs: bool = False,
+        use_vdw_cutoff: bool = False,
+        use_electrostatic_cutoff: bool = False,
     ):
         """
         Calculate the neighboring pairs within the specified cutoffs.
@@ -857,6 +875,10 @@ class NeighborListForTraining(torch.nn.Module):
             The cutoff distance for electrostatic interactions (default is -1, meaning no electrostatic cutoff).
         only_unique_pairs : bool, optional
             If True, only unique pairs are returned (default is False).
+        use_vdw_cutoff : bool, optional
+            If True, the van der Waals cutoff is used (default is False).
+        use_electrostatic_cutoff : bool, optional
+            If True, the electrostatic cutoff is used (default is False).
         """
 
         super().__init__()
@@ -878,6 +900,12 @@ class NeighborListForTraining(torch.nn.Module):
 
         # self.register_buffer("cutoff", torch.tensor(cutoff))
         self.register_buffer("only_unique_pairs", torch.tensor(only_unique_pairs))
+
+        # If we are using the vdw or electrostatic cutoffs, we will use them
+        self.register_buffer("use_vdw_cutoff", torch.tensor(use_vdw_cutoff))
+        self.register_buffer(
+            "use_electrostatic_cutoff", torch.tensor(use_electrostatic_cutoff)
+        )
 
     def calculate_r_ij(
         self, pair_indices: torch.Tensor, positions: torch.Tensor
@@ -1022,13 +1050,15 @@ class NeighborListForTraining(torch.nn.Module):
             pair_indices=pair_list.to(torch.int64),
             cutoff=self.local_cutoff,
         )
-        if self.vdw_cutoff > 0:
+        if self.use_vdw_cutoff:
             pairlist_output_vdw = self._calculate_interacting_pairs(
                 positions=positions,
                 pair_indices=pair_list.to(torch.int64),
                 cutoff=self.vdw_cutoff,
             )
         else:
+            # if we are not using the vdw cutoff, we return an empty pairlist
+            # this is necessary to ensure that the output is consistent for torchscript/jit
             pairlist_output_vdw = PairlistData(
                 pair_indices=torch.empty(
                     2, 0, dtype=torch.int64, device=positions.device
@@ -1036,13 +1066,15 @@ class NeighborListForTraining(torch.nn.Module):
                 d_ij=torch.empty(0, dtype=torch.int64, device=positions.device),
                 r_ij=torch.empty(0, dtype=torch.int64, device=positions.device),
             )
-        if self.electrostatic_cutoff > 0:
+        if self.use_electrostatic_cutoff:
             pairlist_output_electrostatic = self._calculate_interacting_pairs(
                 positions=positions,
                 pair_indices=pair_list.to(torch.int64),
                 cutoff=self.electrostatic_cutoff,
             )
         else:
+            # if we are not using the electrostatic cutoff, we return an empty pairlist
+            # this is necessary to ensure that the output is consistent for torchscript/jit
             pairlist_output_electrostatic = PairlistData(
                 pair_indices=torch.empty(
                     2, 0, dtype=torch.int64, device=positions.device

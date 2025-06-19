@@ -804,9 +804,11 @@ class NeighborlistForInference(torch.nn.Module):
             pair_output_vdw = self._in_cutoff_verlet(self.vdw_cutoff, d_ij, r_ij)
         else:
             pair_output_vdw = PairlistData(
-                pair_indices=torch.tensor([]),
-                d_ij=torch.tensor([]),
-                r_ij=torch.tensor([]),
+                pair_indices=torch.empty(
+                    2, 0, dtype=torch.int64, device=positions.device
+                ),
+                d_ij=torch.empty(0, dtype=d_ij.dtype, device=d_ij.device),
+                r_ij=torch.empty(0, dtype=r_ij.dtype, device=r_ij.device),
             )
         if self.electrostatic_cutoff > 0:
             pair_output_electrostatic = self._in_cutoff_verlet(
@@ -814,9 +816,11 @@ class NeighborlistForInference(torch.nn.Module):
             )
         else:
             pair_output_electrostatic = PairlistData(
-                pair_indices=torch.tensor([]),
-                d_ij=torch.tensor([]),
-                r_ij=torch.tensor([]),
+                pair_indices=torch.empty(
+                    2, 0, dtype=torch.int64, device=positions.device
+                ),
+                d_ij=torch.empty(0, dtype=d_ij.dtype, device=d_ij.device),
+                r_ij=torch.empty(0, dtype=r_ij.dtype, device=r_ij.device),
             )
         # return a dictionary of PairlistData objects for each cutoff
         return PairlistOutputs(
@@ -1022,9 +1026,11 @@ class NeighborListForTraining(torch.nn.Module):
             )
         else:
             pairlist_output_vdw = PairlistData(
-                pair_indices=torch.tensor([]),
-                d_ij=torch.tensor([]),
-                r_ij=torch.tensor([]),
+                pair_indices=torch.tensor(
+                    [], dtype=torch.int64, device=positions.device
+                ),
+                d_ij=torch.tensor([], dtype=torch.int64, device=positions.device),
+                r_ij=torch.tensor([], dtype=torch.int64, device=positions.device),
             )
         if self.electrostatic_cutoff > 0:
             pairlist_output_electrostatic = self._calculate_interacting_pairs(
@@ -1034,9 +1040,11 @@ class NeighborListForTraining(torch.nn.Module):
             )
         else:
             pairlist_output_electrostatic = PairlistData(
-                pair_indices=torch.tensor([]),
-                d_ij=torch.tensor([]),
-                r_ij=torch.tensor([]),
+                pair_indices=torch.tensor(
+                    [], dtype=torch.int64, device=positions.device
+                ),
+                d_ij=torch.tensor([], dtype=torch.int64, device=positions.device),
+                r_ij=torch.tensor([], dtype=torch.int64, device=positions.device),
             )
 
         return PairlistOutputs(

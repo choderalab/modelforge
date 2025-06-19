@@ -22,7 +22,7 @@ import torch
 from loguru import logger as log
 from openff.units import unit
 from modelforge.utils.units import GlobalUnitSystem
-from modelforge.potential.neighbors import PairlistData
+from modelforge.potential.neighbors import PairlistData, PairlistOutputs
 
 from modelforge.dataset.dataset import DatasetParameters
 from modelforge.utils.prop import NNPInput
@@ -339,7 +339,7 @@ class Potential(torch.nn.Module):
     def _add_pairlist(
         self,
         core_output: Dict[str, torch.Tensor],
-        pairlist_output: Dict[str, PairlistData],
+        pairlist_output: PairlistOutputs,
     ):
         """
         Add the pairlist to the core output.
@@ -360,23 +360,25 @@ class Potential(torch.nn.Module):
         """
         # Add the pairlist to the core output
         # looping over all the cutoffs that have been defined in the pairlist_output
-        core_output["local_cutoff"] = {
-            "pair_indices": pairlist_output.local_cutoff.pair_indices,
-            "d_ij": pairlist_output.local_cutoff.d_ij,
-            "r_ij": pairlist_output.local_cutoff.r_ij,
-        }
+        core_output["local_pair_indices"] = pairlist_output.local_cutoff.pair_indices
+        core_output["local_d_ij"] = pairlist_output.local_cutoff.d_ij
+        core_output["local_r_ij"] = pairlist_output.local_cutoff.r_ij
+
         if "vdw_cutoff" in pairlist_output:
-            core_output["vdw_cutoff"] = {
-                "pair_indices": pairlist_output.vdw_cutoff.pair_indices,
-                "d_ij": pairlist_output.vdw_cutoff.d_ij,
-                "r_ij": pairlist_output.vdw_cutoff.r_ij,
-            }
+            core_output["vdw_pair_indices"] = pairlist_output.vdw_cutoff.pair_indices
+            core_output["vdw_d_ij"] = pairlist_output.vdw_cutoff.d_ij
+            core_output["vdw_r_ij"] = pairlist_output.vdw_cutoff.r_ij
+
         if "electrostatic_cutoff" in pairlist_output:
-            core_output["electrostatic_cutoff"] = {
-                "pair_indices": pairlist_output.electrostatic_cutoff.pair_indices,
-                "d_ij": pairlist_output.electrostatic_cutoff.d_ij,
-                "r_ij": pairlist_output.electrostatic_cutoff.r_ij,
-            }
+            core_output["electrostatic_pair_indices"] = (
+                pairlist_output.electrostatic_cutoff.pair_indices
+            )
+            core_output["electrostatic_d_ij"] = (
+                pairlist_output.electrostatic_cutoff.d_ij
+            )
+            core_output["electrostatic_r_ij]"] = (
+                pairlist_output.electrostatic_cutoff.r_ij
+            )
 
         return core_output
 
@@ -402,12 +404,13 @@ class Potential(torch.nn.Module):
             The postprocessed output with the pairlist removed.
         """
         # Remove the pairlist from the core output
-        keys = ["local_cutoff", "vdw_cutoff", "electrostatic_cutoff"]
-        for key in keys:
-            if key in processed_output:
-                del processed_output[key]["pair_indices"]
-                del processed_output[key]["d_ij"]
-                del processed_output[key]["r_ij"]
+        prefixes = ["local", "vdw", "electrostatic"]
+        suffixes = ["pair_indices", "d_ij", "r_ij"]
+        for prefix in prefixes:
+            for suffix in suffixes:
+                key = f"{prefix}_{suffix}"
+                if key in processed_output:
+                    del processed_output[key]
 
         return processed_output
 

@@ -364,12 +364,15 @@ class Potential(torch.nn.Module):
         core_output["local_d_ij"] = pairlist_output.local_cutoff.d_ij
         core_output["local_r_ij"] = pairlist_output.local_cutoff.r_ij
 
-        if "vdw_cutoff" in pairlist_output:
+        if "per_system_vdw_energy" in self.postprocessing._registered_properties:
             core_output["vdw_pair_indices"] = pairlist_output.vdw_cutoff.pair_indices
             core_output["vdw_d_ij"] = pairlist_output.vdw_cutoff.d_ij
             core_output["vdw_r_ij"] = pairlist_output.vdw_cutoff.r_ij
 
-        if "electrostatic_cutoff" in pairlist_output:
+        if (
+            "per_system_electrostatic_energy"
+            in self.postprocessing._registered_properties
+        ):
             core_output["electrostatic_pair_indices"] = (
                 pairlist_output.electrostatic_cutoff.pair_indices
             )
@@ -672,7 +675,9 @@ def setup_potential(
         vdw_cutoff = (
             potential_parameter.postprocessing_parameter.per_system_vdw_energy.maximum_interaction_radius
         )
-
+    log.debug(
+        f"Cutoffs: local_cutoff={local_cutoff}, vdw_cutoff={vdw_cutoff}, electrostatic_cutoff={electrostatic_cutoff}"
+    )
     if use_training_mode_neighborlist:
         from modelforge.potential.neighbors import NeighborListForTraining
 

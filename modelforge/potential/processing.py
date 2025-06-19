@@ -646,7 +646,6 @@ class CoulombPotential(torch.nn.Module):
         # All pair_indices are within the cutoff distance so we do not need to do any further checking.
         # with the cutoff
 
-        print(data)
         idx_i = data["electrostatic_pair_indices"][0]
         idx_j = data["electrostatic_pair_indices"][1]
         # only unique paris

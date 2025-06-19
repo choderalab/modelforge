@@ -637,11 +637,17 @@ class CoulombPotential(torch.nn.Module):
             The input data dictionary with an additional key 'long_range_electrostatic_energy'
             containing the computed long-range electrostatic energy.
         """
-        # todo:  need to add back in the multiple-cutoff neighborlist since we typically
-        # want to do a longer range cutoff for electrostatics
-        # this will ultimately just take an extra key for accessing the appropriate pair indices
-        idx_i = data["pair_indices"][0]
-        idx_j = data["pair_indices"][1]
+
+        # Here we will use the pairwise properties from the data dictionary
+        # Specifically, we will access the properties in the 'electrostatic_cutoff' key
+        # as these were computed based upon the maximum_interaction_radius specified in the toml file
+        # for the Coulombic potential.
+
+        # All pair_indices are within the cutoff distance so we do not need to do any further checking.
+        # with the cutoff
+
+        idx_i = data["electrostatic_cutoff"]["pair_indices"][0]
+        idx_j = data["electrostatic_cutoff"]["pair_indices"][1]
         # only unique paris
         unique_pairs_mask = idx_i < idx_j
         idx_i = idx_i[unique_pairs_mask]
@@ -655,7 +661,7 @@ class CoulombPotential(torch.nn.Module):
         system_indices_of_pair = system_indices[idx_i]
 
         # mask pairwise properties
-        pairwise_distances = data["d_ij"][unique_pairs_mask]
+        pairwise_distances = data["electrostatic_cutoff"]["d_ij"][unique_pairs_mask]
         # The per-atom charge tensor is expected to be of shape (N, 1) where N is the number of atoms
         # we will squeeze it to make it easier to work with
         per_atom_charge = data["per_atom_charge"].squeeze()
@@ -878,8 +884,11 @@ class ZBLPotential(torch.nn.Module):
 
     def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
 
-        # first let us extract all the releveant data from the data dictionary
-        idx_i, idx_j = data["pair_indices"]
+        # first let us extract all the relevant data from the data dictionary
+        # Note; we will use the "local_cutoff" key to access the pairwise properties, as this should be the
+        # smallest cutoff used in the mdoel and available in all models
+        # we will remove pairs based on atomic radii later in the code.
+        idx_i, idx_j = data["local_cutoff"]["pair_indices"]
 
         # let us ensure we only consider  unique pairs
         # this avoids having to know if the neighbor list used unique or non unique pairs
@@ -888,7 +897,7 @@ class ZBLPotential(torch.nn.Module):
         idx_j = idx_j[unique_pairs_mask]
 
         # mask pairwise properties
-        pairwise_distances = data["d_ij"][unique_pairs_mask]
+        pairwise_distances = data["local_cutoff"]["d_ij"][unique_pairs_mask]
 
         atomic_numbers = data["atomic_numbers"]
 

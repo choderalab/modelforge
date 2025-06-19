@@ -144,36 +144,39 @@ def test_electrostatics():
     core_output_dict["atomic_subsystem_indices"] = torch.tensor(
         [0, 0, 0, 0, 0, 1, 1, 1, 1, 1], dtype=torch.int32
     )
-    core_output_dict["d_ij"] = torch.tensor(
-        [
-            [0.0126],
-            [0.1117],
-            [0.1051],
-            [0.1131],
-            [0.1084],
-            [0.1116],
-            [0.1174],
-            [0.1883],
-            [0.1862],
-            [0.1874],
-            [0.0126],
-            [0.1117],
-            [0.1051],
-            [0.1131],
-            [0.1084],
-            [0.1116],
-            [0.1174],
-            [0.1883],
-            [0.1862],
-            [0.1874],
-        ]
-    )
-    core_output_dict["pair_indices"] = torch.tensor(
-        [
-            [0, 0, 0, 0, 1, 1, 1, 2, 2, 3, 5, 5, 5, 5, 6, 6, 6, 7, 7, 8],
-            [1, 2, 3, 4, 2, 3, 4, 3, 4, 4, 6, 7, 8, 9, 7, 8, 9, 8, 9, 9],
-        ]
-    )
+    core_output_dict["electrostatic_cutoff"] = {
+        "d_ij": torch.tensor(
+            [
+                [0.0126],
+                [0.1117],
+                [0.1051],
+                [0.1131],
+                [0.1084],
+                [0.1116],
+                [0.1174],
+                [0.1883],
+                [0.1862],
+                [0.1874],
+                [0.0126],
+                [0.1117],
+                [0.1051],
+                [0.1131],
+                [0.1084],
+                [0.1116],
+                [0.1174],
+                [0.1883],
+                [0.1862],
+                [0.1874],
+            ]
+        ),
+        "pair_indices": torch.tensor(
+            [
+                [0, 0, 0, 0, 1, 1, 1, 2, 2, 3, 5, 5, 5, 5, 6, 6, 6, 7, 7, 8],
+                [1, 2, 3, 4, 2, 3, 4, 3, 4, 4, 6, 7, 8, 9, 7, 8, 9, 8, 9, 9],
+            ]
+        ),
+    }
+    print(core_output_dict)
     # nonsense charges, but summing up all the pairs will result in 2,
     # so the output will be roughly 2*138.96, slightly less due to the
     # multiplication by the cutoff function
@@ -244,10 +247,10 @@ def test_zbl_potential():
     core_output_dict["atomic_subsystem_indices"] = torch.tensor(
         [0, 0, 1, 1, 2, 2, 3, 3, 4, 4], dtype=torch.int32
     )
-    core_output_dict["d_ij"] = torch.tensor(
-        [[0.001], [0.050], [0.100], [0.138], [0.500]]
-    )
-    core_output_dict["pair_indices"] = torch.tensor([[0, 2, 4, 6, 8], [1, 3, 5, 7, 9]])
+    core_output_dict["local_cutoff"] = {
+        "d_ij": torch.tensor([[0.001], [0.050], [0.100], [0.138], [0.500]]),
+        "pair_indices": torch.tensor([[0, 2, 4, 6, 8], [1, 3, 5, 7, 9]]),
+    }
     core_output_dict["atomic_numbers"] = torch.tensor([6, 6, 6, 6, 6, 6, 6, 6, 6, 6])
 
     zbl = ZBLPotential()

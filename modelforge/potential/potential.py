@@ -337,7 +337,9 @@ class Potential(torch.nn.Module):
         return core_output
 
     def _add_pairlist(
-        self, core_output: Dict[str, torch.Tensor], pairlist_output: PairlistData
+        self,
+        core_output: Dict[str, torch.Tensor],
+        pairlist_output: Dict[str, PairlistData],
     ):
         """
         Add the pairlist to the core output.
@@ -346,21 +348,43 @@ class Potential(torch.nn.Module):
         ----------
         core_output : Dict[str, torch.Tensor]
             The core network output.
-        pairlist_output : PairlistData
+        pairlist_output : Dict[str, PairlistData]
             The pairlist output from the neighborlist.
-
+            The keys in the dictionary correspond to different cutoffs: local_cutoff, vdw_cutoff, electrostatic_cutoff
+            Only local_cutoff is guaranteed to be present, while vdw_cutoff and electrostatic_cutoff are optional
+            depending on the postprocessing configuration.
         Returns
         -------
         Dict[str, torch.Tensor]
             The core network output with the pairlist added.
         """
         # Add the pairlist to the core output
-        core_output["pair_indices"] = pairlist_output.pair_indices
-        core_output["d_ij"] = pairlist_output.d_ij
-        core_output["r_ij"] = pairlist_output.r_ij
+        # looping over all the cutoffs that have been defined in the pairlist_output
+        core_output["local_cutoff"] = {
+            "pair_indices": pairlist_output[key].pair_indices,
+            "d_ij": pairlist_output[key].d_ij,
+            "r_ij": pairlist_output[key].r_ij,
+        }
+        if "vdw_cutoff" in pairlist_output:
+            core_output["vdw_cutoff"] = {
+                "pair_indices": pairlist_output["vdw_cutoff"].pair_indices,
+                "d_ij": pairlist_output["vdw_cutoff"].d_ij,
+                "r_ij": pairlist_output["vdw_cutoff"].r_ij,
+            }
+        if "electrostatic_cutoff" in pairlist_output:
+            core_output["electrostatic_cutoff"] = {
+                "pair_indices": pairlist_output["electrostatic_cutoff"].pair_indices,
+                "d_ij": pairlist_output["electrostatic_cutoff"].d_ij,
+                "r_ij": pairlist_output["electrostatic_cutoff"].r_ij,
+            }
+
         return core_output
 
-    def _remove_pairlist(self, processed_output: Dict[str, torch.Tensor]):
+    def _remove_pairlist(
+        self,
+        processed_output: Dict[str, torch.Tensor],
+        pairlist_output: Dict[str, PairlistData],
+    ):
         """
         Remove the pairlist from the core output.
 
@@ -368,16 +392,23 @@ class Potential(torch.nn.Module):
         ----------
         processed_output : Dict[str, torch.Tensor]
             The postprocessed output.
-
+        pairlist_output : Dict[str, PairlistData]
+            The pairlist output from the neighborlist.
+            The keys in the dictionary correspond to different cutoffs: local_cutoff, vdw_cutoff, electrostatic_cutoff
+            Only local_cutoff is guaranteed to be present, while vdw_cutoff and electrostatic_cutoff are optional
+            depending on the postprocessing configuration.
         Returns
         -------
         Dict[str, torch.Tensor]
             The postprocessed output with the pairlist removed.
         """
         # Remove the pairlist from the core output
-        del processed_output["pair_indices"]
-        del processed_output["d_ij"]
-        del processed_output["r_ij"]
+        for key in pairlist_output.keys():
+            if key in processed_output:
+                del processed_output[key]["pair_indices"]
+                del processed_output[key]["d_ij"]
+                del processed_output[key]["r_ij"]
+
         return processed_output
 
     @torch.jit.export
@@ -427,14 +458,17 @@ class Potential(torch.nn.Module):
         pairlist_output = self.neighborlist.forward(input_data)
 
         # Step 2: Compute the core network output
-        core_output = self.core_network.forward(input_data, pairlist_output)
+        # note we will pass only the `local_cutoff` pair data from the pairlist_output
+        core_output = self.core_network.forward(
+            input_data, pairlist_output.local_cutoff
+        )
 
         # Step 3: Apply postprocessing using PostProcessing
         core_output = self._add_total_charge(core_output, input_data)
         core_output = self._add_pairlist(core_output, pairlist_output)
 
         processed_output = self.postprocessing.forward(core_output)
-        processed_output = self._remove_pairlist(processed_output)
+        processed_output = self._remove_pairlist(processed_output, pairlist_output)
         return processed_output
 
     def forward(self, input_data: NNPInput) -> Dict[str, torch.Tensor]:
@@ -455,14 +489,16 @@ class Potential(torch.nn.Module):
         pairlist_output = self.neighborlist.forward(input_data)
 
         # Step 2: Compute the core network output
-        core_output = self.core_network.forward(input_data, pairlist_output)
+        core_output = self.core_network.forward(
+            input_data, pairlist_output["local_cutoff"]
+        )
 
         # Step 3: Apply postprocessing using PostProcessing
         core_output = self._add_total_charge(core_output, input_data)
         core_output = self._add_pairlist(core_output, pairlist_output)
 
         processed_output = self.postprocessing.forward(core_output)
-        processed_output = self._remove_pairlist(processed_output)
+        processed_output = self._remove_pairlist(processed_output, pairlist_output)
         return processed_output
 
     def compute_core_network_output(
@@ -609,11 +645,38 @@ def setup_potential(
         postprocessing_parameter=potential_parameter.postprocessing_parameter.model_dump(),
         dataset_statistic=remove_units_from_dataset_statistics(dataset_statistic),
     )
+    # we will define the possible cutoffs.
+    # - local_cutoff is the maximum interaction radius for the NNP core network (i.e., the local interaction radius)
+    # this is always required.
+    # - vdw_cutoff is the cutoff for the van der Waals interactions, which is only required in the vdw interactions are
+    # included as a post processing step.
+    # - electrostatic_cutoff is the cutoff for the electrostatic interactions, which is only required in the electrostatic
+    # interactions are included as a post processing step.
+    #
+    # note zbl potential does not require a unique cutoff definition; it will use local cutoff and then calculates
+    # the zbl potential based on the radii of the two atoms in the pair.
+
+    local_cutoff = potential_parameter.core_parameter.maximum_interaction_radius
+    electrostatic_cutoff = -1
+    vdw_cutoff = -1
+    if "per_system_electrostatic_energy" in postprocessing._registered_properties:
+        electrostatic_cutoff = (
+            potential_parameter.postprocessing_parameter.per_system_electrostatic_energy.maximum_interaction_radius
+        )
+
+    # note vdw isn't implemented yet, but we can add it later
+    if "per_system_vdw_energy" in postprocessing._registered_properties:
+        vdw_cutoff = (
+            potential_parameter.postprocessing_parameter.per_system_vdw_energy.maximum_interaction_radius
+        )
+
     if use_training_mode_neighborlist:
         from modelforge.potential.neighbors import NeighborListForTraining
 
         neighborlist = NeighborListForTraining(
-            cutoff=potential_parameter.core_parameter.maximum_interaction_radius,
+            local_cutoff=local_cutoff,
+            vdw_cutoff=vdw_cutoff,
+            electrostatic_cutoff=electrostatic_cutoff,
             only_unique_pairs=only_unique_pairs,
         )
     else:
@@ -624,7 +687,9 @@ def setup_potential(
         from modelforge.potential.neighbors import NeighborlistForInference
 
         neighborlist = NeighborlistForInference(
-            cutoff=potential_parameter.core_parameter.maximum_interaction_radius,
+            local_cutoff=local_cutoff,
+            vdw_cutoff=vdw_cutoff,
+            electrostatic_cutoff=electrostatic_cutoff,
             displacement_function=displacement_function,
             only_unique_pairs=only_unique_pairs,
         )

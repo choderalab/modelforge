@@ -236,6 +236,66 @@ def test_electrostatics():
     )
 
 
+def test_dispersion_potential():
+    from modelforge.potential.processing import DispersionPotential
+
+    # set up a minimal dict that would represent the core output for 2 non-interacting methane molecules
+    core_output_dict = {}
+    core_output_dict["atomic_subsystem_indices"] = torch.tensor(
+        [0, 0, 0, 0, 0], dtype=torch.int32
+    )
+    core_output_dict["atomic_numbers"] = torch.tensor([6, 1, 1, 1, 1])
+    core_output_dict["positions"] = torch.tensor(
+        [
+            [0.0, -0.0, 0.0],
+            [-0.06308893, 0.06308893, 0.06308893],
+            [0.06308893, -0.06308893, 0.06308893],
+            [-0.06308893, -0.06308893, -0.06308893],
+            [0.06308893, 0.06308893, -0.06308893],
+        ]
+    )
+
+    vdw = DispersionPotential(cutoff=100.0)
+    vdw_output = vdw(core_output_dict)
+    assert vdw_output["per_system_dispersion_energy"].shape == (1, 1)
+    assert torch.allclose(
+        vdw_output["per_system_dispersion_energy"],
+        torch.tensor([[-6.277308]]),
+        1e-3,
+        1e-3,
+    )
+    # test two molecules
+    core_output_dict = {}
+    core_output_dict["atomic_subsystem_indices"] = torch.tensor(
+        [0, 0, 0, 0, 0, 1, 1, 1, 1, 1], dtype=torch.int32
+    )
+    core_output_dict["atomic_numbers"] = torch.tensor([6, 1, 1, 1, 1, 6, 1, 1, 1, 1])
+    core_output_dict["positions"] = torch.tensor(
+        [
+            [0.0, -0.0, 0.0],
+            [-0.06308893, 0.06308893, 0.06308893],
+            [0.06308893, -0.06308893, 0.06308893],
+            [-0.06308893, -0.06308893, -0.06308893],
+            [0.06308893, 0.06308893, -0.06308893],
+            [0.0, -0.0, 0.0],
+            [-0.06308893, 0.06308893, 0.06308893],
+            [0.06308893, -0.06308893, 0.06308893],
+            [-0.06308893, -0.06308893, -0.06308893],
+            [0.06308893, 0.06308893, -0.06308893],
+        ]
+    )
+
+    vdw = DispersionPotential(cutoff=100.0)
+    vdw_output = vdw(core_output_dict)
+    assert vdw_output["per_system_dispersion_energy"].shape == (2, 1)
+    assert torch.allclose(
+        vdw_output["per_system_dispersion_energy"],
+        torch.tensor([[-6.277308], [-6.277308]]),
+        1e-3,
+        1e-3,
+    )
+
+
 def test_zbl_potential():
     from modelforge.potential.processing import ZBLPotential
 

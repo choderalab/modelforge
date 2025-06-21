@@ -7,6 +7,7 @@ from typing import Dict, Iterator, Union, List
 
 import torch
 from openff.units import unit
+from modelforge.utils.units import GlobalUnitSystem, chem_context
 
 from modelforge.dataset.utils import _ATOMIC_NUMBER_TO_ELEMENT
 
@@ -964,3 +965,151 @@ class ZBLPotential(torch.nn.Module):
         )
 
         return data
+
+
+class DispersionPotential(torch.nn.Module):
+    """
+    Computes the dispersion energy using DFTD3 method.
+
+    This uses the tad-dftd3 library, which is a PyTorch implementation of the DFT-D3 method
+
+    https://github.com/dftd3/tad-dftd3
+    J. Chem. Phys., 2024, 161, 062501. https://doi.org/10.1063/5.0216715
+
+    Fitting parameters for the dispersion are sourced from the simple-dftd3 library,
+    which provides a set of parameters for various functionals.
+
+    https://github.com/dftd3/simple-dftd3/blob/main/assets/parameters.toml
+
+    """
+
+    def __init__(self, cutoff: float, parameter_set: str = "wB97M-D3(BJ)"):
+        """
+        Initializes the Dispersion potential module.
+
+        Parameters
+        ----------
+        cutoff : float
+            The cutoff distance for the dispersion interaction in nanometers.
+        parameter_set : str, optional
+            The parameter set to use for the dispersion calculation.
+            Default is "wB97M-D3(BJ)".
+            Currently, only "wB97M-D3(BJ)" is supported. at this time.
+        """
+        super().__init__()
+
+        """
+        parameters from:
+        Najibi, Asim, and Lars Goerigk. 
+        "The nonlocal kernel in van der Waals density functionals as an additive correction: 
+        An extensive analysis with special emphasis on the B97M-V and ωB97M-V approaches." 
+        Journal of Chemical Theory and Computation 14.11 (2018): 5725-5738.
+        DOI:10.1021/acs.jctc.8b00842
+         """
+        if parameter_set == "wB97M-D3(BJ)":
+            self.params = dict(
+                a1=torch.tensor(0.5660),
+                s8=torch.tensor(0.3908),
+                a2=torch.tensor(3.1280),
+            )
+        # dftd3 uses bohr for length, so we need to convert the cutoff
+        self.cutoff = (cutoff * GlobalUnitSystem.get_units("length")).to("bohr").m
+
+    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        import tad_dftd3 as d3
+        import tad_mctc as mctc
+
+        atomic_numbers = data["atomic_numbers"]
+        atomic_subsystem_indices = data["atomic_subsystem_indices"]
+
+        # need to convert the positions to bohr units
+        positions = (
+            (data["positions"] * GlobalUnitSystem.get_units("length")).to("bohr").m
+        )
+
+        # let us get the atomic subsystem counts so we can breakup the systems properly for batch processing
+        mol_ids, atomic_subsystem_counts = torch.unique(
+            atomic_subsystem_indices, return_counts=True
+        )
+        # cumulative sum gives us the indices where each system starts
+        atomic_subsystem_counts_sum = torch.cumsum(atomic_subsystem_counts, dim=0)
+
+        # split the positions tensor into a list of tensors, one for each system, then use the mctc.batch.pack
+        # to create a batch of tensors in the format expected by the tad-dftd3 library.
+        positions_batch = mctc.batch.pack(
+            (torch.tensor_split(positions, atomic_subsystem_counts_sum[:-1]))
+        )
+
+        # create a batch of atomic numbers in the same way
+        atomic_numbers_batch = mctc.batch.pack(
+            (torch.tensor_split(atomic_numbers, atomic_subsystem_counts_sum[:-1]))
+        )
+
+        energies = torch.sum(
+            d3.dftd3(
+                atomic_numbers_batch, positions_batch, self.params, cutoff=self.cutoff
+            ),
+            -1,
+        )
+
+        data["per_system_dispersion_energy"] = (
+            (energies.reshape(-1, 1) * unit.hartree)
+            .to(GlobalUnitSystem.get_units("energy"), "chem")
+            .m
+        )
+
+        return data
+
+    # def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    #
+    #     import numpy as np
+    #     self.method = "PBE0"
+    #     atomic_numbers = data["atomic_numbers"].cpu().numpy()
+    #
+    #     system_indices = data["atomic_subsystem_indices"].cpu().numpy()
+    #     positions = data["positions"].cpu().numpy()
+    #
+    #     # With DFTD3, we need to identify if there are multiple systems in the batch.
+    #     # atomic_subsystem_indices is always sequential starting at zero, so we can just find the maximum index
+    #     n_systems = np.max(system_indices) + 1
+    #     dispersion_energies = []
+    #     for i in range(n_systems):
+    #         # get the indices of the atoms in the current system
+    #         indices = np.where(system_indices == i)[0]
+    #
+    #         # get the atomic numbers and positions of the atoms in the current system
+    #         atomic_numbers_i = atomic_numbers[indices]
+    #         positions_i = positions[indices]
+    #
+    #         # we need to convert the positions to bohr units
+    #         from modelforge.utils.units import GlobalUnitSystem
+    #
+    #         positions_i = (
+    #             (positions_i * GlobalUnitSystem.get_units("length")).to("bohr").m
+    #         )
+    #
+    #         # reshape to be (n_atoms, 3)
+    #         positions_i = positions_i.reshape(-1, 3)
+    #
+    #         # calculate the dispersion energy for the current system
+    #         # using DFTD3 method
+    #         from dftd3.interface import RationalDampingParam, DispersionModel
+    #
+    #         model = DispersionModel(atomic_numbers_i, positions_i)
+    #         res = model.get_dispersion(
+    #             RationalDampingParam(method=self.method), grad=False
+    #         )
+    #         # output energy is in hartree, we need to convert it to internal units
+    #         energy = (
+    #             (res["energy"] * unit.hartree)
+    #             .to(GlobalUnitSystem.get_units("energy"), "chem")
+    #             .m
+    #         )
+    #
+    #         dispersion_energies.append(energy)
+    #
+    #     data["per_system_dispersion_energy"] = torch.tensor(
+    #         dispersion_energies, dtype=torch.float32, device=data["positions"].device
+    #     ).reshape(-1, 1)
+    #
+    #     return data

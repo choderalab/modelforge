@@ -107,6 +107,7 @@ from modelforge.potential.processing import (
     PerAtomCharge,
     PerAtomEnergy,
     ZBLPotential,
+    DispersionPotential,
     SumPerSystemEnergies,
 )
 
@@ -117,6 +118,7 @@ class PostProcessing(torch.nn.Module):
         "per_atom_charge",
         "per_system_electrostatic_energy",
         "per_system_zbl_energy",
+        "per_system_vdw_energy",
         "general_postprocessing_operation",
         "sum_per_system_energies",
     ]
@@ -204,7 +206,23 @@ class PostProcessing(torch.nn.Module):
                     prop in PostProcessing._SUPPORTED_PROPERTIES
                     for prop in self._registered_properties
                 )
-
+        if "per_system_vdw_energy" in properties_to_process:
+            if (
+                postprocessing_parameter["per_system_vdw_energy"]["calculate_vdw"]
+                == True
+            ):
+                self.registered_chained_operations["per_system_vdw_energy"] = (
+                    DispersionPotential(
+                        cutoff=postprocessing_parameter["per_system_vdw_energy"][
+                            "maximum_interaction_radius"
+                        ]
+                    )
+                )
+                self._registered_properties.append("per_system_vdw_energy")
+                assert all(
+                    prop in PostProcessing._SUPPORTED_PROPERTIES
+                    for prop in self._registered_properties
+                )
         if "per_atom_energy" in properties_to_process:
             self.registered_chained_operations["per_atom_energy"] = PerAtomEnergy(
                 postprocessing_parameter["per_atom_energy"],
@@ -336,6 +354,47 @@ class Potential(torch.nn.Module):
         core_output["per_system_total_charge"] = input_data.per_system_total_charge
         return core_output
 
+    def _add_positions(
+        self, core_output: Dict[str, torch.Tensor], positions: torch.Tensor
+    ):
+        """
+        Add the positions to the core output.
+
+        Parameters
+        ----------
+        core_output : Dict[str, torch.Tensor]
+            The core network output.
+        positions : torch.Tensor
+            The tensor containing atomic positions.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            The core network output with the positions added.
+        """
+        # Add the positions to the core output
+        core_output["positions"] = positions
+        return core_output
+
+    def _remove_positions(self, core_output: Dict[str, torch.Tensor]):
+        """
+        Remove the positions from the core output.
+
+        Parameters
+        ----------
+        core_output : Dict[str, torch.Tensor]
+            The core network output.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            The core network output with the positions removed.
+        """
+        # Remove the positions from the core output
+        if "positions" in core_output:
+            del core_output["positions"]
+        return core_output
+
     def _add_pairlist(
         self,
         core_output: Dict[str, torch.Tensor],
@@ -364,10 +423,13 @@ class Potential(torch.nn.Module):
         core_output["local_d_ij"] = pairlist_output.local_cutoff.d_ij
         core_output["local_r_ij"] = pairlist_output.local_cutoff.r_ij
 
-        if "per_system_vdw_energy" in self.postprocessing._registered_properties:
-            core_output["vdw_pair_indices"] = pairlist_output.vdw_cutoff.pair_indices
-            core_output["vdw_d_ij"] = pairlist_output.vdw_cutoff.d_ij
-            core_output["vdw_r_ij"] = pairlist_output.vdw_cutoff.r_ij
+        # this is commented out for now, as the vdw energy is calculated via
+        # DFTD3 which handles pair calculations internally
+        # If we have other vdw implementations, we can uncomment this
+        # if "per_system_vdw_energy" in self.postprocessing._registered_properties:
+        #     core_output["vdw_pair_indices"] = pairlist_output.vdw_cutoff.pair_indices
+        #     core_output["vdw_d_ij"] = pairlist_output.vdw_cutoff.d_ij
+        #     core_output["vdw_r_ij"] = pairlist_output.vdw_cutoff.r_ij
 
         if (
             "per_system_electrostatic_energy"
@@ -448,7 +510,7 @@ class Potential(torch.nn.Module):
         box_vectors: torch.Tensor,
         is_periodic: torch.Tensor,
     ) -> Dict[str, torch.Tensor]:
-        # Step 1: Compute pair list and distances using Neighborlist
+
         input_data = NNPInput(
             atomic_numbers=atomic_numbers,
             positions=positions,
@@ -461,21 +523,7 @@ class Potential(torch.nn.Module):
             is_periodic=is_periodic,
         )
 
-        pairlist_output = self.neighborlist.forward(input_data)
-
-        # Step 2: Compute the core network output
-        # note we will pass only the `local_cutoff` pair data from the pairlist_output
-        core_output = self.core_network.forward(
-            input_data, pairlist_output.local_cutoff
-        )
-
-        # Step 3: Apply postprocessing using PostProcessing
-        core_output = self._add_total_charge(core_output, input_data)
-        core_output = self._add_pairlist(core_output, pairlist_output)
-
-        processed_output = self.postprocessing.forward(core_output)
-        processed_output = self._remove_pairlist(processed_output)
-        return processed_output
+        return self.forward(input_data)
 
     def forward(self, input_data: NNPInput) -> Dict[str, torch.Tensor]:
         """
@@ -503,8 +551,13 @@ class Potential(torch.nn.Module):
         core_output = self._add_total_charge(core_output, input_data)
         core_output = self._add_pairlist(core_output, pairlist_output)
 
+        if "per_system_vdw_energy" in self.postprocessing._registered_properties:
+            core_output = self._add_positions(core_output, input_data.positions)
+
         processed_output = self.postprocessing.forward(core_output)
         processed_output = self._remove_pairlist(processed_output)
+        if "per_system_vdw_energy" in self.postprocessing._registered_properties:
+            processed_output = self._remove_positions(processed_output)
         return processed_output
 
     def compute_core_network_output(

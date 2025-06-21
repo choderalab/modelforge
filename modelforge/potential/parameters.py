@@ -177,6 +177,7 @@ class ElectrostaticPotential(ParametersBase):
 class EnergyContributions(CaseInsensitiveEnum):
     per_system_electrostatic_energy = "per_system_electrostatic_energy"
     per_system_zbl_energy = "per_system_zbl_energy"
+    per_system_vdw_energy = "per_system_vdw_energy"
 
 
 class SumPerSystemEnergies(ParametersBase):

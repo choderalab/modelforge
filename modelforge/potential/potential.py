@@ -739,12 +739,13 @@ def setup_potential(
     if use_training_mode_neighborlist:
         from modelforge.potential.neighbors import NeighborListForTraining
 
+        # note vdw_cutoff is not being used as this is handled internally by the DFTD3 implementation
         neighborlist = NeighborListForTraining(
             local_cutoff=local_cutoff,
-            vdw_cutoff=vdw_cutoff,
+            # vdw_cutoff=vdw_cutoff,
             electrostatic_cutoff=electrostatic_cutoff,
             only_unique_pairs=only_unique_pairs,
-            use_vdw_cutoff=use_vdw_cutoff,
+            # use_vdw_cutoff=use_vdw_cutoff,
             use_electrostatic_cutoff=use_electrostatic_cutoff,
         )
     else:
@@ -754,13 +755,14 @@ def setup_potential(
 
         from modelforge.potential.neighbors import NeighborlistForInference
 
+        # note vdw_cutoff is not being used as this is handled internally by the DFTD3 implementation
         neighborlist = NeighborlistForInference(
             local_cutoff=local_cutoff,
-            vdw_cutoff=vdw_cutoff,
+            # vdw_cutoff=vdw_cutoff,
             electrostatic_cutoff=electrostatic_cutoff,
             displacement_function=displacement_function,
             only_unique_pairs=only_unique_pairs,
-            use_vdw_cutoff=use_vdw_cutoff,
+            # use_vdw_cutoff=use_vdw_cutoff,
             use_electrostatic_cutoff=use_electrostatic_cutoff,
         )
         # we can set the strategy here before passing this to the Potential

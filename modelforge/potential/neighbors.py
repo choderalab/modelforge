@@ -329,7 +329,7 @@ class OrthogonalDisplacementFunction(torch.nn.Module):
         Tuple[torch.Tensor, torch.Tensor]
             Displacement vectors (r_ij) of shape [n_pairs, 3] and distances (d_ij) of shape [n_pairs, 1].
         """
-        r_ij = coordinate_i - coordinate_j
+        r_ij = coordinate_j - coordinate_i
 
         if is_periodic == True:
             # Note, since box length may change, we need to update each time if periodic

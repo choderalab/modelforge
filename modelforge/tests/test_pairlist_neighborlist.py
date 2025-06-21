@@ -484,13 +484,13 @@ def test_displacement_function():
         r_ij,
         torch.tensor(
             [
-                [1.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0],
-                [0.0, 0.0, 1.0],
-                [-1.0, -1.0, -1.0],
+                [-1.0, 0.0, 0.0],
+                [0.0, -1.0, 0.0],
+                [0.0, 0.0, -1.0],
                 [1.0, 1.0, 1.0],
-                [4.5, 4.5, 4.5],
+                [-1.0, -1.0, -1.0],
                 [-4.5, -4.5, -4.5],
+                [4.5, 4.5, 4.5],
             ],
             dtype=r_ij.dtype,
         ),
@@ -514,8 +514,113 @@ def test_displacement_function():
     r_ij, d_ij = displacement_function(coords1, coords2, box_vectors, is_periodic=False)
 
     # since the
-    assert torch.allclose(r_ij, coords1 - coords2)
+    assert torch.allclose(r_ij, coords2 - coords1)
     assert torch.allclose(d_ij, torch.norm(r_ij, dim=1, keepdim=True, p=2))
+
+
+def test_neigborlist_multiple_cutoffs():
+    from modelforge.potential.neighbors import (
+        NeighborListForTraining,
+        NeighborlistForInference,
+        OrthogonalDisplacementFunction,
+    )
+
+    import torch
+
+    from modelforge.dataset.dataset import NNPInput
+
+    displacement_function = OrthogonalDisplacementFunction()
+
+    positions = torch.tensor(
+        [[0.0, 0, 0], [1, 0, 0], [5.0, 0, 0], [15, 0, 0]], dtype=torch.float32
+    )
+
+    data = NNPInput(
+        atomic_numbers=torch.tensor([1, 1, 1, 1], dtype=torch.int64),
+        positions=positions,
+        atomic_subsystem_indices=torch.tensor([0, 0, 0, 0], dtype=torch.int64),
+        per_system_total_charge=torch.tensor([0.0], dtype=torch.float32),
+        box_vectors=torch.tensor(
+            [[50, 0, 0], [0, 50, 0], [0, 0, 50]], dtype=torch.float32
+        ),
+        is_periodic=False,
+    )
+
+    nlist_train = NeighborListForTraining(
+        local_cutoff=2.0,
+        vdw_cutoff=6.0,
+        electrostatic_cutoff=12.0,
+        use_vdw_cutoff=True,
+        use_electrostatic_cutoff=True,
+        only_unique_pairs=True,
+    )
+
+    output = nlist_train(data)
+    assert torch.allclose(output.local_cutoff.pair_indices, torch.tensor([[0], [1]]))
+    assert torch.allclose(output.local_cutoff.r_ij, torch.tensor([[1.0, 0.0, 0.0]]))
+    assert torch.allclose(output.local_cutoff.d_ij, torch.tensor([[1.0]]))
+
+    assert torch.allclose(
+        output.vdw_cutoff.pair_indices, torch.tensor([[0, 0, 1], [1, 2, 2]])
+    )
+    assert torch.allclose(
+        output.vdw_cutoff.r_ij,
+        torch.tensor([[1.0, 0.0, 0.0], [5.0, 0.0, 0.0], [4.0, 0.0, 0.0]]),
+    )
+    assert torch.allclose(output.vdw_cutoff.d_ij, torch.tensor([[1.0], [5.0], [4.0]]))
+
+    assert torch.allclose(
+        output.electrostatic_cutoff.pair_indices,
+        torch.tensor([[0, 0, 1, 2], [1, 2, 2, 3]]),
+    )
+    assert torch.allclose(
+        output.electrostatic_cutoff.r_ij,
+        torch.tensor(
+            [[1.0, 0.0, 0.0], [5.0, 0.0, 0.0], [4.0, 0.0, 0.0], [10.0, 0.0, 0.0]]
+        ),
+    )
+    assert torch.allclose(
+        output.electrostatic_cutoff.d_ij, torch.tensor([[1.0], [5.0], [4.0], [10.0]])
+    )
+
+    nlist_inf = NeighborlistForInference(
+        local_cutoff=2.0,
+        vdw_cutoff=6.0,
+        electrostatic_cutoff=12.0,
+        use_vdw_cutoff=True,
+        use_electrostatic_cutoff=True,
+        only_unique_pairs=True,
+        displacement_function=displacement_function,
+    )
+
+    output = nlist_inf(data)
+    print(output.vdw_cutoff)
+    assert torch.allclose(output.local_cutoff.pair_indices, torch.tensor([[0], [1]]))
+    assert torch.allclose(output.local_cutoff.r_ij, torch.tensor([[1.0, 0.0, 0.0]]))
+    assert torch.allclose(output.local_cutoff.d_ij, torch.tensor([[1.0]]))
+
+    assert torch.allclose(
+        output.vdw_cutoff.pair_indices, torch.tensor([[0, 0, 1], [1, 2, 2]])
+    )
+    assert torch.allclose(
+        output.vdw_cutoff.r_ij,
+        torch.tensor([[1.0, 0.0, 0.0], [5.0, 0.0, 0.0], [4.0, 0.0, 0.0]]),
+    )
+    assert torch.allclose(output.vdw_cutoff.d_ij, torch.tensor([[1.0], [5.0], [4.0]]))
+
+    assert torch.allclose(
+        output.electrostatic_cutoff.pair_indices,
+        torch.tensor([[0, 0, 1, 2], [1, 2, 2, 3]]),
+    )
+    assert torch.allclose(
+        output.electrostatic_cutoff.r_ij,
+        torch.tensor(
+            [[1.0, 0.0, 0.0], [5.0, 0.0, 0.0], [4.0, 0.0, 0.0], [10.0, 0.0, 0.0]]
+        ),
+    )
+    assert torch.allclose(
+        output.electrostatic_cutoff.d_ij, torch.tensor([[1.0], [5.0], [4.0], [10.0]])
+    )
 
 
 def test_inference_neighborlist_building():
@@ -614,16 +719,16 @@ def test_inference_neighborlist_building():
         r_ij,
         torch.tensor(
             [
-                [-1.0, 0.0, 0.0],
-                [-3.0, 0.0, 0.0],
-                [2.0, 0.0, 0.0],
-                [-2.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
                 [3.0, 0.0, 0.0],
-                [1.0, -0.0, -0.0],
-                [3.0, -0.0, -0.0],
-                [-2.0, -0.0, -0.0],
-                [2.0, -0.0, -0.0],
+                [-2.0, 0.0, 0.0],
+                [2.0, 0.0, 0.0],
+                [-3.0, 0.0, 0.0],
+                [-1.0, -0.0, -0.0],
                 [-3.0, -0.0, -0.0],
+                [2.0, -0.0, -0.0],
+                [-2.0, -0.0, -0.0],
+                [3.0, -0.0, -0.0],
             ]
         ),
     )

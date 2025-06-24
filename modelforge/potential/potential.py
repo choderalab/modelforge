@@ -193,36 +193,27 @@ class PostProcessing(torch.nn.Module):
                     "Only Coulomb potential is supported for electrostatics."
                 )
         if "per_system_zbl_energy" in properties_to_process:
-            if (
-                postprocessing_parameter["per_system_zbl_energy"]["calculate_zbl"]
-                == True
-            ):
 
-                self.registered_chained_operations["per_system_zbl_energy"] = (
-                    ZBLPotential()
-                )
-                self._registered_properties.append("per_system_zbl_energy")
-                assert all(
-                    prop in PostProcessing._SUPPORTED_PROPERTIES
-                    for prop in self._registered_properties
-                )
+            self.registered_chained_operations["per_system_zbl_energy"] = ZBLPotential()
+            self._registered_properties.append("per_system_zbl_energy")
+            assert all(
+                prop in PostProcessing._SUPPORTED_PROPERTIES
+                for prop in self._registered_properties
+            )
         if "per_system_vdw_energy" in properties_to_process:
-            if (
-                postprocessing_parameter["per_system_vdw_energy"]["calculate_vdw"]
-                == True
-            ):
-                self.registered_chained_operations["per_system_vdw_energy"] = (
-                    DispersionPotential(
-                        cutoff=postprocessing_parameter["per_system_vdw_energy"][
-                            "maximum_interaction_radius"
-                        ]
-                    )
+
+            self.registered_chained_operations["per_system_vdw_energy"] = (
+                DispersionPotential(
+                    cutoff=postprocessing_parameter["per_system_vdw_energy"][
+                        "maximum_interaction_radius"
+                    ]
                 )
-                self._registered_properties.append("per_system_vdw_energy")
-                assert all(
-                    prop in PostProcessing._SUPPORTED_PROPERTIES
-                    for prop in self._registered_properties
-                )
+            )
+            self._registered_properties.append("per_system_vdw_energy")
+            assert all(
+                prop in PostProcessing._SUPPORTED_PROPERTIES
+                for prop in self._registered_properties
+            )
         if "per_atom_energy" in properties_to_process:
             self.registered_chained_operations["per_atom_energy"] = PerAtomEnergy(
                 postprocessing_parameter["per_atom_energy"],

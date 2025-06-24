@@ -185,11 +185,10 @@ class SumPerSystemEnergies(ParametersBase):
 
 
 class ZBLPotential(ParametersBase):
-    calculate_zbl: bool = False
+    calculate_zbl: bool = True
 
 
 class DispersionPotential(ParametersBase):
-    calculate_dispersion: bool = False
     # note maximum interaction radius should be passed as a string with units or unit.Quantity;
     # it will be converted to float in appropriate unit system
     maximum_interaction_radius: float

@@ -121,14 +121,14 @@ The following is an example of how the postprocessing section in a .toml file th
 * calculate the `per_system_electrostatic_energy` using the coulomb potential from the `per_atom_charge`
 * calculates the `per_system_zbl_energy` using the ZBL potential
 * calculates the `per_system_vdw_energy` using the DFTD3 potential
-* sums the `per_system_electrostatic_energy`, `per_system_zbl_energy`, and `per_system_vdw_energy` into the `per_system_energy` using the `sum_per_system_energies` operation.
+* sums the `per_system_electrostatic_energy`, `per_system_zbl_energy`, and `per_system_vdw_energy` into the `per_system_energy` using the `sum_per_system_energy` operation.
 
 Note, the order these are defined or listed in `properties_to_process` does not impact the order they are processed.
 
 .. code-block:: toml
 
     [potential.postprocessing_parameter]
-    properties_to_process = ['per_atom_energy', 'per_atom_charge', 'per_system_electrostatic_energy', 'per_system_zbl_energy', 'per_system_vdw_energy', 'sum_per_system_energies']
+    properties_to_process = ['per_atom_energy', 'per_atom_charge', 'per_system_electrostatic_energy', 'per_system_zbl_energy', 'per_system_vdw_energy', 'sum_per_system_energy']
 
     [potential.postprocessing_parameter.per_atom_energy]
     normalize = true
@@ -149,7 +149,7 @@ Note, the order these are defined or listed in `properties_to_process` does not 
     maximum_interaction_radius = "10.0 angstrom"
 
     # this will be added to the `per_system_energy` that results from the `per_atom_energy` reduction operation
-    [potential.postprocessing_parameter.sum_per_system_energies]
+    [potential.postprocessing_parameter.sum_per_system_energy]
     contributions = ['per_system_electrostatic_energy', 'per_system_zbl_energy', 'per_system_vdw_energy']
 
 
@@ -267,7 +267,7 @@ Rather than having all 3 of these energy contributions returned by the core netw
 .. code-block:: toml
 
     [potential.postprocessing_parameter]
-    properties_to_process = ['per_atom_energy', 'per_system_electrostatic_energy', 'per_system_vdw_energy', 'sum_per_system_energies']
+    properties_to_process = ['per_atom_energy', 'per_system_electrostatic_energy', 'per_system_vdw_energy', 'sum_per_system_energy']
 
     [potential.postprocessing_parameter.per_atom_energy]
     normalize = true
@@ -284,5 +284,5 @@ Rather than having all 3 of these energy contributions returned by the core netw
     maximum_interaction_radius = "10.0 angstrom"
 
     # this will be added to the per_system_energy that results from the `per_atom_energy` reduction operation
-    [potential.postprocessing_parameter.sum_per_system_energies]
+    [potential.postprocessing_parameter.sum_per_system_energy]
     contributions = ['per_system_electrostatic_energy', 'per_system_zbl_energy', 'per_system_vdw_energy']

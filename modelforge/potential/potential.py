@@ -120,7 +120,7 @@ class PostProcessing(torch.nn.Module):
         "per_system_zbl_energy",
         "per_system_vdw_energy",
         "general_postprocessing_operation",
-        "sum_per_system_energies",
+        "sum_per_system_energy",
     ]
 
     def __init__(
@@ -225,20 +225,20 @@ class PostProcessing(torch.nn.Module):
                 for prop in self._registered_properties
             )
 
-        if "sum_per_system_energies" in properties_to_process:
-            contributions = postprocessing_parameter["sum_per_system_energies"][
+        if "sum_per_system_energy" in properties_to_process:
+            contributions = postprocessing_parameter["sum_per_system_energy"][
                 "contributions"
             ]
             # if an empty list is provided, we do not register the operation
             if len(contributions) > 0:
-                self.registered_chained_operations["sum_per_system_energies"] = (
+                self.registered_chained_operations["sum_per_system_energy"] = (
                     SumPerSystemEnergies(
-                        contributions=postprocessing_parameter[
-                            "sum_per_system_energies"
-                        ]["contributions"]
+                        contributions=postprocessing_parameter["sum_per_system_energy"][
+                            "contributions"
+                        ]
                     )
                 )
-                self._registered_properties.append("sum_per_system_energies")
+                self._registered_properties.append("sum_per_system_energy")
                 assert all(
                     prop in PostProcessing._SUPPORTED_PROPERTIES
                     for prop in self._registered_properties

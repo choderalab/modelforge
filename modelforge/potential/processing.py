@@ -320,7 +320,7 @@ def default_charge_conservation(
     return per_atom_charge_corrected
 
 
-class SumPerSystemEnergies(torch.nn.Module):
+class SumPerSystemEnergy(torch.nn.Module):
     def __init__(
         self,
         contributions: List[str],

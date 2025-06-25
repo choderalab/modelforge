@@ -180,7 +180,7 @@ class EnergyContributions(CaseInsensitiveEnum):
     per_system_vdw_energy = "per_system_vdw_energy"
 
 
-class SumPerSystemEnergies(ParametersBase):
+class SumPerSystemEnergy(ParametersBase):
     contributions: List[EnergyContributions]
 
 
@@ -216,7 +216,7 @@ class PostProcessingParameter(ParametersBase):
     per_system_electrostatic_energy: Optional[ElectrostaticPotential] = None
     per_system_zbl_energy: Optional[ZBLPotential] = None
     per_system_vdw_energy: Optional[DispersionPotential] = None
-    sum_per_system_energies: Optional[SumPerSystemEnergies] = None
+    sum_per_system_energy: Optional[SumPerSystemEnergy] = None
     general_postprocessing_operation: Optional[GeneralPostProcessingOperation] = None
 
 

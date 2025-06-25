@@ -108,7 +108,7 @@ from modelforge.potential.processing import (
     PerAtomEnergy,
     ZBLPotential,
     DispersionPotential,
-    SumPerSystemEnergies,
+    SumPerSystemEnergy,
 )
 
 

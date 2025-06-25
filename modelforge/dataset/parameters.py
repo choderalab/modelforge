@@ -43,14 +43,14 @@ class DataSetName(CaseInsensitiveEnum):
 
 
 class PropertiesDefinition(ParametersBase):
-    atomic_numbers: str
-    positions: str
-    E: str
-    F: Optional[str] = None
-    dipole_moment: Optional[str] = None
-    total_charge: Optional[str] = None
-    S: Optional[str] = None
-    partial_charge: Optional[str] = None
+    atomic_numbers: str  # atomic numbers of the atoms in the system
+    positions: str  # positions of the atoms in the system
+    E: str  # total energy of the system
+    F: Optional[str] = None  # forces on each atom in the system
+    dipole_moment: Optional[str] = None  # dipole moment of the system
+    total_charge: Optional[str] = None  # total charge of the system
+    S: Optional[str] = None  # spin multiplicity of the system
+    partial_charges: Optional[str] = None  # partial charges on each atom in the system
 
 
 class DatasetParameters(BaseModel):

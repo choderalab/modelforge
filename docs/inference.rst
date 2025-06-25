@@ -5,7 +5,7 @@ Inference mode is a mode allows us to use the trained model to make predictions.
 
 Neighborlists
 ------------------------------------------
-Currently, there are two neighborlist strategies implemented within modelforge for inference, the brute force neighbolist and Verlet neighborlist (implemented within a single class :class:`~modelforge.potential.NeighborlistForInference`).    Both neighborlists support both periodic and not periodic orthogonal boxes.
+Currently, there are two neighborlist strategies implemented within modelforge for inference, the brute force neighbolist and Verlet neighborlist (implemented within a single class :class:`~modelforge.potential.NeighborlistForInference`).    Both neighborlists support periodic and not periodic orthogonal boxes.
 
 The neighborlist strategy can be toggled during potential setup via the `inference_neighborlist_strategy` parameter passed to the :class:`~modelforge.potential.models.NeuralNetworkPotentialFactory`.  The default is the Verlet neighborlist ("verlet_nsq"); brute can be set via "brute_nsq".  This can also be set via set at run time in the potential via Potential.set_neighborlist_strategy(strategy, skin).
 

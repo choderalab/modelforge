@@ -127,9 +127,9 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
             else torch.zeros((dataset[property_name.E].shape[0], 1), dtype=torch.int32)
         )
 
-        properties["partial_charge"] = (
-            torch.from_numpy(dataset[property_name.partial_charge])
-            if property_name.partial_charge is not None
+        properties["partial_charges"] = (
+            torch.from_numpy(dataset[property_name.partial_charges])
+            if property_name.partial_charges is not None
             else torch.zeros(
                 (properties["positions"].shape[0], 1),
                 dtype=torch.float32,
@@ -220,7 +220,7 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
         number_of_atoms = len(atomic_numbers)
         dipole_moment = self.properties_of_interest["dipole_moment"][idx]
         spin_state = self.properties_of_interest["S"][idx]
-        per_atom_charge = self.properties_of_interest["partial_charge"][
+        per_atom_charge = self.properties_of_interest["partial_charges"][
             series_atom_start_idx:series_atom_end_idx
         ]
 

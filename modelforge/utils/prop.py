@@ -10,14 +10,14 @@ from loguru import logger as log
 
 @dataclass
 class PropertyNames:
-    atomic_numbers: str
-    positions: str  # Positions
-    E: str  # Energy
-    F: Optional[str] = None  # Forces
-    total_charge: Optional[str] = None  # Total charge
-    dipole_moment: Optional[str] = None  # Dipole moment
-    S: Optional[str] = None  # Spin multiplicity
-    partial_charge: Optional[str] = None  # Per-atom partial charge
+    atomic_numbers: str  # per atom atomic numbers in the system
+    positions: str  # per atom positions in the system
+    E: str  # per system total energy
+    F: Optional[str] = None  # per atom forces
+    total_charge: Optional[str] = None  # per system total charge
+    dipole_moment: Optional[str] = None  # per system dipole moment
+    S: Optional[str] = None  # per system spin multiplicity
+    partial_charges: Optional[str] = None  # Per-atom partial charge
 
 
 class SpeciesEnergies(NamedTuple):

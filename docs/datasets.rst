@@ -33,13 +33,14 @@ Explanation of the possible fields in the dataset configuration file:
 .. code-block:: python
 
     class PropertyNames:
-        atomic_numbers: str # atomic numbers
-        positions: str  # Positions
-        E: str  # Energy
-        F: Optional[str] = None  # Forces
-        total_charge: Optional[str] = None  # Total charge
-        dipole_moment: Optional[str] = None  # Dipole moment
-        S: Optional[str] = None  # Spin multiplicity,
+        atomic_numbers: str # per-atom atomic numbers (atomic numbers are integers)
+        positions: str  # per-atom positions (cartesian coordinates)
+        E: str  # per-system energy (total energy)
+        F: Optional[str] = None  # per-atom forces
+        total_charge: Optional[str] = None  # per-system total charge
+        dipole_moment: Optional[str] = None  # per-system dipole moment
+        S: Optional[str] = None  # per-system spin multiplicity
+        partial_charges: Optional[str] = None  # per-atom partial charges
 
 - `element_filter`: A filter to select systems with or without certain elements, which are denoted by atomic numbers. If a positive number is provided, then a datapoint that includes that element will be included. A negative values indicates which elements to exclude. For example, [[29]], selects all systems containing copper (29). [[29, -17]] selects all systems containing copper (29), but excludes from that list any that also contain chlorine (17). [[29, 1, -17]] would select all systems that contain copper (29) and hydrogen (H), and do not include chlorine (17). Everything contain within the same brackets acts as an "and" (i.e., all criteria must be satisfied). Providing two separate sublists acts as an "or". For example, [[29,1], [78,-17]], states that a molecule can either have [copper (29) and hydrogen (1)] OR [platinum (78) and not chlorine (17)]. Leaving this field as an empty list or remove it will disable this element filtering feature.
 - `regression_ase`: A boolean flag indicating whether to use the atomic self-energies provided by the dataset (if available) or to calculate them via regression. If set to `True`, the atomic self-energies will be used as provided in the dataset metadata; if set to `False`, the self-energies will be calculated via regression. This is Optional and defaults to `False`.

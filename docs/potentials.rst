@@ -5,33 +5,38 @@ Potentials: Overview
 ------------------------
 
 A potential in *modelforge* encapsulates all the operations required to map a
-description of a molecular system (which includes the Cartesian coordinates,
-atomic numbers, and total charge of a system (optionally also the spin state))
+description of a molecular system (which includes the Cartesian coordinates and
+atomic numbers (and optionally total system charge and system spin multiplicity)
 to, at a minimum, its energy. Specifically, a potential takes as input a
 :py:class:`~modelforge.dataset.dataset.NNPInput` dataclass and outputs a
-dictionary of PyTorch tensors representing per-atom and/or per-molecule
-properties, including per-molecule energies. A potential comprises three main
+dictionary of PyTorch tensors representing per-atom and/or per-system
+properties, including per-system energies.
+Note, "per-system" can be considered synonymous with "per-molecule"
+(i.e., if the system contains a single molecule, the per-system energy
+is the summation of the individual per-atom energies);
+the use of "per-system" is to provide a more general terminology,
+as a given system in a dataset may contain multiple molecules
+(e.g., a cluster of water molecules, or a protein-ligand complex) and modelforge does not differentiate between the
+case of single vs. multiple molecules in a system, as we do not consider fixed bonding topologies.
+
+A potential comprises three main
 components:
 
-1. **Input Preparation Module**
-   (:class:`~modelforge.potential.model.InputPreparation`): Responsible for
-   generating the pair list, pair distances, and pair displacement vectors based
-   on atomic coordinates and the specified cutoff. This module processes the raw
-   input data into a format suitable for the neural network.
+1. **Neighborlist**: Responsible for generating the list of interacting pairs, the pair distances, and pair displacement vectors based on atomic coordinates and the specified cutoff.
 
-2. **Core Model** (:class:`~modelforge.potential.model.CoreNetwork`): The neural
+2. **Core Model**: The core model is the neural
    network containing the learnable parameters, which forms the core of the
    potential. This module generates per-atom scalar and, optionally, tensor properties. The inputs to the core model
-   include atom pair indices, pair distances, pair displacement vectors, and atomic properties such as atomic numbers, charges, and spin state.
+   include atom pair indices, pair distances, pair displacement vectors, and atomic properties such as atomic numbers, charges, and spin multiplicities.
 
 3. **Postprocessing Module**
-   (:class:`~modelforge.potential.model.PostProcessing`): Contains operations
+   (:class:`~modelforge.potential.potential.PostProcessing`): Contains operations
    applied to per-atom properties as well as reduction operations to obtain
-   per-molecule properties. Examples include atomic energy scaling and summation of per-atom energies to obtain per-molecule energies for reduction operations.
+   per-molecule properties. Examples include atomic energy scaling and summation of per-atom energies to obtain per-molecule energies for reduction operations, Coulombic interactions, ZBL potential, and DFTD3 dispersion correction.
 
 A specific neural network (e.g., PhysNet) implements the core model, while the
 input preparation and postprocessing modules are independent of the neural
-network architecture.
+network architecture.  While the underlying code may differ, each potential is designed with a similar structure with 3 classes corresponding to the Core, Representation, and Interaction modules.
 
 
 Implemented Models
@@ -62,11 +67,11 @@ PaiNN can additionally use multipole expansions.
 Using TOML files to configure potentials
 --------------------------------------------
 
-To initialize a potential, a potential factory is used:
+To initialize a potential, a factory is used:
 :class:`~modelforge.potential.potential.NeuralNetworkPotentialFactory`.
 This takes care of initialization of the potential and the input preparation and postprocessing modules.
 
-A neural network potential is defined by a configuration file in the TOML format.
+A neural network potential is defined by a configuration file(s) in the TOML format.
 This configuration file includes parameters for the neural network, as well as
 for the input preparation and postprocessing modules. Below is an example
 configuration file for the PhysNet model:
@@ -110,12 +115,20 @@ the parameters for the postprocessing operations. Explanation of fields in
 
 Default parameter files for each potential are available in `modelforge/tests/data/potential_defaults`. These files can be used as starting points for creating new potential configuration files.
 
-Example of how the postprocessing section in a .toml file that that calculates the coulomb potential and the ZBL potential:
+The following is an example of how the postprocessing section in a .toml file that that:
+* calculates the `per_system_energy` from the `per_atom_energy`
+* processes the `per_atom_charge` to ensure the total charge of the system is conserved
+* calculate the `per_system_electrostatic_energy` using the coulomb potential from the `per_atom_charge`
+* calculates the `per_system_zbl_energy` using the ZBL potential
+* calculates the `per_system_vdw_energy` using the DFTD3 potential
+* sums the `per_system_electrostatic_energy`, `per_system_zbl_energy`, and `per_system_vdw_energy` into the `per_system_energy` using the `sum_per_system_energies` operation.
+
+Note, the order these are defined or listed in `properties_to_process` does not impact the order they are processed.
 
 .. code-block:: toml
 
     [potential.postprocessing_parameter]
-    properties_to_process = ['per_atom_energy', 'per_atom_charge', 'electrostatic_potential', 'zbl_potential']
+    properties_to_process = ['per_atom_energy', 'per_atom_charge', 'per_system_electrostatic_energy', 'per_system_zbl_energy', 'per_system_vdw_energy', 'sum_per_system_energies']
 
     [potential.postprocessing_parameter.per_atom_energy]
     normalize = true
@@ -126,13 +139,18 @@ Example of how the postprocessing section in a .toml file that that calculates t
     conserve = true
     conserve_strategy= "default"
 
-    [potential.postprocessing_parameter.electrostatic_potential]
+    [potential.postprocessing_parameter.per_system_electrostatic_energy]
     electrostatic_strategy = "coulomb"
+    maximum_interaction_radius = "15.0 angstrom"
+
+    [potential.postprocessing_parameter.per_system_zbl_energy]
+
+    [potential.postprocessing_parameter.per_system_vdw_energy]
     maximum_interaction_radius = "10.0 angstrom"
 
-    [potential.postprocessing_parameter.zbl_potential]
-    calculate_zbl_potential = true
-
+    # this will be added to the `per_system_energy` that results from the `per_atom_energy` reduction operation
+    [potential.postprocessing_parameter.sum_per_system_energies]
+    contributions = ['per_system_electrostatic_energy', 'per_system_zbl_energy', 'per_system_vdw_energy']
 
 
 .. note:: All parameters in the configuration files have units attached where applicable. Units within modelforge a represented using the `openff.units` package (https://docs.openforcefield.org/projects/units/en/stable/index.html), which is a wrapper around the `pint` package. Definition of units within the TOML files must unit names available in the `openff.units` package (https://github.com/openforcefield/openff-units/blob/main/openff/units/data/defaults.txt).
@@ -236,3 +254,35 @@ Below is an example of how to create a SchNet model using the potential factory,
       model_type=model_name,
       model_parameter=potential_parameters,
    )
+
+
+AimNet2: how to define the postprocessing operations
+------------------------------------------------------
+
+AimNet2 is unique in that it is devised such that the energy that is predicted from the potential consists of the 3 contributions: the local energy (E_local), the van der Waals energy (E_vdw), and the electrostatic energy (E_electrostatic).  This is done to help address the nearsightedness typical of NNPs.
+
+Rather than having all 3 of these energy contributions returned by the core network, only E_local is returned by the core network; this fits with the modular design of modelforge.  To include the van der Waals and electrostatic contributions, these should be calculated via the post processing module. The following code implements the post processing operations required to include these additional terms.  Note, the charge conservation operation does not need to be included as a post processing operation, as this is performed within the core model.
+
+
+.. code-block:: toml
+
+    [potential.postprocessing_parameter]
+    properties_to_process = ['per_atom_energy', 'per_system_electrostatic_energy', 'per_system_vdw_energy', 'sum_per_system_energies']
+
+    [potential.postprocessing_parameter.per_atom_energy]
+    normalize = true
+    from_atom_to_system_reduction = true
+    keep_per_atom_property = true
+
+
+    [potential.postprocessing_parameter.per_system_electrostatic_energy]
+    electrostatic_strategy = "coulomb"
+    maximum_interaction_radius = "15.0 angstrom"
+
+
+    [potential.postprocessing_parameter.per_system_vdw_energy]
+    maximum_interaction_radius = "10.0 angstrom"
+
+    # this will be added to the per_system_energy that results from the `per_atom_energy` reduction operation
+    [potential.postprocessing_parameter.sum_per_system_energies]
+    contributions = ['per_system_electrostatic_energy', 'per_system_zbl_energy', 'per_system_vdw_energy']

@@ -37,9 +37,37 @@ Loss function
 ^^^^^^^^^^^^^^^^^^^^^^^^
 The loss function quantifies the discrepancy between the model's predictions and the target properties, providing a scalar value that guides the optimizer in updating the model's parameters. This function is configured in the `[training.loss]` section of the training TOML file.
 
-Depending on the specified `loss_components`` section, the loss function can combine various individual loss functions. *Modelforge* always includes the mean squared error (MSE) for energy prediction, and may also incorporate MSE for force prediction, dipole moment prediction, and partial charge prediction.
+Depending on the specified `loss_components`` section, the loss function can combine various individual loss functions. *Modelforge* always includes the mean squared error (MSE) for energy prediction, and may also incorporate MSE for force prediction, dipole moment prediction, total_charge, and partial charge prediction.
+
+The following keys can be used in the `loss_components` section. Note, to use these losses, corresponding known values need to be set within modelforge (see the dataset documentation for more details regarding defining the PropertyNames).  Each key is listed with corresponding properties that need to be defined in the dataset toml file:
+
+* `per_system_energy' -- corresponds to `E` in the property names defitinion.
+* `per_atom_force`  -- corresponds to `F` in the property names definition.
+* `per_system_total_charge` -- corresponds to `total_charge` in the property names definition.
+* `per_system_dipole_moment` -- corresponds to `dipole_moment` in the property names definition.
+* `per_atom_charge` -- corresponds to `partial_charges` in the property names definition.
 
 The design of the loss function is intrinsically linked to the structure of the energy function. For instance, if the energy function aggregates atomic energies, then loss_components should include `per_system_energy` and optionally, `per_atom_force`.
+
+For each component in the loss, a weight must be specified in the `loss_weights` section of the training TOML file. The weights determine the relative importance of each component in the overall loss function. The loss function is then computed as a weighted sum of the individual components.
+
+The weights for the losses can also be changed during the training run by providing a target weight (i.e., the final weight) and a mixing step (i.e., the step size for the linear interpolation between the current and target weights). This is useful for gradually increasing/decreasing the importance of certain loss components during training, which can help stabilize the training process. Note, that the target weights and mixing steps are optional, and if not provided, the loss weights will remain constant throughout the training process. In the snippet below, only `per_system_dipole_moment` has a target weight and a mixing step defined, meaning that the weight for this component will be gradually increased from 1 to 10 over the course of training, while the other components will remain at their initial weights.
+
+.. code-block:: toml
+
+    [training.loss_parameter]
+    loss_components = ['per_system_energy', 'per_system_dipole_moment', "per_atom_charge"]
+
+    [training.loss_parameter.weight]
+    per_system_energy = 1
+    per_system_dipole_moment = 1
+    per_atom_charge = 1000
+
+    [training.loss_parameter.target_weight]
+    per_system_dipole_moment = 10
+
+    [training.loss_parameter.mixing_steps]
+    per_system_dipole_moment= 0.05
 
 
 Predicting Short-Range Atomic Energies

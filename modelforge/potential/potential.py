@@ -232,7 +232,7 @@ class PostProcessing(torch.nn.Module):
             # if an empty list is provided, we do not register the operation
             if len(contributions) > 0:
                 self.registered_chained_operations["sum_per_system_energy"] = (
-                    SumPerSystemEnergies(
+                    SumPerSystemEnergy(
                         contributions=postprocessing_parameter["sum_per_system_energy"][
                             "contributions"
                         ]

@@ -100,6 +100,10 @@ def test_pairlist():
     cutoff = unit.Quantity(5.0, unit.nanometer).to(unit.nanometer).m
     nlist = NeighborListForTraining(local_cutoff=cutoff, only_unique_pairs=True)
 
+    # note, recall that nlist output is a named tuple with 3 attributes:
+    # local_cutoff, vdw_cutoff, and electrostatic_cutoff
+    # Each of these attributes contains the PairListOutput.
+
     r = nlist(TestInput(positions, atomic_subsystem_indices, None)).local_cutoff
     pair_indices = r.pair_indices
 

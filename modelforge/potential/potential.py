@@ -263,7 +263,6 @@ class PostProcessing(torch.nn.Module):
         for name, module in self.registered_chained_operations.items():
             module_output = module.forward(data)
             processed_data.update(module_output)
-
         return processed_data
 
 

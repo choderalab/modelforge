@@ -257,9 +257,9 @@ def test_dispersion_potential():
 
     vdw = DispersionPotential(cutoff=100.0)
     vdw_output = vdw(core_output_dict)
-    assert vdw_output["per_system_dispersion_energy"].shape == (1, 1)
+    assert vdw_output["per_system_vdw_energy"].shape == (1, 1)
     assert torch.allclose(
-        vdw_output["per_system_dispersion_energy"],
+        vdw_output["per_system_vdw_energy"],
         torch.tensor([[-6.277308]]),
         1e-3,
         1e-3,
@@ -287,9 +287,9 @@ def test_dispersion_potential():
 
     vdw = DispersionPotential(cutoff=100.0)
     vdw_output = vdw(core_output_dict)
-    assert vdw_output["per_system_dispersion_energy"].shape == (2, 1)
+    assert vdw_output["per_system_vdw_energy"].shape == (2, 1)
     assert torch.allclose(
-        vdw_output["per_system_dispersion_energy"],
+        vdw_output["per_system_vdw_energy"],
         torch.tensor([[-6.277308], [-6.277308]]),
         1e-3,
         1e-3,
@@ -1453,3 +1453,183 @@ def test_equivariant_energies_and_forces(
         reflection(reference_forces),
         atol=atol,
     )
+
+
+def test_sum_per_system_energy():
+    """
+    Test the sum_per_system_energy function.
+    """
+    import torch
+
+    from modelforge.potential.processing import SumPerSystemEnergy
+
+    data = {
+        "per_system_energy": torch.tensor([[10.0], [20.0], [30.0]]),
+        "per_system_electrostatic_energy": torch.tensor([[1.0], [2.0], [3.0]]),
+        "per_system_vdw_energy": torch.tensor([[0.1], [0.2], [0.3]]),
+    }
+    # make a copy of the original data to compare against
+    original_data = data.copy()
+
+    # first test adding electrostatic energy
+    sum_per_system_energy = SumPerSystemEnergy(
+        contributions=["per_system_electrostatic_energy"]
+    )
+    data = sum_per_system_energy(data)
+
+    assert "per_system_energy" in data
+    assert data["per_system_energy"].shape == (3, 1)
+    assert torch.allclose(
+        data["per_system_energy"],
+        original_data["per_system_energy"]
+        + original_data["per_system_electrostatic_energy"],
+    )
+
+    # now test adding vdw energy and electrostatic energy
+    sum_per_system_energy = SumPerSystemEnergy(
+        contributions=["per_system_vdw_energy", "per_system_electrostatic_energy"]
+    )
+
+    data = original_data.copy()  # reset data to original
+
+    data = sum_per_system_energy(data)
+    assert "per_system_energy" in data
+    assert data["per_system_energy"].shape == (3, 1)
+    assert torch.allclose(
+        data["per_system_energy"],
+        original_data["per_system_energy"]
+        + original_data["per_system_electrostatic_energy"]
+        + original_data["per_system_vdw_energy"],
+    )
+    # f we put per_system_energy in the contributions it won't double sum, let us check that
+    contributions = [
+        "per_system_energy",
+        "per_system_vdw_energy",
+        "per_system_electrostatic_energy",
+    ]
+    sum_per_system_energy = SumPerSystemEnergy(contributions=contributions)
+
+    data = original_data.copy()  # reset data to original
+    data = sum_per_system_energy(data)
+    assert "per_system_energy" in data
+    assert data["per_system_energy"].shape == (3, 1)
+    assert torch.allclose(
+        data["per_system_energy"],
+        original_data["per_system_energy"]
+        + original_data["per_system_vdw_energy"]
+        + original_data["per_system_electrostatic_energy"],
+    )
+
+    data = original_data.copy()  # reset data to original
+
+    # if we put in a contribution that doesn't exist, it will raise an error
+
+    contributions = [
+        "per_system_vdw_energy",
+        "per_system_electrostatic_energy",
+        "per_system_non_existing_energy",
+    ]
+    with pytest.raises(KeyError):
+        sum_per_system_energy = SumPerSystemEnergy(contributions=contributions)
+        sum_per_system_energy(data)  # this should raise an error
+
+    # if remove per_system_energy from the contributions, it will fail
+    del data["per_system_energy"]
+    with pytest.raises(KeyError):
+        sum_per_system_energy = SumPerSystemEnergy(
+            contributions=["per_system_vdw_energy", "per_system_electrostatic_energy"]
+        )
+        sum_per_system_energy(data)
+
+
+def test_postprocessing():
+    # this test will just ensure that the postprocessing module in potential loads the correct operations
+
+    from modelforge.potential.potential import PostProcessing
+    from modelforge.potential.parameters import PostProcessingParameter
+
+    # let us set a bunch of postprocessing operations
+    postprossessing_dict = {
+        "properties_to_process": [
+            "per_atom_energy",
+            "per_atom_charge",
+            "per_system_electrostatic_energy",
+            "per_system_vdw_energy",
+            "per_system_zbl_energy",
+            "sum_per_system_energy",
+        ],
+        "per_atom_energy": {
+            "normalize": True,
+            "from_atom_to_system_reduction": True,
+            "keep_per_atom_property": True,
+        },
+        "per_atom_charge": {"conserve": True, "conserve_strategy": "default"},
+        "per_system_electrostatic_energy": {
+            "electrostatic_strategy": "coulomb",
+            "maximum_interaction_radius": "10.0 angstrom",
+        },
+        "per_system_vdw_energy": {"maximum_interaction_radius": "10.0 angstrom"},
+        "per_system_zbl_energy": {},
+        "sum_per_system_energy": {
+            "contributions": [
+                "per_system_electrostatic_energy",
+                "per_system_vdw_energy",
+                "per_system_zbl_energy",
+            ]
+        },
+    }
+    postprocessing_parameter = PostProcessingParameter(**postprossessing_dict)
+    postprocessing = PostProcessing(
+        postprocessing_parameter=postprocessing_parameter.model_dump(),
+        dataset_statistic={
+            "training_dataset_statistics": {
+                "per_atom_energy_mean": 0.0,
+                "per_atom_energy_stddev": 1.0,
+            }
+        },
+    )
+    assert "per_atom_energy" in postprocessing._registered_properties
+    assert "per_atom_charge" in postprocessing._registered_properties
+    assert "per_system_electrostatic_energy" in postprocessing._registered_properties
+    assert "per_system_vdw_energy" in postprocessing._registered_properties
+    assert "per_system_zbl_energy" in postprocessing._registered_properties
+    assert "sum_per_system_energy" in postprocessing._registered_properties
+
+    # check that the properties are registered in the correct order
+    # order matters to ensure that, e.g., charge is equilibrated (if desired) before we compute electrostatic energy
+    # make sure we have computed the energies before we try to sum them, etc.
+    assert postprocessing._registered_properties == [
+        "per_atom_charge",
+        "per_system_electrostatic_energy",
+        "per_system_zbl_energy",
+        "per_system_vdw_energy",
+        "per_atom_energy",
+        "sum_per_system_energy",
+    ]
+
+    # let us set a smaller set and ensure that we do in fact, load things properly
+    postprossessing_dict = {
+        "properties_to_process": [
+            "per_atom_energy",
+            "per_system_vdw_energy",
+        ],
+        "per_atom_energy": {
+            "normalize": True,
+            "from_atom_to_system_reduction": True,
+            "keep_per_atom_property": True,
+        },
+        "per_system_vdw_energy": {"maximum_interaction_radius": "10.0 angstrom"},
+    }
+    postprocessing_parameter = PostProcessingParameter(**postprossessing_dict)
+    postprocessing = PostProcessing(
+        postprocessing_parameter=postprocessing_parameter.model_dump(),
+        dataset_statistic={
+            "training_dataset_statistics": {
+                "per_atom_energy_mean": 0.0,
+                "per_atom_energy_stddev": 1.0,
+            }
+        },
+    )
+
+    assert "per_atom_energy" in postprocessing._registered_properties
+    assert "per_system_vdw_energy" in postprocessing._registered_properties

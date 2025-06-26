@@ -49,7 +49,7 @@ class PropertiesDefinition(ParametersBase):
     F: Optional[str] = None  # forces on each atom in the system
     dipole_moment: Optional[str] = None  # dipole moment of the system
     total_charge: Optional[str] = None  # total charge of the system
-    S: Optional[str] = None  # spin multiplicity of the system
+    spin_multiplicity: Optional[str] = None  # spin multiplicity of the system
     partial_charges: Optional[str] = None  # partial charges on each atom in the system
 
 

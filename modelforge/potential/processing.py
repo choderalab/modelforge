@@ -333,59 +333,61 @@ class SumPerSystemEnergy(torch.nn.Module):
         super().__init__()
         self.contributions = contributions
 
-        def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
-            """
-            Forward pass to sum the specified energy contributions.
+    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        """
+        Forward pass to sum the specified energy contributions.
 
-            If per_system_energy is computed (i.e., from per_atom post processing),
-            these contributions are summed into the per_system_energy.
+        If per_system_energy is computed (i.e., from per_atom post processing),
+        these contributions are summed into the per_system_energy.
 
-            If per_system_energy is not computed, the contributions are summed
-            and added to the data dictionary under the key "per_system_energy".
+        If per_system_energy is not computed, the contributions are summed
+        and added to the data dictionary under the key "per_system_energy".
 
-            Note, if per_system_energy is already present in the data dictionary,
-            and it is listed in the contributions, it will not be double counted.
-            Parameters
-            ----------
-            data : Dict[str, torch.Tensor]
-                Input data dictionary containing the energy terms to be summed.
+        Note, if per_system_energy is already present in the data dictionary,
+        and it is listed in the contributions, it will not be double counted.
+        Parameters
+        ----------
+        data : Dict[str, torch.Tensor]
+            Input data dictionary containing the energy terms to be summed.
 
-            Returns
-            -------
-            Dict[str, torch.Tensor]
-                Updated data dictionary with the summed energy under the specified output key.
-            """
-            # Sum the specified contributions
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            Updated data dictionary with the summed energy under the specified output key.
+        """
+        # Sum the specified contributions
 
-            # make sure that we have the things in the data dictionary
-            for contribution in self.contributions:
-                if contribution not in data:
-                    raise KeyError(
-                        f"Energy component '{contribution}' not found in data."
-                    )
+        # make sure that we have the things in the data dictionary
+        for contribution in self.contributions:
+            if contribution not in data:
+                raise KeyError(f"Energy component '{contribution}' not found in data.")
 
-            # if per_system_energy is in the contributions list, remove it because we don't want it to be double counted
-            # This seems better than raising an error, since it could be a common user level mistake
-            if "per_system_energy" in contributions:
-                contributions.remove("per_system_energy")
-
-            # create a zero tensor to hold the sum contributions
-            summed_energy = torch.zeros_like(
-                data["per_system_energy"],
-                dtype=data["per_system_energy"].dtype,
-                device=data["per_system_energy"].device,
+        # if per_system_energy is in the contributions list, remove it because we don't want it to be double counted
+        # This seems better than raising an error, since it could be a common user level mistake
+        if "per_system_energy" in self.contributions:
+            self.contributions.remove("per_system_energy")
+        if "per_system_energy" not in data:
+            raise KeyError(
+                "'per_system_energy' not found in data. It should be computed before summing contributions."
             )
 
-            for contribution in self.contributions:
-                summed_energy = summed_energy + data[contribution]
+        # create a zero tensor to hold the sum contributions
+        summed_energy = torch.zeros_like(
+            data["per_system_energy"],
+            dtype=data["per_system_energy"].dtype,
+            device=data["per_system_energy"].device,
+        )
 
-            # add the summed energy to the per_system_energy
-            if "per_system_energy" not in data:
-                data["per_system_energy"] = summed_energy
-            else:
-                data["per_system_energy"] = summed_energy + data["per_system_energy"]
+        for contribution in self.contributions:
+            summed_energy = summed_energy + data[contribution]
 
-            return data
+        # add the summed energy to the per_system_energy
+        if "per_system_energy" not in data:
+            data["per_system_energy"] = summed_energy
+        else:
+            data["per_system_energy"] = summed_energy + data["per_system_energy"]
+
+        return data
 
 
 class ChargeConservation(torch.nn.Module):
@@ -481,13 +483,6 @@ class PerAtomEnergy(torch.nn.Module):
             self.reduction = reduction
         else:
             self.reduction = None
-
-        if not per_atom_energy.get(
-            "from_atom_to_system_reduction"
-        ) and per_atom_energy.get("add_coulombic_energy", False):
-            raise ValueError(
-                "If add_coulombic_energy is True, from_atom_to_system_reduction must also be True."
-            )
 
     def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         per_atom_property, indices = (
@@ -1027,7 +1022,6 @@ class DispersionPotential(torch.nn.Module):
         positions = (
             (data["positions"] * GlobalUnitSystem.get_units("length")).to("bohr").m
         )
-        print(positions.device)
         # let us get the atomic subsystem counts so we can breakup the systems properly for batch processing
         mol_ids, atomic_subsystem_counts = torch.unique(
             atomic_subsystem_indices, return_counts=True
@@ -1061,64 +1055,10 @@ class DispersionPotential(torch.nn.Module):
             -1,
         )
 
-        data["per_system_dispersion_energy"] = (
+        data["per_system_vdw_energy"] = (
             (energies.reshape(-1, 1) * unit.hartree)
             .to(GlobalUnitSystem.get_units("energy"), "chem")
             .m
         )
 
         return data
-
-    # def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
-    #
-    #     import numpy as np
-    #     self.method = "PBE0"
-    #     atomic_numbers = data["atomic_numbers"].cpu().numpy()
-    #
-    #     system_indices = data["atomic_subsystem_indices"].cpu().numpy()
-    #     positions = data["positions"].cpu().numpy()
-    #
-    #     # With DFTD3, we need to identify if there are multiple systems in the batch.
-    #     # atomic_subsystem_indices is always sequential starting at zero, so we can just find the maximum index
-    #     n_systems = np.max(system_indices) + 1
-    #     dispersion_energies = []
-    #     for i in range(n_systems):
-    #         # get the indices of the atoms in the current system
-    #         indices = np.where(system_indices == i)[0]
-    #
-    #         # get the atomic numbers and positions of the atoms in the current system
-    #         atomic_numbers_i = atomic_numbers[indices]
-    #         positions_i = positions[indices]
-    #
-    #         # we need to convert the positions to bohr units
-    #         from modelforge.utils.units import GlobalUnitSystem
-    #
-    #         positions_i = (
-    #             (positions_i * GlobalUnitSystem.get_units("length")).to("bohr").m
-    #         )
-    #
-    #         # reshape to be (n_atoms, 3)
-    #         positions_i = positions_i.reshape(-1, 3)
-    #
-    #         # calculate the dispersion energy for the current system
-    #         # using DFTD3 method
-    #         from dftd3.interface import RationalDampingParam, DispersionModel
-    #
-    #         model = DispersionModel(atomic_numbers_i, positions_i)
-    #         res = model.get_dispersion(
-    #             RationalDampingParam(method=self.method), grad=False
-    #         )
-    #         # output energy is in hartree, we need to convert it to internal units
-    #         energy = (
-    #             (res["energy"] * unit.hartree)
-    #             .to(GlobalUnitSystem.get_units("energy"), "chem")
-    #             .m
-    #         )
-    #
-    #         dispersion_energies.append(energy)
-    #
-    #     data["per_system_dispersion_energy"] = torch.tensor(
-    #         dispersion_energies, dtype=torch.float32, device=data["positions"].device
-    #     ).reshape(-1, 1)
-    #
-    #     return data

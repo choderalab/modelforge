@@ -39,7 +39,7 @@ Explanation of the possible fields in the dataset configuration file:
         F: Optional[str] = None  # per-atom forces
         total_charge: Optional[str] = None  # per-system total charge
         dipole_moment: Optional[str] = None  # per-system dipole moment
-        S: Optional[str] = None  # per-system spin multiplicity
+        spin_multiplicity: Optional[str] = None  # per-system spin multiplicity
         partial_charges: Optional[str] = None  # per-atom partial charges
 
 - `element_filter`: A filter to select systems with or without certain elements, which are denoted by atomic numbers. If a positive number is provided, then a datapoint that includes that element will be included. A negative values indicates which elements to exclude. For example, [[29]], selects all systems containing copper (29). [[29, -17]] selects all systems containing copper (29), but excludes from that list any that also contain chlorine (17). [[29, 1, -17]] would select all systems that contain copper (29) and hydrogen (H), and do not include chlorine (17). Everything contain within the same brackets acts as an "and" (i.e., all criteria must be satisfied). Providing two separate sublists acts as an "or". For example, [[29,1], [78,-17]], states that a molecule can either have [copper (29) and hydrogen (1)] OR [platinum (78) and not chlorine (17)]. Leaving this field as an empty list or remove it will disable this element filtering feature.

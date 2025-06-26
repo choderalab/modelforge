@@ -16,7 +16,7 @@ class PropertyNames:
     F: Optional[str] = None  # per atom forces
     total_charge: Optional[str] = None  # per system total charge
     dipole_moment: Optional[str] = None  # per system dipole moment
-    S: Optional[str] = None  # per system spin multiplicity
+    spin_multiplicity: Optional[str] = None  # per system spin multiplicity
     partial_charges: Optional[str] = None  # Per-atom partial charge
 
 

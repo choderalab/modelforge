@@ -129,6 +129,7 @@ def test_load_from_wandb(prep_temp_dir):
         version="v0",
         local_cache_dir=f"{prep_temp_dir}/test_wandb",
         only_unique_pairs=True,
+        old_config_only_local_cutoff=True,
     )
 
     assert os.path.isfile(f"{prep_temp_dir}/test_wandb/model.ckpt")

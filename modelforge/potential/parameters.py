@@ -166,7 +166,7 @@ class ElectrostaticPotential(ParametersBase):
     electrostatic_strategy: str = "coulomb"
     # note maximum interaction radius should be passed as a string with units or unit.Quantity;
     # it will be converted to float in appropriate unit system
-    maximum_interaction_radius: float = 0.5
+    maximum_interaction_radius: float
 
     converted_units = field_validator(
         "maximum_interaction_radius",
@@ -174,19 +174,50 @@ class ElectrostaticPotential(ParametersBase):
     )(_convert_str_or_unit_to_unit_length)
 
 
+class EnergyContributions(CaseInsensitiveEnum):
+    per_system_electrostatic_energy = "per_system_electrostatic_energy"
+    per_system_zbl_energy = "per_system_zbl_energy"
+    per_system_vdw_energy = "per_system_vdw_energy"
+
+
+class SumPerSystemEnergy(ParametersBase):
+    contributions: List[EnergyContributions]
+
+
 class ZBLPotential(ParametersBase):
-    calculate_zbl_potential: bool = False
+    calculate_zbl: bool = True
+
+
+class DispersionPotential(ParametersBase):
+    # note maximum interaction radius should be passed as a string with units or unit.Quantity;
+    # it will be converted to float in appropriate unit system
+    maximum_interaction_radius: float
+
+    converted_units = field_validator(
+        "maximum_interaction_radius",
+        mode="before",
+    )(_convert_str_or_unit_to_unit_length)
+
+
+class PropertiesToProcess(CaseInsensitiveEnum):
+    per_atom_energy = "per_atom_energy"
+    per_atom_charge = "per_atom_charge"
+    per_system_electrostatic_energy = "per_system_electrostatic_energy"
+    per_system_zbl_energy = "per_system_zbl_energy"
+    per_system_vdw_energy = "per_system_vdw_energy"
+    sum_per_system_energy = "sum_per_system_energy"
+    general_postprocessing_operation = "general_postprocessing_operation"
 
 
 class PostProcessingParameter(ParametersBase):
-    properties_to_process: List[str]
-    per_atom_energy: PerAtomEnergy = PerAtomEnergy()
-    per_atom_charge: PerAtomCharge = PerAtomCharge()
-    electrostatic_potential: ElectrostaticPotential = ElectrostaticPotential()
-    zbl_potential: ZBLPotential = ZBLPotential()
-    general_postprocessing_operation: GeneralPostProcessingOperation = (
-        GeneralPostProcessingOperation()
-    )
+    properties_to_process: List[PropertiesToProcess]
+    per_atom_energy: Optional[PerAtomEnergy] = None
+    per_atom_charge: Optional[PerAtomCharge] = None
+    per_system_electrostatic_energy: Optional[ElectrostaticPotential] = None
+    per_system_zbl_energy: Optional[ZBLPotential] = None
+    per_system_vdw_energy: Optional[DispersionPotential] = None
+    sum_per_system_energy: Optional[SumPerSystemEnergy] = None
+    general_postprocessing_operation: Optional[GeneralPostProcessingOperation] = None
 
 
 class AimNet2Parameters(ParametersBase):

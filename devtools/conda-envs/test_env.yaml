@@ -27,6 +27,7 @@ dependencies:
   - graphviz
   - wandb>=0.18.5
   - pytorch
+  - tad-dftd3
 
   # Testing
   - pytest>=2.1

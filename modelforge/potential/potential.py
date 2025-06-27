@@ -22,7 +22,7 @@ import torch
 from loguru import logger as log
 from openff.units import unit
 from modelforge.utils.units import GlobalUnitSystem
-from modelforge.potential.neighbors import PairlistData
+from modelforge.potential.neighbors import PairlistData, PairlistOutputs
 
 from modelforge.dataset.dataset import DatasetParameters
 from modelforge.utils.prop import NNPInput
@@ -107,6 +107,8 @@ from modelforge.potential.processing import (
     PerAtomCharge,
     PerAtomEnergy,
     ZBLPotential,
+    DispersionPotential,
+    SumPerSystemEnergy,
 )
 
 
@@ -114,9 +116,11 @@ class PostProcessing(torch.nn.Module):
     _SUPPORTED_PROPERTIES = [
         "per_atom_energy",
         "per_atom_charge",
-        "electrostatic_potential",
-        "zbl_potential",
+        "per_system_electrostatic_energy",
+        "per_system_zbl_energy",
+        "per_system_vdw_energy",
         "general_postprocessing_operation",
+        "sum_per_system_energy",
     ]
 
     def __init__(
@@ -144,16 +148,15 @@ class PostProcessing(torch.nn.Module):
         self.dataset_statistic = dataset_statistic
         properties_to_process = postprocessing_parameter["properties_to_process"]
 
-        if "per_atom_energy" in properties_to_process:
-            self.registered_chained_operations["per_atom_energy"] = PerAtomEnergy(
-                postprocessing_parameter["per_atom_energy"],
-                dataset_statistic["training_dataset_statistics"],
-            )
-            self._registered_properties.append("per_atom_energy")
-            assert all(
-                prop in PostProcessing._SUPPORTED_PROPERTIES
-                for prop in self._registered_properties
-            )
+        # note, we need to post process certain properties in a specific order
+        # for example, if we want to calculate the electrostatic potential, this will depend upon
+        # the per_atom_charge, and thus we should perform per_atom_charge operations first.
+
+        # currently, per_atom_energy needs to go last, as it has a functionality to add
+        # the electrostatic energy to the per_system_energy that results from that operations
+        # however, it may be better to create a general energy summation that takes in a list of
+        # the energies to sum (all would be per_system energies), allowing the other energy operations to
+        # be performed in any order.
 
         if "per_atom_charge" in properties_to_process:
             self.registered_chained_operations["per_atom_charge"] = PerAtomCharge(
@@ -165,22 +168,22 @@ class PostProcessing(torch.nn.Module):
                 for prop in self._registered_properties
             )
 
-        if "electrostatic_potential" in properties_to_process:
+        if "per_system_electrostatic_energy" in properties_to_process:
             if (
-                postprocessing_parameter["electrostatic_potential"][
+                postprocessing_parameter["per_system_electrostatic_energy"][
                     "electrostatic_strategy"
                 ]
                 == "coulomb"
             ):
-                self.registered_chained_operations["electrostatic_potential"] = (
-                    CoulombPotential(
-                        postprocessing_parameter["electrostatic_potential"][
-                            "maximum_interaction_radius"
-                        ],
-                    )
+                self.registered_chained_operations[
+                    "per_system_electrostatic_energy"
+                ] = CoulombPotential(
+                    postprocessing_parameter["per_system_electrostatic_energy"][
+                        "maximum_interaction_radius"
+                    ],
                 )
 
-                self._registered_properties.append("electrostatic_potential")
+                self._registered_properties.append("per_system_electrostatic_energy")
                 assert all(
                     prop in PostProcessing._SUPPORTED_PROPERTIES
                     for prop in self._registered_properties
@@ -189,13 +192,57 @@ class PostProcessing(torch.nn.Module):
                 raise NotImplementedError(
                     "Only Coulomb potential is supported for electrostatics."
                 )
-        if "zbl_potential" in properties_to_process:
-            self.registered_chained_operations["zbl_potential"] = ZBLPotential()
-            self._registered_properties.append("zbl_potential")
+        if "per_system_zbl_energy" in properties_to_process:
+
+            self.registered_chained_operations["per_system_zbl_energy"] = ZBLPotential()
+            self._registered_properties.append("per_system_zbl_energy")
             assert all(
                 prop in PostProcessing._SUPPORTED_PROPERTIES
                 for prop in self._registered_properties
             )
+        if "per_system_vdw_energy" in properties_to_process:
+
+            self.registered_chained_operations["per_system_vdw_energy"] = (
+                DispersionPotential(
+                    cutoff=postprocessing_parameter["per_system_vdw_energy"][
+                        "maximum_interaction_radius"
+                    ]
+                )
+            )
+            self._registered_properties.append("per_system_vdw_energy")
+            assert all(
+                prop in PostProcessing._SUPPORTED_PROPERTIES
+                for prop in self._registered_properties
+            )
+        if "per_atom_energy" in properties_to_process:
+            self.registered_chained_operations["per_atom_energy"] = PerAtomEnergy(
+                postprocessing_parameter["per_atom_energy"],
+                dataset_statistic["training_dataset_statistics"],
+            )
+            self._registered_properties.append("per_atom_energy")
+            assert all(
+                prop in PostProcessing._SUPPORTED_PROPERTIES
+                for prop in self._registered_properties
+            )
+
+        if "sum_per_system_energy" in properties_to_process:
+            contributions = postprocessing_parameter["sum_per_system_energy"][
+                "contributions"
+            ]
+            # if an empty list is provided, we do not register the operation
+            if len(contributions) > 0:
+                self.registered_chained_operations["sum_per_system_energy"] = (
+                    SumPerSystemEnergy(
+                        contributions=postprocessing_parameter["sum_per_system_energy"][
+                            "contributions"
+                        ]
+                    )
+                )
+                self._registered_properties.append("sum_per_system_energy")
+                assert all(
+                    prop in PostProcessing._SUPPORTED_PROPERTIES
+                    for prop in self._registered_properties
+                )
 
     def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
@@ -216,7 +263,6 @@ class PostProcessing(torch.nn.Module):
         for name, module in self.registered_chained_operations.items():
             module_output = module.forward(data)
             processed_data.update(module_output)
-
         return processed_data
 
 
@@ -298,8 +344,51 @@ class Potential(torch.nn.Module):
         core_output["per_system_total_charge"] = input_data.per_system_total_charge
         return core_output
 
+    def _add_positions(
+        self, core_output: Dict[str, torch.Tensor], positions: torch.Tensor
+    ):
+        """
+        Add the positions to the core output.
+
+        Parameters
+        ----------
+        core_output : Dict[str, torch.Tensor]
+            The core network output.
+        positions : torch.Tensor
+            The tensor containing atomic positions.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            The core network output with the positions added.
+        """
+        # Add the positions to the core output
+        core_output["positions"] = positions
+        return core_output
+
+    def _remove_positions(self, core_output: Dict[str, torch.Tensor]):
+        """
+        Remove the positions from the core output.
+
+        Parameters
+        ----------
+        core_output : Dict[str, torch.Tensor]
+            The core network output.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            The core network output with the positions removed.
+        """
+        # Remove the positions from the core output
+        if "positions" in core_output:
+            del core_output["positions"]
+        return core_output
+
     def _add_pairlist(
-        self, core_output: Dict[str, torch.Tensor], pairlist_output: PairlistData
+        self,
+        core_output: Dict[str, torch.Tensor],
+        pairlist_output: PairlistOutputs,
     ):
         """
         Add the pairlist to the core output.
@@ -308,21 +397,50 @@ class Potential(torch.nn.Module):
         ----------
         core_output : Dict[str, torch.Tensor]
             The core network output.
-        pairlist_output : PairlistData
+        pairlist_output : Dict[str, PairlistData]
             The pairlist output from the neighborlist.
-
+            The keys in the dictionary correspond to different cutoffs: local_cutoff, vdw_cutoff, electrostatic_cutoff
+            Only local_cutoff is guaranteed to be present, while vdw_cutoff and electrostatic_cutoff are optional
+            depending on the postprocessing configuration.
         Returns
         -------
         Dict[str, torch.Tensor]
             The core network output with the pairlist added.
         """
         # Add the pairlist to the core output
-        core_output["pair_indices"] = pairlist_output.pair_indices
-        core_output["d_ij"] = pairlist_output.d_ij
-        core_output["r_ij"] = pairlist_output.r_ij
+        # looping over all the cutoffs that have been defined in the pairlist_output
+        core_output["local_pair_indices"] = pairlist_output.local_cutoff.pair_indices
+        core_output["local_d_ij"] = pairlist_output.local_cutoff.d_ij
+        core_output["local_r_ij"] = pairlist_output.local_cutoff.r_ij
+
+        # this is commented out for now, as the vdw energy is calculated via
+        # DFTD3 which handles pair calculations internally
+        # If we have other vdw implementations, we can uncomment this
+        # if "per_system_vdw_energy" in self.postprocessing._registered_properties:
+        #     core_output["vdw_pair_indices"] = pairlist_output.vdw_cutoff.pair_indices
+        #     core_output["vdw_d_ij"] = pairlist_output.vdw_cutoff.d_ij
+        #     core_output["vdw_r_ij"] = pairlist_output.vdw_cutoff.r_ij
+
+        if (
+            "per_system_electrostatic_energy"
+            in self.postprocessing._registered_properties
+        ):
+            core_output["electrostatic_pair_indices"] = (
+                pairlist_output.electrostatic_cutoff.pair_indices
+            )
+            core_output["electrostatic_d_ij"] = (
+                pairlist_output.electrostatic_cutoff.d_ij
+            )
+            core_output["electrostatic_r_ij]"] = (
+                pairlist_output.electrostatic_cutoff.r_ij
+            )
+
         return core_output
 
-    def _remove_pairlist(self, processed_output: Dict[str, torch.Tensor]):
+    def _remove_pairlist(
+        self,
+        processed_output: Dict[str, torch.Tensor],
+    ):
         """
         Remove the pairlist from the core output.
 
@@ -330,16 +448,25 @@ class Potential(torch.nn.Module):
         ----------
         processed_output : Dict[str, torch.Tensor]
             The postprocessed output.
-
+        pairlist_output : Dict[str, PairlistData]
+            The pairlist output from the neighborlist.
+            The keys in the dictionary correspond to different cutoffs: local_cutoff, vdw_cutoff, electrostatic_cutoff
+            Only local_cutoff is guaranteed to be present, while vdw_cutoff and electrostatic_cutoff are optional
+            depending on the postprocessing configuration.
         Returns
         -------
         Dict[str, torch.Tensor]
             The postprocessed output with the pairlist removed.
         """
         # Remove the pairlist from the core output
-        del processed_output["pair_indices"]
-        del processed_output["d_ij"]
-        del processed_output["r_ij"]
+        prefixes = ["local", "vdw", "electrostatic"]
+        suffixes = ["pair_indices", "d_ij", "r_ij"]
+        for prefix in prefixes:
+            for suffix in suffixes:
+                key = f"{prefix}_{suffix}"
+                if key in processed_output:
+                    del processed_output[key]
+
         return processed_output
 
     @torch.jit.export
@@ -373,7 +500,7 @@ class Potential(torch.nn.Module):
         box_vectors: torch.Tensor,
         is_periodic: torch.Tensor,
     ) -> Dict[str, torch.Tensor]:
-        # Step 1: Compute pair list and distances using Neighborlist
+
         input_data = NNPInput(
             atomic_numbers=atomic_numbers,
             positions=positions,
@@ -386,18 +513,7 @@ class Potential(torch.nn.Module):
             is_periodic=is_periodic,
         )
 
-        pairlist_output = self.neighborlist.forward(input_data)
-
-        # Step 2: Compute the core network output
-        core_output = self.core_network.forward(input_data, pairlist_output)
-
-        # Step 3: Apply postprocessing using PostProcessing
-        core_output = self._add_total_charge(core_output, input_data)
-        core_output = self._add_pairlist(core_output, pairlist_output)
-
-        processed_output = self.postprocessing.forward(core_output)
-        processed_output = self._remove_pairlist(processed_output)
-        return processed_output
+        return self.forward(input_data)
 
     def forward(self, input_data: NNPInput) -> Dict[str, torch.Tensor]:
         """
@@ -417,14 +533,21 @@ class Potential(torch.nn.Module):
         pairlist_output = self.neighborlist.forward(input_data)
 
         # Step 2: Compute the core network output
-        core_output = self.core_network.forward(input_data, pairlist_output)
+        core_output = self.core_network.forward(
+            input_data, pairlist_output.local_cutoff
+        )
 
         # Step 3: Apply postprocessing using PostProcessing
         core_output = self._add_total_charge(core_output, input_data)
         core_output = self._add_pairlist(core_output, pairlist_output)
 
+        if "per_system_vdw_energy" in self.postprocessing._registered_properties:
+            core_output = self._add_positions(core_output, input_data.positions)
+
         processed_output = self.postprocessing.forward(core_output)
         processed_output = self._remove_pairlist(processed_output)
+        if "per_system_vdw_energy" in self.postprocessing._registered_properties:
+            processed_output = self._remove_positions(processed_output)
         return processed_output
 
     def compute_core_network_output(
@@ -447,7 +570,7 @@ class Potential(torch.nn.Module):
         pairlist_output = self.neighborlist.forward(input_data)
 
         # Step 2: Compute the core network output
-        return self.core_network.forward(input_data, pairlist_output)
+        return self.core_network.forward(input_data, pairlist_output.local_cutoff)
 
     def load_state_dict(
         self,
@@ -571,12 +694,49 @@ def setup_potential(
         postprocessing_parameter=potential_parameter.postprocessing_parameter.model_dump(),
         dataset_statistic=remove_units_from_dataset_statistics(dataset_statistic),
     )
+    # we will define the possible cutoffs.
+    # - local_cutoff is the maximum interaction radius for the NNP core network (i.e., the local interaction radius)
+    # this is always required.
+    # - vdw_cutoff is the cutoff for the van der Waals interactions, which is only required in the vdw interactions are
+    # included as a post processing step.
+    # - electrostatic_cutoff is the cutoff for the electrostatic interactions, which is only required in the electrostatic
+    # interactions are included as a post processing step.
+    #
+    # note zbl potential does not require a unique cutoff definition; it will use local cutoff and then calculates
+    # the zbl potential based on the radii of the two atoms in the pair.
+
+    local_cutoff = potential_parameter.core_parameter.maximum_interaction_radius
+    electrostatic_cutoff = -1
+    vdw_cutoff = -1
+    use_vdw_cutoff = False
+    use_electrostatic_cutoff = False
+
+    if "per_system_electrostatic_energy" in postprocessing._registered_properties:
+        electrostatic_cutoff = (
+            potential_parameter.postprocessing_parameter.per_system_electrostatic_energy.maximum_interaction_radius
+        )
+        use_electrostatic_cutoff = True
+
+    # note vdw isn't implemented yet, but we can add it later
+    if "per_system_vdw_energy" in postprocessing._registered_properties:
+        vdw_cutoff = (
+            potential_parameter.postprocessing_parameter.per_system_vdw_energy.maximum_interaction_radius
+        )
+        use_vdw_cutoff = True
+    log.debug(
+        f"Cutoffs: local_cutoff={local_cutoff}, vdw_cutoff={vdw_cutoff}, electrostatic_cutoff={electrostatic_cutoff}"
+    )
     if use_training_mode_neighborlist:
         from modelforge.potential.neighbors import NeighborListForTraining
 
+        # note vdw_cutoff is not being used as this is handled internally by the DFTD3 implementation
         neighborlist = NeighborListForTraining(
-            cutoff=potential_parameter.core_parameter.maximum_interaction_radius,
+            local_cutoff=local_cutoff,
+            # vdw_cutoff=vdw_cutoff,
+            electrostatic_cutoff=electrostatic_cutoff,
             only_unique_pairs=only_unique_pairs,
+            # use_vdw_cutoff=use_vdw_cutoff,
+            use_electrostatic_cutoff=use_electrostatic_cutoff,
         )
     else:
         from modelforge.potential.neighbors import OrthogonalDisplacementFunction
@@ -585,10 +745,15 @@ def setup_potential(
 
         from modelforge.potential.neighbors import NeighborlistForInference
 
+        # note vdw_cutoff is not being used as this is handled internally by the DFTD3 implementation
         neighborlist = NeighborlistForInference(
-            cutoff=potential_parameter.core_parameter.maximum_interaction_radius,
+            local_cutoff=local_cutoff,
+            # vdw_cutoff=vdw_cutoff,
+            electrostatic_cutoff=electrostatic_cutoff,
             displacement_function=displacement_function,
             only_unique_pairs=only_unique_pairs,
+            # use_vdw_cutoff=use_vdw_cutoff,
+            use_electrostatic_cutoff=use_electrostatic_cutoff,
         )
         # we can set the strategy here before passing this to the Potential
         # this can still be modified later using Potential.set_neighborlist_strategy before it has bit JITTED
@@ -711,6 +876,7 @@ class NeuralNetworkPotentialFactory:
         version: str,
         local_cache_dir: str = "./",
         only_unique_pairs: Optional[bool] = None,
+        old_config_only_local_cutoff: Optional[bool] = False,
     ) -> Union[Potential, JAXModel]:
         """
         Load a neural network potential from a Weights & Biases run.
@@ -726,7 +892,9 @@ class NeuralNetworkPotentialFactory:
         only_unique_pairs : Optional[bool], optional
             For models trained prior to PR #299 in modelforge, this parameter is required to be able to read the model.
             This value should be True for the ANI models, False for most other models.
-
+        long_config_only_local_cutoff : Optional[bool], optional
+            For older models, this parameter is required to be able to read the model. Replaces neighborlist.cutoff with neighborlist.local_cutoff
+            and other associated parameters for vdw and electrostatic cutoffs.
         Returns
         -------
         Union[Potential, JAXModel]
@@ -740,7 +908,9 @@ class NeuralNetworkPotentialFactory:
         artifact_dir = artifact.download(root=local_cache_dir)
         checkpoint_file = f"{artifact_dir}/model.ckpt"
         potential = load_inference_model_from_checkpoint(
-            checkpoint_file, only_unique_pairs
+            checkpoint_path=checkpoint_file,
+            only_unique_pairs=only_unique_pairs,
+            old_config_only_local_cutoff=old_config_only_local_cutoff,
         )
 
         return potential
@@ -925,6 +1095,7 @@ class PyTorch2JAXConverter:
 
 def load_inference_model_from_checkpoint(
     checkpoint_path: str,
+    old_config_only_local_cutoff: Optional[bool] = False,
     only_unique_pairs: Optional[bool] = None,
 ) -> Union[Potential, JAXModel]:
     """
@@ -935,10 +1106,14 @@ def load_inference_model_from_checkpoint(
     ----------
     checkpoint_path : str
         The path to the checkpoint file.
+    old_config_only_local_cutoff: Optional[bool], optional
+        Old checkpoint files may have been only saved with neighborlist.cutoff .
+        this will update the checkpoint to use the new neighborlist.local_cutoff, neighborlist.vdw_cutoff, and neighborlist.electrostatic_cutoff
+        keys and set use_vdw_cutoff and use_electrostatic_cutoff to False, as required in the newly revised neighborlist module.
     only_unique_pairs : Optional[bool], optional
         If defined, this will set the only_unique_pairs key in the neighborlist module. This is only needed
         for models trained prior to PR #299 in modelforge. (default is None).
-        In the case of ANI models, this should be set to True. Typically False for other mdoels
+        In the case of ANI models, this should be set to True. Typically False for other models
     """
 
     # Load the checkpoint
@@ -959,9 +1134,28 @@ def load_inference_model_from_checkpoint(
         potential_seed=potential_seed,
     )
     if only_unique_pairs is not None:
-        checkpoint["state_dict"]["neighborlist.only_unique_pairs"] = torch.Tensor(
-            [only_unique_pairs]
+        checkpoint["state_dict"]["potential.neighborlist.only_unique_pairs"] = (
+            torch.Tensor([only_unique_pairs])
         )
+    if old_config_only_local_cutoff:
+        cutoff = checkpoint["state_dict"].get("potential.neighborlist.cutoff")
+        # remove the old key
+        del checkpoint["state_dict"]["potential.neighborlist.cutoff"]
+
+        checkpoint["state_dict"]["potential.neighborlist.local_cutoff"] = cutoff
+        checkpoint["state_dict"]["potential.neighborlist.vdw_cutoff"] = torch.Tensor(
+            [-1.0]
+        )
+        checkpoint["state_dict"]["potential.neighborlist.electrostatic_cutoff"] = (
+            torch.Tensor([-1.0])
+        )
+        checkpoint["state_dict"]["potential.neighborlist.use_vdw_cutoff"] = (
+            torch.Tensor([False])
+        )
+        checkpoint["state_dict"]["potential.neighborlist.use_electrostatic_cutoff"] = (
+            torch.Tensor([False])
+        )
+        checkpoint["state_dict"]["potential.neighborlist.largest_cutoff"] = cutoff
 
     # Load the state dict into the model
     potential.load_state_dict(checkpoint["state_dict"])

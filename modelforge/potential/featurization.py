@@ -282,10 +282,10 @@ class FeaturizeInput(nn.Module):
                 # #The added features is the total charge (which will be
                 # transformed to a per-atom property)
                 self.append_to_embedding_tensor.append(
-                    AddPerAtomValue("partial_charge")
+                    AddPerAtomValue("per_atom_partial_charge")
                 )
                 self.increase_dim_of_embedded_tensor += 1
-                self.append_to_embedding_tensor("partial_charge")
+                self.append_to_embedding_tensor("per_atom_partial_charge")
 
             else:
                 raise RuntimeError(
@@ -320,6 +320,7 @@ class FeaturizeInput(nn.Module):
         categorial_embedding = self.atomic_number_embedding(atomic_numbers)
 
         if torch.isnan(categorial_embedding).any():
+            print(f"categorial_embedding: {categorial_embedding}")
             raise ValueError("NaN values detected in categorial_embedding.")
 
         for additional_embedding in self.embeddings:

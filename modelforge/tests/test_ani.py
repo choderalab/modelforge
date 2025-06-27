@@ -3,7 +3,7 @@ from modelforge.tests.helper_functions import setup_potential_for_test
 from modelforge.utils.io import get_path_string
 from modelforge.tests import data
 
-file_path = get_path_string(data) + f"/torchani_parameters2.state"
+file_path = get_path_string(data) + f"/torchani_parameters3.state"
 
 
 @pytest.fixture(scope="session")
@@ -350,13 +350,13 @@ def test_dimer_representation():
 
     # set up neighbor list
     nlist = NeighborListForTraining(
-        cutoff=0.51,
+        local_cutoff=0.51,
         only_unique_pairs=True,
     )
 
     nlist_output = nlist.forward(dimer_system)
 
     representation_output = representation(
-        dimer_system, nlist_output, torch.tensor([6, 6])
+        dimer_system, nlist_output.local_cutoff, torch.tensor([6, 6])
     )
     assert representation_output.aevs.shape == (2, 1008)

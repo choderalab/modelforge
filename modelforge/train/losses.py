@@ -11,13 +11,14 @@ import torch
 from torch import nn
 from loguru import logger as log
 
-from modelforge.dataset.dataset import NNPInput
+from modelforge.utils.prop import BatchData
 
 __all__ = [
     "Error",
     "ForceSquaredError",
     "EnergySquaredError",
     "TotalChargeError",
+    "PerAtomChargeError",
     "DipoleMomentError",
     "Loss",
     "LossFactory",
@@ -102,7 +103,7 @@ class ForceSquaredError(Error):
         self,
         per_atom_prediction: torch.Tensor,
         per_atom_reference: torch.Tensor,
-        batch: NNPInput,
+        batch: BatchData,
     ) -> torch.Tensor:
         """
         Computes the per-atom error and aggregates it to per-system mean squared error.
@@ -113,7 +114,7 @@ class ForceSquaredError(Error):
             The predicted values.
         per_atom_reference : torch.Tensor
             The reference values provided by the dataset.
-        batch : NNPInput
+        batch : BatchData
             The batch data containing metadata and input information.
 
         Returns
@@ -166,7 +167,7 @@ class EnergySquaredError(Error):
         self,
         per_system_prediction: torch.Tensor,
         per_system_reference: torch.Tensor,
-        batch: NNPInput,
+        batch: BatchData,
     ) -> torch.Tensor:
         """
         Computes the per-system mean squared error.
@@ -177,7 +178,7 @@ class EnergySquaredError(Error):
             The predicted values.
         per_system_reference : torch.Tensor
             The true values.
-        batch : NNPInput
+        batch : BatchData
             The batch data containing metadata and input information.
 
         Returns
@@ -197,6 +198,74 @@ class EnergySquaredError(Error):
         )
 
         return per_system_square_error_scaled
+
+
+class PerAtomChargeError(Error):
+    """
+    Calculates the error for per-atom charge.
+    """
+
+    """
+        Calculates the per-atom error and aggregates it to per-system mean squared error.
+        """
+
+    def calculate_error(
+        self,
+        per_atom_prediction: torch.Tensor,
+        per_atom_reference: torch.Tensor,
+    ) -> torch.Tensor:
+        """Computes the per-atom squared error."""
+        return self.calculate_squared_error(per_atom_prediction, per_atom_reference)
+
+    def forward(
+        self,
+        per_atom_prediction: torch.Tensor,
+        per_atom_reference: torch.Tensor,
+        batch: BatchData,
+    ) -> torch.Tensor:
+        """
+        Computes the per-atom error and aggregates it to per-system mean squared error.
+
+        Parameters
+        ----------
+        per_atom_prediction : torch.Tensor
+            The predicted values.
+        per_atom_reference : torch.Tensor
+            The reference values provided by the dataset.
+        batch : BatchData
+            The batch data containing metadata and input information.
+
+        Returns
+        -------
+        torch.Tensor
+            The aggregated per-system error.
+        """
+
+        # Compute per-atom squared error
+        per_atom_squared_error = self.calculate_error(
+            per_atom_prediction, per_atom_reference
+        )
+
+        # Initialize per-system squared error tensor
+        per_system_squared_error = torch.zeros_like(
+            batch.metadata.per_system_energy, dtype=per_atom_squared_error.dtype
+        )
+
+        # Aggregate error per system
+        per_system_squared_error = per_system_squared_error.scatter_add(
+            0,
+            batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
+            per_atom_squared_error,
+        )
+
+        # Scale error by number of atoms
+        per_system_square_error_scaled = self.scale_by_number_of_atoms(
+            per_system_squared_error,
+            batch.metadata.atomic_subsystem_counts,
+            prefactor=1,
+        )
+
+        return per_system_square_error_scaled.contiguous()
 
 
 class TotalChargeError(Error):
@@ -219,7 +288,7 @@ class TotalChargeError(Error):
         self,
         total_charge_predict: torch.Tensor,
         total_charge_true: torch.Tensor,
-        batch: NNPInput,
+        batch: BatchData,
     ) -> torch.Tensor:
         """
         Computes the error for total charge.
@@ -230,7 +299,7 @@ class TotalChargeError(Error):
             The predicted total charges.
         total_charge_true : torch.Tensor
             The true total charges.
-        batch : NNPInput
+        batch : BatchData
             The batch data.
 
         Returns
@@ -264,7 +333,7 @@ class DipoleMomentError(Error):
         self,
         dipole_predict: torch.Tensor,
         dipole_true: torch.Tensor,
-        batch: NNPInput,
+        batch: BatchData,
     ) -> torch.Tensor:
         """
         Computes the error for dipole moment.
@@ -275,7 +344,7 @@ class DipoleMomentError(Error):
             The predicted dipole moments.
         dipole_true : torch.Tensor
             The true dipole moments.
-        batch : NNPInput
+        batch : BatchData
             The batch data.
 
         Returns
@@ -295,6 +364,7 @@ class Loss(nn.Module):
         "per_atom_force",
         "per_system_total_charge",
         "per_system_dipole_moment",
+        "per_atom_charge",
     ]
 
     def __init__(
@@ -349,6 +419,8 @@ class Loss(nn.Module):
                 self.loss_functions[prop] = TotalChargeError()
             elif prop == "per_system_dipole_moment":
                 self.loss_functions[prop] = DipoleMomentError()
+            elif prop == "per_atom_charge":
+                self.loss_functions[prop] = PerAtomChargeError()
             else:
                 raise NotImplementedError(f"Loss type {prop} not implemented.")
 
@@ -357,7 +429,7 @@ class Loss(nn.Module):
     def forward(
         self,
         predict_target: Dict[str, torch.Tensor],
-        batch: NNPInput,
+        batch: BatchData,
         epoch_idx: int,
     ) -> Dict[str, torch.Tensor]:
         """
@@ -367,7 +439,7 @@ class Loss(nn.Module):
         ----------
         predict_target : Dict[str, torch.Tensor]
             Dictionary containing predicted and true values for energy and forces.
-        batch : NNPInput
+        batch : BatchData
             The batch data containing metadata and input information.
 
         Returns

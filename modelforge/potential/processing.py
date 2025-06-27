@@ -3,10 +3,11 @@ This module contains utility functions and classes for processing the output of 
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, Iterator, Union
+from typing import Dict, Iterator, Union, List
 
 import torch
 from openff.units import unit
+from modelforge.utils.units import GlobalUnitSystem, chem_context
 
 from modelforge.dataset.utils import _ATOMIC_NUMBER_TO_ELEMENT
 
@@ -319,6 +320,76 @@ def default_charge_conservation(
     return per_atom_charge_corrected
 
 
+class SumPerSystemEnergy(torch.nn.Module):
+    def __init__(
+        self,
+        contributions: List[str],
+    ):
+        """
+        Module to specify additional energy contributions to be summed into the per_system_energy.
+
+
+        """
+        super().__init__()
+        self.contributions = contributions
+
+    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        """
+        Forward pass to sum the specified energy contributions.
+
+        If per_system_energy is computed (i.e., from per_atom post processing),
+        these contributions are summed into the per_system_energy.
+
+        If per_system_energy is not computed, the contributions are summed
+        and added to the data dictionary under the key "per_system_energy".
+
+        Note, if per_system_energy is already present in the data dictionary,
+        and it is listed in the contributions, it will not be double counted.
+        Parameters
+        ----------
+        data : Dict[str, torch.Tensor]
+            Input data dictionary containing the energy terms to be summed.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            Updated data dictionary with the summed energy under the specified output key.
+        """
+        # Sum the specified contributions
+
+        # make sure that we have the things in the data dictionary
+        for contribution in self.contributions:
+            if contribution not in data:
+                raise KeyError(f"Energy component '{contribution}' not found in data.")
+
+        # if per_system_energy is in the contributions list, remove it because we don't want it to be double counted
+        # This seems better than raising an error, since it could be a common user level mistake
+        if "per_system_energy" in self.contributions:
+            self.contributions.remove("per_system_energy")
+        if "per_system_energy" not in data:
+            raise KeyError(
+                "'per_system_energy' not found in data. It should be computed before summing contributions."
+            )
+
+        # create a zero tensor to hold the sum contributions
+        summed_energy = torch.zeros_like(
+            data["per_system_energy"],
+            dtype=data["per_system_energy"].dtype,
+            device=data["per_system_energy"].device,
+        )
+
+        for contribution in self.contributions:
+            summed_energy = summed_energy + data[contribution]
+
+        # add the summed energy to the per_system_energy
+        if "per_system_energy" not in data:
+            data["per_system_energy"] = summed_energy
+        else:
+            data["per_system_energy"] = summed_energy + data["per_system_energy"]
+
+        return data
+
+
 class ChargeConservation(torch.nn.Module):
     def __init__(self, method="default"):
         """
@@ -409,7 +480,9 @@ class PerAtomEnergy(torch.nn.Module):
         if per_atom_energy.get("from_atom_to_system_reduction"):
             reduction = FromAtomToMoleculeReduction()
 
-        self.reduction = reduction
+            self.reduction = reduction
+        else:
+            self.reduction = None
 
     def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         per_atom_property, indices = (
@@ -417,10 +490,13 @@ class PerAtomEnergy(torch.nn.Module):
             data["atomic_subsystem_indices"],
         )
         scaled_values = self.scale(per_atom_property)
-        per_system_energy = self.reduction(indices, scaled_values)
 
-        data["per_system_energy"] = per_system_energy
-        data["per_atom_energy"] = data["per_atom_energy"].detach()
+        # if we have a reduction operation, we apply it
+        if self.reduction is not None:
+            per_system_energy = self.reduction(indices, scaled_values)
+
+            data["per_system_energy"] = per_system_energy
+            data["per_atom_energy"] = data["per_atom_energy"].detach()
 
         return data
 
@@ -557,11 +633,17 @@ class CoulombPotential(torch.nn.Module):
             The input data dictionary with an additional key 'long_range_electrostatic_energy'
             containing the computed long-range electrostatic energy.
         """
-        # todo:  need to add back in the multiple-cutoff neighborlist since we typically
-        # want to do a longer range cutoff for electrostatics
-        # this will ultimately just take an extra key for accessing the appropriate pair indices
-        idx_i, idx_j = data["pair_indices"]
 
+        # Here we will use the pairwise properties from the data dictionary
+        # Specifically, we will access the properties in the 'electrostatic_cutoff' key
+        # as these were computed based upon the maximum_interaction_radius specified in the toml file
+        # for the Coulombic potential.
+
+        # All pair_indices are within the cutoff distance so we do not need to do any further checking.
+        # with the cutoff
+
+        idx_i = data["electrostatic_pair_indices"][0]
+        idx_j = data["electrostatic_pair_indices"][1]
         # only unique paris
         unique_pairs_mask = idx_i < idx_j
         idx_i = idx_i[unique_pairs_mask]
@@ -575,7 +657,7 @@ class CoulombPotential(torch.nn.Module):
         system_indices_of_pair = system_indices[idx_i]
 
         # mask pairwise properties
-        pairwise_distances = data["d_ij"][unique_pairs_mask]
+        pairwise_distances = data["electrostatic_d_ij"][unique_pairs_mask]
         # The per-atom charge tensor is expected to be of shape (N, 1) where N is the number of atoms
         # we will squeeze it to make it easier to work with
         per_atom_charge = data["per_atom_charge"].squeeze()
@@ -603,7 +685,7 @@ class CoulombPotential(torch.nn.Module):
         ) * chi_r.squeeze()
 
         # sum up the energy for pairs in the same molecule
-        data["electrostatic_energy"] = (
+        data["per_system_electrostatic_energy"] = (
             electrostatic_energy.scatter_add_(
                 0, system_indices_of_pair.long(), coulomb_interactions
             )
@@ -798,8 +880,11 @@ class ZBLPotential(torch.nn.Module):
 
     def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
 
-        # first let us extract all the releveant data from the data dictionary
-        idx_i, idx_j = data["pair_indices"]
+        # first let us extract all the relevant data from the data dictionary
+        # Note; we will use the "local_cutoff" key to access the pairwise properties, as this should be the
+        # smallest cutoff used in the mdoel and available in all models
+        # we will remove pairs based on atomic radii later in the code.
+        idx_i, idx_j = data["local_pair_indices"]
 
         # let us ensure we only consider  unique pairs
         # this avoids having to know if the neighbor list used unique or non unique pairs
@@ -808,7 +893,7 @@ class ZBLPotential(torch.nn.Module):
         idx_j = idx_j[unique_pairs_mask]
 
         # mask pairwise properties
-        pairwise_distances = data["d_ij"][unique_pairs_mask]
+        pairwise_distances = data["local_d_ij"][unique_pairs_mask]
 
         atomic_numbers = data["atomic_numbers"]
 
@@ -868,10 +953,112 @@ class ZBLPotential(torch.nn.Module):
         )
 
         # we need to scatter the energy to the correct molecules using the system_indices_of_pair
-        data["zbl_energy"] = (
+        data["per_system_zbl_energy"] = (
             torch.zeros_like(zbl_energy)
             .scatter_add_(0, system_indices_of_pair.long().unsqueeze(1), energy)
             .detach()
+        )
+
+        return data
+
+
+class DispersionPotential(torch.nn.Module):
+    """
+    Computes the dispersion energy using DFTD3 method.
+
+    This uses the tad-dftd3 library, which is a PyTorch implementation of the DFT-D3 method
+
+    https://github.com/dftd3/tad-dftd3
+    J. Chem. Phys., 2024, 161, 062501. https://doi.org/10.1063/5.0216715
+
+    Fitting parameters for the dispersion are sourced from the simple-dftd3 library,
+    which provides a set of parameters for various functionals.
+
+    https://github.com/dftd3/simple-dftd3/blob/main/assets/parameters.toml
+
+    """
+
+    def __init__(self, cutoff: float, parameter_set: str = "wB97M-D3(BJ)"):
+        """
+        Initializes the Dispersion potential module.
+
+        Parameters
+        ----------
+        cutoff : float
+            The cutoff distance for the dispersion interaction in nanometers.
+        parameter_set : str, optional
+            The parameter set to use for the dispersion calculation.
+            Default is "wB97M-D3(BJ)".
+            Currently, only "wB97M-D3(BJ)" is supported. at this time.
+        """
+        super().__init__()
+
+        """
+        parameters from:
+        Najibi, Asim, and Lars Goerigk. 
+        "The nonlocal kernel in van der Waals density functionals as an additive correction: 
+        An extensive analysis with special emphasis on the B97M-V and ωB97M-V approaches." 
+        Journal of Chemical Theory and Computation 14.11 (2018): 5725-5738.
+        DOI:10.1021/acs.jctc.8b00842
+         """
+        if parameter_set == "wB97M-D3(BJ)":
+            self.params = dict(
+                a1=torch.tensor(0.5660),
+                s8=torch.tensor(0.3908),
+                a2=torch.tensor(3.1280),
+            )
+        # dftd3 uses bohr for length, so we need to convert the cutoff
+        self.cutoff = (cutoff * GlobalUnitSystem.get_units("length")).to("bohr").m
+
+    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        import tad_dftd3 as d3
+        import tad_mctc as mctc
+
+        atomic_numbers = data["atomic_numbers"]
+        atomic_subsystem_indices = data["atomic_subsystem_indices"]
+
+        device = atomic_subsystem_indices.device
+        # need to convert the positions to bohr units
+        positions = (
+            (data["positions"] * GlobalUnitSystem.get_units("length")).to("bohr").m
+        )
+        # let us get the atomic subsystem counts so we can breakup the systems properly for batch processing
+        mol_ids, atomic_subsystem_counts = torch.unique(
+            atomic_subsystem_indices, return_counts=True
+        )
+        # cumulative sum gives us the indices where each system starts
+        atomic_subsystem_counts_sum = torch.cumsum(atomic_subsystem_counts, dim=0)
+
+        # split the positions tensor into a list of tensors, one for each system, then use the mctc.batch.pack
+        # to create a batch of tensors in the format expected by the tad-dftd3 library.
+        positions_batch = mctc.batch.pack(
+            (
+                torch.tensor_split(
+                    positions, atomic_subsystem_counts_sum[:-1].to(device="cpu")
+                )
+            )
+        )
+
+        # create a batch of atomic numbers in the same way
+        atomic_numbers_batch = mctc.batch.pack(
+            (
+                torch.tensor_split(
+                    atomic_numbers, atomic_subsystem_counts_sum[:-1].to(device="cpu")
+                )
+            )
+        )
+
+        energies = torch.sum(
+            d3.dftd3(
+                atomic_numbers_batch, positions_batch, self.params, cutoff=self.cutoff
+            ),
+            -1,
+        )
+
+        data["per_system_vdw_energy"] = (
+            (energies.reshape(-1, 1) * unit.hartree)
+            .to(GlobalUnitSystem.get_units("energy"), "chem")
+            .m
         )
 
         return data

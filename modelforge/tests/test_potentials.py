@@ -50,7 +50,7 @@ def validate_output_shapes(output, nr_of_mols: int, energy_expression: str):
     if energy_expression == "short_range_and_long_range_electrostatic":
         assert "per_atom_charge" in output
         assert "per_atom_charge_uncorrected" in output
-        assert "electrostatic_energy" in output
+        assert "per_system_electrostatic_energy" in output
 
 
 def validate_charge_conservation(
@@ -144,7 +144,7 @@ def test_electrostatics():
     core_output_dict["atomic_subsystem_indices"] = torch.tensor(
         [0, 0, 0, 0, 0, 1, 1, 1, 1, 1], dtype=torch.int32
     )
-    core_output_dict["d_ij"] = torch.tensor(
+    core_output_dict["electrostatic_d_ij"] = torch.tensor(
         [
             [0.0126],
             [0.1117],
@@ -168,7 +168,8 @@ def test_electrostatics():
             [0.1874],
         ]
     )
-    core_output_dict["pair_indices"] = torch.tensor(
+
+    core_output_dict["electrostatic_pair_indices"] = torch.tensor(
         [
             [0, 0, 0, 0, 1, 1, 1, 2, 2, 3, 5, 5, 5, 5, 6, 6, 6, 7, 7, 8],
             [1, 2, 3, 4, 2, 3, 4, 3, 4, 4, 6, 7, 8, 9, 7, 8, 9, 8, 9, 9],
@@ -196,9 +197,9 @@ def test_electrostatics():
     output = e_elec(core_output_dict)
 
     # check that the output is correct
-    assert output["electrostatic_energy"].shape == (2, 1)
+    assert output["per_system_electrostatic_energy"].shape == (2, 1)
     assert torch.allclose(
-        output["electrostatic_energy"],
+        output["per_system_electrostatic_energy"],
         torch.tensor([[277.5938], [277.5938]]),
         1e-4,
         1e-4,
@@ -223,15 +224,75 @@ def test_electrostatics():
     output = e_elec(core_output_dict)
 
     # check that the output is correct
-    assert output["electrostatic_energy"].shape == (2, 1)
+    assert output["per_system_electrostatic_energy"].shape == (2, 1)
 
     assert torch.allclose(
-        output["electrostatic_energy"],
+        output["per_system_electrostatic_energy"],
         torch.tensor(
             [[-0.4219], [-0.4219]],
         ),
         1e-4,
         1e-4,
+    )
+
+
+def test_dispersion_potential():
+    from modelforge.potential.processing import DispersionPotential
+
+    # set up a minimal dict that would represent the core output for 2 non-interacting methane molecules
+    core_output_dict = {}
+    core_output_dict["atomic_subsystem_indices"] = torch.tensor(
+        [0, 0, 0, 0, 0], dtype=torch.int32
+    )
+    core_output_dict["atomic_numbers"] = torch.tensor([6, 1, 1, 1, 1])
+    core_output_dict["positions"] = torch.tensor(
+        [
+            [0.0, -0.0, 0.0],
+            [-0.06308893, 0.06308893, 0.06308893],
+            [0.06308893, -0.06308893, 0.06308893],
+            [-0.06308893, -0.06308893, -0.06308893],
+            [0.06308893, 0.06308893, -0.06308893],
+        ]
+    )
+
+    vdw = DispersionPotential(cutoff=100.0)
+    vdw_output = vdw(core_output_dict)
+    assert vdw_output["per_system_vdw_energy"].shape == (1, 1)
+    assert torch.allclose(
+        vdw_output["per_system_vdw_energy"],
+        torch.tensor([[-6.277308]]),
+        1e-3,
+        1e-3,
+    )
+    # test two molecules
+    core_output_dict = {}
+    core_output_dict["atomic_subsystem_indices"] = torch.tensor(
+        [0, 0, 0, 0, 0, 1, 1, 1, 1, 1], dtype=torch.int32
+    )
+    core_output_dict["atomic_numbers"] = torch.tensor([6, 1, 1, 1, 1, 6, 1, 1, 1, 1])
+    core_output_dict["positions"] = torch.tensor(
+        [
+            [0.0, -0.0, 0.0],
+            [-0.06308893, 0.06308893, 0.06308893],
+            [0.06308893, -0.06308893, 0.06308893],
+            [-0.06308893, -0.06308893, -0.06308893],
+            [0.06308893, 0.06308893, -0.06308893],
+            [0.0, -0.0, 0.0],
+            [-0.06308893, 0.06308893, 0.06308893],
+            [0.06308893, -0.06308893, 0.06308893],
+            [-0.06308893, -0.06308893, -0.06308893],
+            [0.06308893, 0.06308893, -0.06308893],
+        ]
+    )
+
+    vdw = DispersionPotential(cutoff=100.0)
+    vdw_output = vdw(core_output_dict)
+    assert vdw_output["per_system_vdw_energy"].shape == (2, 1)
+    assert torch.allclose(
+        vdw_output["per_system_vdw_energy"],
+        torch.tensor([[-6.277308], [-6.277308]]),
+        1e-3,
+        1e-3,
     )
 
 
@@ -244,18 +305,20 @@ def test_zbl_potential():
     core_output_dict["atomic_subsystem_indices"] = torch.tensor(
         [0, 0, 1, 1, 2, 2, 3, 3, 4, 4], dtype=torch.int32
     )
-    core_output_dict["d_ij"] = torch.tensor(
+    core_output_dict["local_d_ij"] = torch.tensor(
         [[0.001], [0.050], [0.100], [0.138], [0.500]]
     )
-    core_output_dict["pair_indices"] = torch.tensor([[0, 2, 4, 6, 8], [1, 3, 5, 7, 9]])
+    core_output_dict["local_pair_indices"] = torch.tensor(
+        [[0, 2, 4, 6, 8], [1, 3, 5, 7, 9]]
+    )
     core_output_dict["atomic_numbers"] = torch.tensor([6, 6, 6, 6, 6, 6, 6, 6, 6, 6])
 
     zbl = ZBLPotential()
     zbl_output = zbl(core_output_dict)
-    assert zbl_output["zbl_energy"].shape == (5, 1)
-    print(zbl_output["zbl_energy"])
+    assert zbl_output["per_system_zbl_energy"].shape == (5, 1)
+    print(zbl_output["per_system_zbl_energy"])
     assert torch.allclose(
-        zbl_output["zbl_energy"],
+        zbl_output["per_system_zbl_energy"],
         torch.tensor([[4.6440e06], [8.5328e03], [3.3545e02], [3.3711e00], [0.0000e00]]),
         1e-3,
         1e-3,
@@ -491,7 +554,9 @@ def test_loading_from_checkpoint_file():
     from modelforge.potential.potential import load_inference_model_from_checkpoint
 
     # note this is a legacy file, and thus we need to manually define only_unique_pairs
-    potential = load_inference_model_from_checkpoint(ckpt_file, only_unique_pairs=False)
+    potential = load_inference_model_from_checkpoint(
+        ckpt_file, only_unique_pairs=False, old_config_only_local_cutoff=True
+    )
     assert potential is not None
 
 
@@ -1388,3 +1453,183 @@ def test_equivariant_energies_and_forces(
         reflection(reference_forces),
         atol=atol,
     )
+
+
+def test_sum_per_system_energy():
+    """
+    Test the sum_per_system_energy function.
+    """
+    import torch
+
+    from modelforge.potential.processing import SumPerSystemEnergy
+
+    data = {
+        "per_system_energy": torch.tensor([[10.0], [20.0], [30.0]]),
+        "per_system_electrostatic_energy": torch.tensor([[1.0], [2.0], [3.0]]),
+        "per_system_vdw_energy": torch.tensor([[0.1], [0.2], [0.3]]),
+    }
+    # make a copy of the original data to compare against
+    original_data = data.copy()
+
+    # first test adding electrostatic energy
+    sum_per_system_energy = SumPerSystemEnergy(
+        contributions=["per_system_electrostatic_energy"]
+    )
+    data = sum_per_system_energy(data)
+
+    assert "per_system_energy" in data
+    assert data["per_system_energy"].shape == (3, 1)
+    assert torch.allclose(
+        data["per_system_energy"],
+        original_data["per_system_energy"]
+        + original_data["per_system_electrostatic_energy"],
+    )
+
+    # now test adding vdw energy and electrostatic energy
+    sum_per_system_energy = SumPerSystemEnergy(
+        contributions=["per_system_vdw_energy", "per_system_electrostatic_energy"]
+    )
+
+    data = original_data.copy()  # reset data to original
+
+    data = sum_per_system_energy(data)
+    assert "per_system_energy" in data
+    assert data["per_system_energy"].shape == (3, 1)
+    assert torch.allclose(
+        data["per_system_energy"],
+        original_data["per_system_energy"]
+        + original_data["per_system_electrostatic_energy"]
+        + original_data["per_system_vdw_energy"],
+    )
+    # f we put per_system_energy in the contributions it won't double sum, let us check that
+    contributions = [
+        "per_system_energy",
+        "per_system_vdw_energy",
+        "per_system_electrostatic_energy",
+    ]
+    sum_per_system_energy = SumPerSystemEnergy(contributions=contributions)
+
+    data = original_data.copy()  # reset data to original
+    data = sum_per_system_energy(data)
+    assert "per_system_energy" in data
+    assert data["per_system_energy"].shape == (3, 1)
+    assert torch.allclose(
+        data["per_system_energy"],
+        original_data["per_system_energy"]
+        + original_data["per_system_vdw_energy"]
+        + original_data["per_system_electrostatic_energy"],
+    )
+
+    data = original_data.copy()  # reset data to original
+
+    # if we put in a contribution that doesn't exist, it will raise an error
+
+    contributions = [
+        "per_system_vdw_energy",
+        "per_system_electrostatic_energy",
+        "per_system_non_existing_energy",
+    ]
+    with pytest.raises(KeyError):
+        sum_per_system_energy = SumPerSystemEnergy(contributions=contributions)
+        sum_per_system_energy(data)  # this should raise an error
+
+    # if remove per_system_energy from the contributions, it will fail
+    del data["per_system_energy"]
+    with pytest.raises(KeyError):
+        sum_per_system_energy = SumPerSystemEnergy(
+            contributions=["per_system_vdw_energy", "per_system_electrostatic_energy"]
+        )
+        sum_per_system_energy(data)
+
+
+def test_postprocessing():
+    # this test will just ensure that the postprocessing module in potential loads the correct operations
+
+    from modelforge.potential.potential import PostProcessing
+    from modelforge.potential.parameters import PostProcessingParameter
+
+    # let us set a bunch of postprocessing operations
+    postprossessing_dict = {
+        "properties_to_process": [
+            "per_atom_energy",
+            "per_atom_charge",
+            "per_system_electrostatic_energy",
+            "per_system_vdw_energy",
+            "per_system_zbl_energy",
+            "sum_per_system_energy",
+        ],
+        "per_atom_energy": {
+            "normalize": True,
+            "from_atom_to_system_reduction": True,
+            "keep_per_atom_property": True,
+        },
+        "per_atom_charge": {"conserve": True, "conserve_strategy": "default"},
+        "per_system_electrostatic_energy": {
+            "electrostatic_strategy": "coulomb",
+            "maximum_interaction_radius": "10.0 angstrom",
+        },
+        "per_system_vdw_energy": {"maximum_interaction_radius": "10.0 angstrom"},
+        "per_system_zbl_energy": {},
+        "sum_per_system_energy": {
+            "contributions": [
+                "per_system_electrostatic_energy",
+                "per_system_vdw_energy",
+                "per_system_zbl_energy",
+            ]
+        },
+    }
+    postprocessing_parameter = PostProcessingParameter(**postprossessing_dict)
+    postprocessing = PostProcessing(
+        postprocessing_parameter=postprocessing_parameter.model_dump(),
+        dataset_statistic={
+            "training_dataset_statistics": {
+                "per_atom_energy_mean": 0.0,
+                "per_atom_energy_stddev": 1.0,
+            }
+        },
+    )
+    assert "per_atom_energy" in postprocessing._registered_properties
+    assert "per_atom_charge" in postprocessing._registered_properties
+    assert "per_system_electrostatic_energy" in postprocessing._registered_properties
+    assert "per_system_vdw_energy" in postprocessing._registered_properties
+    assert "per_system_zbl_energy" in postprocessing._registered_properties
+    assert "sum_per_system_energy" in postprocessing._registered_properties
+
+    # check that the properties are registered in the correct order
+    # order matters to ensure that, e.g., charge is equilibrated (if desired) before we compute electrostatic energy
+    # make sure we have computed the energies before we try to sum them, etc.
+    assert postprocessing._registered_properties == [
+        "per_atom_charge",
+        "per_system_electrostatic_energy",
+        "per_system_zbl_energy",
+        "per_system_vdw_energy",
+        "per_atom_energy",
+        "sum_per_system_energy",
+    ]
+
+    # let us set a smaller set and ensure that we do in fact, load things properly
+    postprossessing_dict = {
+        "properties_to_process": [
+            "per_atom_energy",
+            "per_system_vdw_energy",
+        ],
+        "per_atom_energy": {
+            "normalize": True,
+            "from_atom_to_system_reduction": True,
+            "keep_per_atom_property": True,
+        },
+        "per_system_vdw_energy": {"maximum_interaction_radius": "10.0 angstrom"},
+    }
+    postprocessing_parameter = PostProcessingParameter(**postprossessing_dict)
+    postprocessing = PostProcessing(
+        postprocessing_parameter=postprocessing_parameter.model_dump(),
+        dataset_statistic={
+            "training_dataset_statistics": {
+                "per_atom_energy_mean": 0.0,
+                "per_atom_energy_stddev": 1.0,
+            }
+        },
+    )
+
+    assert "per_atom_energy" in postprocessing._registered_properties
+    assert "per_system_vdw_energy" in postprocessing._registered_properties

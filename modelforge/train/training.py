@@ -133,6 +133,7 @@ class CalculateProperties(torch.nn.Module):
         "per_atom_energy",
         "per_atom_force",
         "per_system_energy",
+        "per_atom_charge",
         "per_system_total_charge",
         "per_system_dipole_moment",
     ]
@@ -151,11 +152,15 @@ class CalculateProperties(torch.nn.Module):
         super().__init__()
         self.requested_properties = requested_properties
         self.include_force = "per_atom_force" in self.requested_properties
-        self.include_charges = "per_system_total_charge" in self.requested_properties
-        # dipole_moment is calculated from charges, thus if dipole moment is requested
-        # we also need to calculate charges, even if we don't call per_system_total_charge
-        if "per_system_dipole_moment" in self.requested_properties:
-            self.include_charges = True
+        self.include_total_charges = (
+            "per_system_total_charge" in self.requested_properties
+        )
+        #
+        self.include_dipole_moment = (
+            "per_system_dipole_moment" in self.requested_properties
+        )
+
+        self.include_per_atom_charges = "per_atom_charge" in self.requested_properties
 
         # Ensure all requested properties are supported
         assert all(
@@ -251,13 +256,13 @@ class CalculateProperties(torch.nn.Module):
             "per_system_energy_predict": per_system_energy_predict,
         }
 
-    def _get_charges(
-        self,
+    @staticmethod
+    def _get_total_charges(
         batch: BatchData,
         model_prediction: Dict[str, torch.Tensor],
     ) -> Dict[str, torch.Tensor]:
         """
-        Compute total molecular charges and dipole moments from the predicted atomic charges.
+        Compute total molecular charges from the predicted atomic charges.
 
         Parameters
         ----------
@@ -286,14 +291,68 @@ class CalculateProperties(torch.nn.Module):
             src=per_atom_charges_predict,
         )  # Shape: [nr_of_systems, 1]
 
+        return {
+            "per_system_total_charge_predict": per_system_total_charge_predict,
+            "per_system_total_charge_true": batch.nnp_input.per_system_total_charge,
+        }
+
+    def _get_dipole_moment(
+        self,
+        batch: BatchData,
+        model_prediction: Dict[str, torch.Tensor],
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Compute dipole moment from the predicted atomic charges.
+
+        Parameters
+        ----------
+        batch : BatchData
+            A batch of data containing input features and target charges.
+        model_prediction : Dict[str, torch.Tensor]
+            A dictionary containing the predicted charges from the model.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            A dictionary containing the true and predicted charges and dipole moments.
+        """
+
         # Predict the dipole moment
         per_system_dipole_moment = self._predict_dipole_moment(model_prediction, batch)
 
         return {
-            "per_system_total_charge_predict": per_system_total_charge_predict,
-            "per_system_total_charge_true": batch.nnp_input.per_system_total_charge,
             "per_system_dipole_moment_predict": per_system_dipole_moment,
             "per_system_dipole_moment_true": batch.metadata.per_system_dipole_moment,
+        }
+
+    @staticmethod
+    def _get_per_atom_charges(
+        batch: BatchData,
+        model_prediction: Dict[str, torch.Tensor],
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Compute per-atom charges from the predicted atomic charges.
+
+        Parameters
+        ----------
+        batch : BatchData
+            A batch of data containing input features and target charges.
+        model_prediction : Dict[str, torch.Tensor]
+            A dictionary containing the predicted charges from the model.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            A dictionary containing the true and predicted per-atom charges.
+        """
+        per_atom_charge_predict = model_prediction["per_atom_charge"]
+        per_atom_charge_true = batch.metadata.per_atom_charge
+
+        # print the shape
+
+        return {
+            "per_atom_charge_predict": per_atom_charge_predict,
+            "per_atom_charge_true": per_atom_charge_true,
         }
 
     @staticmethod
@@ -383,9 +442,17 @@ class CalculateProperties(torch.nn.Module):
             predict_target.update(forces)
 
         # Get charges if they are included in the requested properties
-        if self.include_charges:
-            charges = self._get_charges(batch, model_prediction)
+        if self.include_total_charges:
+            charges = self._get_total_charges(batch, model_prediction)
             predict_target.update(charges)
+
+        if self.include_per_atom_charges:
+            per_atom_charges = self._get_per_atom_charges(batch, model_prediction)
+            predict_target.update(per_atom_charges)
+
+        if self.include_dipole_moment:
+            dipole_moment = self._get_dipole_moment(batch, model_prediction)
+            predict_target.update(dipole_moment)
 
         return predict_target
 

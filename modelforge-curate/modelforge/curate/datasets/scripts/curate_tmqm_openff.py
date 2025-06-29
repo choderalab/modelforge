@@ -35,16 +35,30 @@ def main():
         version_select=version_select,
     )
 
-    tmqm_openff.process(
-        qcportal_view_filename="dataset_419_view.sqlite",
-        qcportal_view_path="~/mf_datasets/tmqm_openff_dataset/download_dataset",
-        force_download=False,
-    )
-    # tmqm_openff.load_from_db(
-    #     local_db_dir="/home/cri/mf_datasets/tmqm_openff",
-    #     local_db_name="tmqm_openff.sqlite",
+    # tmqm_openff.process(
+    #     qcportal_view_filename="dataset_419_view.sqlite",
+    #     qcportal_view_path="~/mf_datasets/tmqm_openff_dataset/download_dataset",
+    #     force_download=False,
     # )
-
+    tmqm_openff.load_from_db(
+        local_db_dir="/home/cri/mf_datasets/tmqm_openff_dataset",
+        local_db_name="tmqm_openff.sqlite",
+    )
+    available_properties = (
+        [
+            "atomic_numbers",
+            "positions",
+            "total_charge",
+            "per_system_spin_multiplicity",
+            "dft_total_energy",
+            "dft_total_force",
+            "scf_dipole",
+            "scf_quadrupole",
+            "mulliken_partial_charges",
+            "lowdin_partial_charges",
+            "spin_multiplicity_per_atom",
+        ],
+    )
     #################
     # 1000 configuration version
     #################
@@ -61,7 +75,7 @@ def main():
         max_force_key="dft_total_force",
     )
     version_name = f"nc_1000_v{version}"
-    about = f"""This provides a curated hdf5 file for a subset of the PhAlkEthOH dataset designed
+    about = f"""This provides a curated hdf5 file for a subset of the tmqm openff dataset designed
             to be compatible with modelforge. This dataset contains {n_total_records} unique records
             for {n_total_configs} total configurations, with a maximum of 10 configurations per record.
             This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
@@ -71,19 +85,7 @@ def main():
         about=about,
         hdf5_file_name=hdf5_file_name,
         hdf5_file_dir=output_file_dir,
-        available_properties=[
-            "atomic_numbers",
-            "positions",
-            "total_charge",
-            "per_system_spin_multiplicity",
-            "dft_total_energy",
-            "dft_total_force",
-            "scf_dipole",
-            "scf_quadrupole",
-            "mulliken_partial_charges",
-            "lowdin_partial_charges",
-            "spin_multiplicity_per_atom",
-        ],
+        available_properties=available_properties,
     )
     # we need to compress the hdf5 file to get the checksum and length for the gzipped file
     metadata.to_yaml(
@@ -110,7 +112,7 @@ def main():
 
     version_name = f"full_dataset_v{version}"
 
-    about = f"""This provides a curated hdf5 file for the PhAlkEthOH dataset designed 
+    about = f"""This provides a curated hdf5 file for the tmqm openff dataset designed
             to be compatible with modelforge. This dataset contains {n_total_records} unique records
             for {n_total_configs} total configurations.
             This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
@@ -121,19 +123,7 @@ def main():
         about=about,
         hdf5_file_name=hdf5_file_name,
         hdf5_file_dir=output_file_dir,
-        available_properties=[
-            "atomic_numbers",
-            "positions",
-            "total_charge",
-            "per_system_spin_multiplicity",
-            "dft_total_energy",
-            "dft_total_force",
-            "scf_dipole",
-            "scf_quadrupole",
-            "mulliken_partial_charges",
-            "lowdin_partial_charges",
-            "spin_multiplicity_per_atom",
-        ],
+        available_properties=available_properties,
     )
     # we need to compress the hdf5 file to get the checksum and length for the gzipped file
     metadata.to_yaml(
@@ -142,6 +132,46 @@ def main():
 
     print(f"Total records: {n_total_records}")
     print(f"Total configs: {n_total_configs}")
+
+    ###############
+    # full dataset, spin multiplicity restrictions
+    ##############
+    for sm in [1, 3, 5]:
+        # curate the full dataset
+        hdf5_file_name = f"tmqm_openff_dataset_sm{sm}_v{version}.hdf5"
+        print("total dataset")
+
+        n_total_records, n_total_configs = tmqm_openff.to_hdf5(
+            hdf5_file_name=hdf5_file_name,
+            output_file_dir=output_file_dir,
+            max_force=1.0 * unit.hartree / unit.bohr,
+            max_force_key="dft_total_force",
+            spin_multiplicity_to_limit=sm,
+            spin_multiplicity_key="per_system_spin_multiplicity",
+        )
+
+        version_name = f"full_dataset_sm{sm}_v{version}"
+
+        about = f"""This provides a curated hdf5 file for the tmqm openff dataset designed 
+                    to be compatible with modelforge. This dataset contains {n_total_records} unique records
+                    for {n_total_configs} total configurations, restricted to spin multiplicity {sm}.
+                    This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
+                    """
+
+        metadata = VersionMetadata(
+            version_name=version_name,
+            about=about,
+            hdf5_file_name=hdf5_file_name,
+            hdf5_file_dir=output_file_dir,
+            available_properties=available_properties,
+        )
+        # we need to compress the hdf5 file to get the checksum and length for the gzipped file
+        metadata.to_yaml(
+            file_name=f"{version_name}_metadata.yaml", file_path=output_file_dir
+        )
+
+        print(f"Total records: {n_total_records}")
+        print(f"Total configs: {n_total_configs}")
 
     ######################################
     # 1000 conformer, last configuration only
@@ -158,7 +188,7 @@ def main():
         final_configuration_only=True,
     )
     version_name = f"nc_1000_v{version}_minimal"
-    about = f"""This provides a curated hdf5 file for a subset of the PhAlkEthOH dataset designed
+    about = f"""This provides a curated hdf5 file for a subset of the tmqm openff dataset designed
             to be compatible with modelforge. This dataset contains {n_total_records} unique records
             for {n_total_configs} total configurations, with only the final configuration of the optimization.
             This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
@@ -169,18 +199,7 @@ def main():
         about=about,
         hdf5_file_name=hdf5_file_name,
         hdf5_file_dir=output_file_dir,
-        available_properties=[
-            "atomic_numbers",
-            "positions",
-            "total_charge",
-            "dispersion_correction_energy",
-            "dft_total_energy",
-            "dispersion_correction_gradient",
-            "dispersion_correction_force",
-            "dft_total_gradient",
-            "dft_total_force",
-            "scf_dipole",
-        ],
+        available_properties=available_properties,
     )
     # we need to compress the hdf5 file to get the checksum and length for the gzipped file
     metadata.to_yaml(
@@ -207,7 +226,7 @@ def main():
         final_configuration_only=True,
     )
     version_name = f"full_dataset_v{version}_minimal"
-    about = f"""This provides a curated hdf5 file for the PhAlkEthOH dataset designed
+    about = f"""This provides a curated hdf5 file for the tmqm openff dataset designed
             to be compatible with modelforge. This dataset contains {n_total_records} unique records
             for {n_total_configs} total configurations, with only the final configuration of the optimization.
             This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
@@ -218,18 +237,7 @@ def main():
         about=about,
         hdf5_file_name=hdf5_file_name,
         hdf5_file_dir=output_file_dir,
-        available_properties=[
-            "atomic_numbers",
-            "positions",
-            "total_charge",
-            "dispersion_correction_energy",
-            "dft_total_energy",
-            "dispersion_correction_gradient",
-            "dispersion_correction_force",
-            "dft_total_gradient",
-            "dft_total_force",
-            "scf_dipole",
-        ],
+        available_properties=available_properties,
     )
     # we need to compress the hdf5 file to get the checksum and length for the gzipped file
     metadata.to_yaml(

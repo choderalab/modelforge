@@ -400,6 +400,8 @@ class SourceDataset:
         max_force: Optional[unit.Quantity] = None,
         max_force_key: Optional[str] = "forces",
         final_configuration_only: Optional[bool] = False,
+        spin_multiplicity_to_limit: Optional[int] = None,
+        spin_multiplicity_key: Optional[str] = "per_system_spin_multiplicity",
         local_db_dir: Optional[str] = None,
         local_db_name: Optional[str] = None,
     ) -> Self:
@@ -421,8 +423,14 @@ class SourceDataset:
             Any molecules that contain elements outside of this list will be igonored
         max_force: Optional[unit.Quantity], default=None
             If set, configurations with forces greater than this value will be removed.
+        max_force_key: Optional[str], default="forces"
+            The key in the record properties that contains the forces. Default is "forces".
         final_configuration_only: Optional[bool], default=False
             If True, only the final configuration of each record will be included in the subset.
+        spin_multiplicity_to_limit: Optional[int], default=None
+            If set, only configurations with the specified per-system spin multiplicity will be included in the subset.
+        spin_multiplicity_key: Optional[str], default="per_system_spin_multiplicity"
+            The key in the record properties that contains the spin multiplicity. Default is "per_system_spin_multiplicity".
         local_db_dir: str, optional, default=None
             Directory to store the local database for the new dataset.  If not defined, will use the same directory as the current dataset.
         local_db_name: str, optional, default=None
@@ -467,6 +475,11 @@ class SourceDataset:
                 log.warning("Using all records in the dataset instead.")
                 total_records = len(self.records)
 
+        if spin_multiplicity_to_limit is not None:
+            # assert we have an integer
+            if isinstance(spin_multiplicity_to_limit, int) == False:
+                raise ValueError("spin_multiplicity_to_limit must be an integer value.")
+
         if local_db_dir is None:
             local_db_dir = self.local_db_dir
         if local_db_name is None:
@@ -495,13 +508,29 @@ class SourceDataset:
 
                         record = db[name]
 
+                        # first let us check the spin multiplicity if we are limiting it
+                        # before we attempt to limit any other properties
+                        if spin_multiplicity_to_limit is not None:
+                            spin_multiplicities = record.get_property_value(
+                                spin_multiplicity_key
+                            )
+
+                            # see what elements have matching spin multiplicity
+                            indices_to_include = list(
+                                np.where(
+                                    spin_multiplicities.flatten()
+                                    == spin_multiplicity_to_limit
+                                )[0]
+                            )
+                            record = record.remove_configs(
+                                indices_to_include=indices_to_include
+                            )
                         # if we have a max force, we will remove configurations with forces greater than the max_force
                         # we will just overwrite the record with the new record
                         if max_force is not None:
                             record = record.remove_high_force_configs(
                                 max_force=max_force, force_key=max_force_key
                             )
-
                         # we need to set the total configs in the record AFTER we have done any force filtering
                         n_configs = record.n_configs
 
@@ -552,6 +581,24 @@ class SourceDataset:
                 for name in self.records.keys():
                     if total_records_to_add > 0:
                         record = db[name]
+                        # first let us check the spin multiplicity if we are limiting it
+                        # before we attempt to limit any other properties
+                        if spin_multiplicity_to_limit is not None:
+                            spin_multiplicities = record.get_property_value(
+                                spin_multiplicity_key
+                            )
+
+                            # see what elements have matching spin multiplicity
+                            indices_to_include = list(
+                                np.where(
+                                    spin_multiplicities.flatten()
+                                    == spin_multiplicity_to_limit
+                                )[0]
+                            )
+                            record = record.remove_configs(
+                                indices_to_include=indices_to_include
+                            )
+
                         # if we have a max force, we will remove configurations with forces greater than the max_force
                         # we will just overwrite the record with the new record
                         if max_force is not None:
@@ -589,8 +636,27 @@ class SourceDataset:
             ) as db:
                 for name in self.records.keys():
                     record = db[name]
+                    # first let us check the spin multiplicity if we are limiting it
+                    # before we attempt to limit any other properties
+                    if spin_multiplicity_to_limit is not None:
+                        spin_multiplicities = record.get_property_value(
+                            spin_multiplicity_key
+                        )
+
+                        # see what elements have matching spin multiplicity
+                        indices_to_include = list(
+                            np.where(
+                                spin_multiplicities.flatten()
+                                == spin_multiplicity_to_limit
+                            )[0]
+                        )
+                        record = record.remove_configs(
+                            indices_to_include=indices_to_include
+                        )
+
                     # if we have a max force, we will remove configurations with forces greater than the max_force
                     # we will just overwrite the record with the new record
+
                     if max_force is not None:
                         record = record.remove_high_force_configs(
                             max_force=max_force, force_key=max_force_key

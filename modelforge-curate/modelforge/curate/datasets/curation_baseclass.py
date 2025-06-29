@@ -255,6 +255,8 @@ class DatasetCuration(ABC):
         max_force: Optional[unit.Quantity] = None,
         max_force_key: str = "forces",
         final_configuration_only: Optional[bool] = False,
+        spin_multiplicity_to_limit: Optional[int] = None,
+        spin_multiplicity_key: Optional[str] = "per_system_spin_multiplicity",
     ) -> Tuple[int, int]:
         """
         Writes the dataset to an hdf5 file.
@@ -284,6 +286,11 @@ class DatasetCuration(ABC):
             Key to use for the maximum force. If not defined, the default key 'forces' will be used.
         final_configuration_only: bool, optional, default=False
             If True, only the final configuration of each record will be included in the dataset.
+        spin_multiplicity_to_limit: Optional[int], optional, default=None
+            If set to an integer, 'n_s', the routine will only process records with a spin multiplicity equal to 'n_s'.
+            This is useful for filtering the dataset based on spin multiplicity.
+        spin_multiplicity_key: str, optional, default="per_system_spin_multiplicity"
+            Key to use for the spin multiplicity. If not defined, the default key 'per_system_spin_multiplicity' will be used.
 
         Returns
         -------
@@ -344,6 +351,7 @@ class DatasetCuration(ABC):
             or max_force is not None
             or total_records is not None
             or final_configuration_only
+            or spin_multiplicity_to_limit is not None
         ):
             import time
             import random
@@ -356,6 +364,26 @@ class DatasetCuration(ABC):
 
             new_dataset_name = f"{self.dataset.name}_temp_{number}"
 
+            if spin_multiplicity_to_limit is not None:
+                logger.info(
+                    f"Filtering dataset for spin multiplicity: {spin_multiplicity_to_limit}"
+                )
+            if atomic_numbers_to_limit is not None:
+                logger.info(
+                    f"Filtering dataset for atomic numbers: {atomic_numbers_to_limit}"
+                )
+            if max_force is not None:
+                logger.info(f"Filtering dataset for max force: {max_force}")
+            if total_records is not None:
+                logger.info(f"Limiting dataset to {total_records} records.")
+            if max_configurations_per_record is not None:
+                logger.info(
+                    f"Limiting dataset to {max_configurations_per_record} configurations per record."
+                )
+            if total_configurations is not None:
+                logger.info(
+                    f"Limiting dataset to {total_configurations} configurations in total."
+                )
             dataset_trimmed = self.dataset.subset_dataset(
                 new_dataset_name=new_dataset_name,
                 total_configurations=total_configurations,
@@ -365,6 +393,8 @@ class DatasetCuration(ABC):
                 max_force=max_force,
                 max_force_key=max_force_key,
                 final_configuration_only=final_configuration_only,
+                spin_multiplicity_to_limit=spin_multiplicity_to_limit,
+                spin_multiplicity_key=spin_multiplicity_key,
             )
             if dataset_trimmed.total_records() == 0:
                 raise ValueError("No records found in the dataset after filtering.")

@@ -6,6 +6,7 @@ batch_size = 128
 lr = 5e-4
 monitor = "val/per_system_energy/rmse" # Common monitor key
 plot_frequency = 1
+gradient_clip_val = 5.0
 # ------------------------------------------------------------ #
 [training.experiment_logger]
 logger_name = "tensorboard" # this will set which logger to use

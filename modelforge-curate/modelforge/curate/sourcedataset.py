@@ -559,17 +559,19 @@ class SourceDataset:
                             if n_configs_to_add > total_configurations_to_add:
                                 n_configs_to_add = total_configurations_to_add
 
-                        if final_configuration_only:
-                            record = record.slice_record(
-                                record.n_configs - 1, record.n_configs
-                            )
-                            new_dataset.add_record(record)
-                            total_configurations_to_add -= 1
+                        # if we have no configurations left after filtering, we will skip this record
+                        if record.n_configs != 0:
+                            if final_configuration_only:
+                                record = record.slice_record(
+                                    record.n_configs - 1, record.n_configs
+                                )
+                                new_dataset.add_record(record)
+                                total_configurations_to_add -= 1
 
-                        else:
-                            record = record.slice_record(0, n_configs_to_add)
-                            new_dataset.add_record(record)
-                            total_configurations_to_add -= n_configs_to_add
+                            else:
+                                record = record.slice_record(0, n_configs_to_add)
+                                new_dataset.add_record(record)
+                                total_configurations_to_add -= n_configs_to_add
                 return new_dataset
 
         elif total_records is not None:
@@ -625,8 +627,9 @@ class SourceDataset:
                                 record.n_configs - 1, record.n_configs
                             )
 
-                        new_dataset.add_record(record)
-                        total_records_to_add -= 1
+                        if record.n_configs != 0:
+                            new_dataset.add_record(record)
+                            total_records_to_add -= 1
                 return new_dataset
         # if we are not going to be limiting the total number of configurations or records
         else:
@@ -673,8 +676,10 @@ class SourceDataset:
                         record = record.slice_record(
                             record.n_configs - 1, record.n_configs
                         )
-
-                    new_dataset.add_record(record)
+                    if record.n_configs != 0:
+                        # if we have no configurations left after filtering, we will skip this record
+                        # otherwise, we will add the record to the new dataset
+                        new_dataset.add_record(record)
                 return new_dataset
 
     def validate_record(self, name: str):
@@ -763,6 +768,10 @@ class SourceDataset:
                 #     f"Number of configurations for properties in record {name} are not consistent."
                 # )
 
+            if record.n_configs == 0:
+                validation_status = False
+                log.error(f"Record {name} has no configurations.")
+                # raise ValueError(f"Record {name} has no configurations.")
             # check that the units provided are compatible with the expected units for the property type
             # e.g., ensure things that should be length have units of length.
             for property in record.per_atom.keys():

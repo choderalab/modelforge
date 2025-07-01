@@ -388,6 +388,7 @@ class TrainingParameters(ParametersBase):
     shift_center_of_mass_to_origin: bool
     batch_size: int
     lr: float
+    gradient_clip_val: float  # gradient clipping value
     plot_frequency: int = 5  # how often to log regression and error histograms
     lr_scheduler: Optional[SchedulerConfig] = None
     loss_parameter: LossParameter

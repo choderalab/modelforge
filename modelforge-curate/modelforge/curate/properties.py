@@ -475,7 +475,7 @@ class SpinMultiplicitiesPerSystem(PropertyBaseModel):
 
     Parameters
     ----------
-    name : str, default="spin_multiplicities"
+    name : str, default="spin_multiplicities_per_system"
         The name of the property
     value : np.ndarray
         The array of spin multiplicities

@@ -401,7 +401,7 @@ class SourceDataset:
         max_force_key: Optional[str] = "forces",
         final_configuration_only: Optional[bool] = False,
         spin_multiplicity_to_limit: Optional[int] = None,
-        spin_multiplicity_key: Optional[str] = "per_system_spin_multiplicity",
+        spin_multiplicity_key: Optional[str] = "spin_multiplicities_per_system",
         local_db_dir: Optional[str] = None,
         local_db_name: Optional[str] = None,
     ) -> Self:
@@ -429,8 +429,8 @@ class SourceDataset:
             If True, only the final configuration of each record will be included in the subset.
         spin_multiplicity_to_limit: Optional[int], default=None
             If set, only configurations with the specified per-system spin multiplicity will be included in the subset.
-        spin_multiplicity_key: Optional[str], default="per_system_spin_multiplicity"
-            The key in the record properties that contains the spin multiplicity. Default is "per_system_spin_multiplicity".
+        spin_multiplicity_key: Optional[str], default="spin_multiplicities_per_system"
+            The key in the record properties that contains the spin multiplicity. Default is "spin_multiplicities_per_system".
         local_db_dir: str, optional, default=None
             Directory to store the local database for the new dataset.  If not defined, will use the same directory as the current dataset.
         local_db_name: str, optional, default=None

@@ -17,6 +17,7 @@ class AimNet2Core(torch.nn.Module):
         number_of_radial_basis_functions: int,
         number_of_vector_features: int,
         number_of_interaction_modules: int,
+        interaction_module_hidden_layers: List[List[int]],
         activation_function_parameter: Dict[str, str],
         predicted_properties: List[str],
         predicted_dim: List[int],
@@ -34,9 +35,15 @@ class AimNet2Core(torch.nn.Module):
         number_of_radial_basis_functions : int
             Number of radial basis functions used in the radial symmetry
             function.
+        number_of_vector_features : int
+            Number of vector features used in the model, which determines the
+            dimensionality of the angular symmetry functions.
         number_of_interaction_modules : int
             Number of interaction modules in the model, determining the depth of
             message passing.
+        interaction_module_hidden_layers : List[List[int]]
+            List of hidden layer sizes for each interaction module. Note, this requires at least one value to be defined
+            as this specifies the output size of the first layer in the interaction module and input size of the final layer
         activation_function_parameter : Dict[str, str]
             Configuration of activation functions used across the model.
         predicted_properties : List[str]
@@ -80,6 +87,7 @@ class AimNet2Core(torch.nn.Module):
                     number_of_per_atom_features=number_of_per_atom_features,
                     number_of_radial_basis_functions=number_of_radial_basis_functions,
                     number_of_vector_features=number_of_vector_features,
+                    hidden_layers=interaction_module_hidden_layers[i],
                     activation_function=self.activation_function,
                     is_first_module=(i == 0),
                 )
@@ -192,24 +200,11 @@ class AimNet2Core(torch.nn.Module):
         if torch.isnan(partial_charges).any():
             raise ValueError("NaN values detected in partial charges.")
 
-        # per_system_electrostatic_energy = self.coulomb_potential(
-        #     {
-        #         "atomic_subsystem_indices": data.atomic_subsystem_indices,
-        #         "per_atom_charge": partial_charges,
-        #         "atomic_numbers": data.atomic_numbers,
-        #         "pair_indices": pairlist.pair_indices,
-        #         "d_ij": pairlist.d_ij,
-        #     }
-        # )["per_system_electrostatic_energy"]
-        # we need to also put in per_atom_charge in the return dict so it is available
-        # in the forward pass.  Note, this is different than adding in "per_atom_charge" in
-        # the predicted_properties list, as that will create a separate output layer.
         return {
             "per_atom_scalar_representation": atomic_embedding,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
             "atomic_numbers": data.atomic_numbers,
             "per_atom_charge": partial_charges,
-            # "per_system_electrostatic_energy": per_system_electrostatic_energy,
         }
 
     def forward(
@@ -263,6 +258,7 @@ class AIMNet2InteractionModule(nn.Module):
         number_of_per_atom_features: int,
         number_of_radial_basis_functions: int,
         number_of_vector_features: int,
+        hidden_layers: List[int],
         activation_function: nn.Module,
         is_first_module: bool = False,
     ):
@@ -288,22 +284,52 @@ class AIMNet2InteractionModule(nn.Module):
             )
 
         # Single MLP producing combined outputs
-        self.mlp = nn.Sequential(
+        num_of_layers = len(hidden_layers)
+
+        self.mlp = nn.Sequential()
+
+        self.mlp.append(
             Dense(
                 in_features=self.number_of_input_features,
-                out_features=128,
+                out_features=hidden_layers[0],
                 activation_function=activation_function,
-            ),
-            Dense(
-                in_features=128,
-                out_features=128,
-                activation_function=activation_function,
-            ),
-            Dense(
-                in_features=128,
-                out_features=number_of_per_atom_features + 2,  # delta_q, f, delta_a
-            ),
+            )
         )
+        for i in range(1, num_of_layers):
+            self.mlp.append(
+                Dense(
+                    in_features=hidden_layers[i - 1],
+                    out_features=hidden_layers[i],
+                    activation_function=activation_function,
+                )
+            )
+        self.mlp.append(
+            Dense(
+                in_features=hidden_layers[-1],
+                out_features=number_of_per_atom_features + 2,  # delta_q, f, delta_a
+            )
+        )
+        log.info("mlp layers: {}".format(self.mlp))
+
+        # self.mlp = nn.Sequential(
+        #     Dense(
+        #         in_features=self.number_of_input_features,
+        #         out_features=hidden_layers[0],
+        #         activation_function=activation_function,
+        #     ),
+        #     [
+        #         Dense(
+        #             in_features=hidden_layers[i - 1],
+        #             out_features=hidden_layers[i],
+        #             activation_function=activation_function,
+        #         )
+        #         for i in range(1, num_of_layers)
+        #     ],
+        #     Dense(
+        #         in_features=hidden_layers[-1],
+        #         out_features=number_of_per_atom_features + 2,  # delta_q, f, delta_a
+        #     ),
+        # )
 
     def calculate_radial_contributions(
         self,

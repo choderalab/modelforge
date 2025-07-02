@@ -664,7 +664,7 @@ class HDF5Dataset:
                         log.warning(
                             "Element filter for hdf5 file used to generate npz file does not match current file in dataloader."
                         )
-
+                        return False
                     if (
                         self._npz_metadata["hdf5_checksum"]
                         != self.hdf5_data_file_dict["md5"]
@@ -988,7 +988,7 @@ class HDF5Dataset:
         --------
         """
         # skip validating the checksum, as the npz file checksum of otherwise identical data differs between python 3.11 and 3.9/10
-        # we have a metadatafile we validate separately instead
+        # we have a metadata file we validate separately instead
         if self._file_validation(
             self.processed_data_file, self.local_cache_dir, checksum=None
         ):
@@ -1015,6 +1015,7 @@ class HDF5Dataset:
                     self.numpy_data = np.load(
                         f"{self.local_cache_dir}/{self.processed_data_file}"
                     )
+                    log.debug("Loaded processed data from cache.")
 
         else:
             raise ValueError(

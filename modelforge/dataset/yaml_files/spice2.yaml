@@ -69,7 +69,7 @@ full_dataset_v1.1:
     gz_data_file:
       file_name: spice_2_dataset_v1.1.hdf5.gz
       length: 25532396063
-      md5: 8fca8388988bdaa1c80acad9426748ba
+      md5: 5ccaba21944da5e3f86f19389767b48f
     hdf5_data_file:
       file_name: spice_2_dataset_v1.1.hdf5
       md5: e2628a66e1f8f428151bcdbbfb1c41a7

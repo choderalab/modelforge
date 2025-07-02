@@ -48,6 +48,7 @@ batch_size = 128
 lr = 1e-3
 monitor = "val/per_system_energy/rmse"
 shift_center_of_mass_to_origin = false
+gradient_clip_val = 5.0
 
 [training.experiment_logger]
 logger_name = "tensorboard"

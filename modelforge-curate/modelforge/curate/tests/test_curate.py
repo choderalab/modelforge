@@ -1264,6 +1264,128 @@ def test_limit_atomic_numbers(prep_temp_dir):
         )
 
 
+def test_limit_to_spin_multiplicity(prep_temp_dir):
+
+    atomic_numbers = AtomicNumbers(
+        value=np.array(
+            [
+                [6],
+                [1],
+            ]
+        )
+    )
+    energies = Energies(
+        value=np.array(
+            [
+                [1.0],
+                [2.0],
+                [3.0],
+                [4.0],
+                [5.0],
+            ]
+        ),
+        units=unit.kilojoule_per_mole,
+    )
+    positions = Positions(
+        value=np.array(
+            [
+                [
+                    [1.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                ],
+                [
+                    [2.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                ],
+                [
+                    [3.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                ],
+                [
+                    [4.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                ],
+                [
+                    [5.0, 0.0, 0.0],
+                    [0.0, 1.5, 1.5],
+                ],
+            ]
+        ),
+        units=unit.nanometer,
+    )
+    spin_multiplicity = SpinMultiplicitiesPerSystem(
+        value=np.array([[1], [2], [2], [3], [2]])
+    )
+
+    record = Record("mol1")
+    record.add_properties([atomic_numbers, energies, positions, spin_multiplicity])
+
+    dataset = SourceDataset(name="test_dataset_spin", local_db_dir=str(prep_temp_dir))
+    dataset.add_record(record)
+
+    # test that we can limit to a specific spin multiplicity
+    new_dataset = dataset.subset_dataset(
+        new_dataset_name="test_dataset12_sub",
+        spin_multiplicity_to_limit=2,
+    )
+
+    # this should produce 1 record with 3 configurations
+    assert new_dataset.total_records() == 1
+    assert new_dataset.get_record("mol1").n_configs == 3
+
+    assert np.all(
+        new_dataset.get_record("mol1").per_system["energies"].value
+        == np.array([[2.0], [3.0], [5.0]])
+    )
+    assert np.all(
+        new_dataset.get_record("mol1").per_atom["positions"].value
+        == np.array(
+            [
+                [[2.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
+                [[3.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
+                [[5.0, 0.0, 0.0], [0.0, 1.5, 1.5]],
+            ]
+        )
+    )
+    assert np.all(
+        new_dataset.get_record("mol1")
+        .per_system["spin_multiplicities_per_system"]
+        .value
+        == np.array([[2], [2], [2]])
+    )
+
+    # test with a different spin multiplicity
+    new_dataset = dataset.subset_dataset(
+        new_dataset_name="test_dataset12_sub2",
+        spin_multiplicity_to_limit=1,
+    )
+    # this should produce 1 record with 1 configuration
+    assert new_dataset.total_records() == 1
+    assert new_dataset.get_record("mol1").n_configs == 1
+    assert np.all(
+        new_dataset.get_record("mol1").per_system["energies"].value == np.array([[1.0]])
+    )
+    assert np.all(
+        new_dataset.get_record("mol1").per_atom["positions"].value
+        == np.array([[[1.0, 0.0, 0.0], [0.0, 0.0, 0.0]]])
+    )
+    # make sure we have the right spin multiplicity
+    assert np.all(
+        new_dataset.get_record("mol1")
+        .per_system["spin_multiplicities_per_system"]
+        .value
+        == np.array([[1]])
+    )
+
+    # test where we don't get any configurations
+    new_dataset = dataset.subset_dataset(
+        new_dataset_name="test_dataset12_sub3",
+        spin_multiplicity_to_limit=90,
+    )
+    # this should produce 0 records
+    assert new_dataset.total_records() == 0
+
+
 def test_remove_high_force_configs(prep_temp_dir):
 
     atomic_numbers = AtomicNumbers(

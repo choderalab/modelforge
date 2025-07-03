@@ -29,7 +29,7 @@ dependencies:
   - pytorch
   - tad-dftd3
   #- tad-mctc==0.4.3
-  - tad-mctc==0.5.1
+  - tad-mctc>=0.5.1
 
   # Testing
   - pytest>=2.1

@@ -349,9 +349,16 @@ def test_metadata_validation(prep_temp_dir, load_test_dataset, dataset_temp_dir)
     dataset_cache_dir = str(dataset_temp_dir)
 
     data = load_test_dataset(
-        "qm9", local_cache_dir=local_cache_dir, dataset_cache_dir=dataset_cache_dir
+        "qm9",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
+        element_filter=[[6, 1]],
     )
 
+    # check lists just is a helper function that checks the contents of the lists are the same
+    # even if the order is different. This is useful for checking the properties of interest
+    # in the metadata file.
+    # nothing fancy, but we should probably test it
     a = ["energy", "force", "atomic_numbers"]
     b = ["energy", "atomic_numbers", "force"]
     assert data._check_lists(a, b) == True
@@ -364,9 +371,16 @@ def test_metadata_validation(prep_temp_dir, load_test_dataset, dataset_temp_dir)
 
     assert data._check_lists(a, b) == False
 
-    # we do not have a metadata files so this will fail
+    # we have not written a metadata file so this will fail validation
     assert data._metadata_validation("qm9_test.json", local_cache_dir) == False
+    import json
 
+    # create local_cache_dir if not already present
+    import os
+
+    os.makedirs(local_cache_dir, exist_ok=True)
+
+    # generate a metadata file
     metadata = {
         "data_keys": [
             "atomic_numbers",
@@ -379,13 +393,6 @@ def test_metadata_validation(prep_temp_dir, load_test_dataset, dataset_temp_dir)
         "hdf5_gz_checksum": "54a2471bba075fcc2cdfe0b78bc567fa",
         "date_generated": "2024-04-11 14:05:14.297305",
     }
-
-    import json
-
-    # create local_cache_dir if not already present
-    import os
-
-    os.makedirs(local_cache_dir, exist_ok=True)
 
     with open(
         f"{local_cache_dir}/qm9_test.json",
@@ -433,6 +440,27 @@ def test_metadata_validation(prep_temp_dir, load_test_dataset, dataset_temp_dir)
             "dipole_moment_per_system",
         ],
         "element_filter": str([[6, 1]]),
+        "hdf5_checksum": "coiejfweoijfowklewke33883",
+        "hdf5_gz_checksum": "54a2471bba075fcc2cdfe0b78bc567fa",
+        "date_generated": "2024-04-11 14:05:14.297305",
+    }
+    with open(
+        f"{local_cache_dir}/qm9_test.json",
+        "w+",
+    ) as f:
+        json.dump(metadata, f)
+
+    assert data._metadata_validation("qm9_test.json", local_cache_dir) == False
+
+    # change the element filter
+    metadata = {
+        "data_keys": [
+            "atomic_numbers",
+            "internal_energy_at_0K",
+            "not_a_property",
+            "dipole_moment_per_system",
+        ],
+        "element_filter": str([[6, 12]]),
         "hdf5_checksum": "coiejfweoijfowklewke33883",
         "hdf5_gz_checksum": "54a2471bba075fcc2cdfe0b78bc567fa",
         "date_generated": "2024-04-11 14:05:14.297305",

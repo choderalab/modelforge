@@ -108,6 +108,7 @@ def compute_grad_norm(loss, model):
             param_norm = grad.detach().data.norm(2)
             total_norm += param_norm.item() ** 2
     total_norm = total_norm**0.5
+
     return total_norm
 
 
@@ -209,9 +210,14 @@ class CalculateProperties(torch.nn.Module):
             retain_graph=train_mode,
             allow_unused=False,
         )[0]
-
         if grad is None:
             raise RuntimeWarning("Force calculation did not return a gradient")
+        # check if nan in the gradient
+        if torch.isnan(grad).any():
+            print(grad)
+            raise RuntimeError(
+                "Gradient of energy used for force calculation contains NaN values."
+            )
 
         per_atom_force_predict = (
             -grad.contiguous()
@@ -742,7 +748,7 @@ class TrainingAdapter(pL.LightningModule):
                     continue  # Skip total loss for gradient norm logging
                 grad_norm = compute_grad_norm(metric.mean(), self)
                 self.log(f"grad_norm/{key}", grad_norm, sync_dist=True)
-
+                log.info(f"Gradient norm for {key}: {grad_norm}")
         # Save energy predictions and targets
         self._update_predictions(
             predict_target,
@@ -1058,6 +1064,7 @@ class TrainingAdapter(pL.LightningModule):
                     histogram_fig,
                     self.current_epoch,
                 )
+
         else:
             log.warning(f"No logger found to log {phase} plots")
 
@@ -1851,6 +1858,8 @@ class PotentialTrainer:
 
             def on_before_optimizer_step(self, trainer, pl_module, optimizer):
                 pl_module.log("grad_norm/model", gradient_norm(pl_module))
+                # norms = pL.utilities.grad_norm(self.layer, norm_type=2)
+                # self.log_dict(norms)
 
         if self.training_parameter.log_norm:
             callbacks.append(GradNormCallback())
@@ -1900,7 +1909,7 @@ class PotentialTrainer:
             limit_test_batches=self.training_parameter.limit_test_batches,
             profiler=self.training_parameter.profiler,
             num_sanity_val_steps=1,
-            gradient_clip_val=5.0,  # FIXME: hardcoded for now
+            gradient_clip_val=self.training_parameter.gradient_clip_val,
             log_every_n_steps=self.runtime_parameter.log_every_n_steps,
             enable_model_summary=True,
             enable_progress_bar=self.runtime_parameter.verbose,  # if true will show progress bar

@@ -28,8 +28,7 @@ dependencies:
   - wandb>=0.18.5
   - pytorch
   - tad-dftd3
-  #- tad-mctc==0.4.3
-  - tad-mctc>=0.5.1
+  - tad-mctc==0.4.3
 
   # Testing
   - pytest>=2.1

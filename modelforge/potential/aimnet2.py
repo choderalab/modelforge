@@ -303,21 +303,12 @@ class AIMNet2InteractionModule(nn.Module):
                     activation_function=activation_function,
                 )
             )
-        if self.is_first_module:
-            self.mlp.append(
-                Dense(
-                    in_features=hidden_layers[-1],
-                    out_features=number_of_per_atom_features + 2,  # delta_q, f, delta_a
-                )
+        self.mlp.append(
+            Dense(
+                in_features=hidden_layers[-1],
+                out_features=number_of_per_atom_features + 2,  # delta_q, f, delta_a
             )
-        else:
-            self.mlp.append(
-                Dense(
-                    in_features=hidden_layers[-1],
-                    out_features=number_of_per_atom_features + 2,  # delta_q, f, delta_a
-                    activation_function=activation_function,
-                )
-            )
+        )
 
     def calculate_radial_contributions(
         self,

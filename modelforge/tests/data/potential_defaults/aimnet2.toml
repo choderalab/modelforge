@@ -6,6 +6,7 @@ number_of_radial_basis_functions = 64
 number_of_vector_features = 8
 maximum_interaction_radius = "5.0 angstrom"
 number_of_interaction_modules = 3
+interaction_module_hidden_layers = [[128,128], [128,128], [128,128]]
 predicted_properties = ["per_atom_energy"]
 predicted_dim = [1]
 

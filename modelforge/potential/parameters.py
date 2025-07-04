@@ -227,6 +227,9 @@ class AimNet2Parameters(ParametersBase):
         # it will be converted to float in appropriate unit system
         maximum_interaction_radius: float
         number_of_interaction_modules: int
+        interaction_module_hidden_layers: List[
+            List[int]
+        ]  # for each interaction module, a list of the sizes of the hidden layers
         activation_function_parameter: ActivationFunctionConfig
         featurization: Featurization
         predicted_properties: List[str]
@@ -235,6 +238,23 @@ class AimNet2Parameters(ParametersBase):
         converted_units = field_validator("maximum_interaction_radius", mode="before")(
             _convert_str_or_unit_to_unit_length
         )
+
+        # validator to ensure that the size of the interaction_module_hidden_layers matches number of interaction modules
+        @model_validator(mode="after")
+        def validate_interaction_module_hidden_layers(self):
+            if (
+                len(self.interaction_module_hidden_layers)
+                != self.number_of_interaction_modules
+            ):
+                raise ValueError(
+                    "The length of 'interaction_module_hidden_layers' list must match 'number_of_interaction_modules'."
+                )
+            for layer_sizes in self.interaction_module_hidden_layers:
+                if len(layer_sizes) < 1:
+                    raise ValueError(
+                        "Each interaction module must have at least one size defined."
+                    )
+            return self
 
     potential_name: str = "AimNet2"
     only_unique_pairs: bool = False

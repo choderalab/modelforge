@@ -1018,35 +1018,33 @@ class DispersionPotential(torch.nn.Module):
         atomic_subsystem_indices = data["atomic_subsystem_indices"]
 
         device = atomic_subsystem_indices.device
+
         # need to convert the positions to bohr units
         positions = (
             (data["positions"] * GlobalUnitSystem.get_units("length")).to("bohr").m
         )
+
         # let us get the atomic subsystem counts so we can breakup the systems properly for batch processing
         mol_ids, atomic_subsystem_counts = torch.unique(
             atomic_subsystem_indices, return_counts=True
         )
+
         # cumulative sum gives us the indices where each system starts
-        atomic_subsystem_counts_sum = torch.cumsum(atomic_subsystem_counts, dim=0)
+        # to be able to use tensor_split, these need to be on the CPU
+        atomic_subsystem_counts_sum = torch.cumsum(atomic_subsystem_counts, dim=0).to(
+            "cpu"
+        )
 
         # split the positions tensor into a list of tensors, one for each system, then use the mctc.batch.pack
         # to create a batch of tensors in the format expected by the tad-dftd3 library.
         positions_batch = mctc.batch.pack(
-            (
-                torch.tensor_split(
-                    positions, atomic_subsystem_counts_sum[:-1].to(device="cpu")
-                )
-            )
-        )
+            (torch.tensor_split(positions, atomic_subsystem_counts_sum[:-1]))
+        ).to(device)
 
         # create a batch of atomic numbers in the same way
         atomic_numbers_batch = mctc.batch.pack(
-            (
-                torch.tensor_split(
-                    atomic_numbers, atomic_subsystem_counts_sum[:-1].to(device="cpu")
-                )
-            )
-        )
+            (torch.tensor_split(atomic_numbers, atomic_subsystem_counts_sum[:-1]))
+        ).to(device)
 
         energies = torch.sum(
             d3.dftd3(

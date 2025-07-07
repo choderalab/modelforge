@@ -18,6 +18,7 @@ class AimNet2Core(torch.nn.Module):
         number_of_vector_features: int,
         number_of_interaction_modules: int,
         interaction_module_hidden_layers: List[List[int]],
+        output_module_hidden_layers: List[int],
         activation_function_parameter: Dict[str, str],
         predicted_properties: List[str],
         predicted_dim: List[int],
@@ -44,6 +45,9 @@ class AimNet2Core(torch.nn.Module):
         interaction_module_hidden_layers : List[List[int]]
             List of hidden layer sizes for each interaction module. Note, this requires at least one value to be defined
             as this specifies the output size of the first layer in the interaction module and input size of the final layer
+        output_module_hidden_layers : List[int]
+            List of hidden layer sizes for the output modules, which are used to
+            compute the final predictions from the atomic embeddings.
         activation_function_parameter : Dict[str, str]
             Configuration of activation functions used across the model.
         predicted_properties : List[str]
@@ -97,17 +101,24 @@ class AimNet2Core(torch.nn.Module):
         # Define output layers to calculate per-atom predictions
         self.output_layers = nn.ModuleDict()
         for property, dim in zip(predicted_properties, predicted_dim):
-            self.output_layers[property] = nn.Sequential(
-                Dense(
-                    number_of_per_atom_features,
-                    number_of_per_atom_features,
-                    activation_function=self.activation_function,
-                ),
-                Dense(
-                    number_of_per_atom_features,
-                    int(dim),
-                ),
+            self.output_layers[property] = mlp_factory(
+                n_in_features=number_of_per_atom_features,
+                n_out_features=int(dim),
+                activation_function=self.activation_function,
+                hidden_layers=output_module_hidden_layers,
             )
+
+            # self.output_layers[property] = nn.Sequential(
+            #     Dense(
+            #         number_of_per_atom_features,
+            #         number_of_per_atom_features,
+            #         activation_function=self.activation_function,
+            #     ),
+            #     Dense(
+            #         number_of_per_atom_features,
+            #         int(dim),
+            #     ),
+            # )
         from modelforge.potential.processing import ChargeConservation
 
         self.charge_conservation = ChargeConservation()
@@ -252,6 +263,45 @@ from torch import Tensor
 from typing import Tuple
 
 
+def mlp_factory(
+    n_in_features: int,
+    n_out_features: int,
+    activation_function: nn.Module,
+    hidden_layers: List[int],
+) -> nn.Sequential:
+    """
+    Helper function to create a dense layer with an activation function.
+    """
+
+    # Single MLP producing combined outputs
+    num_of_layers = len(hidden_layers)
+
+    mlp = nn.Sequential()
+
+    mlp.append(
+        Dense(
+            in_features=n_in_features,
+            out_features=hidden_layers[0],
+            activation_function=activation_function,
+        )
+    )
+    for i in range(1, num_of_layers):
+        mlp.append(
+            Dense(
+                in_features=hidden_layers[i - 1],
+                out_features=hidden_layers[i],
+                activation_function=activation_function,
+            )
+        )
+    mlp.append(
+        Dense(
+            in_features=hidden_layers[-1],
+            out_features=n_out_features,  # delta_q, f, delta_a
+        )
+    )
+    return mlp
+
+
 class AIMNet2InteractionModule(nn.Module):
     def __init__(
         self,
@@ -284,30 +334,11 @@ class AIMNet2InteractionModule(nn.Module):
             )
 
         # Single MLP producing combined outputs
-        num_of_layers = len(hidden_layers)
-
-        self.mlp = nn.Sequential()
-
-        self.mlp.append(
-            Dense(
-                in_features=self.number_of_input_features,
-                out_features=hidden_layers[0],
-                activation_function=activation_function,
-            )
-        )
-        for i in range(1, num_of_layers):
-            self.mlp.append(
-                Dense(
-                    in_features=hidden_layers[i - 1],
-                    out_features=hidden_layers[i],
-                    activation_function=activation_function,
-                )
-            )
-        self.mlp.append(
-            Dense(
-                in_features=hidden_layers[-1],
-                out_features=number_of_per_atom_features + 2,  # delta_q, f, delta_a
-            )
+        self.mlp = mlp_factory(
+            n_in_features=self.number_of_input_features,
+            n_out_features=self.number_of_per_atom_features + 2,
+            activation_function=activation_function,
+            hidden_layers=hidden_layers,
         )
 
     def calculate_radial_contributions(

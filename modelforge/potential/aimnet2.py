@@ -101,7 +101,7 @@ class AimNet2Core(torch.nn.Module):
         # Define output layers to calculate per-atom predictions
         self.output_layers = nn.ModuleDict()
         for property, dim in zip(predicted_properties, predicted_dim):
-            self.output_layers[property] = mlp_factory(
+            self.output_layers[property] = mlp_init(
                 n_in_features=number_of_per_atom_features,
                 n_out_features=int(dim),
                 activation_function=self.activation_function,
@@ -263,14 +263,30 @@ from torch import Tensor
 from typing import Tuple
 
 
-def mlp_factory(
+def mlp_init(
     n_in_features: int,
     n_out_features: int,
     activation_function: nn.Module,
     hidden_layers: List[int],
 ) -> nn.Sequential:
     """
-    Helper function to create a dense layer with an activation function.
+    Helper function to create a sequence of dense layers with an activation function.
+
+
+    Parameters
+    ----------
+    n_in_features : int
+        Number of input features for the first layer.
+    n_out_features : int
+        Number of output features for the last layer.
+    activation_function : nn.Module
+        Activation function to be applied after each hidden layer.
+    hidden_layers : List[int]
+        List of integers specifying the number of features for each hidden layer.
+        First element is the number of output features of the first layer,
+        and the last element is the number of input features of the final layer.
+        If only a single value is provided, it will be used as the output size of the first layer
+        and input size of the final layer (no intermediate layers will be created).
     """
 
     # Single MLP producing combined outputs
@@ -334,7 +350,7 @@ class AIMNet2InteractionModule(nn.Module):
             )
 
         # Single MLP producing combined outputs
-        self.mlp = mlp_factory(
+        self.mlp = mlp_init(
             n_in_features=self.number_of_input_features,
             n_out_features=self.number_of_per_atom_features + 2,
             activation_function=activation_function,

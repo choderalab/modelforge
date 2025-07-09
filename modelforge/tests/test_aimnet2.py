@@ -158,71 +158,71 @@ def test_forward(single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir):
 
     ref_per_system_energy = torch.tensor(
         [
-            [0.2630],
-            [-0.5150],
-            [-0.2999],
-            [-0.0297],
-            [-0.4382],
-            [-0.1805],
-            [0.5974],
-            [0.1770],
-            [0.0842],
-            [-0.2955],
-            [0.1295],
-            [-0.4067],
-            [0.4135],
-            [0.3202],
-            [0.2481],
-            [0.6696],
-            [0.0380],
-            [0.0834],
-            [-0.2613],
-            [-0.8373],
-            [0.2033],
-            [0.1554],
-            [0.0624],
-            [-0.3643],
-            [-0.7861],
-            [-0.0398],
-            [-0.4675],
-            [-0.1000],
-            [0.3265],
-            [0.2546],
-            [-0.1597],
-            [-0.9611],
-            [0.0653],
-            [-0.4411],
-            [0.2587],
-            [-0.1082],
-            [0.0461],
-            [0.0407],
-            [0.6725],
-            [0.3874],
-            [0.3393],
-            [0.1747],
-            [0.4048],
-            [0.1001],
-            [0.1496],
-            [0.2432],
-            [0.3578],
-            [0.2792],
-            [-0.3365],
-            [-0.3329],
-            [-0.8465],
-            [0.0463],
-            [-0.4385],
-            [0.1224],
-            [-0.0442],
-            [0.1029],
-            [-0.4559],
-            [-1.1701],
-            [-0.2714],
-            [0.0318],
-            [-0.8579],
-            [-0.3836],
-            [0.2487],
-            [-0.2728],
-        ],
+            [-0.2266],
+            [-0.0809],
+            [-0.0964],
+            [-0.0579],
+            [-0.0161],
+            [-0.1187],
+            [-0.2539],
+            [-0.2212],
+            [-0.1264],
+            [-0.0572],
+            [-0.1718],
+            [-0.2028],
+            [-0.3489],
+            [-0.3419],
+            [-0.3395],
+            [-0.2923],
+            [-0.2463],
+            [-0.2625],
+            [-0.3212],
+            [-0.3001],
+            [-0.5242],
+            [-0.4224],
+            [-0.0185],
+            [0.0447],
+            [0.1060],
+            [-0.0768],
+            [-0.0089],
+            [-0.1425],
+            [-0.1875],
+            [-0.2198],
+            [-0.1267],
+            [-0.1189],
+            [-0.2076],
+            [-0.1135],
+            [-0.2596],
+            [-0.3231],
+            [-0.2326],
+            [-0.2488],
+            [-0.4488],
+            [-0.4252],
+            [-0.4315],
+            [-0.3634],
+            [-0.3612],
+            [-0.3296],
+            [-0.4591],
+            [-0.3175],
+            [-0.2176],
+            [-0.2271],
+            [-0.4224],
+            [-0.1699],
+            [-0.2058],
+            [-0.0360],
+            [-0.0941],
+            [-0.8663],
+            [-0.6293],
+            [-0.1353],
+            [-0.0477],
+            [-0.1618],
+            [-0.2111],
+            [-0.2212],
+            [-0.2753],
+            [-0.2646],
+            [-0.3484],
+            [-0.2535],
+        ]
     )
 
     print(y_hat["per_system_energy"])
@@ -286,6 +286,30 @@ def test_mlp_initialization():
     assert interaction.mlp[2].out_features == hidden_layers[2]
     assert interaction.mlp[3].in_features == hidden_layers[2]
     assert interaction.mlp[3].out_features == num_per_atom_features + 2
+
+
+def test_mlp_init():
+    """mlp init function makes it easier to set up the MLP layers,
+    as we use the same basic structure also for the output layer"""
+
+    from modelforge.potential.aimnet2 import mlp_init
+
+    from modelforge.potential.utils import ACTIVATION_FUNCTIONS
+
+    mlp = mlp_init(
+        n_in_features=128,
+        n_out_features=2,
+        hidden_layers=[512, 256],
+        activation_function=ACTIVATION_FUNCTIONS["GeLU"](),
+    )
+
+    assert len(mlp) == 3, "MLP should have 3 layers."
+    assert mlp[0].in_features == 128
+    assert mlp[0].out_features == 512
+    assert mlp[1].in_features == 512
+    assert mlp[1].out_features == 256
+    assert mlp[2].in_features == 256
+    assert mlp[2].out_features == 2
 
 
 @pytest.mark.xfail(raises=NotImplementedError)

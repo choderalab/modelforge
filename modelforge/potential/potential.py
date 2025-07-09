@@ -21,7 +21,7 @@ import lightning as pl
 import torch
 from loguru import logger as log
 from openff.units import unit
-from modelforge.utils.units import GlobalUnitSystem
+from modelforge.utils.units import GlobalUnitSystem, chem_context
 from modelforge.potential.neighbors import PairlistData, PairlistOutputs
 
 from modelforge.dataset.dataset import DatasetParameters
@@ -201,12 +201,20 @@ class PostProcessing(torch.nn.Module):
                 for prop in self._registered_properties
             )
         if "per_system_vdw_energy" in properties_to_process:
+            length_conversion_factor = (
+                (1.0 * GlobalUnitSystem.get_units("length")).to("bohr").magnitude
+            )
+            energy_conversion_factor = (
+                (1.0 * unit.hartree).to(GlobalUnitSystem.get_units("energy"), "chem").m
+            )
 
             self.registered_chained_operations["per_system_vdw_energy"] = (
                 DispersionPotential(
                     cutoff=postprocessing_parameter["per_system_vdw_energy"][
                         "maximum_interaction_radius"
-                    ]
+                    ],
+                    length_conversion_factor=length_conversion_factor,
+                    energy_conversion_factor=energy_conversion_factor,
                 )
             )
             self._registered_properties.append("per_system_vdw_energy")
@@ -318,9 +326,11 @@ class Potential(torch.nn.Module):
         self.neighborlist = (
             torch.jit.script(neighborlist) if jit_neighborlist else neighborlist
         )
+        # note cannot jit compile the dispersion interactions as tad-dftd3 is not compatible with torchscript
         self.postprocessing = (
             torch.jit.script(postprocessing) if jit else postprocessing
         )
+        self.postprocessing = postprocessing
 
     def _add_total_charge(
         self, core_output: Dict[str, torch.Tensor], input_data: NNPInput
@@ -1097,6 +1107,7 @@ def load_inference_model_from_checkpoint(
     checkpoint_path: str,
     old_config_only_local_cutoff: Optional[bool] = False,
     only_unique_pairs: Optional[bool] = None,
+    jit: bool = True,
 ) -> Union[Potential, JAXModel]:
     """
     Creates an inference model from a checkpoint file.
@@ -1114,6 +1125,8 @@ def load_inference_model_from_checkpoint(
         If defined, this will set the only_unique_pairs key in the neighborlist module. This is only needed
         for models trained prior to PR #299 in modelforge. (default is None).
         In the case of ANI models, this should be set to True. Typically False for other models
+    jit : bool, optional
+        Whether to use JIT compilation for the model internals (default is True).
     """
 
     # Load the checkpoint
@@ -1132,6 +1145,7 @@ def load_inference_model_from_checkpoint(
         potential_parameter=potential_parameter,
         dataset_statistic=dataset_statistic,
         potential_seed=potential_seed,
+        jit=jit,
     )
     if only_unique_pairs is not None:
         checkpoint["state_dict"]["potential.neighborlist.only_unique_pairs"] = (

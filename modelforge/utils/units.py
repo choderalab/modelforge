@@ -197,14 +197,11 @@ class GlobalUnitSystem:
         )
 
     def __getitem__(self, item):
-        # if item in cls.__dict__.keys():
-        #     return getattr(cls, item)
-        # else:
-        #     return None
         try:
             return getattr(self, item)
         except AttributeError:
             raise AttributeError(f"Unit {item} not found in the unit system.")
+            return getattr(self, item)
 
 
 def print_modelforge_unit_system():

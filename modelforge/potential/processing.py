@@ -1066,16 +1066,6 @@ class DispersionPotential(torch.nn.Module):
             ),
             -1,
         )
-        energies = torch.sum(
-            d3.dftd3(
-                numbers=atomic_numbers,
-                positions=positions,
-                param=self.params,
-                cutoff=self.cutoff,
-                ref=d3.Reference(device=device, dtype=positions.dtype),
-            ),
-            -1,
-        )
 
         data["per_system_vdw_energy"] = (
             energies.reshape(-1, 1) * self.energy_conversion_factor

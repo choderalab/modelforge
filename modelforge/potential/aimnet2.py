@@ -108,17 +108,6 @@ class AimNet2Core(torch.nn.Module):
                 hidden_layers=output_module_hidden_layers,
             )
 
-            # self.output_layers[property] = nn.Sequential(
-            #     Dense(
-            #         number_of_per_atom_features,
-            #         number_of_per_atom_features,
-            #         activation_function=self.activation_function,
-            #     ),
-            #     Dense(
-            #         number_of_per_atom_features,
-            #         int(dim),
-            #     ),
-            # )
         from modelforge.potential.processing import ChargeConservation
 
         self.charge_conservation = ChargeConservation()

@@ -201,7 +201,6 @@ class GlobalUnitSystem:
             return getattr(self, item)
         except AttributeError:
             raise AttributeError(f"Unit {item} not found in the unit system.")
-            return getattr(self, item)
 
 
 def print_modelforge_unit_system():

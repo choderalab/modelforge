@@ -327,10 +327,18 @@ class Potential(torch.nn.Module):
             torch.jit.script(neighborlist) if jit_neighborlist else neighborlist
         )
         # note cannot jit compile the dispersion interactions as tad-dftd3 is not compatible with torchscript
+        if "per_system_vdw_energy" in postprocessing._registered_properties:
+            log.warning(
+                "JIT compiling the postprocessing module with vdw interactions will not work."
+            )
+            log.warning(
+                "The tad-DFTD3 packaged used is not compatible with torchscript."
+            )
+            log.warning("Disabling JIT compilation by setting jit=False.")
+
         self.postprocessing = (
             torch.jit.script(postprocessing) if jit else postprocessing
         )
-        self.postprocessing = postprocessing
 
     def _add_total_charge(
         self, core_output: Dict[str, torch.Tensor], input_data: NNPInput

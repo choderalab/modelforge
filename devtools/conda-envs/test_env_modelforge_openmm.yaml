@@ -27,6 +27,8 @@ dependencies:
   - graphviz
   - openmm
   - openmm-torch
+  - tad-dftd3
+  - tad-mctc==0.4.3
 
   # Testing
   - pytest>=2.1

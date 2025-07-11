@@ -7,7 +7,9 @@ from typing import Dict, Iterator, Union, List
 
 import torch
 from openff.units import unit
-from modelforge.utils.units import GlobalUnitSystem, chem_context
+import tad_dftd3 as d3
+import tad_mctc as mctc
+
 
 from modelforge.dataset.utils import _ATOMIC_NUMBER_TO_ELEMENT
 
@@ -283,7 +285,7 @@ def default_charge_conservation(
 
     Parameters
     ----------
-    partial_charges : torch.Tensor
+    per_atom_charge : torch.Tensor
         Tensor of partial charges for all atoms in all molecules.
     per_system_total_charge : torch.Tensor
         Tensor of desired total charges for each molecule.
@@ -978,7 +980,13 @@ class DispersionPotential(torch.nn.Module):
 
     """
 
-    def __init__(self, cutoff: float, parameter_set: str = "wB97M-D3(BJ)"):
+    def __init__(
+        self,
+        cutoff: float,
+        length_conversion_factor: float,
+        energy_conversion_factor: float,
+        parameter_set: str = "wB97M-D3(BJ)",
+    ):
         """
         Initializes the Dispersion potential module.
 
@@ -986,6 +994,12 @@ class DispersionPotential(torch.nn.Module):
         ----------
         cutoff : float
             The cutoff distance for the dispersion interaction in nanometers.
+        length_conversion_factor : float
+            The conversion factor to convert the length values from the global unit system to bohr.
+            This factor is provided here rather than using the global unit system directly.
+        energy_conversion_factor : float
+            The conversion factor to convert the energy returned by DFT-D3 (hartrees) to the global unit system.
+            This factor is provided here rather than using the global unit system directly.
         parameter_set : str, optional
             The parameter set to use for the dispersion calculation.
             Default is "wB97M-D3(BJ)".
@@ -1007,22 +1021,22 @@ class DispersionPotential(torch.nn.Module):
                 s8=torch.tensor(0.3908),
                 a2=torch.tensor(3.1280),
             )
+        self.length_conversion_factor = length_conversion_factor
+        self.energy_conversion_factor = energy_conversion_factor
+
         # dftd3 uses bohr for length, so we need to convert the cutoff
-        self.cutoff = (cutoff * GlobalUnitSystem.get_units("length")).to("bohr").m
+        self.cutoff = cutoff * self.length_conversion_factor
 
     def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
-        import tad_dftd3 as d3
-        import tad_mctc as mctc
 
         atomic_numbers = data["atomic_numbers"]
+
         atomic_subsystem_indices = data["atomic_subsystem_indices"]
 
         device = atomic_subsystem_indices.device
 
         # need to convert the positions to bohr units
-        positions = (
-            (data["positions"] * GlobalUnitSystem.get_units("length")).to("bohr").m
-        )
+        positions = data["positions"] * self.length_conversion_factor
 
         # let us get the atomic subsystem counts so we can breakup the systems properly for batch processing
         mol_ids, atomic_subsystem_counts = torch.unique(
@@ -1054,9 +1068,7 @@ class DispersionPotential(torch.nn.Module):
         )
 
         data["per_system_vdw_energy"] = (
-            (energies.reshape(-1, 1) * unit.hartree)
-            .to(GlobalUnitSystem.get_units("energy"), "chem")
-            .m
+            energies.reshape(-1, 1) * self.energy_conversion_factor
         )
 
         return data

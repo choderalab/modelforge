@@ -238,6 +238,14 @@ def test_electrostatics():
 
 def test_dispersion_potential():
     from modelforge.potential.processing import DispersionPotential
+    from modelforge.utils.units import GlobalUnitSystem, chem_context
+
+    length_conversion_factor = (
+        (1.0 * GlobalUnitSystem.get_units("length")).to("bohr").magnitude
+    )
+    energy_conversion_factor = (
+        (1.0 * unit.hartree).to(GlobalUnitSystem.get_units("energy"), "chem").m
+    )
 
     # set up a minimal dict that would represent the core output for 2 non-interacting methane molecules
     core_output_dict = {}
@@ -255,7 +263,12 @@ def test_dispersion_potential():
         ]
     )
 
-    vdw = DispersionPotential(cutoff=100.0)
+    vdw = DispersionPotential(
+        cutoff=100.0,
+        length_conversion_factor=length_conversion_factor,
+        energy_conversion_factor=energy_conversion_factor,
+    )
+
     vdw_output = vdw(core_output_dict)
     assert vdw_output["per_system_vdw_energy"].shape == (1, 1)
     assert torch.allclose(
@@ -285,7 +298,11 @@ def test_dispersion_potential():
         ]
     )
 
-    vdw = DispersionPotential(cutoff=100.0)
+    vdw = DispersionPotential(
+        cutoff=100.0,
+        length_conversion_factor=length_conversion_factor,
+        energy_conversion_factor=energy_conversion_factor,
+    )
     vdw_output = vdw(core_output_dict)
     assert vdw_output["per_system_vdw_energy"].shape == (2, 1)
     assert torch.allclose(

@@ -230,6 +230,7 @@ class AimNet2Parameters(ParametersBase):
         interaction_module_hidden_layers: List[
             List[int]
         ]  # for each interaction module, a list of the sizes of the hidden layers
+        output_module_hidden_layers: List[int]
         activation_function_parameter: ActivationFunctionConfig
         featurization: Featurization
         predicted_properties: List[str]

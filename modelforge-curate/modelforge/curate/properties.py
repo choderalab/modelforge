@@ -1094,3 +1094,67 @@ class BondOrders(PropertyBaseModel):
                 f"Property type of bond orders should be dimensionless, found {self.property_type}"
             )
         return self
+
+
+# create a class that returns a PropertyBaseModel subclass based on the string name
+
+
+class PropertyFactory:
+    """
+    Factory class to create instance of PropertyBaseModel subclasses based on the property key.
+    """
+
+    @staticmethod
+    def create_property(
+        class_name: str,
+        name: str,
+        value: NdArray,
+        units: unit.Unit,
+    ) -> PropertyBaseModel:
+        """
+        Create a PropertyBaseModel subclass instance based on the property name.
+
+        Parameters
+        ----------
+        class_name : str
+            The name of the property class.
+        name : str
+            The name of the property.
+        value : NdArray
+            The value of the property.
+        units : unit.Unit
+            The units of the property.
+
+        Returns
+        -------
+        PropertyBaseModel
+            An instance of a PropertyBaseModel subclass.
+        """
+        property_classes = {
+            "energies": Energies,
+            "forces": Forces,
+            "partial_charges": PartialCharges,
+            "total_charge": TotalCharge,
+            "atomic_numbers": AtomicNumbers,
+            "positions": Positions,
+            "spin_multiplicities_per_system": SpinMultiplicitiesPerSystem,
+            "spin_multiplicities_per_atom": SpinMultiplicitiesPerAtom,
+            "dipole_moment_per_system": DipoleMomentPerSystem,
+            "dipole_moment_scalar_per_system": DipoleMomentScalarPerSystem,
+            "dipole_moment_per_atom": DipoleMomentPerAtom,
+            "polarizability": Polarizability,
+            "meta_data": MetaData,
+            "bond_orders": BondOrders,
+            "quadrupole_moment_per_system": QuadrupoleMomentPerSystem,
+            "quadrupole_moment_per_atom": QuadrupoleMomentPerAtom,
+            "octupole_moment_per_atom": OctupoleMomentPerAtom,
+        }
+
+        if class_name not in property_classes:
+            raise ValueError(f"Unknown property name: {class_name}")
+
+        return property_classes[class_name](
+            name=name,
+            value=value,
+            units=units,
+        )

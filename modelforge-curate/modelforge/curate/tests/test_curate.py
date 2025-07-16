@@ -1723,3 +1723,275 @@ def test_reading_from_db_file(prep_temp_dir):
     import os
 
     assert os.path.exists(str(prep_temp_dir / "test_dataset14.sqlite")) == False
+
+
+def test_read_hdf5(prep_temp_dir):
+
+    new_dataset = SourceDataset(
+        "test_dataset_for_reading",
+        local_db_dir=str(prep_temp_dir),
+        local_db_name="test_dataset_for_reading.sqlite",
+    )
+    new_dataset.create_record("mol1")
+    positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
+    energies = Energies(value=np.array([[0.1]]), units=unit.kilojoule_per_mole)
+    atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
+    meta_data = MetaData(name="smiles", value="[CH]")
+
+    new_dataset.add_properties("mol1", [positions, energies, atomic_numbers, meta_data])
+
+    new_dataset.create_record("mol2")
+    positions = Positions(
+        value=[
+            [[2.0, 1.0, 1.0], [2.0, 2.0, 2.0], [3.0, 3.0, 3.0]],
+            [[3.0, 1.0, 1.0], [5.0, 2.0, 2.0], [1.0, 3.0, 3.0]],
+        ],
+        units="nanometer",
+    )
+    energies = Energies(value=np.array([[0.2], [0.4]]), units=unit.hartree)
+    atomic_numbers = AtomicNumbers(value=np.array([[1], [6], [8]]))
+    meta_data = MetaData(name="smiles", value="COH")
+    new_dataset.add_properties("mol2", [positions, energies, atomic_numbers, meta_data])
+
+    new_dataset.create_record("mol3")
+    positions = Positions(value=[[[3.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
+    energies = Energies(value=np.array([[0.3]]), units=unit.hartree)
+    atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
+    meta_data = MetaData(name="smiles", value="[CH]")
+    new_dataset.add_properties("mol3", [positions, energies, atomic_numbers, meta_data])
+
+    checksum = new_dataset.to_hdf5(
+        file_path=str(prep_temp_dir), file_name="test_dataset_for_reading.hdf5"
+    )
+
+    from modelforge.curate.sourcedataset import create_dataset_from_hdf5
+
+    # first read in without a property map
+    input_dataset = create_dataset_from_hdf5(
+        hdf5_filename=f"{prep_temp_dir}/test_dataset_for_reading.hdf5",
+        dataset_name="test_read_data",
+        dataset_local_db_dir=str(prep_temp_dir),
+    )
+
+    assert input_dataset.total_records() == 3
+    assert input_dataset.get_record("mol1").n_configs == 1
+    assert input_dataset.get_record("mol1").n_atoms == 2
+    assert input_dataset.get_record("mol2").n_configs == 2
+    assert input_dataset.get_record("mol2").n_atoms == 3
+    assert input_dataset.get_record("mol3").n_configs == 1
+    assert input_dataset.get_record("mol3").n_atoms == 2
+
+    record_mo1 = input_dataset.get_record("mol1")
+    pos = record_mo1.get_property("positions")
+    assert pos.value.shape == (1, 2, 3)
+    assert np.all(pos.value == np.array([[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]]))
+    assert pos.units == "nanometer"
+    assert pos.classification == "per_atom"
+    assert pos.property_type == "length"
+
+    energy = record_mo1.get_property("energies")
+    assert energy.value.shape == (1, 1)
+    assert np.all(energy.value == np.array([[0.1]]))
+    assert energy.units == "kilojoule_per_mole"
+    assert energy.classification == "per_system"
+    assert energy.property_type == "energy"
+
+    # read in with a property map
+    property_map = {
+        "energies": Energies,
+        "positions": Positions,
+        "atomic_numbers": AtomicNumbers,
+        "smiles": MetaData,
+    }
+
+    input_dataset_with_map = create_dataset_from_hdf5(
+        hdf5_filename=f"{prep_temp_dir}/test_dataset_for_reading.hdf5",
+        dataset_name="test_read_data",
+        dataset_local_db_dir=str(prep_temp_dir),
+        property_map=property_map,
+    )
+
+    assert input_dataset_with_map.total_records() == 3
+    assert input_dataset_with_map.get_record("mol1").n_configs == 1
+    assert input_dataset_with_map.get_record("mol1").n_atoms == 2
+    assert input_dataset_with_map.get_record("mol2").n_configs == 2
+    assert input_dataset_with_map.get_record("mol2").n_atoms == 3
+    assert input_dataset_with_map.get_record("mol3").n_configs == 1
+    assert input_dataset_with_map.get_record("mol3").n_atoms == 2
+
+    record_mo1 = input_dataset_with_map.get_record("mol1")
+
+    pos = record_mo1.get_property("positions")
+    assert isinstance(pos, Positions)
+    assert pos.value.shape == (1, 2, 3)
+    assert np.all(pos.value == np.array([[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]]))
+    assert pos.units == "nanometer"
+    assert pos.classification == "per_atom"
+    assert pos.property_type == "length"
+
+    energy = record_mo1.get_property("energies")
+    assert isinstance(energy, Energies)
+    assert energy.value.shape == (1, 1)
+    assert np.all(energy.value == np.array([[0.1]]))
+    assert energy.units == "kilojoule_per_mole"
+    assert energy.classification == "per_system"
+    assert energy.property_type == "energy"
+
+    atomic_numbers = record_mo1.get_property("atomic_numbers")
+    assert isinstance(atomic_numbers, AtomicNumbers)
+    assert atomic_numbers.value.shape == (2, 1)
+    assert np.all(atomic_numbers.value == np.array([[1], [6]]))
+
+    smiles = record_mo1.get_property("smiles")
+    assert isinstance(smiles, MetaData)
+    assert smiles.value == "[CH]"
+
+
+def test_property_factory(prep_temp_dir):
+    from modelforge.curate.properties import PropertyFactory
+
+    # note the factory isn't used at the moment, but may be in the future
+
+    # test that we can create a property factory
+    factory = PropertyFactory()
+
+    # test that we can create a property from a string
+    positions = factory.create_property(
+        class_name="positions",
+        name="positions_test",
+        value=[[[1.0, 1.0, 1.0]]],
+        units="nanometer",
+    )
+    assert isinstance(positions, Positions)
+    assert positions.value.shape == (1, 1, 3)
+    assert positions.name == "positions_test"
+    assert np.all(positions.value == np.array([[[1.0, 1.0, 1.0]]]))
+    assert positions.units == "nanometer"
+    assert positions.classification == "per_atom"
+    assert positions.property_type == "length"
+
+    energies = factory.create_property(
+        class_name="energies",
+        name="energies_test",
+        value=np.array([[0.1]]),
+        units=unit.hartree,
+    )
+    assert isinstance(energies, Energies)
+    assert energies.value.shape == (1, 1)
+    assert energies.name == "energies_test"
+    assert np.all(energies.value == np.array([[0.1]]))
+    assert energies.units == "hartree"
+
+    forces = factory.create_property(
+        class_name="forces",
+        name="forces_test",
+        value=np.array([[[0.1, 0.2, 0.3]]]),
+        units=unit.kilojoule_per_mole / unit.nanometer,
+    )
+    assert isinstance(forces, Forces)
+    assert forces.name == "forces_test"
+    assert forces.value.shape == (1, 1, 3)
+    assert np.all(forces.value == np.array([[[0.1, 0.2, 0.3]]]))
+    assert forces.units == "kilojoule_per_mole / nanometer"
+
+    atomic_numbers = factory.create_property(
+        class_name="atomic_numbers",
+        name="atomic_numbers_name",
+        value=np.array([[1], [6]]),
+        units=unit.dimensionless,
+    )
+    assert isinstance(atomic_numbers, AtomicNumbers)
+    assert atomic_numbers.name == "atomic_numbers_name"
+    assert atomic_numbers.value.shape == (2, 1)
+    assert np.all(atomic_numbers.value == np.array([[1], [6]]))
+
+    total_charge = factory.create_property(
+        class_name="total_charge",
+        name="total_charge_name",
+        value=np.array([[0]]),
+        units=unit.elementary_charge,
+    )
+    assert isinstance(total_charge, TotalCharge)
+    assert total_charge.name == "total_charge_name"
+    assert total_charge.value.shape == (1, 1)
+    assert np.all(total_charge.value == np.array([[0]]))
+    assert total_charge.property_type == "charge"
+    assert total_charge.classification == "per_system"
+
+    spin_multiplicities = factory.create_property(
+        class_name="spin_multiplicities_per_system",
+        name="spin_multiplicities_name",
+        value=np.array([[1]]),
+        units=unit.dimensionless,
+    )
+    assert isinstance(spin_multiplicities, SpinMultiplicitiesPerSystem)
+    assert spin_multiplicities.name == "spin_multiplicities_name"
+
+    spin_multiplicities_per_atom = factory.create_property(
+        class_name="spin_multiplicities_per_atom",
+        name="spin_multiplicities_per_atom_name",
+        value=np.array([[[1], [2]]]),
+        units=unit.dimensionless,
+    )
+    assert isinstance(spin_multiplicities_per_atom, SpinMultiplicitiesPerAtom)
+    assert spin_multiplicities_per_atom.name == "spin_multiplicities_per_atom_name"
+
+    dipole_moment_per_system = factory.create_property(
+        class_name="dipole_moment_per_system",
+        name="dipole_moment_per_system_name",
+        value=np.array([[0.0, 0.0, 0.0]]),
+        units=unit.debye,
+    )
+    assert isinstance(dipole_moment_per_system, DipoleMomentPerSystem)
+    assert dipole_moment_per_system.name == "dipole_moment_per_system_name"
+
+    dipole_moment_per_atom = factory.create_property(
+        class_name="dipole_moment_per_atom",
+        name="dipole_moment_per_atom_name",
+        value=np.array([[[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]]),
+        units=unit.debye,
+    )
+    assert isinstance(dipole_moment_per_atom, DipoleMomentPerAtom)
+    assert dipole_moment_per_atom.name == "dipole_moment_per_atom_name"
+
+    quadrupole_moment_per_system = factory.create_property(
+        class_name="quadrupole_moment_per_system",
+        name="quadrupole_moment_per_system_name",
+        value=np.array([[[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]]),
+        units=unit.debye * unit.nanometer,
+    )
+    assert isinstance(quadrupole_moment_per_system, QuadrupoleMomentPerSystem)
+    assert quadrupole_moment_per_system.name == "quadrupole_moment_per_system_name"
+
+    quadrupole_moment_per_atom = factory.create_property(
+        class_name="quadrupole_moment_per_atom",
+        name="quadrupole_moment_per_atom_name",
+        value=np.array([[[[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]]]),
+        units=unit.debye * unit.nanometer,
+    )
+    assert isinstance(quadrupole_moment_per_atom, QuadrupoleMomentPerAtom)
+
+    polarizability = factory.create_property(
+        class_name="polarizability",
+        name="polarizability_name",
+        value=np.array([[0.0]]),
+        units=unit.angstrom**3,
+    )
+    assert isinstance(polarizability, Polarizability)
+    assert polarizability.name == "polarizability_name"
+    bond_orders_per_atom = factory.create_property(
+        class_name="bond_orders",
+        name="bond_orders_per_atom_name",
+        value=np.array([[[0.0, 0.0], [1.0, 1.0]]]),
+        units=unit.dimensionless,
+    )
+    assert isinstance(bond_orders_per_atom, BondOrders)
+    assert bond_orders_per_atom.name == "bond_orders_per_atom_name"
+
+    dipole_moment_scalar_per_system = factory.create_property(
+        class_name="dipole_moment_scalar_per_system",
+        name="dipole_moment_scalar_per_system_name",
+        value=np.array([[0.0]]),
+        units=unit.debye,
+    )
+    assert isinstance(dipole_moment_scalar_per_system, DipoleMomentScalarPerSystem)

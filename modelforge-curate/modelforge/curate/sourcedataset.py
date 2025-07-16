@@ -13,7 +13,7 @@ from openff.units import unit
 
 import numpy as np
 import os
-from typing import Union, List, Type, Optional
+from typing import Union, List, Type, Optional, Dict
 
 from typing_extensions import Self
 
@@ -1131,14 +1131,24 @@ def create_dataset_from_hdf5(
     dataset_local_db_dir: str = "./",
     dataset_local_db_name: str = None,
     append_property: bool = False,
+    property_map: Optional[Dict[str, Type[PropertyBaseModel]]] = None,
 ):
     """
-    Create a dataset from an HDF5 file.
+    Create a dataset from an modelforge curated HDF5 file.
+
+    This will load the HDF5 file and create a SourceDataset instance.
+    If property_map is not provided, all properties will be added as
+    an instance of PropertyBaseModel (i.e., the base class for all properties),
+    rather than the specific property class.  These classes store the same information,
+    but the specific property classes contain additional validation.
+
+    Note, if the property_map is not provided, warnings may be raised when writing the dataset to a file,
+    as writing checks that for each record an instance of the Energies, AtomicNumbers, and Positions classes are present.
 
     Parameters
     ----------
     hdf5_filename: str
-        Name of the HDF5 file to read.
+        Name and path of the HDF5 file to read.
     dataset_name: str
         Name of the dataset to create.
     dataset_local_db_dir: str, optional, default="./"
@@ -1148,6 +1158,11 @@ def create_dataset_from_hdf5(
     append_property: bool, optional, default=False
         Set to True to append properties to existing properties in a record.
         If False, an error will be raised if a property with the same name is added to a record.
+    property_map: dict[str, type[PropertyBaseModel]], optional, default=None
+        A dictionary mapping property names to property classes (i.e, subclasses of PropertyBaseModel class).
+        If a property is not in the map, it will be added as a PropertyBaseModel with default settings.
+        If None, all properties will be added as an instance PropertyBaseModel with default settings.
+        Mapping to the PropertyBaseModel class is useful for validation of the dataset.
 
     Returns
     -------
@@ -1165,6 +1180,8 @@ def create_dataset_from_hdf5(
         append_property=append_property,
     )
 
+    if property_map is None:
+        property_map = {}
     with h5py.File(hdf5_filename, "r") as f:
         keys = list(f.keys())
 
@@ -1177,6 +1194,7 @@ def create_dataset_from_hdf5(
                 if pk == "n_configs":
                     n_configs = f[key][pk][()]
                 else:
+
                     property_type = f[key][pk].attrs["property_type"]
                     property_classification = f[key][pk].attrs["format"]
                     if "u" in f[key][pk].attrs.keys():
@@ -1187,13 +1205,22 @@ def create_dataset_from_hdf5(
                     if type(value) is bytes:
                         value = f[key][pk][()].decode("utf-8")
 
-                    property = PropertyBaseModel(
-                        name=pk,
-                        value=value,
-                        units=unit_str,
-                        property_type=property_type,
-                        classification=property_classification,
-                    )
+                    if pk in property_map:
+                        property = property_map[pk](
+                            name=pk,
+                            value=value,
+                            units=unit_str,
+                            property_type=property_type,
+                            classification=property_classification,
+                        )
+                    else:
+                        property = PropertyBaseModel(
+                            name=pk,
+                            value=value,
+                            units=unit_str,
+                            property_type=property_type,
+                            classification=property_classification,
+                        )
 
                     record.add_property(property)
             assert n_configs == record.n_configs

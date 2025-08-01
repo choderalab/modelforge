@@ -103,7 +103,7 @@ class tmQMOpenFFCuration(DatasetCuration):
 
         ds = client.get_dataset_by_id(dataset_id)
         qcportal_view_full_path = f"{qcportal_view_path}/{qcportal_view_filename}"
-        logger.debug(f"Using qcportal view file: {qcportal_view_full_path}")
+        # logger.debug(f"Using qcportal view file: {qcportal_view_full_path}")
         ds.use_view_cache(qcportal_view_full_path)
 
         # ds = client.get_dataset(dataset_type=dataset_type, dataset_name=dataset_name)

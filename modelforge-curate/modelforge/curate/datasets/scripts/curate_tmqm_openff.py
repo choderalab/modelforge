@@ -25,7 +25,7 @@ def main():
 
     # We'll want to provide some simple means of versioning
     # if we make updates to either the underlying dataset, curation modules, or parameters given to the code
-    version = "1.1"
+    version = "1.2"
     # version of the dataset to curate
     version_select = f"v_0"
 
@@ -35,15 +35,15 @@ def main():
         version_select=version_select,
     )
 
-    # tmqm_openff.process(
-    #     qcportal_view_filename="dataset_419_view.sqlite",
-    #     qcportal_view_path="~/mf_datasets/tmqm_openff_dataset/download_dataset",
-    #     force_download=False,
-    # )
-    tmqm_openff.load_from_db(
-        local_db_dir="/home/cri/mf_datasets/tmqm_openff_dataset",
-        local_db_name="tmqm_openff.sqlite",
+    tmqm_openff.process(
+        qcportal_view_filename="dataset_419_view_july.sqlite",
+        qcportal_view_path="/home/cri/mf_datasets/tmqm_openff_dataset/dataset_download_30July25",
+        force_download=False,
     )
+    # tmqm_openff.load_from_db(
+    #     local_db_dir="/home/cri/mf_datasets/tmqm_openff_dataset",
+    #     local_db_name="tmqm_openff.sqlite",
+    # )
     available_properties = (
         [
             "atomic_numbers",

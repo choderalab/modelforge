@@ -396,6 +396,7 @@ class SourceDataset:
         total_records: Optional[int] = None,
         total_configurations: Optional[int] = None,
         max_configurations_per_record: Optional[int] = None,
+        max_configurations_per_record_order: Optional[str] = "start",
         atomic_numbers_to_limit: Optional[np.ndarray] = None,
         max_force: Optional[unit.Quantity] = None,
         max_force_key: Optional[str] = "forces",
@@ -404,6 +405,7 @@ class SourceDataset:
         spin_multiplicity_key: Optional[str] = "spin_multiplicities_per_system",
         local_db_dir: Optional[str] = None,
         local_db_name: Optional[str] = None,
+        seed: Optional[int] = 42,
     ) -> Self:
         """
         Subset the dataset based on various criteria
@@ -418,6 +420,11 @@ class SourceDataset:
             Total number of conformers to include in the subset. annot be used in conjunction with total_records
         max_configurations_per_record: Optional[int], default=None
             Maximum number of conformers to include per record. If None, all conformers in a record will be included.
+            By default, configurations to include are taken from the start of the record.
+        max_configurations_per_record_order: Optional[str], default="start"
+            If "start", configurations will be taken from the start of the record, i.e., [0:max_configurations_per_record].
+            If "end", configurations will be taken from the end of the record, i.e., [total-max_configurations_per_record:total].
+            If "random", configurations will be randomly selected from the record.
         atomic_numbers_to_limit: Optional[np.ndarray], default=None
             An array of atomic species to limit the dataset to.
             Any molecules that contain elements outside of this list will be igonored
@@ -435,11 +442,17 @@ class SourceDataset:
             Directory to store the local database for the new dataset.  If not defined, will use the same directory as the current dataset.
         local_db_name: str, optional, default=None
             Name of the cache database for the new dataset. If None, the dataset name will be used.
-
+        seed: int, optional, default=42
+            If max_configurations_per_record_order is "random", this seed will be used to ensure reproducibility of the random selection.
+            Note this seeds an instance of the numpy random number generator only used within this context
         Returns
         -------
             SourceDataset: A new dataset that corresponds to the desired subset.
         """
+
+        # set random number generator seed for reproducibility
+        rng = np.random.default_rng(seed)
+
         if new_dataset_name == self.name:
             raise ValueError(
                 "New dataset name cannot be the same as the current dataset name."
@@ -619,8 +632,19 @@ class SourceDataset:
                             n_to_add = min(
                                 max_configurations_per_record, record.n_configs
                             )
-
-                            record = record.slice_record(0, n_to_add)
+                            if max_configurations_per_record_order == "start":
+                                record = record.slice_record(0, n_to_add)
+                            if max_configurations_per_record_order == "end":
+                                record = record.slice_record(
+                                    record.n_configs - n_to_add, record.n_configs
+                                )
+                            if max_configurations_per_record_order == "random":
+                                indices = rng.choice(
+                                    record.n_configs, n_to_add, replace=False
+                                )
+                                record = record.remove_configs(
+                                    indices_to_include=indices
+                                )
 
                         if final_configuration_only:
                             record = record.slice_record(
@@ -671,7 +695,17 @@ class SourceDataset:
                             continue
                     if max_configurations_per_record is not None:
                         n_to_add = min(max_configurations_per_record, record.n_configs)
-                        record = record.slice_record(0, n_to_add)
+                        if max_configurations_per_record_order == "start":
+                            record = record.slice_record(0, n_to_add)
+                        if max_configurations_per_record_order == "end":
+                            record = record.slice_record(
+                                record.n_configs - n_to_add, record.n_configs
+                            )
+                        if max_configurations_per_record_order == "random":
+                            indices = rng.choice(
+                                record.n_configs, n_to_add, replace=False
+                            )
+                            record = record.remove_configs(indices_to_include=indices)
                     if final_configuration_only:
                         record = record.slice_record(
                             record.n_configs - 1, record.n_configs

@@ -211,7 +211,6 @@ def test_record_failures():
         )
         record.add_property(positions)
 
-    print(record.per_system.keys())
     # this will fail because the property already exists, but with different type
     with pytest.raises(ValueError):
         energies = Energies(
@@ -245,7 +244,6 @@ def test_record_to_rdkit():
     rdkit_mol = record.to_rdkit()
     assert rdkit_mol.GetNumAtoms() == 2
     assert rdkit_mol.GetNumConformers() == 2
-    print(rdkit_mol.GetConformer(0).GetAtomPosition(0))
     assert np.allclose(
         np.array(rdkit_mol.GetConformer(0).GetAtomPosition(0)),
         np.array([10.0, 10.0, 10.0]),
@@ -401,14 +399,12 @@ def test_record_repr(capsys):
     energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
     atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
     smiles = MetaData(name="smiles", value="[CH]")
-    print(record)
     out, err = capsys.readouterr()
 
     assert "n_atoms: cannot be determined" in out
     assert "n_configs: cannot be determined" in out
 
     record.add_properties([positions, energies, atomic_numbers, smiles])
-    print(record)
     out, err = capsys.readouterr()
     assert "name: mol1" in out
     assert "n_atoms: 2" in out
@@ -1151,7 +1147,6 @@ def test_dataset_subsetting(prep_temp_dir):
     # grab a record and check the energy values to ensure we took 2 random configurations
     record_temp = ds_subset.get_record("mol0")
     assert record_temp.n_configs == 2
-    print(record_temp.per_system["energies"].value)
     assert np.all(record_temp.per_system["energies"].value == np.array([[0.1], [0.4]]))
 
     # check that this fails if we give a bad value to max_configurations_per_record_order

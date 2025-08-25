@@ -1106,7 +1106,7 @@ def test_dataset_subsetting(prep_temp_dir):
 
     assert ds_subset.name == "test_dataset_sub1"
     assert ds_subset.local_db_name == "test_dataset_sub1.sqlite"
-    assert ds_subset.local_db_dir == ds.local_db_dirs
+    assert ds_subset.local_db_dir == ds.local_db_dir
 
     ds_subset = ds.subset_dataset(new_dataset_name="test_dataset_sub2", total_records=3)
     assert ds_subset.total_configs() == 15

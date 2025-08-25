@@ -645,6 +645,10 @@ class SourceDataset:
                                 record = record.remove_configs(
                                     indices_to_include=indices
                                 )
+                            else:
+                                raise ValueError(
+                                    "max_configurations_per_record_order must be one of 'start', 'end', or 'random'"
+                                )
 
                         if final_configuration_only:
                             record = record.slice_record(

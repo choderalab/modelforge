@@ -1154,6 +1154,14 @@ def test_dataset_subsetting(prep_temp_dir):
     print(record_temp.per_system["energies"].value)
     assert np.all(record_temp.per_system["energies"].value == np.array([[0.1], [0.4]]))
 
+    # check that this fails if we give a bad value to max_configurations_per_record_order
+    with pytest.raises(ValueError):
+        ds_subset = ds.subset_dataset(
+            new_dataset_name="test_dataset_sub3c",
+            max_configurations_per_record=2,
+            max_configurations_per_record_order="totally_wrong",
+            seed=57,
+        )
     # check total_conformers
     ds_subset = ds.subset_dataset(
         new_dataset_name="test_dataset_sub4", total_configurations=20

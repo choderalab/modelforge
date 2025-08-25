@@ -634,11 +634,11 @@ class SourceDataset:
                             )
                             if max_configurations_per_record_order == "start":
                                 record = record.slice_record(0, n_to_add)
-                            if max_configurations_per_record_order == "end":
+                            elif max_configurations_per_record_order == "end":
                                 record = record.slice_record(
                                     record.n_configs - n_to_add, record.n_configs
                                 )
-                            if max_configurations_per_record_order == "random":
+                            elif max_configurations_per_record_order == "random":
                                 indices = rng.choice(
                                     record.n_configs, n_to_add, replace=False
                                 )

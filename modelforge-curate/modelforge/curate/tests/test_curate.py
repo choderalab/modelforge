@@ -1069,6 +1069,9 @@ def test_dataset_validation(prep_temp_dir):
 
 
 def test_dataset_subsetting(prep_temp_dir):
+    # test breaking up a dataset into smaller datasets that apply some filtering
+    # for example, total_records or total_configurations, max_configurations_per_record
+    # including strategies for picking configurations
     ds = SourceDataset(name="test_dataset10", local_db_dir=str(prep_temp_dir))
 
     assert ds.local_db_dir == str(prep_temp_dir)
@@ -1103,7 +1106,7 @@ def test_dataset_subsetting(prep_temp_dir):
 
     assert ds_subset.name == "test_dataset_sub1"
     assert ds_subset.local_db_name == "test_dataset_sub1.sqlite"
-    assert ds_subset.local_db_dir == ds.local_db_dir
+    assert ds_subset.local_db_dir == ds.local_db_dirs
 
     ds_subset = ds.subset_dataset(new_dataset_name="test_dataset_sub2", total_records=3)
     assert ds_subset.total_configs() == 15

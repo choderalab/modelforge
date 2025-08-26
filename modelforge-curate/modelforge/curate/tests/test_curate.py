@@ -1128,6 +1128,34 @@ def test_dataset_subsetting(prep_temp_dir):
     record_temp = ds_subset.get_record("mol0")
     assert np.all(record_temp.per_system["energies"].value == np.array([[0.1], [0.2]]))
 
+    # check max_configurations_per_record with different strategies for total_records
+    ds_subset = ds.subset_dataset(
+        new_dataset_name="test_dataset_sub3a2",
+        total_records=2,
+        max_configurations_per_record=2,
+        max_configurations_per_record_order="start",
+    )
+    assert ds_subset.total_configs() == 4
+    assert ds_subset.total_records() == 2
+    # grab a record and check the energy values to ensure we took the first 2 configurations
+    record_temp = ds_subset.get_record("mol0")
+    assert np.all(record_temp.per_system["energies"].value == np.array([[0.1], [0.2]]))
+
+    # check max_configurations_per_record with different strategies for total_configurations
+    ds_subset = ds.subset_dataset(
+        new_dataset_name="test_dataset_sub3a3",
+        total_configurations=4,
+        max_configurations_per_record=2,
+        max_configurations_per_record_order="start",
+    )
+    assert ds_subset.total_configs() == 4
+    assert ds_subset.total_records() == 2
+    # grab a record and check the energy values to ensure we took the first 2 configurations
+    record_temp = ds_subset.get_record("mol0")
+    assert np.all(record_temp.per_system["energies"].value == np.array([[0.1], [0.2]]))
+
+    # check max_configurations_per_record with different strategies for total_configurations
+
     ds_subset = ds.subset_dataset(
         new_dataset_name="test_dataset_sub3b",
         max_configurations_per_record=2,
@@ -1136,6 +1164,32 @@ def test_dataset_subsetting(prep_temp_dir):
     assert ds_subset.total_configs() == 20
     record_temp = ds_subset.get_record("mol0")
     assert np.all(record_temp.per_system["energies"].value == np.array([[0.4], [0.5]]))
+
+    # check max_configurations_per_record with different strategies for total_records
+    ds_subset = ds.subset_dataset(
+        new_dataset_name="test_dataset_sub3b2",
+        total_records=2,
+        max_configurations_per_record=2,
+        max_configurations_per_record_order="end",
+    )
+    assert ds_subset.total_configs() == 4
+    assert ds_subset.total_records() == 2
+    record_temp = ds_subset.get_record("mol0")
+    assert np.all(record_temp.per_system["energies"].value == np.array([[0.4], [0.5]]))
+
+    # check max_configurations_per_record with different strategies for total_configurations
+    ds_subset = ds.subset_dataset(
+        new_dataset_name="test_dataset_sub3b3",
+        total_configurations=4,
+        max_configurations_per_record=2,
+        max_configurations_per_record_order="end",
+    )
+    assert ds_subset.total_configs() == 4
+    assert ds_subset.total_records() == 2
+    record_temp = ds_subset.get_record("mol0")
+    assert np.all(record_temp.per_system["energies"].value == np.array([[0.4], [0.5]]))
+
+    # check for random subsetting
 
     ds_subset = ds.subset_dataset(
         new_dataset_name="test_dataset_sub3c",
@@ -1149,13 +1203,56 @@ def test_dataset_subsetting(prep_temp_dir):
     assert record_temp.n_configs == 2
     assert np.all(record_temp.per_system["energies"].value == np.array([[0.1], [0.4]]))
 
+    # check max_configurations_per_record with different strategies for total_records
+    ds_subset = ds.subset_dataset(
+        new_dataset_name="test_dataset_sub3c2",
+        total_records=2,
+        max_configurations_per_record=2,
+        max_configurations_per_record_order="random",
+        seed=57,
+    )
+    assert ds_subset.total_configs() == 4
+    assert ds_subset.total_records() == 2
+    record_temp = ds_subset.get_record("mol0")
+    assert record_temp.n_configs == 2
+    assert np.all(record_temp.per_system["energies"].value == np.array([[0.1], [0.4]]))
+
+    # check max_configurations_per_record with different strategies for total_configurations
+    ds_subset = ds.subset_dataset(
+        new_dataset_name="test_dataset_sub3c3",
+        total_configurations=4,
+        max_configurations_per_record=2,
+        max_configurations_per_record_order="random",
+        seed=57,
+    )
+    assert ds_subset.total_configs() == 4
+    assert ds_subset.total_records() == 2
+    record_temp = ds_subset.get_record("mol0")
+    assert record_temp.n_configs == 2
+    assert np.all(record_temp.per_system["energies"].value == np.array([[0.1], [0.4]]))
+
     # check that this fails if we give a bad value to max_configurations_per_record_order
     with pytest.raises(ValueError):
         ds_subset = ds.subset_dataset(
-            new_dataset_name="test_dataset_sub3c",
+            new_dataset_name="test_dataset_sub3d",
             max_configurations_per_record=2,
             max_configurations_per_record_order="totally_wrong",
             seed=57,
+        )
+    with pytest.raises(ValueError):
+        ds_subset = ds.subset_dataset(
+            new_dataset_name="test_dataset_sub3e",
+            total_records=1,
+            max_configurations_per_record=2,
+            max_configurations_per_record_order="totally_wrong",
+        )
+
+    with pytest.raises(ValueError):
+        ds_subset = ds.subset_dataset(
+            new_dataset_name="test_dataset_sub3f",
+            total_configurations=10,
+            max_configurations_per_record=2,
+            max_configurations_per_record_order="totally_wrong",
         )
     # check total_conformers
     ds_subset = ds.subset_dataset(

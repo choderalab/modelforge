@@ -506,7 +506,7 @@ class SourceDataset:
             local_db_name=local_db_name,
         )
 
-        # if we are limiting the total conformers
+        # if we are limiting the total configurations
         if total_configurations is not None:
 
             total_configurations_to_add = total_configurations
@@ -556,6 +556,7 @@ class SourceDataset:
                                 continue
 
                         # if we set a max number of configurations we want per record, consider that here
+
                         if max_configurations_per_record is not None:
                             n_configs_to_add = max_configurations_per_record
                             # if we have fewer than the max, just set to n_configs
@@ -575,6 +576,7 @@ class SourceDataset:
                         # if we have no configurations left after filtering, we will skip this record
                         if record.n_configs != 0:
                             if final_configuration_only:
+
                                 record = record.slice_record(
                                     record.n_configs - 1, record.n_configs
                                 )
@@ -582,7 +584,27 @@ class SourceDataset:
                                 total_configurations_to_add -= 1
 
                             else:
-                                record = record.slice_record(0, n_configs_to_add)
+
+                                if max_configurations_per_record_order == "start":
+                                    record = record.slice_record(0, n_configs_to_add)
+                                elif max_configurations_per_record_order == "end":
+                                    record = record.slice_record(
+                                        record.n_configs - n_configs_to_add,
+                                        record.n_configs,
+                                    )
+                                elif max_configurations_per_record_order == "random":
+                                    indices = rng.choice(
+                                        record.n_configs,
+                                        n_configs_to_add,
+                                        replace=False,
+                                    )
+                                    record = record.remove_configs(
+                                        indices_to_include=indices
+                                    )
+                                else:
+                                    raise ValueError(
+                                        "max_configurations_per_record_order must be one of 'start', 'end', or 'random'"
+                                    )
                                 new_dataset.add_record(record)
                                 total_configurations_to_add -= n_configs_to_add
                 return new_dataset
@@ -701,15 +723,19 @@ class SourceDataset:
                         n_to_add = min(max_configurations_per_record, record.n_configs)
                         if max_configurations_per_record_order == "start":
                             record = record.slice_record(0, n_to_add)
-                        if max_configurations_per_record_order == "end":
+                        elif max_configurations_per_record_order == "end":
                             record = record.slice_record(
                                 record.n_configs - n_to_add, record.n_configs
                             )
-                        if max_configurations_per_record_order == "random":
+                        elif max_configurations_per_record_order == "random":
                             indices = rng.choice(
                                 record.n_configs, n_to_add, replace=False
                             )
                             record = record.remove_configs(indices_to_include=indices)
+                        else:
+                            raise ValueError(
+                                "max_configurations_per_record_order must be one of 'start', 'end', or 'random'"
+                            )
                     if final_configuration_only:
                         record = record.slice_record(
                             record.n_configs - 1, record.n_configs

@@ -399,12 +399,14 @@ def test_record_repr(capsys):
     energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
     atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
     smiles = MetaData(name="smiles", value="[CH]")
+    print(record)
     out, err = capsys.readouterr()
 
     assert "n_atoms: cannot be determined" in out
     assert "n_configs: cannot be determined" in out
 
     record.add_properties([positions, energies, atomic_numbers, smiles])
+    print(record)
     out, err = capsys.readouterr()
     assert "name: mol1" in out
     assert "n_atoms: 2" in out

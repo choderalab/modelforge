@@ -30,3 +30,21 @@ def test_dataset_download_from_zenodo(
         batch_size=64,
         dataset_cache_dir=dataset_cache_dir,
     )
+    # download any additional subsets that we may need
+    if dataset_name.lower().startswith("spice"):
+
+        versions = {
+            "spice1": "nc_1000_HCNOFClS_v1.1",
+            "spice2": "nc_1000_HCNOFClS_v1.1",
+            "spice1_openff": "nc_1000_HCNOFClS_v2.1",
+            "spice2_openff": "nc_1000_HCNOFClS_v1.1",
+        }
+
+        dataset = datamodule_factory(
+            dataset_name=dataset_name,
+            batch_size=64,
+            splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+            local_cache_dir=local_cache_dir,
+            dataset_cache_dir=dataset_cache_dir,
+            version_select=versions[dataset_name.lower()],
+        )

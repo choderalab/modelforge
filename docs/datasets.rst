@@ -46,23 +46,24 @@ Explanation of the possible fields in the dataset configuration file:
 - `regression_ase`: A boolean flag indicating whether to use the atomic self-energies provided by the dataset (if available) or to calculate them via regression. If set to `True`, the atomic self-energies will be used as provided in the dataset metadata; if set to `False`, the self-energies will be calculated via regression. This is Optional and defaults to `False`.
 
 Other fields that can be specified in the dataset configuration file include:
+
 - `local_yaml_file`: A path to a local dataset yaml file. This is Optional and defaults to `None`. If specified, it will be used to load the dataset metadata instead of the default metadata files provided by modelforge. This allows users to work with their own datasets without needing to upload them to a remote server or modifying the modelforge source.
 - `dataset_cache_dir`: Specifies the directory where the dataset files will be cached. This is useful for storing the dataset files locally to avoid downloading them multiple times; can be shared between multiple training runs.
 
 
-Postprocessing of dataset entries
+Processing of dataset entries
 -----------------------------------
 
-Other common operations that are performed on the dataset as part of training machine learned potentials include:
+Other common operations that are performed on the dataset as part of training machine learned potentials.  These are defined in the training toml file:
 
-- *Removing Self-Energies*: Self-energies are per-element offsets added to the total energy of a system. These offsets are not useful for training
-  machine-learned potentials and can be removed to provide cleaner training data.
-- *Splitting the Dataset*: The dataset are split into training, validation, and test sets. This is crucial for evaluating the performance of the machine learning model and ensuring that it generalizes well to unseen data. Various schemes can be used to specify this
+- `Removing Self-Energies`: Self-energies are per-element offsets subtracted to the total energy of a system.
+  The energy offsets provide cleaner training data (e.g., MAE values of energy are closer to the scale of the energy itself).
+- *Splitting the Dataset*: The dataset are split into training, validation, and test sets. This is crucial for evaluating the performance of the machine learning model and ensuring that it generalizes well to unseen data. Various schemes can be used to specify this.
 - *Shifting the center of mass*: The center of mass of the system can be shifted to the origin to enable calculation of the dipole moment.
 - *Normalization and Scaling*: Normalize the energies and other properties to ensure they are on a comparable scale, which can improve the stability and
   performance of the machine learning model. Note that this is done when atomic energies are predicted, i.e. the atomic energy (`E_i`) is scaled using the atomic energy distribution obtained from the training dataset: `E_i = E_i_stddev * E_i_pred + E_i_mean`.
 
-However, note that these operations are defined within the dataset configuration; these are specified in the training (self-energy, splitting, shifting COM) and potential (normalization) configuration TOML files.
+However, note that these operations are not defined within the dataset configuration; these are specified in the training (self-energy, splitting, shifting COM) and potential (normalization) configuration TOML files.
 
 Interacting with the Dataset Module
 -----------------------------------

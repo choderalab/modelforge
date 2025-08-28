@@ -293,7 +293,8 @@ class SplittingStrategy(ABC):
         # then the main generator will be used to split the train/val set
         if self.test_seed is not None:
             self.test_generator = torch.Generator().manual_seed(self.test_seed)
-
+        else:
+            self.test_generator = None
         self.train_size, self.val_size, self.test_size = split[0], split[1], split[2]
         self.train_indices: List[int] = []
         self.val_indices: List[int] = []

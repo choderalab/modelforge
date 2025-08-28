@@ -346,6 +346,7 @@ class TrainingParameters(ParametersBase):
         )
         data_split: List[float]
         seed: int
+        test_seed: Optional[int] = None
 
         @field_validator("data_split")
         def data_split_must_sum_to_one_and_length_three(cls, v) -> List[float]:

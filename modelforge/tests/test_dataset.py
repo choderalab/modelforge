@@ -705,6 +705,101 @@ from modelforge.dataset.utils import (
 )
 
 
+def test_size_of_splits():
+    # The routine that splits up a dataset in train/val/test based on the provided split fractions
+
+    from modelforge.dataset.utils import calculate_size_of_splits
+
+    total_size = 100
+    fractions = [0.8, 0.1, 0.1]
+    sizes = calculate_size_of_splits(total_size=total_size, split=fractions)
+
+    assert sum(sizes) == total_size
+    assert sizes == [80, 10, 10]
+
+    # if we cannot easily divide, we assign the remainders in a round robin fashion
+    total_size = 103
+    fractions = [0.8, 0.1, 0.1]
+    sizes = calculate_size_of_splits(total_size=total_size, split=fractions)
+    assert sum(sizes) == total_size
+    assert sizes == [83, 10, 10]
+
+    # Let us test a case that will fail because the fractions add up to more than 1
+    with pytest.raises(ValueError):
+        total_size = 10
+        fractions = [0.5, 0.3, 0.3]
+        sizes = calculate_size_of_splits(total_size=total_size, split=fractions)
+
+    with pytest.raises(ValueError):
+        total_size = 10
+        fractions = [0.5, 0.1, 0.1]
+        sizes = calculate_size_of_splits(total_size=total_size, split=fractions)
+
+
+@pytest.mark.parametrize(
+    "splitting_strategy",
+    [
+        RandomSplittingStrategy,
+        RandomRecordSplittingStrategy,
+    ],
+)
+@pytest.mark.parametrize("dataset_name", ["QM9", "PHALKETHOH"])
+def test_random_splitting_fixed_test(
+    splitting_strategy,
+    dataset_name,
+    datamodule_factory,
+    get_dataset_container_fix,
+    prep_temp_dir,
+    dataset_temp_dir,
+):
+    local_cache_dir = str(prep_temp_dir) + "/dataset_splitting1"
+    dataset_cache_dir = str(dataset_temp_dir)
+
+    """Test random_split on the the dataset."""
+    dm = datamodule_factory(
+        dataset_name=dataset_name,
+        batch_size=512,
+        splitting_strategy=splitting_strategy(seed=42, test_seed=123),
+        remove_self_energies=False,
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
+    )
+
+    train_dataset, val_dataset, test_dataset = (
+        dm.train_dataset,
+        dm.val_dataset,
+        dm.test_dataset,
+    )
+
+    dm = datamodule_factory(
+        dataset_name=dataset_name,
+        batch_size=512,
+        splitting_strategy=splitting_strategy(seed=142, test_seed=123),
+        remove_self_energies=False,
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
+    )
+
+    train_dataset_2, val_dataset_2, test_dataset_2 = (
+        dm.train_dataset,
+        dm.val_dataset,
+        dm.test_dataset,
+    )
+    # the test set should be identical since we used the same test_seed
+    assert len(test_dataset) == len(test_dataset_2)
+
+    for i in range(len(test_dataset)):
+        data1 = test_dataset[i]
+        data2 = test_dataset_2[i]
+        assert torch.allclose(
+            data1.nnp_input.atomic_numbers, data2.nnp_input.atomic_numbers
+        )
+        assert torch.allclose(data1.nnp_input.positions, data2.nnp_input.positions)
+        assert torch.allclose(
+            data1.metadata.per_system_energy, data2.metadata.per_system_energy
+        )
+
+
 @pytest.mark.parametrize(
     "splitting_strategy",
     [

@@ -21,7 +21,7 @@ def pytest_addoption(parser):
 # so we do not need to re-download the datasets for each of the tests
 #
 @pytest.fixture(scope="session")
-def dataset_temp_dir(tmp_path_factory):
+def dataset_temp_dir(tmp_path_factory, worker_id):
     fn = tmp_path_factory.mktemp("dataset_dir")
     return fn
 

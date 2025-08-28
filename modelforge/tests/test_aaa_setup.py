@@ -16,7 +16,7 @@ from modelforge.dataset import _ImplementedDatasets
 # if we can't fetch the datasets for whatever reason (e.g. server issues), this should fail immediately.
 @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 def test_dataset_download_from_zenodo(
-    dataset_name, datamodule_factory, prep_temp_dir, dataset_temp_dir, worker_id
+    dataset_name, datamodule_factory, prep_temp_dir, dataset_temp_dir
 ):
     from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
 

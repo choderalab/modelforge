@@ -271,6 +271,7 @@ import pytest
 from modelforge.train.parameters import TrainingParameters
 
 
+@pytest.mark.xdist_group(name="training_tests")
 @pytest.mark.parametrize("potential_name", ["ANI2x"])
 @pytest.mark.parametrize("dataset_name", ["PHALKETHOH"])
 @pytest.mark.parametrize(
@@ -308,6 +309,7 @@ def test_learning_rate_scheduler(
     get_trainer(config).train_potential().save_checkpoint("test.chp")  # save checkpoint
 
 
+@pytest.mark.xdist_group(name="training_tests")
 @pytest.mark.xdist_group(name="test_training_with_lightning")
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
 @pytest.mark.parametrize(
@@ -349,6 +351,7 @@ def test_train_with_lightning(loss, potential_name, dataset_name, prep_temp_dir)
     # get_trainer(config).train_potential()
 
 
+@pytest.mark.xdist_group(name="training_tests")
 def test_train_from_single_toml_file(prep_temp_dir):
     from modelforge.utils.io import get_path_string
 
@@ -361,6 +364,7 @@ def test_train_from_single_toml_file(prep_temp_dir):
     read_config_and_train(config_path, local_cache_dir=local_cache_dir)
 
 
+@pytest.mark.xdist_group(name="training_tests")
 def test_train_from_single_toml_file_element_filter():
     from modelforge.utils.io import get_path_string
 
@@ -392,6 +396,7 @@ def test_train_from_single_toml_file_element_filter():
     assert np.all(np.array(trainer.datamodule.element_filter) == np.array([[6, 1]]))
 
 
+@pytest.mark.xdist_group(name="training_tests")
 def test_error_calculation(
     single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
 ):
@@ -457,6 +462,7 @@ def test_error_calculation(
     assert torch.allclose(torch.mean(F_error), reference_F_error)
 
 
+@pytest.mark.xdist_group(name="training_tests")
 def test_loss_with_dipole_moment(
     single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
 ):
@@ -552,6 +558,7 @@ def test_loss_with_dipole_moment(
     ).all(), "Total loss contains non-finite values."
 
 
+@pytest.mark.xdist_group(name="training_tests")
 def test_per_atom_charge_loss(
     single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
 ):
@@ -592,6 +599,7 @@ def test_per_atom_charge_loss(
     assert torch.allclose(scaled_loss_value, torch.tensor([[0.51]]))
 
 
+@pytest.mark.xdist_group(name="training_tests")
 def test_loss(single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir):
     from modelforge.train.losses import Loss
 

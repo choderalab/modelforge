@@ -452,8 +452,8 @@ class RandomRecordSplittingStrategy(SplittingStrategy):
             List containing three float values representing the ratio of data for
             training, validation, and testing respectively, by default [0.8, 0.1, 0.1].
         test_seed : Optional[int], optional
-            An optional see that can be used to provide a fixed set of indices for testing purposes, by default None.
-            If provided, the datest will first be split into (train+val) and test using this seed, and then the
+            An optional seed that can be used to provide a fixed set of indices for testing purposes, by default None.
+            If provided, the dataset will first be split into (train+val) and test using this seed, and then the
             (train+val) set will be split into train and val using the main seed.
             This allows randomization of the train/val split while keeping the test set fixed.
         Raises

@@ -112,7 +112,7 @@ Predicting Longer-Range Interactions
 
 
 
-In scenarios where longer-range interactions are considered, additional terms are incorporated into the loss function. There are two lonerg range interactions that are of interest: dispersion interactions and electrostatics.
+In scenarios where longer-range interactions are considered, additional terms are incorporated into the loss function. There are two longer range interactions that are of interest: dispersion interactions and electrostatics.
 
 To calculate  electrostatics the first moment of the charge density (partial charges) is predicted by the machine learning potential.  The atomic
 charges are then used to calculate the long range electrostatics. The expression

@@ -400,11 +400,15 @@ class RandomSplittingStrategy(SplittingStrategy):
         # if we have a test seed, we need to first split off the test set
         # using the test seed, and then split the remaining data into train/val
         else:
+            subset_lengths = calculate_size_of_splits(
+                len(dataset),
+                split_frac=[self.train_size, self.val_size, self.test_size],
+            )
 
             self.train_indices, self.val_indices, self.test_indices = (
                 two_stage_random_split(
                     len(dataset),
-                    split=[self.train_size, self.val_size, self.test_size],
+                    split_size=subset_lengths,
                     generator1=self.test_generator,
                     generator2=self.generator,
                 )
@@ -498,7 +502,7 @@ class RandomRecordSplittingStrategy(SplittingStrategy):
         return (train_d, val_d, test_d)
 
 
-def calculate_size_of_splits(total_size: int, split: List[float]) -> List[int]:
+def calculate_size_of_splits(total_size: int, split_frac: List[float]) -> List[int]:
     """
     Calculate the size of each split based on the total size and the split ratios.
 
@@ -514,7 +518,7 @@ def calculate_size_of_splits(total_size: int, split: List[float]) -> List[int]:
     ----------
     total_size : int
         Total size of the dataset.
-    split : List[float]
+    split_frac : List[float]
         List containing three float values representing the ratio of data for
         training, validation, and testing respectively.
 
@@ -523,10 +527,10 @@ def calculate_size_of_splits(total_size: int, split: List[float]) -> List[int]:
     List[int]
         List containing the sizes of each split.
     """
-    if np.isclose(sum(split), 1) and sum(split) <= 1:
+    if np.isclose(sum(split_frac), 1) and sum(split_frac) <= 1:
         subset_lengths: List[int] = []
 
-        for i, frac in enumerate(split):
+        for i, frac in enumerate(split_frac):
             if frac < 0 or frac > 1:
                 raise ValueError(f"Fraction at index {i} is not between 0 and 1")
             n_items_in_split = int(np.floor(total_size * frac))
@@ -546,7 +550,7 @@ def calculate_size_of_splits(total_size: int, split: List[float]) -> List[int]:
 
 def two_stage_random_split(
     dataset_size: int,
-    split: List[float],
+    split_size: List[int],
     generator1: torch.Generator,
     generator2: torch.Generator,
 ) -> Tuple[List[int], List[int], List[int]]:
@@ -562,9 +566,9 @@ def two_stage_random_split(
     ----------
     dataset_size : int
         Total size of the dataset.
-    split : List[float]
-        List containing three float values representing the ratio of data for
-        training, validation, and testing respectively.
+    split_size : List[int]
+        List containing three int values representing the sizes of the
+        training, validation, and testing splits respectively.
     generator1 : torch.Generator
         Torch random number generator for the first stage of splitting.
     generator2 : torch.Generator
@@ -575,13 +579,12 @@ def two_stage_random_split(
     Tuple[List[int], List[int], List[int]]
         A tuple containing three lists of indices for training, validation, and testing subsets, respectively.
     """
-    if len(split) != 3 or not np.isclose(sum(split), 1.0):
-        raise ValueError("Split must be a list of three fractions that sum to 1.0")
+    if len(split_size) != 3 or not np.isclose(sum(split_size), dataset_size):
+        raise ValueError(
+            "Split must be a list of three integers that sum to the total dataset size."
+        )
 
-    train_frac, val_frac, test_frac = split
-
-    # Calculate sizes for each split
-    train_size, val_size, test_size = calculate_size_of_splits(dataset_size, split)
+    train_size, val_size, test_size = split_size
 
     # First stage: Randomize all indicies and Split into (train + val) and test
     indices_first_shuffle = torch.randperm(dataset_size, generator=generator1)
@@ -638,8 +641,9 @@ def random_record_split(
     if np.isclose(sum(lengths), 1) and sum(lengths) <= 1:
         subset_lengths: List[int] = []
 
-        subset_lengths = calculate_size_of_splits(dataset.record_len(), lengths)  # type: ignore[arg-type]
-
+        subset_lengths = calculate_size_of_splits(
+            total_size=dataset.record_len(), split_frac=lengths
+        )  # type: ignore[arg-type]
 
         lengths = subset_lengths
 
@@ -663,28 +667,14 @@ def random_record_split(
         # and extract the test set
         # then reshuffle the remaining indices to get train and val
 
-        # do the first shuffle
-        indices_first_shuffle = torch.randperm(
-            sum(lengths), generator=test_generator  # type: ignore[attr-defined]
+        training_indices, val_indices, test_indices = two_stage_random_split(
+            dataset_size=dataset.record_len(),  # type: ignore[arg-type]
+            split_size=lengths,
+            generator1=test_generator,
+            generator2=generator,
         )
 
-        # let us get the test indices first
-        test_indices = indices_first_shuffle[0 : lengths[2]]
-        test_indices = test_indices.tolist()
-
-        # get the remaining indices
-        remaining_indices = indices_first_shuffle[lengths[2] :]
-
-        # perform the second shuffling
-        indices_second_shuffle = torch.randperm(
-            remaining_indices.shape[0], generator=generator
-        ).tolist()
-        # now we can split the remaining indices into train and val
-        train_val_indices = remaining_indices[indices_second_shuffle].tolist()
-
-        record_indices = train_val_indices + test_indices
-        for i in range(0, dataset.record_len()):  # type: ignore[arg-type]
-            assert i in record_indices, f"Record index {i} is missing!"
+        record_indices = training_indices + val_indices + test_indices
 
     indices_by_split: List[List[int]] = []
     for offset, length in zip(np.cumsum(lengths), lengths):

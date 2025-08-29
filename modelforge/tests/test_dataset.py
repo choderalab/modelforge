@@ -712,7 +712,7 @@ def test_size_of_splits():
 
     total_size = 100
     fractions = [0.8, 0.1, 0.1]
-    sizes = calculate_size_of_splits(total_size=total_size, split=fractions)
+    sizes = calculate_size_of_splits(total_size=total_size, split_frac=fractions)
 
     assert sum(sizes) == total_size
     assert sizes == [80, 10, 10]
@@ -720,7 +720,7 @@ def test_size_of_splits():
     # if we cannot easily divide, we assign the remainders in a round robin fashion
     total_size = 103
     fractions = [0.8, 0.1, 0.1]
-    sizes = calculate_size_of_splits(total_size=total_size, split=fractions)
+    sizes = calculate_size_of_splits(total_size=total_size, split_frac=fractions)
     assert sum(sizes) == total_size
     assert sizes == [83, 10, 10]
 
@@ -728,19 +728,19 @@ def test_size_of_splits():
     with pytest.raises(ValueError):
         total_size = 10
         fractions = [0.5, 0.3, 0.3]
-        sizes = calculate_size_of_splits(total_size=total_size, split=fractions)
+        sizes = calculate_size_of_splits(total_size=total_size, split_frac=fractions)
 
     with pytest.raises(ValueError):
         total_size = 10
         fractions = [0.5, 0.1, 0.1]
-        sizes = calculate_size_of_splits(total_size=total_size, split=fractions)
+        sizes = calculate_size_of_splits(total_size=total_size, split_frac=fractions)
 
 
 def test_two_stage_random_splitting():
     from modelforge.dataset.utils import two_stage_random_split
 
     total_size = 1000
-    split = [0.8, 0.1, 0.1]
+    split = [800, 100, 100]
     first_split_seed = 42
     second_split_seed = 123
 
@@ -748,7 +748,7 @@ def test_two_stage_random_splitting():
 
     train_indices, val_indices, test_indices = two_stage_random_split(
         dataset_size=total_size,
-        split=split,
+        split_size=split,
         generator1=torch.Generator().manual_seed(first_split_seed),
         generator2=torch.Generator().manual_seed(second_split_seed),
     )
@@ -760,7 +760,7 @@ def test_two_stage_random_splitting():
     # next let us change the second split seed and see that we get the same test set but different train and val sets
     train_indices_2, val_indices_2, test_indices_2 = two_stage_random_split(
         dataset_size=total_size,
-        split=split,
+        split_size=split,
         generator1=torch.Generator().manual_seed(first_split_seed),
         generator2=torch.Generator().manual_seed(456),
     )

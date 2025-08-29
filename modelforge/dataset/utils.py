@@ -269,17 +269,32 @@ class SplittingStrategy(ABC):
         Random seed for reproducibility.
     generator : torch.Generator, optional
         Torch random number generator.
+    test_seed: int, optional
+        An optional seed that can be used to provide a fixed set of indices for testing purposes.
+        If provided, the dataset will first be split into (train+val) and test using this seed, and then the
+        (train+val) set will be split into train and val using the main seed.
+        This allows randomization of the train/val split while keeping the test set fixed.
     """
 
     def __init__(
         self,
         split: List[float],
         seed: Optional[int] = None,
+        test_seed: Optional[int] = None,
     ):
         self.seed = seed
+        self.test_seed = test_seed
+
         if self.seed is not None:
             self.generator = torch.Generator().manual_seed(self.seed)
 
+        # if we set test_seed, we'll initialize a separate generator
+        # this will be used to initially split off the test set
+        # then the main generator will be used to split the train/val set
+        if self.test_seed is not None:
+            self.test_generator = torch.Generator().manual_seed(self.test_seed)
+        else:
+            self.test_generator = None
         self.train_size, self.val_size, self.test_size = split[0], split[1], split[2]
         self.train_indices: List[int] = []
         self.val_indices: List[int] = []
@@ -300,7 +315,12 @@ class RandomSplittingStrategy(SplittingStrategy):
     Strategy to split a dataset randomly.
     """
 
-    def __init__(self, seed: int = 42, split: List[float] = [0.8, 0.1, 0.1]):
+    def __init__(
+        self,
+        seed: int = 42,
+        split: List[float] = [0.8, 0.1, 0.1],
+        test_seed: Optional[int] = None,
+    ):
         """
         Initializes the RandomSplittingStrategy with a specified seed and split ratios.
 
@@ -314,6 +334,12 @@ class RandomSplittingStrategy(SplittingStrategy):
         split : List[float], optional
             List containing three float values representing the ratio of data for
             training, validation, and testing respectively, by default [0.8, 0.1, 0.1].
+        test_seed : Optional[int], optional
+            An optional seed that can be used to provide a fixed set of indices for testing purposes,
+            by default None.
+            If provided, the dataset will first be split into (train+val) and test using this seed, and then the
+            (train+val) set will be split into train and val using the main seed.
+            This allows randomization of the train/val split while keeping the test set fixed.
 
         Raises
         ------
@@ -327,7 +353,7 @@ class RandomSplittingStrategy(SplittingStrategy):
         >>> train_idx, val_idx, test_idx = random_split.split(dataset)
         """
 
-        super().__init__(seed=seed, split=split)
+        super().__init__(seed=seed, split=split, test_seed=test_seed)
 
     def split(self, dataset: "TorchDataset") -> Tuple[Subset, Subset, Subset]:
         """
@@ -358,26 +384,55 @@ class RandomSplittingStrategy(SplittingStrategy):
             f"Splitting dataset into {self.train_size}, {self.val_size}, {self.test_size} ..."
         )
 
-        train_d, val_d, test_d = random_split(
-            dataset,
-            lengths=[self.train_size, self.val_size, self.test_size],
-            generator=self.generator,
-        )
-        self.train_indices, self.val_indices, self.test_indices = (
-            list(train_d.indices),
-            list(val_d.indices),
-            list(test_d.indices),
-        )
+        # if we do not have a test seed, we can just do a single random split
+        # use the torch.random_split function
+        if self.test_seed is None:
+            train_d, val_d, test_d = random_split(
+                dataset,
+                lengths=[self.train_size, self.val_size, self.test_size],
+                generator=self.generator,
+            )
+            self.train_indices, self.val_indices, self.test_indices = (
+                list(train_d.indices),
+                list(val_d.indices),
+                list(test_d.indices),
+            )
+        # if we have a test seed, we need to first split off the test set
+        # using the test seed, and then split the remaining data into train/val
+        else:
+            subset_lengths = calculate_size_of_splits(
+                len(dataset),
+                split_frac=[self.train_size, self.val_size, self.test_size],
+            )
+
+            self.train_indices, self.val_indices, self.test_indices = (
+                two_stage_random_split(
+                    len(dataset),
+                    split_size=subset_lengths,
+                    generator1=self.test_generator,
+                    generator2=self.generator,
+                )
+            )
+
+            train_d = Subset(dataset, self.train_indices)
+            val_d = Subset(dataset, self.val_indices)
+            test_d = Subset(dataset, self.test_indices)
+
         return (train_d, val_d, test_d)
 
 
 class RandomRecordSplittingStrategy(SplittingStrategy):
     """
-    Strategy to split a dataset randomly, keeping all conformers in a record in the same split.
+    Strategy to split a dataset randomly, keeping all configurations in a record in the same split.
 
     """
 
-    def __init__(self, seed: int = 42, split: List[float] = [0.8, 0.1, 0.1]):
+    def __init__(
+        self,
+        seed: int = 42,
+        split: List[float] = [0.8, 0.1, 0.1],
+        test_seed: Optional[int] = None,
+    ):
         """
         This strategy splits a dataset randomly based on provided ratios for training, validation,
         and testing subsets. The sum of split ratios should be 1.0.
@@ -389,7 +444,11 @@ class RandomRecordSplittingStrategy(SplittingStrategy):
         split : List[float], optional
             List containing three float values representing the ratio of data for
             training, validation, and testing respectively, by default [0.8, 0.1, 0.1].
-
+        test_seed : Optional[int], optional
+            An optional seed that can be used to provide a fixed set of indices for testing purposes, by default None.
+            If provided, the dataset will first be split into (train+val) and test using this seed, and then the
+            (train+val) set will be split into train and val using the main seed.
+            This allows randomization of the train/val split while keeping the test set fixed.
         Raises
         ------
         AssertionError
@@ -402,7 +461,7 @@ class RandomRecordSplittingStrategy(SplittingStrategy):
         >>> train_idx, val_idx, test_idx = random_split.split(dataset)
         """
 
-        super().__init__(split=split, seed=seed)
+        super().__init__(split=split, seed=seed, test_seed=test_seed)
 
     def split(self, dataset: "TorchDataset") -> Tuple[Subset, Subset, Subset]:
         """
@@ -437,15 +496,119 @@ class RandomRecordSplittingStrategy(SplittingStrategy):
             dataset,
             lengths=[self.train_size, self.val_size, self.test_size],
             generator=self.generator,
+            test_generator=self.test_generator,
         )
 
         return (train_d, val_d, test_d)
+
+
+def calculate_size_of_splits(total_size: int, split_frac: List[float]) -> List[int]:
+    """
+    Calculate the size of each split based on the total size and the split ratios.
+
+    If a list of fractions that sum up to 1 is given,
+    the lengths will be computed automatically as
+    floor(frac * total_size) for each fraction provided.
+
+    After computing the lengths, if there are any remainders, 1 count will be
+    distributed in round-robin fashion to the lengths
+    until there are no remainders left.
+
+    Parameters
+    ----------
+    total_size : int
+        Total size of the dataset.
+    split_frac : List[float]
+        List containing three float values representing the ratio of data for
+        training, validation, and testing respectively.
+
+    Returns
+    -------
+    List[int]
+        List containing the sizes of each split.
+    """
+    if np.isclose(sum(split_frac), 1) and sum(split_frac) <= 1:
+        subset_lengths: List[int] = []
+
+        for i, frac in enumerate(split_frac):
+            if frac < 0 or frac > 1:
+                raise ValueError(f"Fraction at index {i} is not between 0 and 1")
+            n_items_in_split = int(np.floor(total_size * frac))
+            subset_lengths.append(n_items_in_split)
+
+        remainder = total_size - sum(subset_lengths)
+
+        # add 1 to all the lengths in round-robin fashion until the remainder is 0
+        for i in range(remainder):
+            idx_to_add_at = i % len(subset_lengths)
+            subset_lengths[idx_to_add_at] += 1
+
+        return subset_lengths
+    else:
+        raise ValueError("Split ratios must sum to 1.0")
+
+
+def two_stage_random_split(
+    dataset_size: int,
+    split_size: List[int],
+    generator1: torch.Generator,
+    generator2: torch.Generator,
+) -> Tuple[List[int], List[int], List[int]]:
+    """
+    Perform a two-stage random split of a dataset.
+
+    In the first stage, the dataset is split into a combined training and validation set,
+    and a test set using the first generator. In the second stage, the combined training
+    and validation set is further split into separate training and validation sets using
+    the second generator.
+
+    Parameters
+    ----------
+    dataset_size : int
+        Total size of the dataset.
+    split_size : List[int]
+        List containing three int values representing the sizes of the
+        training, validation, and testing splits respectively.
+    generator1 : torch.Generator
+        Torch random number generator for the first stage of splitting.
+    generator2 : torch.Generator
+        Torch random number generator for the second stage of splitting.
+
+    Returns
+    -------
+    Tuple[List[int], List[int], List[int]]
+        A tuple containing three lists of indices for training, validation, and testing subsets, respectively.
+    """
+    if len(split_size) != 3 or not np.isclose(sum(split_size), dataset_size):
+        raise ValueError(
+            "Split must be a list of three integers that sum to the total dataset size."
+        )
+
+    train_size, val_size, test_size = split_size
+
+    # First stage: Randomize all indices and Split into (train + val) and test
+    indices_first_shuffle = torch.randperm(dataset_size, generator=generator1)
+
+    test_indices = indices_first_shuffle[:test_size]
+    train_val_indices = indices_first_shuffle[test_size:]
+
+    # Second stage: Shuffle the (train + val) indices and  Split (train + val) into train and val
+
+    indices_second_shuffle = train_val_indices[
+        torch.randperm(len(train_val_indices), generator=generator2)
+    ]
+
+    train_indices = indices_second_shuffle[:train_size]
+    val_indices = indices_second_shuffle[train_size : train_size + val_size]
+
+    return train_indices.tolist(), val_indices.tolist(), test_indices.tolist()
 
 
 def random_record_split(
     dataset: "TorchDataset",
     lengths: List[Union[int, float]],
     generator: Optional[torch.Generator] = torch.default_generator,
+    test_generator: Optional[torch.Generator] = None,
 ) -> List[Subset]:
     """
     Randomly split a TorchDataset into non-overlapping new datasets of given lengths, keeping all conformers in a record in the same split
@@ -467,7 +630,8 @@ def random_record_split(
         Lengths of splits to be produced.
     generator : Optional[torch.Generator], optional
         Generator used for the random permutation, by default None
-
+    test_generator: Optional[torch.Generator], optional
+        An optional generator that can be used to provide a fixed set of indices for testing purposes,
     Returns
     -------
     List[Subset]
@@ -477,20 +641,9 @@ def random_record_split(
     if np.isclose(sum(lengths), 1) and sum(lengths) <= 1:
         subset_lengths: List[int] = []
 
-        for i, frac in enumerate(lengths):
-            if frac < 0 or frac > 1:
-                raise ValueError(f"Fraction at index {i} is not between 0 and 1")
-            n_items_in_split = int(
-                np.floor(dataset.record_len() * frac)  # type: ignore[arg-type]
-            )
-            subset_lengths.append(n_items_in_split)
-
-        remainder = dataset.record_len() - sum(subset_lengths)  # type: ignore[arg-type]
-
-        # add 1 to all the lengths in round-robin fashion until the remainder is 0
-        for i in range(remainder):
-            idx_to_add_at = i % len(subset_lengths)
-            subset_lengths[idx_to_add_at] += 1
+        subset_lengths = calculate_size_of_splits(
+            total_size=dataset.record_len(), split_frac=lengths
+        )  # type: ignore[arg-type]
 
         lengths = subset_lengths
 
@@ -506,8 +659,22 @@ def random_record_split(
         raise ValueError(
             "Sum of input lengths does not equal the number of records of the input dataset!"
         )
+    if test_generator is None:
+        record_indices = torch.randperm(sum(lengths), generator=generator).tolist()  # type: ignore[arg-type, call-overload]
 
-    record_indices = torch.randperm(sum(lengths), generator=generator).tolist()  # type: ignore[arg-type, call-overload]
+    else:
+        # if we do define the test_generator, we will first shuffle the entire dataset
+        # and extract the test set
+        # then reshuffle the remaining indices to get train and val
+
+        training_indices, val_indices, test_indices = two_stage_random_split(
+            dataset_size=dataset.record_len(),  # type: ignore[arg-type]
+            split_size=lengths,
+            generator1=test_generator,
+            generator2=generator,
+        )
+
+        record_indices = training_indices + val_indices + test_indices
 
     indices_by_split: List[List[int]] = []
     for offset, length in zip(np.cumsum(lengths), lengths):

@@ -285,5 +285,5 @@ Rather than having all 3 of these energy contributions returned by the core netw
 
     # this will be added to the per_system_energy that results from the `per_atom_energy` reduction operation
     [potential.postprocessing_parameter.sum_per_system_energy]
-    contributions = ['per_system_electrostatic_energy', 'per_system_zbl_energy', 'per_system_vdw_energy']
+    contributions = ['per_system_electrostatic_energy', 'per_system_vdw_energy']
 

@@ -705,6 +705,172 @@ from modelforge.dataset.utils import (
 )
 
 
+def test_size_of_splits():
+    # The routine that splits up a dataset in train/val/test based on the provided split fractions
+
+    from modelforge.dataset.utils import calculate_size_of_splits
+
+    total_size = 100
+    fractions = [0.8, 0.1, 0.1]
+    sizes = calculate_size_of_splits(total_size=total_size, split_frac=fractions)
+
+    assert sum(sizes) == total_size
+    assert sizes == [80, 10, 10]
+
+    # if we cannot easily divide, we assign the remainders in a round robin fashion
+    total_size = 103
+    fractions = [0.8, 0.1, 0.1]
+    sizes = calculate_size_of_splits(total_size=total_size, split_frac=fractions)
+    assert sum(sizes) == total_size
+    assert sizes == [83, 10, 10]
+
+    # Let us test a case that will fail because the fractions add up to more than 1
+    with pytest.raises(ValueError):
+        total_size = 10
+        fractions = [0.5, 0.3, 0.3]
+        sizes = calculate_size_of_splits(total_size=total_size, split_frac=fractions)
+
+    with pytest.raises(ValueError):
+        total_size = 10
+        fractions = [0.5, 0.1, 0.1]
+        sizes = calculate_size_of_splits(total_size=total_size, split_frac=fractions)
+
+
+def test_two_stage_random_splitting():
+    from modelforge.dataset.utils import two_stage_random_split
+
+    total_size = 1000
+    split = [800, 100, 100]
+    first_split_seed = 42
+    second_split_seed = 123
+
+    # set up the rng for each split seed
+
+    train_indices, val_indices, test_indices = two_stage_random_split(
+        dataset_size=total_size,
+        split_size=split,
+        generator1=torch.Generator().manual_seed(first_split_seed),
+        generator2=torch.Generator().manual_seed(second_split_seed),
+    )
+
+    # we want to check that every index is present in all of the splits
+    for idx in range(total_size):
+        assert idx in train_indices or idx in val_indices or idx in test_indices
+
+    # next let us change the second split seed and see that we get the same test set but different train and val sets
+    train_indices_2, val_indices_2, test_indices_2 = two_stage_random_split(
+        dataset_size=total_size,
+        split_size=split,
+        generator1=torch.Generator().manual_seed(first_split_seed),
+        generator2=torch.Generator().manual_seed(456),
+    )
+
+    # test subsets should be identical
+    assert len(test_indices) == len(test_indices_2)
+    assert np.all(np.array(test_indices) == np.array(test_indices_2))
+
+    # train and val should be different; the sizes should be the same though
+    assert len(train_indices) == len(train_indices_2)
+    assert len(val_indices) == len(val_indices_2)
+
+    assert not np.all(np.array(train_indices) == np.array(train_indices_2))
+    assert not np.all(np.array(val_indices) == np.array(val_indices_2))
+
+
+@pytest.mark.parametrize(
+    "splitting_strategy",
+    [
+        RandomSplittingStrategy,
+        RandomRecordSplittingStrategy,
+    ],
+)
+@pytest.mark.parametrize("dataset_name", ["QM9", "PHALKETHOH"])
+def test_random_splitting_fixed_test(
+    splitting_strategy,
+    dataset_name,
+    datamodule_factory,
+    get_dataset_container_fix,
+    prep_temp_dir,
+    dataset_temp_dir,
+):
+    local_cache_dir = str(prep_temp_dir) + "/dataset_splitting1"
+    dataset_cache_dir = str(dataset_temp_dir)
+
+    """Test random_split on the the dataset."""
+    dm = datamodule_factory(
+        dataset_name=dataset_name,
+        batch_size=512,
+        splitting_strategy=splitting_strategy(seed=42, test_seed=123),
+        remove_self_energies=False,
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
+    )
+
+    train_dataset, val_dataset, test_dataset = (
+        dm.train_dataset,
+        dm.val_dataset,
+        dm.test_dataset,
+    )
+
+    dm = datamodule_factory(
+        dataset_name=dataset_name,
+        batch_size=512,
+        splitting_strategy=splitting_strategy(seed=142, test_seed=123),
+        remove_self_energies=False,
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
+    )
+
+    train_dataset_2, val_dataset_2, test_dataset_2 = (
+        dm.train_dataset,
+        dm.val_dataset,
+        dm.test_dataset,
+    )
+    # the test set should be identical since we used the same test_seed
+    assert len(test_dataset) == len(test_dataset_2)
+
+    for i in range(len(test_dataset)):
+        data1 = test_dataset[i]
+        data2 = test_dataset_2[i]
+        assert torch.allclose(
+            data1.nnp_input.atomic_numbers, data2.nnp_input.atomic_numbers
+        )
+        assert torch.allclose(data1.nnp_input.positions, data2.nnp_input.positions)
+        assert torch.allclose(
+            data1.metadata.per_system_energy, data2.metadata.per_system_energy
+        )
+
+    # train and val should be the same length, but have different indices
+    assert len(train_dataset) == len(train_dataset_2)
+    assert len(val_dataset) == len(val_dataset_2)
+
+    # to validate that the indices are different, we will check the sizes of the systems in each dataset
+    # however there could be cases where the size is the same for a given index
+    # so we will put these all in a list and check the entire list is not the same
+
+    train1_sizes = []
+    train2_sizes = []
+    for i in range(len(train_dataset)):
+        data1 = train_dataset[i]
+        data2 = train_dataset_2[i]
+
+        train1_sizes.append(data1.nnp_input.atomic_numbers.shape[0])
+        train2_sizes.append(data2.nnp_input.atomic_numbers.shape[0])
+
+    assert not np.all(np.array(train1_sizes) == np.array(train2_sizes))
+
+    val1_sizes = []
+    val2_sizes = []
+    for i in range(len(val_dataset)):
+        data1 = val_dataset[i]
+        data2 = val_dataset_2[i]
+
+        val1_sizes.append(data1.nnp_input.atomic_numbers.shape[0])
+        val2_sizes.append(data2.nnp_input.atomic_numbers.shape[0])
+
+    assert not np.all(np.array(val1_sizes) == np.array(val2_sizes))
+
+
 @pytest.mark.parametrize(
     "splitting_strategy",
     [

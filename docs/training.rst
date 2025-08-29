@@ -51,7 +51,7 @@ The design of the loss function is intrinsically linked to the structure of the 
 
 For each component in the loss, a weight must be specified in the `loss_weights` section of the training TOML file. The weights determine the relative importance of each component in the overall loss function. The loss function is then computed as a weighted sum of the individual components.
 
-The weights for the losses can also be changed during the training run by providing a target weight (i.e., the final weight) and a mixing step (i.e., the step size for the linear interpolation between the current and target weights). This is useful for gradually increasing/decreasing the importance of certain loss components during training, which can help stabilize the training process. Note, that the target weights and mixing steps are optional, and if not provided, the loss weights will remain constant throughout the training process. In the snippet below, only `per_system_dipole_moment` has a target weight and a mixing step defined, meaning that the weight for this component will be gradually increased from 1 to 10 over the course of training, while the other components will remain at their initial weights.
+The weights for the losses can also be changed during the training run by providing a target weight (i.e., the final weight) and a mixing step (i.e., the step size for the linear interpolation between the current and target weights). This is useful for gradually increasing/decreasing the importance of certain loss components during training, which can help stabilize the training process. Note, that the target weights and mixing steps are optional, and if not provided, the loss weights will remain constant throughout the training process. In the snippet below, only `per_system_dipole_moment` has a target weight and a mixing step defined, meaning that the weight for this component will be gradually increased from 0.1 to 1 by increments of 0.01 over the course of training, while the other components will remain at their initial weights.
 
 .. code-block:: toml
 
@@ -59,15 +59,15 @@ The weights for the losses can also be changed during the training run by provid
     loss_components = ['per_system_energy', 'per_system_dipole_moment', "per_atom_charge"]
 
     [training.loss_parameter.weight]
-    per_system_energy = 1
-    per_system_dipole_moment = 1
-    per_atom_charge = 1000
+    per_system_energy = 0.00001
+    per_system_dipole_moment = 0.1
+    per_atom_charge = 1
 
     [training.loss_parameter.target_weight]
-    per_system_dipole_moment = 10
+    per_system_dipole_moment = 1
 
     [training.loss_parameter.mixing_steps]
-    per_system_dipole_moment= 0.05
+    per_system_dipole_moment= 0.01
 
 
 Predicting Short-Range Atomic Energies
@@ -89,26 +89,81 @@ Alternatively, if the dataset includes per atom forces, the loss function can be
 
 where `w_E` and `w_F` are the weights for the energy and force components, respectively.
 
-Predicting Short-Range Atomic Energy with Long-Range Interactions
+Note, the ZBL potential can also be included, providing a repulsive interaction at extremely short distances (i.e., atomic overlap), as discussed in the :doc:`potentials` documentation. As with electrostatic or vdw interactions, these contributions must be summed into the total `per_system_energy` using postprocessing operations. An example code block is included below that shows how to set up postprocessing operations to include the ZBL interactions, as well as how to sum these into the total `per_system_energy`.
+
+.. code-block:: toml
+
+    [potential.postprocessing_parameter]
+    properties_to_process = ['per_atom_energy', 'per_system_zbl_energy',  'sum_per_system_energy']
+
+    [potential.postprocessing_parameter.per_atom_energy]
+    normalize = true
+    from_atom_to_system_reduction = true
+    keep_per_atom_property = true
+
+    [potential.postprocessing_parameter.per_system_zbl_energy]
+
+    # this will be added to the `per_system_energy` that results from the `per_atom_energy` reduction operation
+    [potential.postprocessing_parameter.sum_per_system_energy]
+    contributions = ['per_system_zbl_energy']
+
+Predicting Longer-Range Interactions
 *************************************************************************
 
-.. warning::
-    The following section is under development and may not be fully implemented in the current version of *modelforge*.
 
-In scenarios where long-range interactions are considered, additional terms are incorporated into the loss function. There are two long range interactions that are of interest: long range dispersion interactions and electrostatics.
 
-To calculate long range electrostatics the first moment of the charge density (partial charges) is predicted by the machine learning potential.  The atomic
+In scenarios where longer-range interactions are considered, additional terms are incorporated into the loss function. There are two longer range interactions that are of interest: dispersion interactions and electrostatics.
+
+To calculate  electrostatics the first moment of the charge density (partial charges) is predicted by the machine learning potential.  The atomic
 charges are then used to calculate the long range electrostatics. The expression
 for the total energy is then:
 
 .. math:: E = \sum_i^N E_i + k_c \sum_i^N \sum_{j>i}^N \frac{q_i q_j}{r_{ij}}
 
-where `k_c` is the Coulomb constant, `q_i` and `q_j` are the atomic charges, and the loss function is:
+where `k_c` is the Coulomb constant, `q_i` and `q_j` are the atomic charges.  To avoid singularities at `r_{ij} = 0`, the Coulomb interaction is modified following the approach taken by PhysNet (J. Chem. Theory Comput. 2019, 15, 3678-3693, DOI:10.1021/acs.jctc.9b00181, see eqn: 12 and 13 in the reference). Specifically,
+
+.. math:: E_coulomb = k_c \sum_i^N \sum_{j>i}^N q_i q_j\chi(r_{ij})
+
+where:
+
+.. math:: \chi(r_{ij}) = \phi(2r_{ij})\frac{1}/{\sqrt{r_{ij}^2 + 1}} + (1-\phi(2r_{ij}))\frac{1}{r_{ij}}.
+
+and `\phi(r)` is represented by the PhysNet cutoff function:
+
+.. math:: \phi(r) = \begin{cases} 1-6(\frac{r}{r_{cut}})^5 + 15(\frac{r}{r_{cut}})^4 - 10(\frac{r}{r_{cut}})^3 & r \leq r_{cut} \\ 0 & r > r_{cut} \end{cases}
+
+The loss function to optimize charges is represented as, where we note that this includes both the partial charges and the dipole moment; these can be toggled on and off separately:
 
 .. math:: L(E,F,Q) = L(E,F) + w_Q (\sum_i^N q_i - Q_i^{pred})^2 + \frac{w_p}{3} \sum_j^3 (\sum_i^N q_i r_i,j - p_j^{ref})^2
 
 where `w_Q` is the weight for the charge component, `w_p` the weight for the dipole moment component, and `p_j^{ref}` is the reference dipole moment. 
 
+van Der Waals interactions can also be calculated; this is done using the tad-DFTD3 package. These interactions are calculated outside of the machine learning potential, and added to the total `per_system_energy`.
+
+As also discussed in the context of AIMNET2 in the :doc:`potentials` documentation, to include electrostic and/or dispersion interactions, we must sum these into the total `per_system_energy`. This is not done automatically, and must be specificied in the provided .toml file, specifically as post processing operations.  An example code block is included below that shows how to set up postprocessing operations to include electrostatics and van der Waals interactions, as well as how to sum these into the total `per_system_energy`.
+
+.. code-block:: toml
+
+    [potential.postprocessing_parameter]
+    properties_to_process = ['per_atom_energy', 'per_system_electrostatic_energy', 'per_system_vdw_energy', 'sum_per_system_energy']
+
+    [potential.postprocessing_parameter.per_atom_energy]
+    normalize = true
+    from_atom_to_system_reduction = true
+    keep_per_atom_property = true
+
+
+    [potential.postprocessing_parameter.per_system_electrostatic_energy]
+    electrostatic_strategy = "coulomb"
+    maximum_interaction_radius = "15.0 angstrom"
+
+
+    [potential.postprocessing_parameter.per_system_vdw_energy]
+    maximum_interaction_radius = "10.0 angstrom"
+
+    # this will be added to the per_system_energy that results from the `per_atom_energy` reduction operation
+    [potential.postprocessing_parameter.sum_per_system_energy]
+    contributions = ['per_system_electrostatic_energy', 'per_system_vdw_energy']
 
 Splitting Strategies
 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -119,12 +174,29 @@ The dataset splitting strategy is crucial for ensuring that a potential generali
 *Modelforge* also provides other splitting strategies, including:
 
 - :class:`~modelforge.dataset.utils.FirstComeFirstServeStrategy`: Splits the dataset based on the order of records (molecules).
-- :class:`~modelforge.dataset.utils.RandomSplittingStrategy`: Splits the dataset randomly based on conformations.
+- :class:`~modelforge.dataset.utils.RandomSplittingStrategy`: Splits the dataset randomly based on configurations.
+- :class:`~modelforge.dataset.utils.RandomRecordSplittingStrategy`: Splits the dataset randomly based on records (i.e., systems, keeping all configurations of a system in the same split).
 
 To use a different data split ratio, you can specify a custom split list in the
 splitting strategy. The most effective way to pass this information to the
 training process is by defining the appropriate fields in the TOML file providing the training parameters, see the TOML file above. 
 
+Note, The `RandomSplittingStrategy` and `RandomRecordSplittingStrategy` classes accept a `seed` parameter, which can be set to ensure reproducibility of the data splits across different training runs.  To provide further control, the `RandomRecordSplittingStrategy` class also accepts a `test_seed` parameter, which allows for independent control over the randomness of the test set split, separate from the training and validation splits. For a given dataset, if test_seed is not changed, the test set will remain the same even if the `seed` for the training and validation sets is altered (training and validation will change if `seed` is changed in this case). This feature is particularly useful for benchmarking and comparing model performance across different training configurations while keeping the test set consistent.
+
+To specify in the toml file, use the following keywords for the strategy argument:
+- "first_come_first_serve_strategy"
+- "random_splitting_strategy"
+- "random_record_splitting_strategy"
+
+For example, the following snippet would specify the RandomRecordSplittingStrategy with a 70/15/15 split, a seed of 42 for the training and validation sets, and a test_seed of 7 for the test set:
+
+.. code-block:: toml
+
+    [dataset.splitting_strategy]
+    strategy = "random_record_splitting_strategy"
+    split = [0.7, 0.15, 0.15]
+    seed = 42
+    test_seed = 7
 
 Train a Model
 ----------------------

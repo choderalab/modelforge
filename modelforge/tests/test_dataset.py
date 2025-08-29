@@ -736,6 +736,47 @@ def test_size_of_splits():
         sizes = calculate_size_of_splits(total_size=total_size, split=fractions)
 
 
+def test_two_stage_random_splitting():
+    from modelforge.dataset.utils import two_stage_random_split
+
+    total_size = 1000
+    split = [0.8, 0.1, 0.1]
+    first_split_seed = 42
+    second_split_seed = 123
+
+    # set up the rng for each split seed
+
+    train_indices, val_indices, test_indices = two_stage_random_split(
+        dataset_size=total_size,
+        split=split,
+        generator1=torch.Generator().manual_seed(first_split_seed),
+        generator2=torch.Generator().manual_seed(second_split_seed),
+    )
+
+    # we want to check that every index is present in all of the splits
+    for idx in range(total_size):
+        assert idx in train_indices or idx in val_indices or idx in test_indices
+
+    # next let us change the second split seed and see that we get the same test set but different train and val sets
+    train_indices_2, val_indices_2, test_indices_2 = two_stage_random_split(
+        dataset_size=total_size,
+        split=split,
+        generator1=torch.Generator().manual_seed(first_split_seed),
+        generator2=torch.Generator().manual_seed(456),
+    )
+
+    # test subsets should be identical
+    assert len(test_indices) == len(test_indices_2)
+    assert np.all(np.array(test_indices) == np.array(test_indices_2))
+
+    # train and val should be different; the sizes should be the same though
+    assert len(train_indices) == len(train_indices_2)
+    assert len(val_indices) == len(val_indices_2)
+
+    assert not np.all(np.array(train_indices) == np.array(train_indices_2))
+    assert not np.all(np.array(val_indices) == np.array(val_indices_2))
+
+
 @pytest.mark.parametrize(
     "splitting_strategy",
     [
@@ -798,6 +839,36 @@ def test_random_splitting_fixed_test(
         assert torch.allclose(
             data1.metadata.per_system_energy, data2.metadata.per_system_energy
         )
+
+    # train and val should be the same length, but have different indices
+    assert len(train_dataset) == len(train_dataset_2)
+    assert len(val_dataset) == len(val_dataset_2)
+
+    # to validate that the indices are different, we will check the sizes of the systems in each dataset
+    # however there could be cases where the size is the same for a given index
+    # so we will put these all in a list and check the entire list is not the same
+
+    train1_sizes = []
+    train2_sizes = []
+    for i in range(len(train_dataset)):
+        data1 = train_dataset[i]
+        data2 = train_dataset_2[i]
+
+        train1_sizes.append(data1.nnp_input.atomic_numbers.shape[0])
+        train2_sizes.append(data2.nnp_input.atomic_numbers.shape[0])
+
+    assert not np.all(np.array(train1_sizes) == np.array(train2_sizes))
+
+    val1_sizes = []
+    val2_sizes = []
+    for i in range(len(val_dataset)):
+        data1 = val_dataset[i]
+        data2 = val_dataset_2[i]
+
+        val1_sizes.append(data1.nnp_input.atomic_numbers.shape[0])
+        val2_sizes.append(data2.nnp_input.atomic_numbers.shape[0])
+
+    assert not np.all(np.array(val1_sizes) == np.array(val2_sizes))
 
 
 @pytest.mark.parametrize(

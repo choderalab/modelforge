@@ -270,8 +270,8 @@ class SplittingStrategy(ABC):
     generator : torch.Generator, optional
         Torch random number generator.
     test_seed: int, optional
-        An optional see that can be used to provide a fixed set of indices for testing purposes.
-        If provided, the datest will first be split into (train+val) and test using this seed, and then the
+        An optional seed that can be used to provide a fixed set of indices for testing purposes.
+        If provided, the dataset will first be split into (train+val) and test using this seed, and then the
         (train+val) set will be split into train and val using the main seed.
         This allows randomization of the train/val split while keeping the test set fixed.
     """

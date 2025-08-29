@@ -120,7 +120,7 @@ for the total energy is then:
 
 .. math:: E = \sum_i^N E_i + k_c \sum_i^N \sum_{j>i}^N \frac{q_i q_j}{r_{ij}}
 
-where `k_c` is the Coulomb constant, `q_i` and `q_j` are the atomic charges.  To avoid singularlities at `r_{ij} = 0`, the Coloumb interaction is modified following the aporoach taken by PhsNet (J. Chem. Theory Comput. 2019, 15, 3678-3693, DOI:10.1021/acs.jctc.9b00181, see eqn: 12 and 13 in the reference). Specifically,
+where `k_c` is the Coulomb constant, `q_i` and `q_j` are the atomic charges.  To avoid singularities at `r_{ij} = 0`, the Coulomb interaction is modified following the approach taken by PhysNet (J. Chem. Theory Comput. 2019, 15, 3678-3693, DOI:10.1021/acs.jctc.9b00181, see eqn: 12 and 13 in the reference). Specifically,
 
 .. math:: E_coulomb = k_c \sum_i^N \sum_{j>i}^N q_i q_j\chi(r_{ij})
 

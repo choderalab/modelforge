@@ -288,7 +288,7 @@ class SplittingStrategy(ABC):
         if self.seed is not None:
             self.generator = torch.Generator().manual_seed(self.seed)
 
-        # if we set test_seed, we'll initially a separate generator
+        # if we set test_seed, we'll initialize a separate generator
         # this will be used to initially split off the test set
         # then the main generator will be used to split the train/val set
         if self.test_seed is not None:
@@ -586,7 +586,7 @@ def two_stage_random_split(
 
     train_size, val_size, test_size = split_size
 
-    # First stage: Randomize all indicies and Split into (train + val) and test
+    # First stage: Randomize all indices and Split into (train + val) and test
     indices_first_shuffle = torch.randperm(dataset_size, generator=generator1)
 
     test_indices = indices_first_shuffle[:test_size]

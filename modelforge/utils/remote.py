@@ -222,7 +222,7 @@ def download_from_url(
                             f"Checksum of downloaded file {calculated_checksum} does not match expected checksum {md5_checksum}."
                         )
                     else:
-                        break
+                        return  # success, exit the function
                 except requests.exceptions.RequestException as e:
                     if attempt < (max_retries - 1):
                         logger.debug(

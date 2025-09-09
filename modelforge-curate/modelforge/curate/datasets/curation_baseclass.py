@@ -167,13 +167,9 @@ class DatasetCuration(ABC):
         dipole_moment_list = []
         # compute the center of mass
         for config in range(positions.value.shape[0]):
-            # center_of_mass = np.einsum(
-            #     "i,ij->j",
-            #     atomic_masses,
-            #     positions.value[config] / np.sum(atomic_masses),
-            # )
+
             center_of_mass = self._calc_center_of_mass(
-                atomic_numbers.value[config], positions.value[config]
+                atomic_numbers.value, positions.value[config]
             )
             pos = positions.value[config] - center_of_mass
 

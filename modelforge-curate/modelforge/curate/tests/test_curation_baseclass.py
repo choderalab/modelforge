@@ -375,8 +375,6 @@ def test_dipolemoment_calculation(prep_temp_dir):
     com = dataset_curation._calc_center_of_mass(
         atomic_numbers.value.reshape(-1, 1), positions.value[0]
     )
-    print(com)
-
     dipole_moment_comp = dataset_curation.compute_dipole_moment(
         atomic_numbers=atomic_numbers, positions=positions, partial_charges=charges
     )

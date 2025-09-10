@@ -112,7 +112,7 @@ class DatasetCuration(ABC):
 
         if len(atomic_numbers.shape) != 2 or atomic_numbers.shape[1] != 1:
             raise ValueError(
-                f"atomic_numbers must be a 2D array withs shape [n_atoms, 1], found shape {atomic_numbers.shape}"
+                f"atomic_numbers must be a 2D array with shape [n_atoms, 1], found shape {atomic_numbers.shape}"
             )
         if len(positions.shape) != 2 or positions.shape[1] != 3:
             raise ValueError(

@@ -98,14 +98,31 @@ class DatasetCuration(ABC):
         ----------
         atomic_numbers: np.ndarray, required
             atomic numbers of the atoms in the system
+            shape [n_atoms, 1]
         positions: np.ndarray, required
-            positions of the atoms in the system
-
+            positions of the atoms in the system for a single configuration
+            shape [n_atoms, 3]
         Returns
         -------
         np.ndarray
             center of mass of the system
         """
+
+        # let us validate the input shapes to ensure we do not have any broadcasting issues
+
+        if len(atomic_numbers.shape) != 2 or atomic_numbers.shape[1] != 1:
+            raise ValueError(
+                f"atomic_numbers must be a 2D array withs shape [n_atoms, 1], found shape {atomic_numbers.shape}"
+            )
+        if len(positions.shape) != 2 or positions.shape[1] != 3:
+            raise ValueError(
+                f"positions must be a 2D array with shape [n_atoms, 3], found shape {positions.shape}"
+            )
+
+        if atomic_numbers.shape[0] != positions.shape[0]:
+            raise ValueError(
+                f"atomic_numbers and positions must have the same number of atoms, found {atomic_numbers.shape[0]} and {positions.shape[0]}"
+            )
 
         from openff.units.elements import MASSES
         from openff.units import unit

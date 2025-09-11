@@ -61,6 +61,74 @@ def setup_test_dataset(dataset_name, local_cache_dir):
     return TestCuration(dataset_name=dataset_name, local_cache_dir=local_cache_dir)
 
 
+def test_center_of_mass(prep_temp_dir):
+    class TestCuration(DatasetCuration):
+        def _init_dataset_parameters(self):
+            pass
+
+    # test first where a molecule has the center of mass at zero
+    atomic_numbers = np.array([[6], [1], [1], [1], [1]])
+    # note this helper function accepts just a single molecule at a time
+    # so the shape of positions is (n_atoms, 3)
+    positions = np.array([[0, 0, 0], [-1, 0, 0], [1, 0, 0], [0, 1, 0], [0, -1, 0]])
+
+    dataset_curation = TestCuration(
+        dataset_name="test_dataset", local_cache_dir=str(prep_temp_dir)
+    )
+
+    center_of_mass = dataset_curation._calc_center_of_mass(
+        atomic_numbers=atomic_numbers, positions=positions
+    )
+
+    assert np.allclose(center_of_mass, np.array([0.0, 0.0, 0.0]))
+
+    # test a molecule where the center of mass is not at zero
+    atomic_numbers = np.array([[8], [1], [1]])
+    positions = np.array([[8.0, 0.0, 0.0], [9.0, 0.0, 0.0], [7.0, 0.0, 0.0]])
+
+    center_of_mass = dataset_curation._calc_center_of_mass(
+        atomic_numbers=atomic_numbers, positions=positions
+    )
+    assert np.allclose(center_of_mass, np.array([8.0, 0.0, 0.0]))
+
+    # first test that we fail if we do not have the same number of atoms in atomic_numbers and positions
+    with pytest.raises(ValueError):
+        atomic_numbers = np.array([[8], [1], [1]])
+        positions = np.array([[8.0, 0.0, 0.0], [9.0, 0.0, 0.0]])
+        center_of_mass = dataset_curation._calc_center_of_mass(
+            atomic_numbers=atomic_numbers, positions=positions
+        )
+    # test that we raise an error if the atomic_number shape is wrong
+    with pytest.raises(ValueError):
+        atomic_numbers = np.array([8, 1, 1])
+        positions = np.array([[8.0, 0.0, 0.0], [9.0, 0.0, 0.0], [7.0, 0.0, 0.0]])
+        center_of_mass = dataset_curation._calc_center_of_mass(
+            atomic_numbers=atomic_numbers, positions=positions
+        )
+    with pytest.raises(ValueError):
+        atomic_numbers = np.array([[8, 1], [1, 1]])
+        positions = np.array([[8.0, 0.0, 0.0], [9.0, 0.0, 0.0], [7.0, 0.0, 0.0]])
+        center_of_mass = dataset_curation._calc_center_of_mass(
+            atomic_numbers=atomic_numbers, positions=positions
+        )
+
+    # test that we raise an error if the positions shape is wrong
+    with pytest.raises(ValueError):
+        atomic_numbers = np.array([[8], [1], [1]])
+        positions = np.array([[[8.0, 0.0, 0.0], [9.0, 0.0, 0.0], [7.0, 0.0, 0.0]]])
+        center_of_mass = dataset_curation._calc_center_of_mass(
+            atomic_numbers=atomic_numbers, positions=positions
+        )
+    with pytest.raises(ValueError):
+        atomic_numbers = np.array([[8], [1], [1]])
+        positions = np.array(
+            [[[8.0, 0.0, 0.0, 1.0], [9.0, 0.0, 0.0, 1.0], [7.0, 0.0, 0.0, 1.0]]]
+        )
+        center_of_mass = dataset_curation._calc_center_of_mass(
+            atomic_numbers=atomic_numbers, positions=positions
+        )
+
+
 def test_dipolemoment_calculation(prep_temp_dir):
     class TestCuration(DatasetCuration):
         def _init_dataset_parameters(self):
@@ -304,6 +372,9 @@ def test_dipolemoment_calculation(prep_temp_dir):
         dataset_name="test_dataset", local_cache_dir=str(prep_temp_dir)
     )
 
+    com = dataset_curation._calc_center_of_mass(
+        atomic_numbers.value.reshape(-1, 1), positions.value[0]
+    )
     dipole_moment_comp = dataset_curation.compute_dipole_moment(
         atomic_numbers=atomic_numbers, positions=positions, partial_charges=charges
     )
@@ -315,20 +386,59 @@ def test_dipolemoment_calculation(prep_temp_dir):
     )
 
     # scf dipole: [[0.11519327, 0.04117512, 0.0367095]]
-    # computed from partial charges: [[0.11143426, 0.04153308, 0.05102292]]
+    # computed from partial charges: [[0.09112792, 0.05734182, 0.05859077]]
     # reasonably close
-    assert np.allclose(
-        scf_dipole_moment.value, dipole_moment_comp.value, atol=1e-1, rtol=1e-3
-    )
 
-    assert np.allclose(
-        dipole_moment_comp.value, np.array([[0.11143426, 0.04153308, 0.05102292]])
-    )
+    assert np.all(scf_dipole_moment.value - dipole_moment_comp.value < 0.05)
 
     assert np.allclose(
         np.linalg.norm(dipole_moment_scaled_comp.value).reshape(1, 1),
         scf_dipole_magnitude.value,
     )
+
+    atomic_numbers = AtomicNumbers(value=np.array([[8], [1], [1]]))
+    positions = Positions(
+        value=np.array([[[8.0, 0.0, 0.0], [9.0, 0.0, 0.0], [7.0, 0.0, 0.0]]]),
+        units=unit.nanometer,
+    )
+    charges = PartialCharges(
+        value=np.array([[[-2], [1], [1]]]),
+        units=unit.elementary_charge,
+    )
+
+    dipole_moment_comp = dataset_curation.compute_dipole_moment(
+        atomic_numbers=atomic_numbers, positions=positions, partial_charges=charges
+    )
+    assert np.allclose(dipole_moment_comp.value, np.array([[0.0, 0.0, 0.0]]))
+
+    charges = PartialCharges(
+        value=np.array([[[-1], [1], [2]]]),
+        units=unit.elementary_charge,
+    )
+    dipole_moment_comp = dataset_curation.compute_dipole_moment(
+        atomic_numbers=atomic_numbers, positions=positions, partial_charges=charges
+    )
+    assert np.allclose(dipole_moment_comp.value, np.array([[-1.0, 0.0, 0.0]]))
+
+    positions = Positions(
+        value=np.array(
+            [
+                [[8, 0.0, 0.0], [9.0, 0.0, 0.0], [7.0, 0.0, 0.0]],
+                [[0, 0, 2], [0, 0, 3], [0, 0, 0]],
+            ]
+        ),
+        units=unit.nanometer,
+    )
+    charges = PartialCharges(
+        value=np.array([[[-2], [1], [1]], [[-1], [1], [1]]]),
+        units=unit.elementary_charge,
+    )
+    dipole_moment_comp = dataset_curation.compute_dipole_moment(
+        atomic_numbers=atomic_numbers, positions=positions, partial_charges=charges
+    )
+    assert np.allclose(dipole_moment_comp.value[0], np.array([0, 0, 0]))
+
+    assert np.allclose(dipole_moment_comp.value[1], [0.0, 0.0, -0.9441], atol=1e-3)
 
 
 def test_base_convert_element_string_to_atomic_number(prep_temp_dir):

@@ -789,3 +789,110 @@ def test_dipole_moment_computation(
     assert torch.allclose(
         dipole_moment[1], torch.tensor([0.0183, -0.0122, -0.0349]), atol=1e-3
     )
+
+
+def test_quadrupole_moment_computation(
+    single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
+):
+
+    # This test will just ensure the underlying functions work as expected in the CalculateProperties class
+
+    from modelforge.utils.prop import NNPInput, Metadata, BatchData
+    from modelforge.train.training import CalculateProperties
+
+    local_cache_dir = str(prep_temp_dir) + "/test_quadrupole_calculation"
+    dataset_cache_dir = str(dataset_temp_dir)
+
+    props = CalculateProperties(requested_properties=["per_system_quadrupole_moment"])
+
+    batch = single_batch_with_batchsize(
+        batch_size=2,
+        dataset_name="QM9",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
+        shift_center_of_mass_to_origin=True,
+    )
+
+    print(
+        "print number of atoms in each system in batch: ",
+        batch.metadata.atomic_subsystem_counts,
+    )
+    # set up some fake model predictions
+    model_predictions = {
+        "per_system_energy": torch.tensor([[0.0], [0.0]]),
+        "per_atom_charge": torch.tensor(
+            [
+                [-0.24],
+                [0.06],
+                [0.06],
+                [0.06],
+                [0.06],
+                [-1.026],
+                [0.342],
+                [0.342],
+                [0.342],
+            ]
+        ),  # partial charges for CH4 and NH3 from opls just for testing
+    }
+    # calculate quadrupole moment
+    quadrupole_moment = props._predict_quadrupole_moment(
+        model_predictions=model_predictions, batch=batch
+    )
+
+    print(quadrupole_moment)
+    assert quadrupole_moment.size() == (2, 3, 3)
+    # quadrupole moment should be zero for methane with these partial charges
+    assert torch.allclose(
+        quadrupole_moment[0],
+        torch.tensor([[[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]]),
+        atol=1e-2,
+    )
+    assert torch.allclose(
+        quadrupole_moment[1],
+        torch.tensor([[[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]]),
+        atol=1e-2,
+    )
+
+    # now let us test on a known result for a two fake molecules to compare to hand computed values
+    positions = torch.tensor(
+        [
+            [0.0, 1.0, 2.0],
+            [3.0, 4.0, 5.0],
+            [6.0, 7.0, 8.0],
+            [0.0, 1.0, 2.0],
+            [3.0, 4.0, 5.0],
+        ],
+        dtype=batch.nnp_input.positions.dtype,
+    )
+    charges = torch.tensor(
+        [[2.0], [-1.0], [-1.0], [2.0], [-1.0]], dtype=batch.nnp_input.positions.dtype
+    )
+    batch.nnp_input.positions = positions
+
+    batch.nnp_input.atomic_subsystem_indices = torch.tensor([0, 0, 0, 1, 1])
+    batch.metadata.atomic_subsystem_counts = torch.tensor([[3], [2]])
+    batch.metadata.number_of_atoms = 5
+
+    quadrupole_moment = props._predict_quadrupole_moment(
+        model_predictions={"per_atom_charge": charges}, batch=batch
+    )
+    print(quadrupole_moment)
+    assert torch.allclose(
+        quadrupole_moment[0],
+        torch.tensor(
+            [
+                [[54.0, -162, -189], [-162, 0.0, -216.0], [-189.0, -216.0, -54.0]],
+            ]
+        ),
+        atol=1e-5,
+    )
+
+    assert torch.allclose(
+        quadrupole_moment[1],
+        torch.tensor(
+            [
+                [[13.0, -36, -45], [-36, -2, -48], [-45, -48, -11]],
+            ]
+        ),
+        atol=1e-5,
+    )

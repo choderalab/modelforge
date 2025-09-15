@@ -1726,6 +1726,7 @@ def single_batch(
         "E": "internal_energy_at_0K",
         "dipole_moment": "dipole_moment_per_system",
     },
+    shift_center_of_mass_to_origin: bool = False,
 ):
     """
     Utility function to create a single batch of data for testing (default returns qm9)
@@ -1748,6 +1749,8 @@ def single_batch(
     properties_assignment : dict
         Dictionary mapping properties of interest to their corresponding keys in the dataset.
         Default is {"atomic_numbers": "atomic_numbers", "positions": "positions", "E": "internal_energy_at_0K", "dipole_moment": "dipole_moment_per_system"} for qm9.
+    shift_center_of_mass_to_origin: bool
+        Whether to shift the center of mass of the molecule to the origin. This is necessary if computing the dipole moment or quadrupole moment.
     """
     data_module = initialize_datamodule(
         dataset_name=dataset_name,
@@ -1757,6 +1760,7 @@ def single_batch(
         dataset_cache_dir=dataset_cache_dir,
         properties_of_interest=properties_of_interest,
         properties_assignment=properties_assignment,
+        shift_center_of_mass_to_origin=shift_center_of_mass_to_origin,
     )
     return next(iter(data_module.train_dataloader(shuffle=False)))
 

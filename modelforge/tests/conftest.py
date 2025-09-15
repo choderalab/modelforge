@@ -143,6 +143,7 @@ def single_batch_with_batchsize():
         local_cache_dir: str,
         dataset_cache_dir: Optional[str] = None,
         version_select: Optional[str] = None,
+        shift_center_of_mass_to_origin: bool = False,
     ):
         # for simplicity of writing tests, we will have this accept the dataset name
         # and then use the toml files to load the properties of interests and association
@@ -178,6 +179,7 @@ def single_batch_with_batchsize():
             version_select=version_select,
             properties_of_interest=config_dict["dataset"]["properties_of_interest"],
             properties_assignment=config_dict["dataset"]["properties_assignment"],
+            shift_center_of_mass_to_origin=shift_center_of_mass_to_origin,
         )
 
     return _create_single_batch

@@ -712,3 +712,80 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir):
         + +loss_weights["per_atom_energy"] * loss_output["per_atom_energy"],
         loss_output["total_loss"].to(torch.float32),
     )
+
+
+def test_dipole_moment_computation(
+    single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
+):
+
+    # This test will just ensure the underlying functions work as expected in the CalculateProperties class
+
+    from modelforge.utils.prop import NNPInput, Metadata, BatchData
+    from modelforge.train.training import CalculateProperties
+
+    local_cache_dir = str(prep_temp_dir) + "/test_dipole_calculation"
+    dataset_cache_dir = str(dataset_temp_dir)
+
+    props = CalculateProperties(requested_properties=["per_system_dipole_moment"])
+
+    batch = single_batch_with_batchsize(
+        batch_size=1,
+        dataset_name="QM9",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
+        shift_center_of_mass_to_origin=True,
+    )
+
+    # set up some fake model predictions
+    model_predictions = {
+        "per_system_energy": torch.tensor([[0.0]]),
+        "per_atom_charge": torch.tensor(
+            [[-0.24], [0.06], [0.06], [0.06], [0.06]]
+        ),  # partial charges for CH4 from opls
+    }
+    # calculate dipole moment
+    dipole_moment = props._predict_dipole_moment(
+        model_predictions=model_predictions, batch=batch
+    )
+
+    assert dipole_moment.size() == (1, 3)
+    # dipole moment should be zero for methane with these partial charges
+    assert torch.allclose(dipole_moment, torch.tensor([[0.0, 0.0, 0.0]]), atol=1e-3)
+
+    # now test where we have a batch size of 2 to ensure we can handle multiple systems correctly.
+
+    batch = single_batch_with_batchsize(
+        batch_size=2,
+        dataset_name="QM9",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
+        shift_center_of_mass_to_origin=True,
+    )
+    # set up some fake model predictions
+    # note the first molecule is methane the second is ammonia
+    model_predictions = {
+        "per_system_energy": torch.tensor([[0.0], [0.0]]),
+        "per_atom_charge": torch.tensor(
+            [
+                [-0.24],
+                [0.06],
+                [0.06],
+                [0.06],
+                [0.06],
+                [-1.026],
+                [0.342],
+                [0.342],
+                [0.342],
+            ]  # partial charges for NH3 from opls
+        ),
+    }
+    dipole_moment = props._predict_dipole_moment(
+        model_predictions=model_predictions, batch=batch
+    )
+    assert dipole_moment.size() == (2, 3)
+    # dipole moment should be zero for methane with these partial charges
+    assert torch.allclose(dipole_moment[0], torch.tensor([[0.0, 0.0, 0.0]]), atol=1e-3)
+    # dipole moment magnitude for ammonia is non zero
+    assert torch.allclose(
+        dipole_moment[1], torch.tensor([0.0183, -0.0122, -0.0349]), atol=1e-3
+    )

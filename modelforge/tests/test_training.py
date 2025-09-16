@@ -131,8 +131,9 @@ def add_dipole_moment_to_loss_parameter(config):
     # also add per_atom_charge to predicted properties
 
     p_config = config["potential"]
-    p_config.core_parameter.predicted_properties.append("per_atom_charge")
-    p_config.core_parameter.predicted_dim.append(1)
+    if "per_atom_charge" not in p_config.core_parameter.predicted_properties:
+        p_config.core_parameter.predicted_properties.append("per_atom_charge")
+        p_config.core_parameter.predicted_dim.append(1)
 
 
 def add_quadrupole_moment_to_loss_parameter(config):
@@ -153,8 +154,9 @@ def add_quadrupole_moment_to_loss_parameter(config):
     # also add per_atom_charge to predicted properties
 
     p_config = config["potential"]
-    p_config.core_parameter.predicted_properties.append("per_atom_charge")
-    p_config.core_parameter.predicted_dim.append(1)
+    if "per_atom_charge" not in p_config.core_parameter.predicted_properties:
+        p_config.core_parameter.predicted_properties.append("per_atom_charge")
+        p_config.core_parameter.predicted_dim.append(1)
 
 
 def replace_per_system_with_per_atom_loss(config):
@@ -345,8 +347,7 @@ def test_learning_rate_scheduler(
         "energy",
         "energy_force",
         "normalized_energy_force",
-        "energy_force_dipole_moment",
-        "quadrupole_moment",
+        "energy_force_dipole_moment_quadrupole_moment",
     ],
 )
 def test_train_with_lightning(loss, potential_name, dataset_name, prep_temp_dir):
@@ -356,6 +357,9 @@ def test_train_with_lightning(loss, potential_name, dataset_name, prep_temp_dir)
     This will use the spice2 subset that is compatible with ANI2x i.e., only elements H,C,N,O,F,Cl,S
     Allowing us to test all the systems.
     nc_1000_HCNOFClS_v1.1
+
+    note only a single test will be performed for dipole/quadrupole moment as this is just to ensure that it runs
+    and that the loss function is calculated;  we do not test for accuracy here and do not want to waste additional time
 
     """
 

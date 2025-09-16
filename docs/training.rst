@@ -37,7 +37,7 @@ Loss function
 ^^^^^^^^^^^^^^^^^^^^^^^^
 The loss function quantifies the discrepancy between the model's predictions and the target properties, providing a scalar value that guides the optimizer in updating the model's parameters. This function is configured in the `[training.loss]` section of the training TOML file.
 
-Depending on the specified `loss_components`` section, the loss function can combine various individual loss functions. *Modelforge* always includes the mean squared error (MSE) for energy prediction, and may also incorporate MSE for force prediction, dipole moment prediction, total_charge, and partial charge prediction.
+Depending on the specified `loss_components`` section, the loss function can combine various individual loss functions. *Modelforge* always includes the mean squared error (MSE) for energy prediction, and may also incorporate MSE for force prediction, dipole moment prediction (computed from predicted partial charges), quadrupole moment prediction (computed from predicted partial charges),  total_charge, and partial charge prediction.
 
 The following keys can be used in the `loss_components` section. Note, to use these losses, corresponding known values need to be set within modelforge (see the dataset documentation for more details regarding defining the PropertyNames).  Each key is listed with corresponding properties that need to be defined in the dataset toml file:
 
@@ -45,6 +45,7 @@ The following keys can be used in the `loss_components` section. Note, to use th
 * `per_atom_force`  -- corresponds to `F` in the property names definition.
 * `per_system_total_charge` -- corresponds to `total_charge` in the property names definition.
 * `per_system_dipole_moment` -- corresponds to `dipole_moment` in the property names definition.
+* `per_system_quadrupole_moment` -- corresponds to `quadrupole_moment` in the property names definition.
 * `per_atom_charge` -- corresponds to `partial_charges` in the property names definition.
 
 The design of the loss function is intrinsically linked to the structure of the energy function. For instance, if the energy function aggregates atomic energies, then loss_components should include `per_system_energy` and optionally, `per_atom_force`.

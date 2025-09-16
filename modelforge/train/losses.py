@@ -311,6 +311,51 @@ class TotalChargeError(Error):
         return error  # No scaling needed
 
 
+class QuadrupoleMomentError(Error):
+    """
+    Calculates the error for quadrupole moment.
+    """
+
+    def calculate_error(
+        self,
+        quadrupole_predict: torch.Tensor,
+        quadrupole_true: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Computes the squared difference between predicted and true quadrupole moments.
+        """
+        error = (
+            (quadrupole_predict - quadrupole_true).pow(2).sum(dim=(1, 2), keepdim=True)
+        )  # Shape: [batch_size, 1]
+        return error.squeeze(-1)
+
+    def forward(
+        self,
+        quadrupole_predict: torch.Tensor,
+        quadrupole_true: torch.Tensor,
+        batch: BatchData,
+    ) -> torch.Tensor:
+        """
+        Computes the error for quadrupole moment.
+
+        Parameters
+        ----------
+        quadrupole_predict : torch.Tensor
+            The predicted quadrupole moments.
+        quadrupole_true : torch.Tensor
+            The true quadrupole moments.
+        batch : BatchData
+            The batch data.
+
+        Returns
+        -------
+        torch.Tensor
+            The error for quadrupole moments.
+        """
+        error = self.calculate_error(quadrupole_predict, quadrupole_true)
+        return error  # No scaling needed
+
+
 class DipoleMomentError(Error):
     """
     Calculates the error for dipole moment.
@@ -365,6 +410,7 @@ class Loss(nn.Module):
         "per_system_total_charge",
         "per_system_dipole_moment",
         "per_atom_charge",
+        "per_system_quadrupole_moment",
     ]
 
     def __init__(
@@ -421,6 +467,8 @@ class Loss(nn.Module):
                 self.loss_functions[prop] = DipoleMomentError()
             elif prop == "per_atom_charge":
                 self.loss_functions[prop] = PerAtomChargeError()
+            elif prop == "per_system_quadrupole_moment":
+                self.loss_functions[prop] = QuadrupoleMomentError()
             else:
                 raise NotImplementedError(f"Loss type {prop} not implemented.")
 
@@ -471,9 +519,10 @@ class Loss(nn.Module):
                 predict_target[f"{prop_}_true"],
                 batch,
             )
+
             # check that none of the tensors are NaN
             if torch.isnan(prop_loss).any():
-                raise ValueError(f"NaN values detected in {prop} loss.")
+                raise ValueError(f"NaN values detected in {prop_} loss.")
 
             # Accumulate weighted per-sample losses
             weighted_loss = self.weights_scheduling[prop][epoch_idx] * prop_loss

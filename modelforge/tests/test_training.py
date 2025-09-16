@@ -135,6 +135,28 @@ def add_dipole_moment_to_loss_parameter(config):
     p_config.core_parameter.predicted_dim.append(1)
 
 
+def add_quadrupole_moment_to_loss_parameter(config):
+    """This will add quadrupole moment to the loss parameter configuration so we can test to ensure everything runs"""
+
+    t_config = config["training"]
+    t_config.loss_parameter.loss_components.append("per_system_quadrupole_moment")
+    t_config.loss_parameter.loss_components.append("per_system_total_charge")
+    t_config.loss_parameter.weight["per_system_quadrupole_moment"] = 0.01
+    t_config.loss_parameter.weight["per_system_total_charge"] = 0.01
+
+    t_config.loss_parameter.target_weight["per_system_quadrupole_moment"] = 0.01
+    t_config.loss_parameter.target_weight["per_system_total_charge"] = 0.01
+
+    t_config.loss_parameter.mixing_steps["per_system_quadrupole_moment"] = 1
+    t_config.loss_parameter.mixing_steps["per_system_total_charge"] = 1
+
+    # also add per_atom_charge to predicted properties
+
+    p_config = config["potential"]
+    p_config.core_parameter.predicted_properties.append("per_atom_charge")
+    p_config.core_parameter.predicted_dim.append(1)
+
+
 def replace_per_system_with_per_atom_loss(config):
     t_config = config["training"]
     t_config.loss_parameter.loss_components.remove("per_system_energy")
@@ -315,20 +337,32 @@ def test_learning_rate_scheduler(
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
-@pytest.mark.parametrize("dataset_name", ["PHALKETHOH"])
+# this will grab the toml file for the spice2_hcnocls subset
+@pytest.mark.parametrize("dataset_name", ["SPICE2_HCNOCLS"])
 @pytest.mark.parametrize(
     "loss",
-    ["energy", "energy_force", "normalized_energy_force", "energy_force_dipole_moment"],
+    [
+        "energy",
+        "energy_force",
+        "normalized_energy_force",
+        "energy_force_dipole_moment",
+        "quadrupole_moment",
+    ],
 )
 def test_train_with_lightning(loss, potential_name, dataset_name, prep_temp_dir):
     """
     Test that we can train, save and load checkpoints.
+
+    This will use the spice2 subset that is compatible with ANI2x i.e., only elements H,C,N,O,F,Cl,S
+    Allowing us to test all the systems.
+    nc_1000_HCNOFClS_v1.1
+
     """
 
     local_cache_dir = str(prep_temp_dir) + "/test_train_with_lightning"
-    # SKIP if potential is ANI and dataset is SPICE2
-    if "ANI" in potential_name and dataset_name == "SPICE2":
-        pytest.skip("ANI potential is not compatible with SPICE2 dataset")
+    # SKIP if potential is ANI and dataset is SPICE2 -- no longer need to skip as this will use the spice2_hcnocls subset
+    # if "ANI" in potential_name and dataset_name == "SPICE2":
+    #    pytest.skip("ANI potential is not compatible with SPICE2 dataset")
     if IN_GITHUB_ACTIONS and potential_name == "SAKE" and "force" in loss:
         pytest.skip(
             "Skipping Sake training with forces because it allocates too much memory"
@@ -344,6 +378,8 @@ def test_train_with_lightning(loss, potential_name, dataset_name, prep_temp_dir)
         replace_per_system_with_per_atom_loss(config)
     if "dipole_moment" in loss:
         add_dipole_moment_to_loss_parameter(config)
+    if "quadrupole_moment" in loss:
+        add_quadrupole_moment_to_loss_parameter(config)
 
     # train potential
     get_trainer(config).train_potential().save_checkpoint("test.chp")  # save checkpoint

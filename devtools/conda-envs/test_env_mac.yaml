@@ -9,6 +9,7 @@ dependencies:
   - pip
   - h5py
   - tqdm
+  - toml
   - qcportal>=0.50
   - qcelemental
   - pytorch>=2.1

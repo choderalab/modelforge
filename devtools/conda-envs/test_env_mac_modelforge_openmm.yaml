@@ -9,6 +9,7 @@ dependencies:
   - pip
   - h5py
   - tqdm
+  - toml
   - qcportal>=0.50
   - qcelemental
   - pytorch>=2.1
@@ -17,7 +18,7 @@ dependencies:
   - tensorboard
   - torchvision
   - openff-units
-  - pint
+  - pint>=0.24.1
   - rdkit
   - retry
   - sqlitedict

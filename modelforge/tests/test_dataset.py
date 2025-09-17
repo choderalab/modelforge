@@ -119,7 +119,7 @@ def test_get_properties(
     assert (
         len(raw_data_item.nnp_input.__slots__) == 9
     )  # 9 properties are returned now that we have included spin state
-    assert len(raw_data_item.metadata.__slots__) == 7  # 7 properties are returned
+    assert len(raw_data_item.metadata.__slots__) == 8  # 8 properties are returned
 
 
 def test_get_different_properties_of_interest(

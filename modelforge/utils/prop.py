@@ -10,14 +10,15 @@ from loguru import logger as log
 
 @dataclass
 class PropertyNames:
-    atomic_numbers: str  # per atom atomic numbers in the system
-    positions: str  # per atom positions in the system
-    E: str  # per system total energy
-    F: Optional[str] = None  # per atom forces
-    total_charge: Optional[str] = None  # per system total charge
-    dipole_moment: Optional[str] = None  # per system dipole moment
-    spin_multiplicity: Optional[str] = None  # per system spin multiplicity
-    partial_charges: Optional[str] = None  # Per-atom partial charge
+    atomic_numbers: str  # per-atom atomic numbers in the system
+    positions: str  # per-atom positions in the system
+    E: str  # per-system total energy
+    F: Optional[str] = None  # per-atom forces
+    total_charge: Optional[str] = None  # per-system total charge
+    dipole_moment: Optional[str] = None  # per-system dipole moment
+    spin_multiplicity: Optional[str] = None  # per-system spin multiplicity
+    partial_charges: Optional[str] = None  # per-atom partial charge
+    quadrupole_moment: Optional[str] = None  # per-system quadrupole moment
 
 
 class SpeciesEnergies(NamedTuple):
@@ -151,6 +152,7 @@ class Metadata:
         "per_atom_force",
         "per_system_dipole_moment",
         "per_atom_charge",
+        "per_system_quadrupole_moment",
     )
 
     def __init__(
@@ -162,6 +164,7 @@ class Metadata:
         per_atom_force: torch.Tensor = None,
         per_system_dipole_moment: torch.Tensor = None,
         per_atom_charge: torch.Tensor = None,
+        per_system_quadrupole_moment: torch.Tensor = None,
     ):
         self.per_system_energy = per_system_energy
         self.atomic_subsystem_counts = atomic_subsystem_counts
@@ -172,6 +175,7 @@ class Metadata:
         self.per_atom_force = per_atom_force
         self.per_system_dipole_moment = per_system_dipole_moment
         self.per_atom_charge = per_atom_charge
+        self.per_system_quadrupole_moment = per_system_quadrupole_moment
 
     def to_device(self, device: torch.device):
         """Move all tensors in this instance to the specified device."""
@@ -183,6 +187,7 @@ class Metadata:
         )
         self.per_system_dipole_moment = self.per_system_dipole_moment.to(device)
         self.per_atom_charge = self.per_atom_charge.to(device)
+        self.per_system_quadrupole_moment = self.per_system_quadrupole_moment.to(device)
         return self
 
     def to_dtype(self, dtype: torch.dtype):
@@ -191,6 +196,7 @@ class Metadata:
         self.per_atom_force = self.per_atom_force.to(dtype)
         self.per_system_dipole_moment = self.per_system_dipole_moment.to(dtype)
         self.per_atom_charge = self.per_atom_charge.to(dtype)
+        self.per_system_quadrupole_moment = self.per_system_quadrupole_moment.to(dtype)
         return self
 
 

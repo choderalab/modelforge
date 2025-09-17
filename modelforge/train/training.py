@@ -137,6 +137,7 @@ class CalculateProperties(torch.nn.Module):
         "per_atom_charge",
         "per_system_total_charge",
         "per_system_dipole_moment",
+        "per_system_quadrupole_moment",
     ]
 
     def __init__(self, requested_properties: List[str]):
@@ -167,6 +168,10 @@ class CalculateProperties(torch.nn.Module):
         assert all(
             prop in self._SUPPORTED_PROPERTIES for prop in self.requested_properties
         ), f"Unsupported property requested: {self.requested_properties}"
+
+        self.include_quadrupole_moment = (
+            "per_system_quadrupole_moment" in self.requested_properties
+        )
 
     @staticmethod
     def _get_forces(
@@ -302,6 +307,34 @@ class CalculateProperties(torch.nn.Module):
             "per_system_total_charge_true": batch.nnp_input.per_system_total_charge,
         }
 
+    def _get_quadrupole_moment(
+        self,
+        batch: BatchData,
+        model_prediction: Dict[str, torch.Tensor],
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Compute quadrupole moment from the predicted atomic charges.
+
+        Parameters
+        ----------
+        batch : BatchData
+            A batch of data containing input features and target charges.
+        model_prediction : Dict[str, torch.Tensor]
+            A dictionary containing the predicted charges from the model.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            A dictionary containing the true and predicted charges and dipole moments.
+        """
+        per_system_quadrupole_moment_predict = self._predict_quadrupole_moment(
+            model_prediction, batch
+        )
+        return {
+            "per_system_quadrupole_moment_predict": per_system_quadrupole_moment_predict,
+            "per_system_quadrupole_moment_true": batch.metadata.per_system_quadrupole_moment,
+        }
+
     def _get_dipole_moment(
         self,
         batch: BatchData,
@@ -354,12 +387,108 @@ class CalculateProperties(torch.nn.Module):
         per_atom_charge_predict = model_prediction["per_atom_charge"]
         per_atom_charge_true = batch.metadata.per_atom_charge
 
-        # print the shape
-
         return {
             "per_atom_charge_predict": per_atom_charge_predict,
             "per_atom_charge_true": per_atom_charge_true,
         }
+
+    @staticmethod
+    def _predict_quadrupole_moment(
+        model_predictions: Dict[str, torch.Tensor], batch: BatchData
+    ) -> torch.Tensor:
+        """
+        Compute the predicted quadrupole moment for each system based on the
+        predicted partial atomic charges and positions (which requires
+        that the coordinates are centered).
+
+
+        Parameters
+        ----------
+        model_predictions : Dict[str, torch.Tensor]
+            A dictionary containing the predicted atomic charges from the model.
+        batch : BatchData
+            A batch of data containing the atomic positions and indices.
+
+        Returns
+        -------
+        torch.Tensor
+            The predicted quadruople moment for each system.
+        """
+
+        """
+        quadrupole moment Q is a 3x3 tensor, defined as:
+        Q_{ij} = \sum_n q_n (3 r_{n,i} * r_{n,j} - r_n^2 \delta_{ij})
+        where:
+        - q_n is the charge of atom n, 
+        - r_i and r_j are the cartesian coordinates of atom n in the i and j directions,
+        - r_n^2  is the sum of the squares of the cartesian coordinates of atom n, r_n^2 = x_n^2 + y_n^2 + z_n^2
+        - \delta_{ij} is the Kronecker delta, which is 1 if i=j and 0 otherwise.
+        
+        To compute this efficiently on batches in torch, we will: 
+        1) compute the outer product of the position vectors for each atom, r_{n,i} * r_{n,j}
+        2) compute r_n^2 for each atom
+        3) compute the term (3 r_{n,i} * r_{n,j} - r_n^2 \delta_{ij}) for each atom
+        4) multiply this tensor by the per-atom charges to get the per-atom contributions to the quadrupole tensor
+        5) sum over all atoms in each system to get the quadrupole moment for each system with shape (num_systems, 3, 3)
+        """
+        # grab the relevant data from the model_predictions and batch
+        per_atom_charge = model_predictions["per_atom_charge"]  # shape: [num_atoms, 1]
+        positions = batch.nnp_input.positions  # Shape: [num_atoms, 3]
+        atomic_subsystem_indices = (
+            batch.nnp_input.atomic_subsystem_indices
+        )  # Shape: [num_atoms]
+
+        # Step 1: compute the outer product of the position vectors for each atom
+        # output is a tensor with shape [n_atoms, 3, 3]
+        r_outer_prod = torch.einsum("mk,ml->mkl", positions, positions)
+
+        # Step 2: compute r_n^2 for each atom
+        # the output tensor will be of shape [natoms]
+        r_squared = torch.einsum("mk,mk->m", positions, positions)
+
+        # step 3: compute the term (3 r_{n,i} * r_{n,j} - r_n^2 \delta_{ij}) for each atom
+
+        # This requires setting up an identity tensor for the kronecker delta
+        # I_batch used to remove the off-diagonal components will have shape [natoms,3,3]
+        I = torch.eye(3, device=positions.device)
+        I_batch = I.unsqueeze(0).expand(positions.shape[0], -1, -1)
+
+        # quad_temp tensor represents the term (3 r_{n,i} * r_{n,j} - r_n^2 \delta_{ij}) for each atom
+        quad_temp = (
+            3 * r_outer_prod - r_squared.view(-1, 1, 1) * I_batch
+        )  # shape: [n_atoms, 3, 3]
+        # step 4: multiply this tensor by the per-atom charges to get the per-atom contributions to the quadrupole tensor
+        # output shape is still [n_atoms, 3, 3]
+        quadrupole_moment_per_atom = torch.einsum(
+            "m...,mkl->mkl", per_atom_charge, quad_temp
+        )
+
+        # step 5: sum over all atoms in each system to get the quadrupole moment for each system
+        # this will use scatter add to ensure the per_atom contributions are summed correctly for each system
+
+        # create an empty output tensor of size [n_molecules, 3, 3]
+        output_tensor = torch.zeros(
+            batch.metadata.atomic_subsystem_counts.shape[0],
+            3,
+            3,
+            device=positions.device,
+            dtype=positions.dtype,
+        )
+
+        # define the indices for scatter add; we will use the atomic_subsystem indices, expanded to match the size of
+        # the quadrupole_moment_per_atom tensor
+        indices = (
+            atomic_subsystem_indices.view(-1, 1, 1).expand_as(
+                quadrupole_moment_per_atom
+            )
+        ).to(dtype=torch.int64, device=positions.device)
+
+        # perform scatter add to get the quadrupole moment for each molecule in the batch
+        quadrupole_moment_predict = output_tensor.scatter_add(
+            0, indices, quadrupole_moment_per_atom
+        )
+
+        return quadrupole_moment_predict
 
     @staticmethod
     def _predict_dipole_moment(
@@ -460,6 +589,9 @@ class CalculateProperties(torch.nn.Module):
             dipole_moment = self._get_dipole_moment(batch, model_prediction)
             predict_target.update(dipole_moment)
 
+        if self.include_quadrupole_moment:
+            quadrupole_moment = self._get_quadrupole_moment(batch, model_prediction)
+            predict_target.update(quadrupole_moment)
         return predict_target
 
 

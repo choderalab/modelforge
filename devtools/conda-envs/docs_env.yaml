@@ -17,7 +17,7 @@ dependencies:
   - torchvision
   - openff-units
   - torchmetrics>=1.4
-  - pint
+  - pint>=0.24.1
   - rdkit
   - retry
   - sqlitedict

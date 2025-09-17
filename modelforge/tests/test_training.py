@@ -131,8 +131,32 @@ def add_dipole_moment_to_loss_parameter(config):
     # also add per_atom_charge to predicted properties
 
     p_config = config["potential"]
-    p_config.core_parameter.predicted_properties.append("per_atom_charge")
-    p_config.core_parameter.predicted_dim.append(1)
+    if "per_atom_charge" not in p_config.core_parameter.predicted_properties:
+        p_config.core_parameter.predicted_properties.append("per_atom_charge")
+        p_config.core_parameter.predicted_dim.append(1)
+
+
+def add_quadrupole_moment_to_loss_parameter(config):
+    """This will add quadrupole moment to the loss parameter configuration so we can test to ensure everything runs"""
+
+    t_config = config["training"]
+    t_config.loss_parameter.loss_components.append("per_system_quadrupole_moment")
+    t_config.loss_parameter.loss_components.append("per_system_total_charge")
+    t_config.loss_parameter.weight["per_system_quadrupole_moment"] = 0.01
+    t_config.loss_parameter.weight["per_system_total_charge"] = 0.01
+
+    t_config.loss_parameter.target_weight["per_system_quadrupole_moment"] = 0.01
+    t_config.loss_parameter.target_weight["per_system_total_charge"] = 0.01
+
+    t_config.loss_parameter.mixing_steps["per_system_quadrupole_moment"] = 1
+    t_config.loss_parameter.mixing_steps["per_system_total_charge"] = 1
+
+    # also add per_atom_charge to predicted properties
+
+    p_config = config["potential"]
+    if "per_atom_charge" not in p_config.core_parameter.predicted_properties:
+        p_config.core_parameter.predicted_properties.append("per_atom_charge")
+        p_config.core_parameter.predicted_dim.append(1)
 
 
 def replace_per_system_with_per_atom_loss(config):
@@ -315,20 +339,34 @@ def test_learning_rate_scheduler(
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )
-@pytest.mark.parametrize("dataset_name", ["PHALKETHOH"])
+# this will grab the toml file for the spice2_hcnocls subset
+@pytest.mark.parametrize("dataset_name", ["SPICE2_HCNOCLS"])
 @pytest.mark.parametrize(
     "loss",
-    ["energy", "energy_force", "normalized_energy_force", "energy_force_dipole_moment"],
+    [
+        "energy",
+        "energy_force",
+        "normalized_energy_force",
+        "energy_force_dipole_moment_quadrupole_moment",
+    ],
 )
 def test_train_with_lightning(loss, potential_name, dataset_name, prep_temp_dir):
     """
     Test that we can train, save and load checkpoints.
+
+    This will use the spice2 subset that is compatible with ANI2x i.e., only elements H,C,N,O,F,Cl,S
+    Allowing us to test all the systems.
+    nc_1000_HCNOFClS_v1.1
+
+    note only a single test will be performed for dipole/quadrupole moment as this is just to ensure that it runs
+    and that the loss function is calculated;  we do not test for accuracy here and do not want to waste additional time
+
     """
 
     local_cache_dir = str(prep_temp_dir) + "/test_train_with_lightning"
-    # SKIP if potential is ANI and dataset is SPICE2
-    if "ANI" in potential_name and dataset_name == "SPICE2":
-        pytest.skip("ANI potential is not compatible with SPICE2 dataset")
+    # SKIP if potential is ANI and dataset is SPICE2 -- no longer need to skip as this will use the spice2_hcnocls subset
+    # if "ANI" in potential_name and dataset_name == "SPICE2":
+    #    pytest.skip("ANI potential is not compatible with SPICE2 dataset")
     if IN_GITHUB_ACTIONS and potential_name == "SAKE" and "force" in loss:
         pytest.skip(
             "Skipping Sake training with forces because it allocates too much memory"
@@ -344,6 +382,8 @@ def test_train_with_lightning(loss, potential_name, dataset_name, prep_temp_dir)
         replace_per_system_with_per_atom_loss(config)
     if "dipole_moment" in loss:
         add_dipole_moment_to_loss_parameter(config)
+    if "quadrupole_moment" in loss:
+        add_quadrupole_moment_to_loss_parameter(config)
 
     # train potential
     get_trainer(config).train_potential().save_checkpoint("test.chp")  # save checkpoint
@@ -711,4 +751,188 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir):
         + loss_weights["per_atom_force"] * loss_output["per_atom_force"]
         + +loss_weights["per_atom_energy"] * loss_output["per_atom_energy"],
         loss_output["total_loss"].to(torch.float32),
+    )
+
+
+def test_dipole_moment_computation(
+    single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
+):
+
+    # This test will just ensure the underlying functions work as expected in the CalculateProperties class
+
+    from modelforge.utils.prop import NNPInput, Metadata, BatchData
+    from modelforge.train.training import CalculateProperties
+
+    local_cache_dir = str(prep_temp_dir) + "/test_dipole_calculation"
+    dataset_cache_dir = str(dataset_temp_dir)
+
+    props = CalculateProperties(requested_properties=["per_system_dipole_moment"])
+
+    batch = single_batch_with_batchsize(
+        batch_size=1,
+        dataset_name="QM9",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
+        shift_center_of_mass_to_origin=True,
+    )
+
+    # set up some fake model predictions
+    model_predictions = {
+        "per_system_energy": torch.tensor([[0.0]]),
+        "per_atom_charge": torch.tensor(
+            [[-0.24], [0.06], [0.06], [0.06], [0.06]]
+        ),  # partial charges for CH4 from opls
+    }
+    # calculate dipole moment
+    dipole_moment = props._predict_dipole_moment(
+        model_predictions=model_predictions, batch=batch
+    )
+
+    assert dipole_moment.size() == (1, 3)
+    # dipole moment should be zero for methane with these partial charges
+    assert torch.allclose(dipole_moment, torch.tensor([[0.0, 0.0, 0.0]]), atol=1e-3)
+
+    # now test where we have a batch size of 2 to ensure we can handle multiple systems correctly.
+
+    batch = single_batch_with_batchsize(
+        batch_size=2,
+        dataset_name="QM9",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
+        shift_center_of_mass_to_origin=True,
+    )
+    # set up some fake model predictions
+    # note the first molecule is methane the second is ammonia
+    model_predictions = {
+        "per_system_energy": torch.tensor([[0.0], [0.0]]),
+        "per_atom_charge": torch.tensor(
+            [
+                [-0.24],
+                [0.06],
+                [0.06],
+                [0.06],
+                [0.06],
+                [-1.026],
+                [0.342],
+                [0.342],
+                [0.342],
+            ]  # partial charges for NH3 from opls
+        ),
+    }
+    dipole_moment = props._predict_dipole_moment(
+        model_predictions=model_predictions, batch=batch
+    )
+    assert dipole_moment.size() == (2, 3)
+    # dipole moment should be zero for methane with these partial charges
+    assert torch.allclose(dipole_moment[0], torch.tensor([[0.0, 0.0, 0.0]]), atol=1e-3)
+    # dipole moment magnitude for ammonia is non zero
+    assert torch.allclose(
+        dipole_moment[1], torch.tensor([0.0183, -0.0122, -0.0349]), atol=1e-3
+    )
+
+
+def test_quadrupole_moment_computation(
+    single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
+):
+
+    # This test will just ensure the underlying functions work as expected in the CalculateProperties class
+
+    from modelforge.utils.prop import NNPInput, Metadata, BatchData
+    from modelforge.train.training import CalculateProperties
+
+    local_cache_dir = str(prep_temp_dir) + "/test_quadrupole_calculation"
+    dataset_cache_dir = str(dataset_temp_dir)
+
+    props = CalculateProperties(requested_properties=["per_system_quadrupole_moment"])
+
+    batch = single_batch_with_batchsize(
+        batch_size=2,
+        dataset_name="QM9",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
+        shift_center_of_mass_to_origin=True,
+    )
+
+    print(
+        "print number of atoms in each system in batch: ",
+        batch.metadata.atomic_subsystem_counts,
+    )
+    # set up some fake model predictions
+    model_predictions = {
+        "per_system_energy": torch.tensor([[0.0], [0.0]]),
+        "per_atom_charge": torch.tensor(
+            [
+                [-0.24],
+                [0.06],
+                [0.06],
+                [0.06],
+                [0.06],
+                [-1.026],
+                [0.342],
+                [0.342],
+                [0.342],
+            ]
+        ),  # partial charges for CH4 and NH3 from opls just for testing
+    }
+    # calculate quadrupole moment
+    quadrupole_moment = props._predict_quadrupole_moment(
+        model_predictions=model_predictions, batch=batch
+    )
+
+    print(quadrupole_moment)
+    assert quadrupole_moment.size() == (2, 3, 3)
+    # quadrupole moment should be zero for methane with these partial charges
+    assert torch.allclose(
+        quadrupole_moment[0],
+        torch.tensor([[[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]]),
+        atol=1e-2,
+    )
+    assert torch.allclose(
+        quadrupole_moment[1],
+        torch.tensor([[[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]]),
+        atol=1e-2,
+    )
+
+    # now let us test on a known result for a two fake molecules to compare to hand computed values
+    positions = torch.tensor(
+        [
+            [0.0, 1.0, 2.0],
+            [3.0, 4.0, 5.0],
+            [6.0, 7.0, 8.0],
+            [0.0, 1.0, 2.0],
+            [3.0, 4.0, 5.0],
+        ],
+        dtype=batch.nnp_input.positions.dtype,
+    )
+    charges = torch.tensor(
+        [[2.0], [-1.0], [-1.0], [2.0], [-1.0]], dtype=batch.nnp_input.positions.dtype
+    )
+    batch.nnp_input.positions = positions
+
+    batch.nnp_input.atomic_subsystem_indices = torch.tensor([0, 0, 0, 1, 1])
+    batch.metadata.atomic_subsystem_counts = torch.tensor([[3], [2]])
+    batch.metadata.number_of_atoms = 5
+
+    quadrupole_moment = props._predict_quadrupole_moment(
+        model_predictions={"per_atom_charge": charges}, batch=batch
+    )
+    print(quadrupole_moment)
+    assert torch.allclose(
+        quadrupole_moment[0],
+        torch.tensor(
+            [
+                [[54.0, -162, -189], [-162, 0.0, -216.0], [-189.0, -216.0, -54.0]],
+            ]
+        ),
+        atol=1e-5,
+    )
+
+    assert torch.allclose(
+        quadrupole_moment[1],
+        torch.tensor(
+            [
+                [[13.0, -36, -45], [-36, -2, -48], [-45, -48, -11]],
+            ]
+        ),
+        atol=1e-5,
     )

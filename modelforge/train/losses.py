@@ -314,6 +314,8 @@ class TotalChargeError(Error):
 class QuadrupoleMomentError(Error):
     """
     Calculates the error for quadrupole moment.
+
+    Quadrupole moments are represented as 3x3 tensors, so shape [n_systems, 3, 3].
     """
 
     def calculate_error(
@@ -326,8 +328,8 @@ class QuadrupoleMomentError(Error):
         """
         error = (
             (quadrupole_predict - quadrupole_true).pow(2).sum(dim=(1, 2), keepdim=True)
-        )  # Shape: [batch_size, 1]
-        return error.squeeze(-1)
+        )
+        return error.squeeze(-1)  # Shape: [n_systems, 1]
 
     def forward(
         self,

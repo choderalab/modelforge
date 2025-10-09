@@ -192,7 +192,7 @@ class DatasetCuration(ABC):
 
             dm_temp = np.einsum(
                 "i,ij->j", partial_charges.value[config].reshape(-1), pos
-            ).reshape(1, 3)
+            )
 
             if dipole_moment_scalar is not None:
                 if dipole_moment_scalar.value[config] == 0:

@@ -180,16 +180,16 @@ class Record:
 
     def remove_configs(self, indices_to_include: List[int]):
         """
-        Remove configurations not in the indices_to_include list
+                Remove configurations not in the indices_to_include list
+        z
+                Parameters
+                ----------
+                indices_to_include: List[int]
+                    List of indices to keep in the record.
 
-        Parameters
-        ----------
-        indices_to_include: List[int]
-            List of indices to keep in the record.
-
-        Returns
-        -------
-        Record: Copy of the record with configurations removed.
+                Returns
+                -------
+                Record: Copy of the record with configurations removed.
 
         """
 

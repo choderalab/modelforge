@@ -53,7 +53,7 @@ extensions = [
     "sphinx.ext.extlinks",
     "sphinx.ext.autosectionlabel",
     "nbsphinx",
-    "sphinxcontrib.collections",
+    "sphinx.collections",
 ]
 
 collections = {

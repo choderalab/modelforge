@@ -1196,6 +1196,7 @@ def create_dataset_from_hdf5(
     dataset_local_db_name: str = None,
     append_property: bool = False,
     property_map: Optional[Dict[str, Type[PropertyBaseModel]]] = None,
+    n_records: int = None,
 ):
     """
     Create a dataset from an modelforge curated HDF5 file.
@@ -1227,7 +1228,8 @@ def create_dataset_from_hdf5(
         If a property is not in the map, it will be added as a PropertyBaseModel with default settings.
         If None, all properties will be added as an instance PropertyBaseModel with default settings.
         Mapping to the PropertyBaseModel class is useful for validation of the dataset.
-
+    n_records: int, optional, default=None
+        If provided, only the first n_records will be read from the HDF5 file.
     Returns
     -------
     SourceDataset
@@ -1246,9 +1248,11 @@ def create_dataset_from_hdf5(
 
     if property_map is None:
         property_map = {}
+
     with h5py.File(hdf5_filename, "r") as f:
         keys = list(f.keys())
-
+        if n_records is not None:
+            keys = keys[:n_records]
         for key in tqdm(keys):
 
             record = Record(name=key)

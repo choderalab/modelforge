@@ -181,7 +181,6 @@ class Record:
     def remove_configs(self, indices_to_include: List[int]):
         """
                 Remove configurations not in the indices_to_include list
-        z
                 Parameters
                 ----------
                 indices_to_include: List[int]

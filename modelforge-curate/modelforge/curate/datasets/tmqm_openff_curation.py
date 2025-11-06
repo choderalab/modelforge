@@ -48,6 +48,47 @@ class tmQMOpenFFCuration(DatasetCuration):
 
         self.molecule_names = {}
 
+    def _correct_scf_dipole(self, record: Record) -> DipoleMomentPerSystem:
+        """
+        Shift the dipole moment to the center of mass frame of reference.
+
+        SCF Dipole values in the qcarchive dataset for charged systems do not have the proper
+        reference center applied causing in many cases large values (proportional to the distance of the COM from the origin).
+
+
+        Parameters
+        ----------
+        record: Record, required
+            Record containing the dipole moment, positions, atomic numbers, and total charge.
+
+        Returns
+        -------
+            DipoleMomentPerSystem
+                Dipole moment shifted to the center of mass frame of reference.
+        """
+        dipole = record.get_property("scf_dipole")  # in Debye
+        positions = record.get_property("positions")
+        atomic_numbers = record.get_property("atomic_numbers")
+        total_charge = record.get_property("total_charge")
+
+        coms_temp = []
+        for i in range(record.n_configs):
+            com = self._calc_center_of_mass(
+                atomic_numbers.value,
+                positions.value[i],
+            )
+            coms_temp.append(com)
+        coms = np.array(coms_temp) * positions.units
+
+        dipole_corrected = (
+            dipole.value * dipole.units - coms * total_charge.value * total_charge.units
+        )
+
+        dipole.value = dipole_corrected.m
+        dipole.units = dipole_corrected.u
+
+        return dipole
+
     # we will use the retry package to allow us to resume download if we lose connection to the server
     # @retry(delay=1, jitter=1, backoff=2, tries=50, logger=logger, max_delay=10)
     def _fetch_singlepoint_from_qcarchive(
@@ -103,7 +144,7 @@ class tmQMOpenFFCuration(DatasetCuration):
 
         ds = client.get_dataset_by_id(dataset_id)
         qcportal_view_full_path = f"{qcportal_view_path}/{qcportal_view_filename}"
-        # logger.debug(f"Using qcportal view file: {qcportal_view_full_path}")
+        logger.debug(f"Using qcportal view file: {qcportal_view_full_path}")
         ds.use_view_cache(qcportal_view_full_path)
 
         # ds = client.get_dataset(dataset_type=dataset_type, dataset_name=dataset_name)
@@ -363,10 +404,12 @@ class tmQMOpenFFCuration(DatasetCuration):
                         # extract the lowdin spin multiplicity
                         n_atoms = forces.n_atoms
                         try:
+                            log = record_val["compute_history_"][0]["outputs_"][
+                                "stdout"
+                            ]["data_"]
+                            # log = record_val["stdout"]
                             spins = self._process_log_for_spin(
-                                log=record_val["compute_history_"][0]["outputs_"][
-                                    "stdout"
-                                ]["data_"],
+                                log=log,
                                 n_atoms=n_atoms,
                             )
                             spin_multiplicity_per_atom = SpinMultiplicitiesPerAtom(
@@ -386,6 +429,16 @@ class tmQMOpenFFCuration(DatasetCuration):
                                 units=unit.dimensionless,
                             )
                             dataset.add_property(mol_name, spin_multiplicity_per_atom)
+
+        for record_name in dataset.keys():
+            record = dataset.get_record(record_name)
+            # we need to correct the dipole moment to be in the center of mass frame of reference
+
+            scf_dipole_corrected = self._correct_scf_dipole(record)
+            record.remove_property("scf_dipole")
+            record.add_property(scf_dipole_corrected)
+
+            dataset.update_record(record)
 
         return dataset
 
@@ -447,7 +500,7 @@ class tmQMOpenFFCuration(DatasetCuration):
             Number of concurrent threads for retrieving data from QCArchive
         Examples
         --------
-        >>> tmqm_openff_data = tmQMOpenFFCuration(local_cache_dir='~/datasets/phalkethoh_openff_dataset')
+        >>> tmqm_openff_data = tmQMOpenFFCuration(local_cache_dir='~/datasets/tmqm_openff_dataset')
         >>> tmqm_openff_data.process()
 
         """

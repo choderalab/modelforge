@@ -196,6 +196,16 @@ class ScaleMode(CaseInsensitiveEnum):
     iterations = "iterations"
 
 
+class ShiftEnergiesMode(CaseInsensitiveEnum):
+    """
+    Enum class for the energy shifting modes
+    """
+
+    min = "min"
+    max = "max"
+    mean = "mean"
+
+
 class OneCycleLRConfig(SchedulerConfigBase):
     """
     Configuration for OneCycleLR scheduler
@@ -387,6 +397,7 @@ class TrainingParameters(ParametersBase):
     number_of_epochs: int
     remove_self_energies: bool
     shift_center_of_mass_to_origin: bool
+    shift_energies: Optional[ShiftEnergiesMode] = None
     batch_size: int
     lr: float
     gradient_clip_val: float  # gradient clipping value

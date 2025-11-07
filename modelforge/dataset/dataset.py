@@ -1104,6 +1104,7 @@ class DataModule(pl.LightningDataModule):
         batch_size: int = 64,
         remove_self_energies: bool = True,
         shift_center_of_mass_to_origin: bool = False,
+        shift_energies: Optional[str] = None,
         atomic_self_energies: Optional[Dict[str, float]] = None,
         regression_ase: bool = False,
         force_download: bool = False,
@@ -1139,6 +1140,9 @@ class DataModule(pl.LightningDataModule):
             shift_center_of_mass_to_origin: bool, defaults to False
                 Whether to shift the center of mass of the molecule to the origin. This is necessary if using the
                 dipole moment in the loss function.
+            shift_energies: str, defaults to None
+                If provided will shift the energies using the provided scheme. Options are 'min', 'max' and 'mean'.
+                If None, no shifting is performed. Note, this shifting is performed after self energy removal.
             atomic_self_energies : Optional[Dict[str, float]]
                 A dictionary mapping element names to their self energies. If not provided, the self energies will be calculated.
             regression_ase: bool, defaults to False
@@ -1155,7 +1159,6 @@ class DataModule(pl.LightningDataModule):
                 Directory to store the files associated/specific with a given dataset/training run.
             dataset_cache_dir : str, defaults to "./"
                 Directory to store the dataset files,
-
             local_yaml_file : Optional[str]
                 Path to the local yaml file to use for the dataset. If not provided, the code will search for a
                 yaml file associated with the dataset name in the modelforge.dataset.yaml_files directory.
@@ -1170,6 +1173,7 @@ class DataModule(pl.LightningDataModule):
         self.splitting_strategy = splitting_strategy
         self.remove_self_energies = remove_self_energies
         self.shift_center_of_mass_to_origin = shift_center_of_mass_to_origin
+        self.shift_energies = shift_energies
         self.dict_atomic_self_energies = (
             atomic_self_energies  # element name (e.g., 'H') maps to self energies
         )
@@ -1438,8 +1442,27 @@ class DataModule(pl.LightningDataModule):
 
         from tqdm import tqdm
 
+        # create a temporary variable to hold the min/max energies to allow for shifting
+        e_min = 0
+        e_max = 0
+        e_mean = 0
+        shift_energy = False
+        calc_mean = False
+
+        if self.shift_energies is not None:
+            log.info(f"Shifting energies using the '{self.shift_energies}' scheme.")
+            if self.shift_energies not in ["min", "max"]:
+                raise ValueError(
+                    f"Unknown energy shifting scheme: {self.shift_energies}. Supported schemes are 'min' and 'max'."
+                )
+            shift_energy = True
+            if self.shift_energies == "mean":
+                calc_mean = True
+                # create a numpy array to hold all energies for mean calculation
+                energy_array = np.zeros(len(dataset), dtype=np.float32)
+
         # remove the self energies if requested
-        log.info("Performing per datapoint operations in the dataset dataset")
+        log.info("Performing per datapoint operations in the dataset")
         if self.remove_self_energies:
             log.info("Removing self energies from the dataset")
 
@@ -1453,8 +1476,39 @@ class DataModule(pl.LightningDataModule):
                         ]
                     ]
                 )
+                shifted_e = dataset.properties_of_interest["E"][i] - energy
 
-                dataset[i] = {"E": dataset.properties_of_interest["E"][i] - energy}
+                if shift_energy:
+                    if calc_mean:
+                        energy_array[i] = shifted_e.to("cpu").numpy().reshape(-1)
+                    else:
+                        if i == 0:
+                            e_min = shifted_e
+                            e_max = shifted_e
+                        else:
+                            if shifted_e < e_min:
+                                e_min = shifted_e
+                            if shifted_e > e_max:
+                                e_max = shifted_e
+
+                dataset[i] = {"E": shifted_e}
+        if shift_energy:
+            # let us get the min, max or mean of the dataset
+            if self.shift_energies == "min":
+                shift_value = e_min
+            elif self.shift_energies == "max":
+                shift_value = e_max
+            elif self.shift_energies == "mean":
+                e_mean = np.mean(energy_array)
+                shift_value = e_mean
+
+            log.info(
+                f"Shifting energies by {self.shift_energies} with value: {shift_value}"
+            )
+
+            for i in tqdm(range(len(dataset)), desc="Process dataset"):
+                shifted_e = dataset.properties_of_interest["E"][i] - shift_value
+                dataset[i] = {"E": shifted_e}
 
         if self.shift_center_of_mass_to_origin:
             log.info("Shifting the center of mass of each molecule to the origin.")

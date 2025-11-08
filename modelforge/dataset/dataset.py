@@ -1451,7 +1451,7 @@ class DataModule(pl.LightningDataModule):
 
         if self.shift_energies is not None:
             log.info(f"Shifting energies using the '{self.shift_energies}' scheme.")
-            if self.shift_energies not in ["min", "max"]:
+            if self.shift_energies not in ["min", "max", "mean"]:
                 raise ValueError(
                     f"Unknown energy shifting scheme: {self.shift_energies}. Supported schemes are 'min' and 'max'."
                 )
@@ -1749,6 +1749,7 @@ def initialize_datamodule(
     properties_assignment: Optional[Dict[str, str]] = None,
     element_filter: Optional[List[tuple]] = None,
     local_yaml_file: Optional[str] = None,
+    shift_energies: Optional[str] = None,
 ) -> DataModule:
     """
     Initialize a dataset for a given mode.
@@ -1768,6 +1769,7 @@ def initialize_datamodule(
         properties_assignment=properties_assignment,
         element_filter=element_filter,
         local_yaml_file=local_yaml_file,
+        shift_energies=shift_energies,
     )
     data_module.prepare_data()
     data_module.setup()

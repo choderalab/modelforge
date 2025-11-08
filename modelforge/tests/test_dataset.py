@@ -510,6 +510,106 @@ from modelforge.potential import _Implemented_NNPs
 
 
 @pytest.mark.parametrize("dataset_name", ["QM9", "PHALKETHOH"])
+def test_energy_shifting(
+    dataset_name, datamodule_factory, prep_temp_dir, dataset_temp_dir
+):
+    from modelforge.dataset.utils import FirstComeFirstServeSplittingStrategy
+
+    """Test the energy shifting of the dataset."""
+    local_cache_dir = f"{str(prep_temp_dir)}/energy_shifting"
+    dataset_cache_dir = str(dataset_temp_dir)
+    # prepare reference value
+    dm = datamodule_factory(
+        dataset_name=dataset_name,
+        batch_size=512,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        shift_energies=None,
+        remove_self_energies=True,
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
+    )
+    first_entry_no_shift = dm.train_dataset[0].metadata.per_system_energy
+
+    # prepare reference value
+    dm_min = datamodule_factory(
+        dataset_name=dataset_name,
+        batch_size=512,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        shift_energies="min",
+        remove_self_energies=True,
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
+    )
+    first_entry_min_shift = dm_min.train_dataset[0].metadata.per_system_energy
+
+    # first check they don't match
+    assert not torch.allclose(first_entry_no_shift, first_entry_min_shift)
+
+    # when using min shift, all values should be >= 0
+    for i in range(len(dm_min.train_dataset)):
+        entry = dm_min.train_dataset[i].metadata.per_system_energy
+        assert torch.all(entry >= 0.0)
+
+        # prepare reference value
+    dm_max = datamodule_factory(
+        dataset_name=dataset_name,
+        batch_size=512,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        shift_energies="max",
+        remove_self_energies=True,
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
+    )
+
+    # when shifting with max, all values should be <= 0
+    for i in range(len(dm_max.train_dataset)):
+        entry = dm_max.train_dataset[i].metadata.per_system_energy
+        assert torch.all(entry <= 0.0)
+
+    # now look at the mean
+    dm_mean = datamodule_factory(
+        dataset_name=dataset_name,
+        batch_size=512,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        shift_energies="mean",
+        remove_self_energies=True,
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
+    )
+    # compute the mean of the shifted dataset, it should be close to zero
+    # note we need to include all the subsets: train, val, test
+    # as those were used in the initial computation of the mean;
+    # otherwise the tolerance will need to be large, given the relatively large spread of the energy values
+    # in the datasets
+    energies = []
+    for i in range(len(dm_mean.train_dataset)):
+        entry = dm_mean.train_dataset[i].metadata.per_system_energy
+        energies.append(entry.numpy())
+    for i in range(len(dm_mean.val_dataset)):
+        entry = dm_mean.val_dataset[i].metadata.per_system_energy
+        energies.append(entry.numpy())
+    for i in range(len(dm_mean.test_dataset)):
+        entry = dm_mean.test_dataset[i].metadata.per_system_energy
+        energies.append(entry.numpy())
+
+    energies = np.concatenate(energies)
+    mean_energy = np.mean(energies)
+    assert abs(mean_energy) < 1e-3
+
+    # let us check if we give something bad it will fail
+    with pytest.raises(ValueError):
+        dm_bad = datamodule_factory(
+            dataset_name=dataset_name,
+            batch_size=512,
+            splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+            shift_energies="not_a_real_shift",
+            remove_self_energies=True,
+            local_cache_dir=local_cache_dir,
+            dataset_cache_dir=dataset_cache_dir,
+        )
+
+
+@pytest.mark.parametrize("dataset_name", ["QM9", "PHALKETHOH"])
 # @pytest.mark.parametrize("dataset_name", _ImplementedDatasets.get_all_dataset_names())
 def test_removal_of_self_energy(
     dataset_name, datamodule_factory, prep_temp_dir, dataset_temp_dir

@@ -1497,7 +1497,7 @@ class DataModule(pl.LightningDataModule):
 
         # if we are not removing self energies, but shifting is requested
         # we still need to figure out the min/max/mean energies
-        if self.remove_self_energies == False and shift_energy:
+        if not self.remove_self_energies and shift_energy:
             # we still need to gather the energies for shifting
             log.info("Gathering energy information for shifting the dataset.")
             for i in tqdm(range(len(dataset)), desc="Process dataset"):

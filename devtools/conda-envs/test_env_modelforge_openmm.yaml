@@ -41,7 +41,7 @@ dependencies:
       - jax
       - flax
       - pytorch2jax
-      - git+https://github.com/ArnNag/sake.git@nanometer
+      #- git+https://github.com/ArnNag/sake.git@nanometer
       - flax
-      - torch
+      #- torch
       - pytest-xdist

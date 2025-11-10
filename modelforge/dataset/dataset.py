@@ -1462,6 +1462,8 @@ class DataModule(pl.LightningDataModule):
                 energy_array = np.zeros(len(dataset), dtype=np.float32)
 
         # remove the self energies if requested
+        # note, if we are also shifting the energies, we can calculate the min/max/mean
+        # in the same loop to avoid multiple passes over the dataset
         log.info("Performing per datapoint operations in the dataset")
         if self.remove_self_energies:
             log.info("Removing self energies from the dataset")
@@ -1492,6 +1494,28 @@ class DataModule(pl.LightningDataModule):
                                 e_max = shifted_e
 
                 dataset[i] = {"E": shifted_e}
+
+        # if we are not removing self energies, but shifting is requested
+        # we still need to figure out the min/max/mean energies
+        if self.remove_self_energies is False and shift_energy:
+            # we still need to gather the energies for shifting
+            log.info("Gathering energy information for shifting the dataset.")
+            for i in tqdm(range(len(dataset)), desc="Process dataset"):
+                shifted_e = dataset.properties_of_interest["E"][i]
+
+                if calc_mean:
+                    energy_array[i] = shifted_e.to("cpu").numpy().reshape(-1)
+                else:
+                    if i == 0:
+                        e_min = shifted_e
+                        e_max = shifted_e
+                    else:
+                        if shifted_e < e_min:
+                            e_min = shifted_e
+                        if shifted_e > e_max:
+                            e_max = shifted_e
+
+        # if we are shifting the energy we need to apply it.
         if shift_energy:
             # let us get the min, max or mean of the dataset
             if self.shift_energies == "min":

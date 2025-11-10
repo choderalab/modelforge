@@ -1453,7 +1453,7 @@ class DataModule(pl.LightningDataModule):
             log.info(f"Shifting energies using the '{self.shift_energies}' scheme.")
             if self.shift_energies not in ["min", "max", "mean"]:
                 raise ValueError(
-                    f"Unknown energy shifting scheme: {self.shift_energies}. Supported schemes are 'min' and 'max'."
+                    f"Unknown energy shifting scheme: {self.shift_energies}. Supported schemes are 'min', 'max', and 'mean'."
                 )
             shift_energy = True
             if self.shift_energies == "mean":

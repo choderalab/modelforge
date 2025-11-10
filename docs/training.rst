@@ -28,7 +28,7 @@ separately (a common use case where this is useful is when a potential is traine
 different datasets — instead of repeating the `training` and `potential`
 sections in each TOML file, only the `dataset.toml` file needs to be changed).
 
-Note, as discussed in the :doc:`datasets` documentation, the dataset can have the self-energy removed (`remove_self_energies` option set to `true').  The dataset can also have the energy shifted (after self-energy removal, if performed) using the `shift_energies` option; this can be set to ['min', 'max', or 'mean']  to shift  the energies accordingly (`min` shifts the lowest energy to 0, `max` shifts the highest energy to 0, and `mean` shifts the mean energy to 0). `shift_center_of_mass_to_origin` can also be set to `true` to center the coordinates of each system at the origin, necessary for computing the dipole moments and quadrupole moments correctly.
+Note, as discussed in the :doc:`datasets` documentation, the dataset can have the self-energy removed (`remove_self_energies` option set to `true').  The dataset can also have the energy shifted (after self-energy removal, if performed) using the `shift_energies` option; this can be set to ['min', 'max', or 'mean'] to shift the energies accordingly (`min` shifts the lowest energy to 0, `max` shifts the highest energy to 0, and `mean` shifts the mean energy to 0). `shift_center_of_mass_to_origin` can also be set to `true` to center the coordinates of each system at the origin, necessary for computing the dipole moments and quadrupole moments correctly.
 
 
 Learning rate scheduler

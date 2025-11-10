@@ -529,7 +529,6 @@ def test_energy_shifting(
         local_cache_dir=local_cache_dir,
         dataset_cache_dir=dataset_cache_dir,
     )
-    first_entry_min_shift = dm_min.train_dataset[0].metadata.per_system_energy
 
     # when using min shift, all values should be >= 0
     for i in range(len(dm_min.train_dataset)):
@@ -606,7 +605,6 @@ def test_energy_shifting(
         local_cache_dir=local_cache_dir,
         dataset_cache_dir=dataset_cache_dir,
     )
-    first_entry_min_shift = dm_min.train_dataset[0].metadata.per_system_energy
 
     # when using min shift, all values should be >= 0
     for i in range(len(dm_min.train_dataset)):

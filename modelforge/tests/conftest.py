@@ -64,6 +64,7 @@ def datamodule_factory():
         shift_center_of_mass_to_origin: bool = True,
         version_select: Optional[str] = None,
         regression_ase: Optional[bool] = False,
+        shift_energies: Optional[str] = None,
     ):
 
         # for simplicity of writing tests, we will have this accept the dataset name
@@ -110,6 +111,7 @@ def datamodule_factory():
             local_yaml_file=local_yaml_file,
             shift_center_of_mass_to_origin=shift_center_of_mass_to_origin,
             regression_ase=regression_ase,
+            shift_energies=shift_energies,
         )
 
     return create_datamodule

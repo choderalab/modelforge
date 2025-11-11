@@ -1840,6 +1840,7 @@ class PotentialTrainer:
             batch_size=self.training_parameter.batch_size,
             remove_self_energies=self.training_parameter.remove_self_energies,
             shift_center_of_mass_to_origin=self.training_parameter.shift_center_of_mass_to_origin,
+            shift_energies=self.training_parameter.shift_energies,
             version_select=self.dataset_parameter.version_select,
             local_cache_dir=self.runtime_parameter.local_cache_dir,
             regression_ase=self.dataset_parameter.regression_ase,

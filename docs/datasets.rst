@@ -59,6 +59,7 @@ Other common operations that are performed on the dataset as part of training ma
 
 - `Removing Self-Energies`: Self-energies are per-element offsets subtracted to the total energy of a system.
   The energy offsets provide cleaner training data (e.g., MAE values of energy are closer to the scale of the energy itself).
+- `Shifting the Energies`: The energies can be shifted by a constant value potentially improving the stability and speed of training.  This shifting can be set  to be the minimum, maximum, or mean of the training dataset energies. The minimum energy shifting will shift by the smallest value, hence making all values positive; maximum shifting will make all values negative; mean shifting will center the energies around zero.
 - *Splitting the Dataset*: The dataset are split into training, validation, and test sets. This is crucial for evaluating the performance of the machine learning model and ensuring that it generalizes well to unseen data. Various schemes can be used to specify this.
 - *Shifting the center of mass*: The center of mass of the system can be shifted to the origin to enable calculation of the dipole moment.
 - *Normalization and Scaling*: Normalize the energies and other properties to ensure they are on a comparable scale, which can improve the stability and

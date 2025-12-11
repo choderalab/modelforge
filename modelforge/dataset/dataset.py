@@ -1517,6 +1517,9 @@ class DataModule(pl.LightningDataModule):
 
         # if we are shifting the energy we need to apply it.
         if shift_energy:
+            # initialize a numpy array to hold all the energies that hav ebeen shifted
+            shifted_energy_array = np.zeros(len(dataset), dtype=np.float32)
+
             # let us get the min, max or mean of the dataset
             if self.shift_energies == "min":
                 shift_value = float(e_min[0])
@@ -1530,6 +1533,17 @@ class DataModule(pl.LightningDataModule):
                 shifted_e = dataset.properties_of_interest["E"][i] - shift_value
 
                 dataset[i] = {"E": shifted_e}
+                shifted_energy_array[i] = shifted_e.to("cpu").numpy().reshape(-1)
+
+            import matplotlib.pyplot as plt
+
+            plt.hist(shifted_energy_array, bins=50)
+            plt.title(
+                f"Histogram of shifted energies (shift: {self.shift_energies}={shift_value:.2f})"
+            )
+            plt.xlabel("Energy (kJ/mol)")
+            plt.ylabel("Count")
+            plt.savefig(f"{self.name}_shifted_energies_histogram.png")
 
         if self.shift_center_of_mass_to_origin:
             log.info("Shifting the center of mass of each molecule to the origin.")

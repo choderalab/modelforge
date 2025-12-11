@@ -180,15 +180,15 @@ class Record:
 
     def remove_configs(self, indices_to_include: List[int]):
         """
-                Remove configurations not in the indices_to_include list
-                Parameters
-                ----------
-                indices_to_include: List[int]
-                    List of indices to keep in the record.
+        Remove configurations not in the indices_to_include list
+        Parameters
+        ----------
+        indices_to_include: List[int]
+            List of indices to keep in the record.
 
-                Returns
-                -------
-                Record: Copy of the record with configurations removed.
+        Returns
+        -------
+        Record: Copy of the record with configurations removed.
 
         """
 
@@ -876,3 +876,16 @@ def map_configurations(record_ref: Record, record_test: Record) -> np.ndarray:
     )
 
     return np.array(out[2])[:, 1]
+
+
+def calculate_reference_energy(atomic_numbers, ase):
+    from modelforge.dataset.utils import _ATOMIC_NUMBER_TO_ELEMENT
+
+    atomic_numbers = list(atomic_numbers.reshape(-1))
+    # sum up the reference energy for each element in the atomic numbers
+    reference_energy = [
+        ase[_ATOMIC_NUMBER_TO_ELEMENT[atomic_number]]
+        for atomic_number in atomic_numbers
+    ]
+
+    return sum(reference_energy)

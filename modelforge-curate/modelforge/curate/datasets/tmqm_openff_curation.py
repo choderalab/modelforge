@@ -266,6 +266,8 @@ class tmQMOpenFFCuration(DatasetCuration):
 
                         # format is "{molecule_name}-{conformer_id}-m{spin_multiplicity}"
                         mol_name = key.split("-")[0]
+                        if mol_name == key:
+                            mol_name = key.split("_")[0]
 
                         entry_val = ph_db[key].dict()
                         record_val = db_default[key]

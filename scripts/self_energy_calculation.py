@@ -1,61 +1,61 @@
 from modelforge.dataset.dataset import initialize_datamodule
 from loguru import logger
 
-# This script will perform the self-energy calculation for multiple datasets
+# This script will perform the self-energy regression calculation for multiple datasets
 
 datasets = {
-    # "qm9": {
-    #     "properties_of_interest": [
-    #         "positions",
-    #         "internal_energy_at_0K",
-    #         "atomic_numbers",
-    #     ],
-    #     "properties_assignment": {
-    #         "positions": "positions",
-    #         "E": "internal_energy_at_0K",
-    #         "atomic_numbers": "atomic_numbers",
-    #     },
-    # },
-    # "ani1x": {
-    #     "properties_of_interest": ["positions", "wb97x_dz_energy", "atomic_numbers"],
-    #     "properties_assignment": {
-    #         "positions": "positions",
-    #         "E": "wb97x_dz_energy",
-    #         "atomic_numbers": "atomic_numbers",
-    #     },
-    # },
-    # "ani2x": {
-    #     "properties_of_interest": ["positions", "energies", "atomic_numbers"],
-    #     "properties_assignment": {
-    #         "positions": "positions",
-    #         "E": "energies",
-    #         "atomic_numbers": "atomic_numbers",
-    #     },
-    # },
-    # "spice1": {
-    #     "properties_of_interest": ["positions", "dft_total_energy", "atomic_numbers"],
-    #     "properties_assignment": {
-    #         "positions": "positions",
-    #         "E": "dft_total_energy",
-    #         "atomic_numbers": "atomic_numbers",
-    #     },
-    # },
-    # "spice2": {
-    #     "properties_of_interest": ["positions", "dft_total_energy", "atomic_numbers"],
-    #     "properties_assignment": {
-    #         "positions": "positions",
-    #         "E": "dft_total_energy",
-    #         "atomic_numbers": "atomic_numbers",
-    #     },
-    # },
-    # "spice1_openff": {
-    #     "properties_of_interest": ["positions", "dft_total_energy", "atomic_numbers"],
-    #     "properties_assignment": {
-    #         "positions": "positions",
-    #         "E": "dft_total_energy",
-    #         "atomic_numbers": "atomic_numbers",
-    #     },
-    # },
+    "qm9": {
+        "properties_of_interest": [
+            "positions",
+            "internal_energy_at_0K",
+            "atomic_numbers",
+        ],
+        "properties_assignment": {
+            "positions": "positions",
+            "E": "internal_energy_at_0K",
+            "atomic_numbers": "atomic_numbers",
+        },
+    },
+    "ani1x": {
+        "properties_of_interest": ["positions", "wb97x_dz_energy", "atomic_numbers"],
+        "properties_assignment": {
+            "positions": "positions",
+            "E": "wb97x_dz_energy",
+            "atomic_numbers": "atomic_numbers",
+        },
+    },
+    "ani2x": {
+        "properties_of_interest": ["positions", "energies", "atomic_numbers"],
+        "properties_assignment": {
+            "positions": "positions",
+            "E": "energies",
+            "atomic_numbers": "atomic_numbers",
+        },
+    },
+    "spice1": {
+        "properties_of_interest": ["positions", "dft_total_energy", "atomic_numbers"],
+        "properties_assignment": {
+            "positions": "positions",
+            "E": "dft_total_energy",
+            "atomic_numbers": "atomic_numbers",
+        },
+    },
+    "spice2": {
+        "properties_of_interest": ["positions", "dft_total_energy", "atomic_numbers"],
+        "properties_assignment": {
+            "positions": "positions",
+            "E": "dft_total_energy",
+            "atomic_numbers": "atomic_numbers",
+        },
+    },
+    "spice1_openff": {
+        "properties_of_interest": ["positions", "dft_total_energy", "atomic_numbers"],
+        "properties_assignment": {
+            "positions": "positions",
+            "E": "dft_total_energy",
+            "atomic_numbers": "atomic_numbers",
+        },
+    },
     "spice2_openff": {
         "properties_of_interest": ["positions", "dft_total_energy", "atomic_numbers"],
         "properties_assignment": {
@@ -64,14 +64,14 @@ datasets = {
             "atomic_numbers": "atomic_numbers",
         },
     },
-    # "phalkethoh": {
-    #     "properties_of_interest": ["positions", "dft_total_energy", "atomic_numbers"],
-    #     "properties_assignment": {
-    #         "positions": "positions",
-    #         "E": "dft_total_energy",
-    #         "atomic_numbers": "atomic_numbers",
-    #     },
-    # },
+    "phalkethoh": {
+        "properties_of_interest": ["positions", "dft_total_energy", "atomic_numbers"],
+        "properties_assignment": {
+            "positions": "positions",
+            "E": "dft_total_energy",
+            "atomic_numbers": "atomic_numbers",
+        },
+    },
 }
 
 for dataset_name in datasets:

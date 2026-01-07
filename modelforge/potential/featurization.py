@@ -316,6 +316,9 @@ class FeaturizeInput(nn.Module):
         torch.Tensor
             The featurized input data.
         """
+        # for debugging, uncommenting this can be helpful
+        # torch.autograd.set_detect_anomaly(True)
+
         atomic_numbers = data.atomic_numbers
         categorial_embedding = self.atomic_number_embedding(atomic_numbers)
 

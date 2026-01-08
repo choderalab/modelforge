@@ -1,4 +1,4 @@
-from modelforge.curate import create_dataset_from_hdf5, Record, SourceDataset
+from modelforge.curate import create_dataset_from_hdf5
 from modelforge.utils.units import chem_context
 from openff.units import unit
 from tqdm import tqdm

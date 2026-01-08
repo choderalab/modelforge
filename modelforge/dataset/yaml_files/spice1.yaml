@@ -31,7 +31,7 @@ atomic_self_energies:
   K: -1574847.955709633*kilojoule_per_mole
   Ca: -1777543.2887296947*kilojoule_per_mole
   Br: -6758454.442850963*kilojoule_per_mole
-  I: -781842.6578771132*kilojoule_per_mole,
+  I: -781842.6578771132*kilojoule_per_mole
 
 full_dataset_v1.1:
   about: 'This provides a curated hdf5 file for the SPICE1 dataset designed to be

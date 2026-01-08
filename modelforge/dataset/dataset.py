@@ -1517,7 +1517,7 @@ class DataModule(pl.LightningDataModule):
 
         # if we are shifting the energy we need to apply it.
         if shift_energy:
-            # initialize a numpy array to hold all the energies that hav ebeen shifted
+            # initialize a numpy array to hold all the energies that have been shifted
             shifted_energy_array = np.zeros(len(dataset), dtype=np.float32)
 
             # let us get the min, max or mean of the dataset

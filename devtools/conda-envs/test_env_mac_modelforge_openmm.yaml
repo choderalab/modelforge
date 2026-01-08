@@ -17,7 +17,7 @@ dependencies:
   - lightning>=2.0.8
   - tensorboard
   - torchvision
-  - openff-units
+  - openff-units>=0.3.1
   - pint>=0.24.1
   - rdkit
   - retry

@@ -878,7 +878,24 @@ def map_configurations(record_ref: Record, record_test: Record) -> np.ndarray:
     return np.array(out[2])[:, 1]
 
 
-def calculate_reference_energy(atomic_numbers, ase):
+def calculate_reference_energy(
+    atomic_numbers: np.ndarray, ase: Dict[str, float]
+) -> float:
+    """
+    Calculate the reference energy of a set of atomic numbers based on the ASE atomic numbers
+
+    Parameters
+    ----------
+    atomic_numbers: numpy.ndarray
+        Atomic numbers as a numpy array
+    ase: Dict[str, float]
+        ASE atomic numbers as a dictionary
+
+    Returns
+    -------
+        reference energy: float
+            Sum of all the energies associated with each atom in the system
+    """
     from modelforge.dataset.utils import _ATOMIC_NUMBER_TO_ELEMENT
 
     atomic_numbers = list(atomic_numbers.reshape(-1))

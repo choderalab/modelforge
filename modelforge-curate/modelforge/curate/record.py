@@ -9,7 +9,7 @@ from openff.units import unit
 
 import numpy as np
 import copy
-from typing import Union, List, Type, Optional
+from typing import Union, List, Type, Dict
 
 from typing_extensions import Self
 

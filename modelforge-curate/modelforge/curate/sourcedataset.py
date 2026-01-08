@@ -100,7 +100,7 @@ class SourceDataset:
             for name in self.records.keys():
                 yield db[name]
 
-    def records_names(self):
+    def record_names(self):
         """
         Return the names of the records in the dataset
 

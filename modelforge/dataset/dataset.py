@@ -1531,11 +1531,8 @@ class DataModule(pl.LightningDataModule):
 
             for i in tqdm(range(len(dataset)), desc="Process dataset"):
                 shifted_e = dataset.properties_of_interest["E"][i] - shift_value
-
                 dataset[i] = {"E": shifted_e}
                 shifted_energy_array[i] = shifted_e.to("cpu").numpy().reshape(-1)
-
-
 
         if self.shift_center_of_mass_to_origin:
             log.info("Shifting the center of mass of each molecule to the origin.")

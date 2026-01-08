@@ -1283,7 +1283,7 @@ def create_dataset_from_hdf5(
     if property_map is None:
         property_map = {}
 
-    with OpenWithLock(f"{hdf5_filename}.lockfile", "w") as lockfile:
+    with OpenWithLock(f"{hdf5_filename}.lockfile", "w"):
         log.info(f"Reading dataset from {hdf5_filename}")
         with h5py.File(hdf5_filename, "r") as f:
             keys = list(f.keys())

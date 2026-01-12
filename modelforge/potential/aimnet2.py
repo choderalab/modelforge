@@ -435,10 +435,15 @@ class AIMNet2InteractionModule(nn.Module):
         avf_v_sum.index_add_(0, idx_j, avf_v)  # Shape: (number_of_atoms, H, 3)
 
         # Compute the norm over the last dimension (vector components)
-        vector_contributions = torch.norm(
-            avf_v_sum, dim=-1
-        )  # Shape: (number_of_atoms, H)
+        # note, we need to add a very small epsilon value to ensure stability
+        # 1e-8 seems to work well.
+        vector_contributions = torch.linalg.norm(
+            avf_v_sum + 1e-8, dim=-1
+        )  #  # Shape: (number_of_atoms, H)
 
+        # raise an error if we have NaN values in the vector contribution as this will cause problems later on
+        if torch.isnan(vector_contributions).any():
+            raise ValueError("NaN values detected in vector contributions.")
         return vector_contributions
 
     def calculate_contributions(

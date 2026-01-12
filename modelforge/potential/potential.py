@@ -895,6 +895,7 @@ class NeuralNetworkPotentialFactory:
         local_cache_dir: str = "./",
         only_unique_pairs: Optional[bool] = None,
         old_config_only_local_cutoff: Optional[bool] = False,
+        jit: bool = True,
     ) -> Union[Potential, JAXModel]:
         """
         Load a neural network potential from a Weights & Biases run.
@@ -913,6 +914,8 @@ class NeuralNetworkPotentialFactory:
         long_config_only_local_cutoff : Optional[bool], optional
             For older models, this parameter is required to be able to read the model. Replaces neighborlist.cutoff with neighborlist.local_cutoff
             and other associated parameters for vdw and electrostatic cutoffs.
+        jit : bool, optional
+            Whether to use JIT compilation (default is True).
         Returns
         -------
         Union[Potential, JAXModel]
@@ -929,6 +932,7 @@ class NeuralNetworkPotentialFactory:
             checkpoint_path=checkpoint_file,
             only_unique_pairs=only_unique_pairs,
             old_config_only_local_cutoff=old_config_only_local_cutoff,
+            jit=jit,
         )
 
         return potential

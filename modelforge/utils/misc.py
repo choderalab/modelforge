@@ -270,13 +270,16 @@ class OpenWithLock:
     """
 
     def __init__(self, file_path: str, mode: str = "r"):
-        self._file_path = file_path
+        import os
+
+        # expand the file path in case we have a tilde or environment variables
+        self._file_path = os.path.expanduser(os.path.expandvars(file_path))
         self._mode = mode
         self._file_handle = None
 
     def __enter__(self):
         # open the file
-        self._file_handle = open(self._file_path, self._mode)
+        self._file_handle = open(self._file_path, mode=self._mode)
 
         # check to see if the file is already locked
         if check_file_lock(self._file_handle):

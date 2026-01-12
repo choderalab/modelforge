@@ -468,7 +468,9 @@ class Loss(nn.Module):
             elif prop == "per_system_dipole_moment":
                 self.loss_functions[prop] = DipoleMomentError()
             elif prop == "per_atom_charge":
-                self.loss_functions[prop] = PerAtomChargeError()
+                self.loss_functions[prop] = PerAtomChargeError(
+                    scale_by_number_of_atoms=True
+                )
             elif prop == "per_system_quadrupole_moment":
                 self.loss_functions[prop] = QuadrupoleMomentError()
             else:

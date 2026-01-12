@@ -9,7 +9,7 @@ from openff.units import unit
 
 import numpy as np
 import copy
-from typing import Union, List, Type, Optional
+from typing import Union, List, Type, Dict
 
 from typing_extensions import Self
 
@@ -180,15 +180,15 @@ class Record:
 
     def remove_configs(self, indices_to_include: List[int]):
         """
-                Remove configurations not in the indices_to_include list
-                Parameters
-                ----------
-                indices_to_include: List[int]
-                    List of indices to keep in the record.
+        Remove configurations not in the indices_to_include list
+        Parameters
+        ----------
+        indices_to_include: List[int]
+            List of indices to keep in the record.
 
-                Returns
-                -------
-                Record: Copy of the record with configurations removed.
+        Returns
+        -------
+        Record: Copy of the record with configurations removed.
 
         """
 
@@ -876,3 +876,33 @@ def map_configurations(record_ref: Record, record_test: Record) -> np.ndarray:
     )
 
     return np.array(out[2])[:, 1]
+
+
+def calculate_reference_energy(
+    atomic_numbers: np.ndarray, ase: Dict[str, float]
+) -> float:
+    """
+    Calculate the reference energy of a set of atomic numbers based on the ASE atomic numbers
+
+    Parameters
+    ----------
+    atomic_numbers: numpy.ndarray
+        Atomic numbers as a numpy array
+    ase: Dict[str, float]
+        ASE atomic numbers as a dictionary
+
+    Returns
+    -------
+        reference energy: float
+            Sum of all the energies associated with each atom in the system
+    """
+    from modelforge.dataset.utils import _ATOMIC_NUMBER_TO_ELEMENT
+
+    atomic_numbers = list(atomic_numbers.reshape(-1))
+    # sum up the reference energy for each element in the atomic numbers
+    reference_energy = [
+        ase[_ATOMIC_NUMBER_TO_ELEMENT[atomic_number]]
+        for atomic_number in atomic_numbers
+    ]
+
+    return sum(reference_energy)

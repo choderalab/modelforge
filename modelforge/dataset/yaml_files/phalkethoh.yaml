@@ -29,9 +29,9 @@ description: "PhAlkEthOH: Phenyls, Alkanes, Ethers, and Alcohols (OH)
             https://github.com/openforcefield/qca-dataset-submission/tree/master/submissions/2020-09-18-OpenFF-Sandbox-CHO-PhAlkEthOH
             "
 atomic_self_energies:
-  C: -37.87264507233593 * hartree
-  H: -0.498760510048753 * hartree
-  O: -75.11317840410095 * hartree
+  H: -1596.6973305434612*kilojoule_per_mole
+  C: -100059.79872980758*kilojoule_per_mole
+  O: -197491.36594960644*kilojoule_per_mole
 
 full_dataset_v1.1:
   about: 'This provides a curated hdf5 file for the PhAlkEthOH dataset designed to

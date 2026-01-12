@@ -2078,6 +2078,7 @@ class PotentialTrainer:
             dataloaders=self.datamodule.val_dataloader(),
             ckpt_path="best",
             verbose=True,
+            weights_only=False,
         )
 
         self.trainer.test(
@@ -2085,6 +2086,7 @@ class PotentialTrainer:
             dataloaders=self.datamodule.test_dataloader(),
             ckpt_path="best",
             verbose=True,
+            weights_only=False,
         )
         return self.trainer
 

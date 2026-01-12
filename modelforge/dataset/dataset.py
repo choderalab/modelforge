@@ -1517,6 +1517,9 @@ class DataModule(pl.LightningDataModule):
 
         # if we are shifting the energy we need to apply it.
         if shift_energy:
+            # initialize a numpy array to hold all the energies that have been shifted
+            shifted_energy_array = np.zeros(len(dataset), dtype=np.float32)
+
             # let us get the min, max or mean of the dataset
             if self.shift_energies == "min":
                 shift_value = float(e_min[0])
@@ -1528,8 +1531,8 @@ class DataModule(pl.LightningDataModule):
 
             for i in tqdm(range(len(dataset)), desc="Process dataset"):
                 shifted_e = dataset.properties_of_interest["E"][i] - shift_value
-
                 dataset[i] = {"E": shifted_e}
+                shifted_energy_array[i] = shifted_e.to("cpu").numpy().reshape(-1)
 
         if self.shift_center_of_mass_to_origin:
             log.info("Shifting the center of mass of each molecule to the origin.")

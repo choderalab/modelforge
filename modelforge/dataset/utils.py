@@ -233,7 +233,7 @@ def _calculate_self_energies(torch_dataset, collate_fn) -> Dict[str, unit.Quanti
             )
             molecule_counter += 1
 
-    # Prepare the data for lineare regression
+    # Prepare the data for linear regression
     valid_elements_mask = counts.sum(dim=0) > 0
     filtered_counts = counts[:, valid_elements_mask]
 

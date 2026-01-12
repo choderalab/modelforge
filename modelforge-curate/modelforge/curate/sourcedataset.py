@@ -85,6 +85,31 @@ class SourceDataset:
                     for key in keys:
                         self.records[key] = key
 
+    def iter_records(self):
+        """
+        Generator to iterate over the records in the dataset
+
+        Yields
+        ------
+            Record: instance of the Record class
+        """
+        with SqliteDict(
+            f"{self.local_db_dir}/{self.local_db_name}",
+            autocommit=True,
+        ) as db:
+            for name in self.records.keys():
+                yield db[name]
+
+    def record_names(self):
+        """
+        Return the names of the records in the dataset
+
+        Returns
+        -------
+        list: list of record names
+        """
+        return list(self.records.keys())
+
     def keys(self):
         """
         Return the keys of the records in the dataset
@@ -1197,6 +1222,7 @@ def create_dataset_from_hdf5(
     append_property: bool = False,
     property_map: Optional[Dict[str, Type[PropertyBaseModel]]] = None,
     n_records: int = None,
+    read_from_local_db: bool = False,
 ):
     """
     Create a dataset from an modelforge curated HDF5 file.
@@ -1230,6 +1256,8 @@ def create_dataset_from_hdf5(
         Mapping to the PropertyBaseModel class is useful for validation of the dataset.
     n_records: int, optional, default=None
         If provided, only the first n_records will be read from the HDF5 file.
+    read_from_local_db: bool, optional, default=False
+        if True, read the dataset from the local database if it exists.
     Returns
     -------
     SourceDataset
@@ -1238,60 +1266,68 @@ def create_dataset_from_hdf5(
     import h5py
     from tqdm import tqdm
     from modelforge.curate.properties import PropertyBaseModel
+    from modelforge.utils.misc import OpenWithLock
+    import os
+
+    hdf5_filename = os.path.expanduser(hdf5_filename)
 
     dataset = SourceDataset(
         name=dataset_name,
         local_db_dir=dataset_local_db_dir,
         local_db_name=dataset_local_db_name,
         append_property=append_property,
+        read_from_local_db=read_from_local_db,
     )
-
+    if read_from_local_db:
+        return dataset
     if property_map is None:
         property_map = {}
 
-    with h5py.File(hdf5_filename, "r") as f:
-        keys = list(f.keys())
-        if n_records is not None:
-            keys = keys[:n_records]
-        for key in tqdm(keys):
+    with OpenWithLock(f"{hdf5_filename}.lockfile", "w"):
+        log.info(f"Reading dataset from {hdf5_filename}")
+        with h5py.File(hdf5_filename, "r") as f:
+            keys = list(f.keys())
+            if n_records is not None:
+                keys = keys[:n_records]
+            for key in tqdm(keys):
 
-            record = Record(name=key)
-            n_configs = 0
-            properties_keys = f[key].keys()
-            for pk in properties_keys:
-                if pk == "n_configs":
-                    n_configs = f[key][pk][()]
-                else:
-
-                    property_type = f[key][pk].attrs["property_type"]
-                    property_classification = f[key][pk].attrs["format"]
-                    if "u" in f[key][pk].attrs.keys():
-                        unit_str = f[key][pk].attrs["u"]
+                record = Record(name=key)
+                n_configs = 0
+                properties_keys = f[key].keys()
+                for pk in properties_keys:
+                    if pk == "n_configs":
+                        n_configs = f[key][pk][()]
                     else:
-                        unit_str = "dimensionless"
-                    value = f[key][pk][()]
-                    if type(value) is bytes:
-                        value = f[key][pk][()].decode("utf-8")
 
-                    if pk in property_map:
-                        property = property_map[pk](
-                            name=pk,
-                            value=value,
-                            units=unit_str,
-                            property_type=property_type,
-                            classification=property_classification,
-                        )
-                    else:
-                        property = PropertyBaseModel(
-                            name=pk,
-                            value=value,
-                            units=unit_str,
-                            property_type=property_type,
-                            classification=property_classification,
-                        )
+                        property_type = f[key][pk].attrs["property_type"]
+                        property_classification = f[key][pk].attrs["format"]
+                        if "u" in f[key][pk].attrs.keys():
+                            unit_str = f[key][pk].attrs["u"]
+                        else:
+                            unit_str = "dimensionless"
+                        value = f[key][pk][()]
+                        if type(value) is bytes:
+                            value = f[key][pk][()].decode("utf-8")
 
-                    record.add_property(property)
-            assert n_configs == record.n_configs
-            dataset.add_record(record)
+                        if pk in property_map:
+                            property = property_map[pk](
+                                name=pk,
+                                value=value,
+                                units=unit_str,
+                                property_type=property_type,
+                                classification=property_classification,
+                            )
+                        else:
+                            property = PropertyBaseModel(
+                                name=pk,
+                                value=value,
+                                units=unit_str,
+                                property_type=property_type,
+                                classification=property_classification,
+                            )
+
+                        record.add_property(property)
+                assert n_configs == record.n_configs
+                dataset.add_record(record)
 
         return dataset

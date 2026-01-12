@@ -53,7 +53,7 @@ atomic_self_energies: # these need to be replaced
   Cl: -1208159.74701762*kilojoule_per_mole
   K: -1574526.5435217225*kilojoule_per_mole
   Ca: -1777190.5165390158*kilojoule_per_mole
-  Br: -6757220.35723592*kilojoule_per_mole
+  Br: -6757220.35723592*kilojoule_per_mole,
 
 
 nc_1000_v1.1:

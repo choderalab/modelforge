@@ -95,6 +95,8 @@ jobs:
         if: steps.cache-dataset.outputs.cache-hit != 'true'
         run: |
           echo "downloading test datasets"
+          pwd
+          ls /home/runner/micromamba/envs/test/lib/python${{ matrix.python-version }}/site-packages/modelforge/tests/data/dataset_defaults
           python modelforge/tests/fetch_test_datasets.py
 
       - name: Run tests

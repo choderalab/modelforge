@@ -38,7 +38,7 @@ zip-safe = false
 include-package-data = true
 
 [tool.setuptools.packages.find]
-namespaces = false
+namespaces = true
 where = ["."]
 
 # Ref https://setuptools.pypa.io/en/latest/userguide/datafiles.html#package-data

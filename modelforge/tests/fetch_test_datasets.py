@@ -74,7 +74,7 @@ def create_datamodule(
     import toml
     import os
 
-    toml_file = f"{resources.files('modelforge.tests.data.dataset_defaults')}/{dataset_name.lower()}.toml"
+    toml_file = f"{resources.files('modelforge.tests')}/data/dataset_defaults/{dataset_name.lower()}.toml"
 
     # importlib resources doesn't seem to be working here properly for some reason, just hardcode
 

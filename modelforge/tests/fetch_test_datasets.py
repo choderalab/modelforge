@@ -75,11 +75,8 @@ def create_datamodule(
     import toml
     import os
 
-    toml_file = (
-        resources.files(modelforge)
-        / f"/tests/data/dataset_defaults/{dataset_name.lower()}.toml"
-    )
-
+    toml_file = f"{resources.files(modelforge)}/tests/data/dataset_defaults/{dataset_name.lower()}.toml"
+    print(resources.files(modelforge))
     # check to ensure the yaml file exists
     if not os.path.exists(toml_file):
         raise FileNotFoundError(

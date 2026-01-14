@@ -71,11 +71,14 @@ def create_datamodule(
     """
 
     from importlib import resources
-    from modelforge.tests.data import dataset_defaults
+    import modelforge as modelforge
     import toml
     import os
 
-    toml_file = resources.files(dataset_defaults) / f"{dataset_name.lower()}.toml"
+    toml_file = (
+        resources.files(modelforge)
+        / f"/tests/data/dataset_defaults/{dataset_name.lower()}.toml"
+    )
 
     # check to ensure the yaml file exists
     if not os.path.exists(toml_file):

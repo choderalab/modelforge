@@ -184,11 +184,10 @@ def download_from_url(
         ACCESS_TOKEN = os.environ.get("ZENODO_TOKEN")
         print(ACCESS_TOKEN)
         if ACCESS_TOKEN is None:
-            logger.info("No Zenodo access token found in the environment variables.")
             logger.info(
-                "It is recommended to generate and access token and set it as an environment variable, ZENODO_TOKEN "
+                "ZENODO_TOKEN not found in the environment. Downloading without it."
             )
-            logger.info("as this may prevent downloads from zenodo being rate limited.")
+
         else:
             logger.info("Using Zenodo access token")
             use_zenodo_token = True

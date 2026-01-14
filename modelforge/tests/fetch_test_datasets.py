@@ -155,5 +155,5 @@ shutil.rmtree(local_cache_dir, ignore_errors=True)
 
 # get a list of files in the dataset directory and remove any that don't end in hdf5
 for file in os.listdir(dataset_cache_dir):
-    if not file.endswith(".hdf5"):
+    if not file.endswith(".gz"):
         os.remove(os.path.join(dataset_cache_dir, file))

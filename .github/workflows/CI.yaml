@@ -75,8 +75,6 @@ jobs:
 
           micromamba list
 
-      - uses: actions/cache@v4
-
       - name: Cache Test Dataset
         id: cache-dataset
         uses: actions/cache@v4

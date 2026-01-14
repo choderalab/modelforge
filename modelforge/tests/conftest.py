@@ -17,24 +17,38 @@ def pytest_addoption(parser):
     )
 
 
-# create a temporary directory for storing the downloaded datasets
-# so we do not need to re-download the datasets for each of the tests
-# This is different from the standard fixture
-# as we want this to create a single directory shared by all workers
-# in the pytest-xdist parallel testing, rather than a separate directory for each worker
-# see https://docs.pytest.org/en/6.2.x/how-to/xdist.html#making-fixtures-shared-between-workers
-# for more details
-@pytest.fixture(scope="session")
-def dataset_temp_dir(tmp_path_factory):
+# rather than downloading datafiles each time,
+# the CI is now set up to download all of these to a common location
+# and use caching to preserve these between separate calls to the CI
+# this will replace the previous fixture that created a central location for each run
+
+
+@pytest.fixture
+def dataset_temp_dir():
     import os
 
-    worker_id = os.environ.get("PYTEST_XDIST_WORKER")
-    if worker_id is not None:
-        fn = str(tmp_path_factory.getbasetemp().parent) + f"/dataset_dir"
-        os.makedirs(fn, exist_ok=True)
-    else:
-        fn = tmp_path_factory.mktemp("dataset_dir")
-    return fn
+    dataset_test_cache = "~/modelforge_testing_dataset_cache"
+    return os.path.expanduser(dataset_test_cache)
+
+
+# # create a temporary directory for storing the downloaded datasets
+# # so we do not need to re-download the datasets for each of the tests
+# # This is different from the standard fixture
+# # as we want this to create a single directory shared by all workers
+# # in the pytest-xdist parallel testing, rather than a separate directory for each worker
+# # see https://docs.pytest.org/en/6.2.x/how-to/xdist.html#making-fixtures-shared-between-workers
+# # for more details
+# @pytest.fixture(scope="session")
+# def dataset_temp_dir(tmp_path_factory):
+#     import os
+#
+#     worker_id = os.environ.get("PYTEST_XDIST_WORKER")
+#     if worker_id is not None:
+#         fn = str(tmp_path_factory.getbasetemp().parent) + f"/dataset_dir"
+#         os.makedirs(fn, exist_ok=True)
+#     else:
+#         fn = tmp_path_factory.mktemp("dataset_dir")
+#     return fn
 
 
 def pytest_collection_modifyitems(config, items):

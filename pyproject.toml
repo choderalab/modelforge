@@ -44,7 +44,7 @@ where = ["."]
 # Ref https://setuptools.pypa.io/en/latest/userguide/datafiles.html#package-data
 [tool.setuptools.package-data]
 modelforge = [
-    "py.typed"
+    "py.typed", "*.toml", "*.yaml"
 ]
 
 # https://versioningit.readthedocs.io/en/stable/configuration.html#

@@ -79,7 +79,7 @@ jobs:
         id: cache-dataset
         uses: actions/cache@v4
         with:
-          path: ~/modelforge_testing_dataset_cache
+          path: ~/modelforge/modelforge_testing_dataset_cache
           key: ${{ runner.os }}-${{ matrix.python-version }}-modelforge-dataset-cache-${{ hashFiles('data.version') }}
           restore-keys: | 
             ${{ runner.os }}-${{ matrix.python-version }}-modelforge-dataset-cache-

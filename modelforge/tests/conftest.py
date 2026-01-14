@@ -27,7 +27,7 @@ def pytest_addoption(parser):
 def dataset_temp_dir():
     import os
 
-    dataset_test_cache = "~/modelforge_testing_dataset_cache"
+    dataset_test_cache = "~/modelforge/modelforge_testing_dataset_cache"
     return os.path.expanduser(dataset_test_cache)
 
 

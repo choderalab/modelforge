@@ -77,8 +77,8 @@ def fetch_url_from_doi(doi: str, timeout: Optional[int] = 10) -> str:
     except requests.exceptions.ConnectTimeout:
         raise Exception("Fetching url for DOI timed out.")
 
-    # if not response.ok:
-    #     raise Exception(f"{doi} could not be accessed.")
+    if not response.ok:
+        raise Exception(f"{doi} could not be accessed.")
 
     return response.url
 
@@ -115,7 +115,7 @@ def download_from_url(
     output_filename: str,
     length: Optional[int] = None,
     force_download=False,
-    max_retries: int = 30,
+    max_retries: int = 5,
     retry_delay: List[int] = [1, 2, 5, 10, 20],  # in seconds
 ):
     """
@@ -138,7 +138,7 @@ def download_from_url(
     max_retries : int, optional, default=10
         The maximum number of times to retry the download if it fails.
         Note, it will retry if the connection cannot be established, or if the checksum does not match (as can happen if a download is interrupted).
-    retry_delay : List[int], optional, default=[1, 5, 5, 5, 10]
+    retry_delay : List[int], optional, default=[1, 2, 5, 10]
         The delay in seconds between retries. The length of this list should be equal to max_retries.
         If the length of this list is less than max_retries, the last value will be used for the remaining retries.
 

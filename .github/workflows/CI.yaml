@@ -79,7 +79,7 @@ jobs:
         id: cache-dataset
         uses: actions/cache@v3
         with:
-          path: ~/modelforge_testing_dataset_cache
+          path: modelforge/tests/modelforge_testing_dataset_cache
           key: ${{ runner.os }}-${{ matrix.python-version }}-modelforge-dataset-cache-
           restore-keys: | 
             ${{ runner.os }}-${{ matrix.python-version }}-modelforge-dataset-cache-
@@ -91,7 +91,6 @@ jobs:
         if: steps.cache-dataset.outputs.cache-hit == 'true'
         run: |
           echo "using previously cached test datasets"
-          #python modelforge/tests/fetch_test_datasets.py
 
       - name: Generate Dataset Cache
         if: steps.cache-dataset.outputs.cache-hit != 'true'

@@ -109,9 +109,10 @@ def create_datamodule(
 
 
 # define the location to save the cached datasets
-dataset_cache_dir = "~/modelforge_testing_dataset_cache"
+dataset_cache_dir = "modelforge/tests/modelforge_testing_dataset_cache"
 # expand the dataset_cache_dir path to get the full path
-dataset_cache_dir = os.path.expanduser(dataset_cache_dir)
+dataset_cache_dir = os.path.abspath(dataset_cache_dir)
+# dataset_cache_dir = os.path.expanduser(dataset_cache_dir)
 
 # define a local cache dir that we will simple remove when we are done
 local_cache_dir = f"{dataset_cache_dir}/local_cache"

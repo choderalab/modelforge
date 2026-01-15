@@ -27,8 +27,9 @@ def pytest_addoption(parser):
 def dataset_temp_dir():
     import os
 
-    dataset_test_cache = "~/modelforge_testing_dataset_cache"
-    return os.path.expanduser(dataset_test_cache)
+    dataset_test_cache = "modelforge/tests/modelforge_testing_dataset_cache"
+    return os.path.abspath(dataset_test_cache)
+    # return os.path.expanduser(dataset_test_cache)
 
 
 # # create a temporary directory for storing the downloaded datasets

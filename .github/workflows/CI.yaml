@@ -80,9 +80,9 @@ jobs:
         uses: actions/cache@v3
         with:
           path: modelforge/tests/modelforge_testing_dataset_cache
-          key: ${{ runner.os }}-${{ matrix.python-version }}-modelforge-dataset-cache-
+          key: modelforge-dataset-cache-${{ hashFiles('modelforge/tests/modelforge_testing_dataset_cache/*.gz') }}
           restore-keys: | 
-            ${{ runner.os }}-${{ matrix.python-version }}-modelforge-dataset-cache-
+            modelforge-dataset-cache-
 
       # since the underlying code itself will not redownload if files are present
       # I think regardless of the state we should just run the script

@@ -2,6 +2,7 @@
 
 from typing import Optional, List, Dict
 from loguru import logger
+from sympy import true
 
 
 def is_url(query: str, hostname: str) -> bool:
@@ -114,8 +115,8 @@ def download_from_url(
     output_filename: str,
     length: Optional[int] = None,
     force_download=False,
-    max_retries: int = 3,
-    retry_delay: List[int] = [1, 5, 10],  # in seconds
+    max_retries: int = 5,
+    retry_delay: List[int] = [1, 2, 5, 10, 20],  # in seconds
 ):
     """
     Download a file from a URL, with retries and checksum verification.
@@ -134,10 +135,10 @@ def download_from_url(
         The expected length of the file in bytes. If provided, this will be used to update the progress bar.
     force_download : bool, optional, default=False
         If True, the file will be re-downloaded even if it already exists and the checksum matches.
-    max_retries : int, optional, default=3
+    max_retries : int, optional, default=10
         The maximum number of times to retry the download if it fails.
         Note, it will retry if the connection cannot be established, or if the checksum does not match (as can happen if a download is interrupted).
-    retry_delay : List[int], optional, default=[1, 5, 10]
+    retry_delay : List[int], optional, default=[1, 2, 5, 10]
         The delay in seconds between retries. The length of this list should be equal to max_retries.
         If the length of this list is less than max_retries, the last value will be used for the remaining retries.
 
@@ -174,6 +175,23 @@ def download_from_url(
     # make sure we can handle a path with a ~ in it
     output_path = os.path.expanduser(output_path)
 
+    # if the output path doesn't exist create it
+    os.makedirs(output_path, exist_ok=True)
+    use_zenodo_token = False
+
+    if "zenodo.org" in url.lower():
+
+        ACCESS_TOKEN = os.environ.get("ZENODO_TOKEN")
+        print(ACCESS_TOKEN)
+        if ACCESS_TOKEN is None:
+            logger.info(
+                "ZENODO_TOKEN not found in the environment. Downloading without it."
+            )
+
+        else:
+            logger.info("Using Zenodo access token")
+            use_zenodo_token = True
+
     from modelforge.utils.misc import OpenWithLock
 
     with OpenWithLock(f"{output_path}/{output_filename}_download.lockfile", "w") as fl:
@@ -197,7 +215,14 @@ def download_from_url(
             )
             for attempt in range(max_retries):
                 try:
-                    r = requests.get(url, stream=True)
+                    if use_zenodo_token:
+                        r = requests.get(
+                            url, stream=True, params={"access_token": ACCESS_TOKEN}
+                        )
+                    else:
+                        r = requests.get(url, stream=True)
+
+                    r.raise_for_status()
 
                     os.makedirs(output_path, exist_ok=True)
                     if length is not None:

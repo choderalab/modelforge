@@ -279,6 +279,9 @@ def get_path_string(module) -> str:
     """
     Get the path as a string to an imported module.
 
+    Note, this effectively just calls importlib.resources, but has some additional logic to
+    check the output, as in some cases a MultiplexedPath object is returned instead of a single Path
+
     Parameters
     ----------
     module : module

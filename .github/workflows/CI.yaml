@@ -75,6 +75,29 @@ jobs:
 
           micromamba list
 
+      - name: Cache Test Dataset
+        id: cache-dataset
+        uses: actions/cache@v3
+        with:
+          path: modelforge/tests/modelforge_testing_dataset_cache
+          key: modelforge-dataset-cache
+          restore-keys: modelforge-dataset-cache
+
+      # since the underlying code itself will not redownload if files are present
+      # I think regardless of the state we should just run the script
+      # that may be the best way to ensure if we change the training datasets new will be generated
+      # since these are determined from accessing data in a few different spots
+      - name: Load datasets from cache
+        if: steps.cache-dataset.outputs.cache-hit == 'true'
+        run: |
+          echo "using previously cached test datasets"
+          python modelforge/tests/fetch_test_datasets.py
+
+      - name: Download datasets to cache
+        if: steps.cache-dataset.outputs.cache-hit != 'true'
+        run: |
+          echo "downloading test datasets"
+          python modelforge/tests/fetch_test_datasets.py
 
       - name: Run tests
         # conda setup requires this special shell

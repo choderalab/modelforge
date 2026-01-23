@@ -121,7 +121,6 @@ print(dataset_cache_dir)
 # define a local cache dir that we will simple remove when we are done
 local_cache_dir = f"{dataset_cache_dir}/local_cache"
 
-track_files = []
 for dataset_name in _ImplementedDatasets.get_all_dataset_names():
     print("fetching " + dataset_name)
 
@@ -132,7 +131,6 @@ for dataset_name in _ImplementedDatasets.get_all_dataset_names():
         batch_size=64,
         dataset_cache_dir=dataset_cache_dir,
     )
-    track_files.append([dataset_name, dataset.version_select])
     # download any additional subsets that we may need
     if dataset_name.lower().startswith("spice"):
 
@@ -142,7 +140,6 @@ for dataset_name in _ImplementedDatasets.get_all_dataset_names():
             "spice1_openff": "nc_1000_HCNOFClS_v2.1",
             "spice2_openff": "nc_1000_HCNOFClS_v1.1",
         }
-        track_files.append([dataset_name, versions[dataset_name.lower()]])
         dataset = create_datamodule(
             dataset_name=dataset_name,
             batch_size=64,
@@ -163,9 +160,3 @@ shutil.rmtree(local_cache_dir, ignore_errors=True)
 for file in os.listdir(dataset_cache_dir):
     if not file.endswith(".gz"):
         os.remove(os.path.join(dataset_cache_dir, file))
-
-# write out a text file listing the datasets and versions downloaded so that we can check that hash of it
-# on the CI for cache validation
-with open(f"{dataset_cache_dir}/downloaded_datasets.txt", "w") as f:
-    for dataset_name, version in track_files:
-        f.write(f"{dataset_name}: {version}\n")

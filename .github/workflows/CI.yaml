@@ -75,12 +75,20 @@ jobs:
 
           micromamba list
 
+      # this will figure out what datasets we will use in our tests
+      # and save them to a file so we can hash this file to see if the cache needs updating
+      # this will save "downloaded_datasets.txt" in the modelforge testing cache folder
+      - name: Identify test systems
+        run: |
+          python -c "import modelforge; modelforge.tests.identify_test_systems()"
+
       - name: Cache Test Dataset
         id: cache-dataset
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
-          path: modelforge/tests/modelforge_testing_dataset_cache
-          key: modelforge-dataset-cache
+          path: ~/.cache/modelforge_testing_dataset_cache
+          # include the has of the downloaded_datasets.txt to ensure if that changes we update the cache
+          key: modelforge-dataset-cache--${{ hashFiles('~/.cache/modelforge_testing_dataset_cache/downloaded_datasets.txt') }}
           restore-keys: modelforge-dataset-cache
 
       # since the underlying code itself will not redownload if files are present

@@ -19,6 +19,7 @@ import textwrap
 
 MESSAGES = dict()
 
+# fmt: off
 MESSAGES[
     "jax"
 ] = """
@@ -35,7 +36,7 @@ To install on a machine with an NVIDIA GPU, use:
     conda install jaxlib=*=*cuda* jax cuda-nvcc -c conda-forge -c nvidia
 
 """
-
+# fmt: off
 MESSAGES[
     "pytorch2jax"
 ] = """
@@ -48,7 +49,7 @@ Pytorch2Jax can be installed via pip:
         pip install pytorch2jax
     
     """
-
+# fmt: off
 MESSAGES[
     "flax"
 ] = """
@@ -61,7 +62,7 @@ Flax can be installed via conda:
         conda install conda-forge::flax
     
     """
-
+# fmt: off
 MESSAGES[
     "ray"
 ] = """
@@ -74,7 +75,7 @@ On Linux, Ray can be install via conda:
     conda install -c conda-forge ray-all
     
 """
-
+# fmt: off
 MESSAGES[
     "torchviz"
 ] = """
@@ -86,7 +87,7 @@ PyTorchViz can be installed via pip:
     pip install torchviz
 
 """
-
+# fmt: off
 MESSAGES[
     "qcelemental"
 ] = """
@@ -98,7 +99,7 @@ QCElemental can be installed via conda:
 
     conda install qcelemental -c conda-forge
 """
-
+# fmt: off
 MESSAGES[
     "qcportal"
 ] = """
@@ -111,7 +112,7 @@ QCPortal can be installed via conda:
         conda install qcportal">=0.50" -c conda-forge
 
 """
-
+# fmt: off
 MESSAGES[
     "rdkit"
 ] = """
@@ -124,7 +125,7 @@ RDKit can be installed via conda:
     conda install -c conda-forge rdkit
     
 """
-
+# fmt: off
 MESSAGES[
     "retry"
 ] = """
@@ -135,7 +136,7 @@ Retry can be installed via conda:
         conda install -c conda-forge retry
     
 """
-
+# fmt: off
 MESSAGES[
     "sqlitedict"
 ] = """
@@ -147,7 +148,7 @@ SqliteDict can be installed via conda:
         conda install -c conda-forge sqlitedict
     
 """
-
+# fmt: off
 MESSAGES[
     "wandb"
 ] = """

@@ -1486,7 +1486,7 @@ class DataModule(pl.LightningDataModule):
 
                 if shift_energy:
                     if calc_mean:
-                        energy_array[i] = shifted_e.to("cpu").numpy().reshape(-1)
+                        energy_array[i] = shifted_e.to("cpu").numpy().reshape(-1)[0]
                     else:
                         if i == 0:
                             e_min = shifted_e
@@ -1508,7 +1508,7 @@ class DataModule(pl.LightningDataModule):
                 shifted_e = dataset.properties_of_interest["E"][i]
 
                 if calc_mean:
-                    energy_array[i] = shifted_e.to("cpu").numpy().reshape(-1)
+                    energy_array[i] = shifted_e.to("cpu").numpy().reshape(-1)[0]
                 else:
                     if i == 0:
                         e_min = shifted_e
@@ -1536,7 +1536,7 @@ class DataModule(pl.LightningDataModule):
             for i in tqdm(range(len(dataset)), desc="Process dataset"):
                 shifted_e = dataset.properties_of_interest["E"][i] - shift_value
                 dataset[i] = {"E": shifted_e}
-                shifted_energy_array[i] = shifted_e.to("cpu").numpy().reshape(-1)
+                shifted_energy_array[i] = shifted_e.to("cpu").numpy().reshape(-1)[0]
 
         if self.shift_center_of_mass_to_origin:
             log.info("Shifting the center of mass of each molecule to the origin.")

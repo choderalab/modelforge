@@ -80,7 +80,8 @@ jobs:
       # this will save "downloaded_datasets.txt" in the modelforge testing cache folder
       - name: Identify test systems
         run: |
-          python -c "import modelforge; modelforge.tests.identify_test_systems()"
+          echo "figuring out what test datasets are needed"
+          python modelforge/tests/list_test_datasets.py
 
       - name: Cache Test Dataset
         id: cache-dataset

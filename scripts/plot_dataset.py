@@ -61,11 +61,11 @@ def calculate_reference_energy(atomic_numbers, ase):
 
 # # load up the dataset
 # dataset = create_dataset_from_hdf5(
-#     "~/dataset_cache/spice_1_dataset_v1.1.hdf5", "spice_1", read_from_local_db=True
+#     "~/modelforge_testing_dataset_cache/spice_1_dataset_v1.1.hdf5", "spice_1", read_from_local_db=True
 # )
 # load up the dataset
 dataset = create_dataset_from_hdf5(
-    "~/dataset_cache/PhAlkEthOH_openff_dataset_v1.1.hdf5",
+    "~/modelforge_testing_dataset_cache/PhAlkEthOH_openff_dataset_v1.1.hdf5",
     "ph1",
     read_from_local_db=False,
 )

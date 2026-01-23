@@ -59,11 +59,11 @@ nc_1000_v1.1:
          "
   remote_dataset:
     doi:  10.5281/zenodo.15346340
-    url: https://zenodo.org/records/15346340/files/ani2x_dataset_v1.1_ntc_1000.hdf5.gz?download=1
+    url: https://zenodo.org/records/15346340/files/ani2x_dataset_v1.1_ntc_1000.hdf5.gz
     gz_data_file:
       length: 179312
       md5: 574cb77f5089019965607f7c7110d4c2
-      file_name: ani2x_dataset_nc_1000_v1.1.hdf5.gz
+      file_name: ani2x_dataset_v1.1_ntc_1000.hdf5.gz
     hdf5_data_file:
       md5: 5be0f654ce8c7bc13ade8141ba53134e
-      file_name: ani2x_dataset_nc_1000_v1.1.hdf5
+      file_name: ani2x_dataset_v1.1_ntc_1000.hdf5

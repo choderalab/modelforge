@@ -14,9 +14,42 @@ This package is centered around the implementation and infrastructure to train, 
 Datasets will be provided to enable accurate training and validation of the neural network structures. 
 The technical roadmap for the modelforge package is outlined in the wiki. 
 
+Documentation for how to use the package be found at: https://modelforge.readthedocs.io/en/latest/
+
+Installation
+------------
+
+To set up a development environment, clone the repository and install the package in editable mode:
+```bash
+git clone https://github.com/choderalab/modelforge.git
+```
+navigate to the modelforge root directory:
+```bash
+cd modelforge
+```
+
+Create a micromamba environment (or similar package manager) and activate it:
+```bash
+micromamba create -n modelforge -f devtools/conda-envs/test_env.yaml
+micromamba activate modelforge
+``` 
+
+install via pip in editable mode:
+```bash
+
+pip install -e . --config-settings editable-mode=strict
+```
+
+Install the curate package:
+```bash
+pip install -e modelforge-curate --config-settings editable-mode=strict
+```
+
+
+
 ### Copyright
 
-Copyright (c) 2023-2025, Chodera Lab
+Copyright (c) 2023-2026, Chodera Lab https://www.choderalab.org/
 
 
 #### Acknowledgements

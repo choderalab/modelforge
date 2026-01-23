@@ -68,14 +68,18 @@ def create_datamodule(
     Returns
     -------
         DataModule
+        returns an initialized DataModule instance for the specified dataset
     """
 
     from importlib import resources
     import toml
     import os
+    from modelforge.utils.io import get_path_string
+    import modelforge.tests as tests
 
-    toml_file = f"{resources.files('modelforge.tests')}/data/dataset_defaults/{dataset_name.lower()}.toml"
+    toml_file = f'{resources.files("modelforge.tests")}/data/dataset_defaults/{dataset_name.lower()}.toml'
 
+    print("using toml file: " + toml_file)
     # check to ensure the yaml file exists
     if not os.path.exists(toml_file):
         raise FileNotFoundError(
@@ -109,15 +113,15 @@ def create_datamodule(
 
 
 # define the location to save the cached datasets
-dataset_cache_dir = "modelforge/tests/modelforge_testing_dataset_cache"
+dataset_cache_dir = "~/.cache/modelforge_testing_dataset_cache"
 # expand the dataset_cache_dir path to get the full path
-dataset_cache_dir = os.path.abspath(dataset_cache_dir)
-# dataset_cache_dir = os.path.expanduser(dataset_cache_dir)
-
+# dataset_cache_dir = os.path.abspath(dataset_cache_dir)
+dataset_cache_dir = os.path.expanduser(dataset_cache_dir)
+print(dataset_cache_dir)
 # define a local cache dir that we will simple remove when we are done
 local_cache_dir = f"{dataset_cache_dir}/local_cache"
 
-
+track_files = []
 for dataset_name in _ImplementedDatasets.get_all_dataset_names():
     print("fetching " + dataset_name)
 
@@ -128,6 +132,7 @@ for dataset_name in _ImplementedDatasets.get_all_dataset_names():
         batch_size=64,
         dataset_cache_dir=dataset_cache_dir,
     )
+    track_files.append([dataset_name, dataset.version_select])
     # download any additional subsets that we may need
     if dataset_name.lower().startswith("spice"):
 
@@ -137,7 +142,7 @@ for dataset_name in _ImplementedDatasets.get_all_dataset_names():
             "spice1_openff": "nc_1000_HCNOFClS_v2.1",
             "spice2_openff": "nc_1000_HCNOFClS_v1.1",
         }
-
+        track_files.append([dataset_name, versions[dataset_name.lower()]])
         dataset = create_datamodule(
             dataset_name=dataset_name,
             batch_size=64,
@@ -147,7 +152,7 @@ for dataset_name in _ImplementedDatasets.get_all_dataset_names():
             version_select=versions[dataset_name.lower()],
         )
 
-# purge anything but the hdf5 files from the dataset_cache
+# purge anything but the hdf5 files from the modelforge_testing_dataset_cache
 
 # first remove the local_cache_dir
 import shutil
@@ -158,3 +163,9 @@ shutil.rmtree(local_cache_dir, ignore_errors=True)
 for file in os.listdir(dataset_cache_dir):
     if not file.endswith(".gz"):
         os.remove(os.path.join(dataset_cache_dir, file))
+
+# write out a text file listing the datasets and versions downloaded so that we can check that hash of it
+# on the CI for cache validation
+with open(f"{dataset_cache_dir}/downloaded_datasets.txt", "w") as f:
+    for dataset_name, version in track_files:
+        f.write(f"{dataset_name}: {version}\n")

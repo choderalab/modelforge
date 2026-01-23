@@ -88,7 +88,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/modelforge_testing_dataset_cache
-          # include the has of the downloaded_datasets.txt to ensure if that changes we update the cache
+          # include the hash of the downloaded_datasets.txt to ensure if that changes we update the cache
           key: modelforge-dataset-cache--${{ hashFiles('~/.cache/modelforge_testing_dataset_cache/downloaded_datasets.txt') }}
           restore-keys: modelforge-dataset-cache
 

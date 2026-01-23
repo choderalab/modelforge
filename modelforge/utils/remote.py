@@ -153,7 +153,7 @@ def curl_wrapper(url: str, output_path: str, output_filename: str):
 
     Returns
     -------
-
+        bool True if the download was successful, False otherwise.
     """
     import os
     import subprocess
@@ -161,9 +161,9 @@ def curl_wrapper(url: str, output_path: str, output_filename: str):
     # check to see if curl is installed
     from shutil import which
 
-    if which("curl") is None:
+    if check_for_curl() is False:
         logger.debug("curl is not installed, cannot use curl_wrapper to download file.")
-        return
+        return False
 
     # make sure we can handle a path with a ~ in it
     output_path = os.path.expanduser(output_path)
@@ -176,20 +176,40 @@ def curl_wrapper(url: str, output_path: str, output_filename: str):
 
     try:
         subprocess.run(command, check=True)
+        return True
     except subprocess.CalledProcessError as e:
         logger.debug(f"curl failed with code {e.returncode}")
+        return False
 
 
 def wget_wrapper(url: str, output_path: str, output_filename: str):
+    """
+    Download a file using wget.
+
+    Parameters
+    ----------
+    url: str
+        The URL to download the file from.
+    output_path: str
+        The path to save the downloaded file to.
+    output_filename:
+        The name to save the downloaded file as.
+
+    Returns
+    -------
+        bool True if the download was successful, False otherwise.
+
+
+    """
     import os
     import subprocess
 
     # check to see if wget is installed
     from shutil import which
 
-    if which("wget") is None:
+    if check_for_wget() == False:
         logger.debug("wget is not installed, cannot use wget_wrapper to download file.")
-        return
+        return False
 
     # make sure we can handle a path with a ~ in it
     output_path = os.path.expanduser(output_path)
@@ -202,43 +222,10 @@ def wget_wrapper(url: str, output_path: str, output_filename: str):
 
     try:
         subprocess.run(command, check=True)
+        return True
     except subprocess.CalledProcessError as e:
         logger.debug(f"wget failed with code {e.returncode}")
-
-
-def requests_wrapper(
-    url: str, output_path: str, output_filename: str, length: Optional[int] = None
-):
-    import requests
-    import os
-    from tqdm import tqdm
-
-    chunk_size = 512
-
-    # make sure we can handle a path with a ~ in it
-    output_path = os.path.expanduser(output_path)
-
-    # if the output path doesn't exist create it
-    os.makedirs(output_path, exist_ok=True)
-
-    r = requests.get(url, stream=True)
-
-    r.raise_for_status()
-
-    os.makedirs(output_path, exist_ok=True)
-    if length is not None:
-        total = int(length / chunk_size) + 1
-    else:
-        total = None
-
-    with open(f"{output_path}/{output_filename}", "wb") as fd:
-        for chunk in tqdm(
-            r.iter_content(chunk_size=chunk_size),
-            ascii=True,
-            desc="downloading",
-            total=total,
-        ):
-            fd.write(chunk)
+        return False
 
 
 def download_from_url(
@@ -280,11 +267,11 @@ def download_from_url(
         The download scheme to use. If "auto", will use requests with fallbacks to wget or curl. If "requests", will only use requests. If "wget", will only use wget. If "curl", will only use curl.
     Returns
     -------
-    None
+    bool, True if the download was successful, False otherwise.
 
     Example
     -------
-    >>> download_from_url(
+    >>> status = download_from_url(
     ...     url="https://zenodo.org/record/3588339/files/tmqm_openff_dataset_v1.2.hdf5",
     ...     md5_checksum="3b5c3f6e8e2f4c3e8e2f4c3e8e2f4c3",
     ...     output_path="~/data",
@@ -340,13 +327,33 @@ def download_from_url(
             )
             if scheme == "requests" or scheme == "auto":
                 for attempt in range(max_retries):
+
+                    chunk_size = 512
+
+                    # make sure we can handle a path with a ~ in it
+                    output_path = os.path.expanduser(output_path)
+
+                    # if the output path doesn't exist create it
+                    os.makedirs(output_path, exist_ok=True)
+
+                    r = requests.get(url, stream=True)
+
                     try:
-                        requests_wrapper(
-                            url=url,
-                            output_path=output_path,
-                            output_filename=output_filename,
-                            length=length,
-                        )
+                        r.raise_for_status()
+
+                        if length is not None:
+                            total = int(length / chunk_size) + 1
+                        else:
+                            total = None
+
+                        with open(f"{output_path}/{output_filename}", "wb") as fd:
+                            for chunk in tqdm(
+                                r.iter_content(chunk_size=chunk_size),
+                                ascii=True,
+                                desc="downloading",
+                                total=total,
+                            ):
+                                fd.write(chunk)
 
                         calculated_checksum = calculate_md5_checksum(
                             file_name=output_filename, file_path=output_path
@@ -356,7 +363,7 @@ def download_from_url(
                                 f"Checksum of downloaded file {calculated_checksum} does not match expected checksum {md5_checksum}."
                             )
                         else:
-                            return  # success, exit the function
+                            return True  # success, exit the function
                     except requests.exceptions.RequestException as e:
                         if attempt < (max_retries - 1):
                             logger.debug(
@@ -371,7 +378,7 @@ def download_from_url(
             # check if wget is available
             if check_for_wget() and (scheme == "wget" or scheme == "auto"):
                 try:
-                    wget_wrapper(
+                    status = wget_wrapper(
                         url=url,
                         output_path=output_path,
                         output_filename=output_filename,
@@ -379,12 +386,15 @@ def download_from_url(
                     calculated_checksum = calculate_md5_checksum(
                         file_name=output_filename, file_path=output_path
                     )
-                    if calculated_checksum != md5_checksum:
-                        raise Exception(
-                            f"Checksum of downloaded file {calculated_checksum} does not match expected checksum {md5_checksum}."
-                        )
+                    if status == False:
+                        logger.info("wget download reported failure status.")
                     else:
-                        return  # success, exit the function
+                        if calculated_checksum != md5_checksum:
+                            raise Exception(
+                                f"Checksum of downloaded file {calculated_checksum} does not match expected checksum {md5_checksum}."
+                            )
+                        else:
+                            return True  # success, exit the function
                 except Exception as e:
                     logger.debug(
                         f"wget fallback to download file from {url} failed with exception: {e}"
@@ -392,34 +402,34 @@ def download_from_url(
             # check if curl is available
             if check_for_curl() and (scheme == "curl" or scheme == "auto"):
                 try:
-                    curl_wrapper(
+                    status = curl_wrapper(
                         url=url,
                         output_path=output_path,
                         output_filename=output_filename,
                     )
-                    calculated_checksum = calculate_md5_checksum(
-                        file_name=output_filename, file_path=output_path
-                    )
-                    if calculated_checksum != md5_checksum:
-                        raise Exception(
-                            f"Checksum of downloaded file {calculated_checksum} does not match expected checksum {md5_checksum}."
-                        )
+                    if status == False:
+                        logger.info("curl download reported failure status.")
                     else:
-                        return  # success, exit the function
+                        calculated_checksum = calculate_md5_checksum(
+                            file_name=output_filename, file_path=output_path
+                        )
+                        if calculated_checksum != md5_checksum:
+                            raise Exception(
+                                f"Checksum of downloaded file {calculated_checksum} does not match expected checksum {md5_checksum}."
+                            )
+                        else:
+                            return True  # success, exit the function
                 except Exception as e:
                     logger.debug(
                         f"curl fallback to download file from {url} failed with exception: {e}"
                     )
-            else:
-                logger.debug(
-                    "No fallback download methods (wget or curl) are available."
-                )
-                raise Exception(
-                    f"Failed to download file from {url} after {max_retries} attempts and fallback methods."
-                )
+            logger.debug("All download attempts failed.")
+
+            return False
 
         else:  # if the file exists and we don't set force_download to True, just use the cached version
             logger.debug(f"Datafile {output_filename} already exists in {output_path}.")
             logger.debug(
                 "Using previously downloaded file; set force_download=True to re-download."
             )
+            return True

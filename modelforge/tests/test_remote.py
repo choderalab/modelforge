@@ -117,15 +117,15 @@ def test_md5_calculation(prep_temp_dir):
 
     assert bad_checksum != calculated_checksum
 
-    with pytest.raises(Exception):
-        download_from_url(
-            url=url,
-            md5_checksum=bad_checksum,
-            output_path=str(prep_temp_dir),
-            output_filename=name,
-            force_download=True,
-            scheme="wget",
-        )
+    status = download_from_url(
+        url=url,
+        md5_checksum=bad_checksum,
+        output_path=str(prep_temp_dir),
+        output_filename=name,
+        force_download=True,
+        scheme="wget",
+    )
+    assert status == False
 
 
 @pytest.mark.skipif(
@@ -158,7 +158,7 @@ def test_download_with_various_schemes_zenodo(prep_temp_dir, scheme):
     output_dir = f"{str(prep_temp_dir)}/download_{scheme}"
     name = "atools_ml-v0.1.zip"
     # Download the file
-    download_from_url(
+    status = download_from_url(
         url,
         md5_checksum=checksum,
         output_path=output_dir,
@@ -166,6 +166,7 @@ def test_download_with_various_schemes_zenodo(prep_temp_dir, scheme):
         force_download=True,
         scheme=scheme,
     )
+    assert status == True
 
     file_name_path = f"{output_dir}/{name}"
     assert os.path.isfile(file_name_path)

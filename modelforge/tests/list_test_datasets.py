@@ -28,7 +28,7 @@ for dataset_name in _ImplementedDatasets.get_all_dataset_names():
 
     print("using toml file: " + toml_file)
 
-    # check to ensure the yaml file exists
+    # check to ensure the toml file exists
     if not os.path.exists(toml_file):
         raise FileNotFoundError(
             f"Dataset toml file {toml_file} not found. Please check the dataset name."

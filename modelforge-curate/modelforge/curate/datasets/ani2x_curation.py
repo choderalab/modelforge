@@ -209,7 +209,7 @@ class ANI2xCuration(DatasetCuration):
         url = self.dataset_download_url
 
         # download the dataset
-        download_from_url(
+        status = download_from_url(
             url=url,
             md5_checksum=self.dataset_md5_checksum,
             output_path=self.local_cache_dir,
@@ -217,6 +217,9 @@ class ANI2xCuration(DatasetCuration):
             length=self.dataset_length,
             force_download=force_download,
         )
+        if status == False:
+            logger.info(f"Could not download file from {url}")
+            raise Exception("Failed to download file")
 
         # untar and uncompress the dataset
         from modelforge.utils.misc import extract_tarred_file

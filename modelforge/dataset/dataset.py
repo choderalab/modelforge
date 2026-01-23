@@ -461,7 +461,7 @@ class HDF5Dataset:
                 log.debug(
                     f"hdf5 file {self.hdf5_data_file_dict['file_name']} not found."
                 )
-                download_from_url(
+                status = download_from_url(
                     url=self.url,
                     md5_checksum=self.gz_data_file_dict["md5"],
                     output_path=self.dataset_cache_dir,
@@ -469,6 +469,10 @@ class HDF5Dataset:
                     length=self.gz_data_file_dict["length"],
                     force_download=self.force_download,
                 )
+                if status == False:
+                    logger.info(f"Could not download file from {url}")
+                    raise Exception("Failed to download file")
+
                 self._ungzip_hdf5()
                 self._from_hdf5()
                 self._to_file_cache()

@@ -229,8 +229,8 @@ class Aimnet2Curation(DatasetCuration):
 
         Examples
         --------
-        >>> ani2_data = ANI2xCuration(local_cache_dir='~/datasets/ani2x_dataset')
-        >>> ani2_data.process()
+        >>> aimnet2_data = Aimnet2Curation(local_cache_dir='~/datasets/aimnet2_dataset')
+        >>> aimnet2_data.process()
 
         """
 

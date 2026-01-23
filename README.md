@@ -11,10 +11,10 @@ modelforge
 
 ### 
 This package is centered around the implementation and infrastructure to train, create, optimize and store neural network potentials (NNPs) effectively. 
-Datasets will be provided to enable accurate training and validation of the neural network structures. 
+Datasets are provided to enable accurate training and validation of the neural network structures, and users can include their own using the API in modelforge-curate. 
 The technical roadmap for the modelforge package is outlined in the wiki. 
 
-Documentation for how to use the package be found at: https://modelforge.readthedocs.io/en/latest/
+Documentation for how to use the package can be found at: https://modelforge.readthedocs.io/en/latest/
 
 Installation
 ------------

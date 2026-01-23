@@ -52,7 +52,7 @@ for dataset_name in _ImplementedDatasets.get_all_dataset_names():
 
 # purge anything but the hdf5 files from the modelforge_testing_dataset_cache
 
-# write out a text file listing the datasets and versions downloaded so that we can check that hash of it
+# write out a text file listing the datasets and versions downloaded so that we can check the hash of it
 # on the CI for cache validation
 with open(f"{dataset_cache_dir}/downloaded_datasets.txt", "w") as f:
     for dataset_name, version in track_files:

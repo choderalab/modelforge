@@ -6,12 +6,7 @@ help to eliminate zenodo downtime as a limiting factor
 """
 
 from modelforge.dataset import _ImplementedDatasets
-from modelforge.dataset.utils import (
-    FirstComeFirstServeSplittingStrategy,
-    SplittingStrategy,
-)
-from modelforge.dataset.dataset import initialize_datamodule
-from typing import Optional, Type
+
 import os
 
 
@@ -22,6 +17,9 @@ dataset_cache_dir = "~/.cache/modelforge_testing_dataset_cache"
 dataset_cache_dir = os.path.expanduser(dataset_cache_dir)
 print(dataset_cache_dir)
 
+# create the dataset cache directory if it does not exist
+os.makedirs(dataset_cache_dir, exist_ok=True)
+
 
 track_files = []
 for dataset_name in _ImplementedDatasets.get_all_dataset_names():
@@ -29,8 +27,6 @@ for dataset_name in _ImplementedDatasets.get_all_dataset_names():
     from importlib import resources
     import toml
     import os
-    from modelforge.utils.io import get_path_string
-    import modelforge.tests as tests
 
     toml_file = f'{resources.files("modelforge.tests")}/data/dataset_defaults/{dataset_name.lower()}.toml'
 

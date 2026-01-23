@@ -7,34 +7,64 @@ from loguru import logger
 from openff.units import unit
 
 
-class ANI2xCuration(DatasetCuration):
+class Aimnet2Curation(DatasetCuration):
     """
-    Routines to fetch and process the ANI-2x dataset into a curated hdf5 file.
+    Routines to fetch and process the Aimnet2 dataset into a curated hdf5 file.
 
-    The ANI-2x data set includes properties for small organic molecules that contain
-    H, C, N, O, S, F, and Cl.  This dataset contains 9651712 conformers for nearly 20,000 molecules.
-    This will fetch data generated with the wB97X/631Gd level of theory
-    used in the original ANI-2x paper, calculated using Gaussian 09
+    The datasets contain molecular structures and the properties computed with B97-3c (GGA DFT) or wB97M-def2-TZVPP
+    (range-separated hybrid DFT) methods. Each data file contains about 20M structures.
+    DFT calculation performed with ORCA 5.0.3 software.
 
-    Citation: Devereux, C, Zubatyuk, R., Smith, J. et al.
-                "Extending the applicability of the ANI deep learning molecular potential to sulfur and halogens."
-                Journal of Chemical Theory and Computation 16.7 (2020): 4192-4202.
-                https://doi.org/10.1021/acs.jctc.0c00121
+    Properties include energy, forces, atomic charges, and molecular dipole and quadrupole moments.
 
-    DOI for dataset: 10.5281/zenodo.10108941
+    Dataset Citation: Zubatiuk, Roman; Isayev, Olexandr; Anstine, Dylan (2024).
+            Training datasets for AIMNet2 machine-learned neural network potential.
+            Carnegie Mellon University.
+            https://doi.org/10.1184/R1/27629937.v2
+
+    DOI for associated publication:
+        publisher: https://doi.org/10.1039/D4SC08572H
+        ChemRxiv: https://doi.org/10.26434/chemrxiv-2023-296ch-v3
 
     Parameters
     ----------
-    local_cache_dir: str, optional, default='./AN1_dataset'
+    local_cache_dir: str, optional, default='./Aimnet2_dataset'
         Location to save downloaded dataset.
+    version_select: str, optional, default='wB97M_v0'
+        Version of the dataset to use. Options include B97-3c_v0 and wB97M_v0 which correspond to the
+        data calculated with B97-3c (GGA DFT) and wB97M-def2-TZPP respectively.
+        The associated yaml defines all versions and their associated download links;
+        see this file for a full lists of all available dataset versions.
 
     Examples
     --------
-    >>> ani2_data = ANI2xCuration(local_cache_dir='~/datasets/ani2x_dataset')
-    >>> ani2_data.process()
-    >>> ani2_data.to_hdf5(output_file_dir='~/datasets/ani2x_dataset', hdf5_file_name='ani2x_dataset.hdf5')
+    >>> aimnet2_data = Aimnet2Curation(dataset_name="aimnet2", local_cache_dir='~/datasets/aimnet2_dataset')
+    >>> aimnet2_data.process()
+    >>> aimnet2_data.to_hdf5(output_file_dir='~/datasets/aimnet2_dataset', hdf5_file_name='aimnet2_dataset.hdf5')
 
     """
+
+    def __init__(
+        self,
+        dataset_name: str,
+        local_cache_dir: str = "./",
+        version_select: str = "wB97M_v0",
+    ):
+        """
+        Sets input and output parameters.
+
+        Parameters
+        ----------
+        dataset_name: str, required
+            Name of the dataset to curate.
+        local_cache_dir: str, optional, default='./qm9_datafiles'
+            Location to save downloaded dataset.
+        version_select: str, optional, default='latest'
+            Version of the dataset to use as defined in the associated yaml file.
+
+        """
+        # since we want the default to be wB97M_v0, not latest
+        super().__init__(dataset_name, local_cache_dir, version_select)
 
     def _init_dataset_parameters(self) -> None:
         """
@@ -199,8 +229,8 @@ class ANI2xCuration(DatasetCuration):
 
         Examples
         --------
-        >>> ani2_data = ANI2xCuration(local_cache_dir='~/datasets/ani2x_dataset')
-        >>> ani2_data.process()
+        >>> aimnet2_data = Aimnet2Curation(local_cache_dir='~/datasets/aimnet2_dataset')
+        >>> aimnet2_data.process()
 
         """
 
@@ -209,7 +239,7 @@ class ANI2xCuration(DatasetCuration):
         url = self.dataset_download_url
 
         # download the dataset
-        status = download_from_url(
+        download_from_url(
             url=url,
             md5_checksum=self.dataset_md5_checksum,
             output_path=self.local_cache_dir,
@@ -217,9 +247,6 @@ class ANI2xCuration(DatasetCuration):
             length=self.dataset_length,
             force_download=force_download,
         )
-        if status == False:
-            logger.info(f"Could not download file from {url}")
-            raise Exception("Failed to download file")
 
         # untar and uncompress the dataset
         from modelforge.utils.misc import extract_tarred_file

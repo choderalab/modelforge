@@ -52,6 +52,7 @@ class PropertiesDefinition(ParametersBase):
     spin_multiplicity: Optional[str] = None  # spin multiplicity of the system
     partial_charges: Optional[str] = None  # partial charges on each atom in the system
     quadrupole_moment: Optional[str] = None  # quadrupole moment of the system
+    # spin_multiplicity_per_atom: Optional[str] = None  # spin multiplicity per atom
 
 
 class DatasetParameters(BaseModel):

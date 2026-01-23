@@ -32,17 +32,19 @@ def test_download_from_url(prep_temp_dir):
     url = "https://zenodo.org/records/3401581/files/PTC-CMC/atools_ml-v0.1.zip"
     checksum = "194cde222565dca8657d8521e5df1fd8"
 
+    output_dir = f"{str(prep_temp_dir)}/download_test"
     name = "atools_ml-v0.1.zip"
     # Download the file
     download_from_url(
         url,
         md5_checksum=checksum,
-        output_path=str(prep_temp_dir),
+        output_path=output_dir,
         output_filename=name,
         force_download=True,
+        scheme="auto",
     )
 
-    file_name_path = str(prep_temp_dir) + f"/{name}"
+    file_name_path = f"{output_dir}/{name}"
     assert os.path.isfile(file_name_path)
 
     # create a dummy document to test the case where
@@ -54,12 +56,13 @@ def test_download_from_url(prep_temp_dir):
     download_from_url(
         url,
         md5_checksum=checksum,
-        output_path=str(prep_temp_dir),
+        output_path=output_dir,
         output_filename=name,
         force_download=False,
+        scheme="auto",
     )
 
-    file_name_path = str(prep_temp_dir) + f"/{name}"
+    file_name_path = f"{output_dir}/{name}"
     assert os.path.isfile(file_name_path)
 
     # let us change the expected checksum to cause a failure
@@ -69,34 +72,39 @@ def test_download_from_url(prep_temp_dir):
         download_from_url(
             url,
             md5_checksum="checksum_garbage",
-            output_path=str(prep_temp_dir),
+            output_path=output_dir,
             output_filename=name,
             force_download=True,
+            scheme="auto",
         )
 
 
 def test_fetch_record_id():
-    record = fetch_url_from_doi(doi="10.5281/zenodo.3588339")
-    assert record == "https://zenodo.org/records/3588339"
+    record = fetch_url_from_doi(doi="10.6084/m9.figshare.4573048")
+    assert (
+        record
+        == "https://figshare.com/articles/poster/SI2-SSE_Development_of_a_Software_Framework_for_Formalizing_ForceField_Atom-Typing_for_Molecular_Simulation/4573048"
+    )
 
     with pytest.raises(Exception):
         fetch_url_from_doi(doi="10.5281/zenodo.fake.3588339")
 
     with pytest.raises(Exception):
-        fetch_url_from_doi(doi="10.5281/zenodo.3588339", timeout=0.0000000000001)
+        fetch_url_from_doi(doi="10.6084/m9.figshare.4573048", timeout=0.0000000000001)
 
 
 def test_md5_calculation(prep_temp_dir):
     url = "https://zenodo.org/records/3401581/files/PTC-CMC/atools_ml-v0.1.zip"
-    zenodo_checksum = "194cde222565dca8657d8521e5df1fd8"
+    checksum = "194cde222565dca8657d8521e5df1fd8"
 
     name = "atools_ml-v0.1.zip"
     download_from_url(
         url=url,
-        md5_checksum=zenodo_checksum,
+        md5_checksum=checksum,
         output_path=str(prep_temp_dir),
         output_filename=name,
         force_download=True,
+        scheme="wget",
     )
 
     # explicit direct check of the function, even though included in download_from_zenodo
@@ -104,17 +112,20 @@ def test_md5_calculation(prep_temp_dir):
         file_name=name, file_path=str(prep_temp_dir)
     )
 
-    assert zenodo_checksum == calculated_checksum
+    assert checksum == calculated_checksum
+    bad_checksum = "294badmd5checksumthatwontwork9de"
 
-    with pytest.raises(Exception):
-        bad_checksum = "294badmd5checksumthatwontwork9de"
-        download_from_url(
-            url=url,
-            md5_checksum=bad_checksum,
-            output_path=str(prep_temp_dir),
-            output_filename=name,
-            force_download=True,
-        )
+    assert bad_checksum != calculated_checksum
+
+    status = download_from_url(
+        url=url,
+        md5_checksum=bad_checksum,
+        output_path=str(prep_temp_dir),
+        output_filename=name,
+        force_download=True,
+        scheme="wget",
+    )
+    assert status == False
 
 
 @pytest.mark.skipif(
@@ -135,3 +146,27 @@ def test_load_from_wandb(prep_temp_dir):
     assert os.path.isfile(f"{prep_temp_dir}/test_wandb/model.ckpt")
 
     assert nn_potential is not None
+
+
+@pytest.mark.parametrize("scheme", ["auto", "curl", "wget"])
+# define a test to ensure we can download using curl or wget in addition to requests
+def test_download_with_various_schemes_zenodo(prep_temp_dir, scheme):
+
+    url = "https://zenodo.org/records/3401581/files/PTC-CMC/atools_ml-v0.1.zip"
+    checksum = "194cde222565dca8657d8521e5df1fd8"
+
+    output_dir = f"{str(prep_temp_dir)}/download_{scheme}"
+    name = "atools_ml-v0.1.zip"
+    # Download the file
+    status = download_from_url(
+        url,
+        md5_checksum=checksum,
+        output_path=output_dir,
+        output_filename=name,
+        force_download=True,
+        scheme=scheme,
+    )
+    assert status == True
+
+    file_name_path = f"{output_dir}/{name}"
+    assert os.path.isfile(file_name_path)

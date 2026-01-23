@@ -461,7 +461,7 @@ class HDF5Dataset:
                 log.debug(
                     f"hdf5 file {self.hdf5_data_file_dict['file_name']} not found."
                 )
-                download_from_url(
+                status = download_from_url(
                     url=self.url,
                     md5_checksum=self.gz_data_file_dict["md5"],
                     output_path=self.dataset_cache_dir,
@@ -469,6 +469,10 @@ class HDF5Dataset:
                     length=self.gz_data_file_dict["length"],
                     force_download=self.force_download,
                 )
+                if status == False:
+                    logger.info(f"Could not download file from {url}")
+                    raise Exception("Failed to download file")
+
                 self._ungzip_hdf5()
                 self._from_hdf5()
                 self._to_file_cache()
@@ -1482,7 +1486,7 @@ class DataModule(pl.LightningDataModule):
 
                 if shift_energy:
                     if calc_mean:
-                        energy_array[i] = shifted_e.to("cpu").numpy().reshape(-1)
+                        energy_array[i] = shifted_e.to("cpu").numpy().reshape(-1)[0]
                     else:
                         if i == 0:
                             e_min = shifted_e
@@ -1504,7 +1508,7 @@ class DataModule(pl.LightningDataModule):
                 shifted_e = dataset.properties_of_interest["E"][i]
 
                 if calc_mean:
-                    energy_array[i] = shifted_e.to("cpu").numpy().reshape(-1)
+                    energy_array[i] = shifted_e.to("cpu").numpy().reshape(-1)[0]
                 else:
                     if i == 0:
                         e_min = shifted_e
@@ -1532,7 +1536,7 @@ class DataModule(pl.LightningDataModule):
             for i in tqdm(range(len(dataset)), desc="Process dataset"):
                 shifted_e = dataset.properties_of_interest["E"][i] - shift_value
                 dataset[i] = {"E": shifted_e}
-                shifted_energy_array[i] = shifted_e.to("cpu").numpy().reshape(-1)
+                shifted_energy_array[i] = shifted_e.to("cpu").numpy().reshape(-1)[0]
 
         if self.shift_center_of_mass_to_origin:
             log.info("Shifting the center of mass of each molecule to the origin.")

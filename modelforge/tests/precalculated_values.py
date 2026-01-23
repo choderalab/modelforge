@@ -2142,6 +2142,7 @@ def provide_input_for_test_ani_test_compare_aev():
         torchani_model = torchani.models.ANI2x(periodic_table_index=False)
 
         # calculate aev
+        # fmt: off
         (species, tochani_aev) = torchani_model.aev_computer(
             (species, coordinates), cell=None, pbc=None
         )

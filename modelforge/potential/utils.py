@@ -3,73 +3,23 @@ Utility functions for neural network potentials.
 """
 
 import math
-from dataclasses import dataclass
-from typing import Callable, Optional, Dict
+from typing import Callable, Dict
 
 
 import torch
 import torch.nn as nn
 from openff.units import unit
 
-from modelforge.utils.prop import NNPInput
 
+def shared_config_prior():
 
-# @dataclass(frozen=False)
-# class Metadata:
-#     """
-#     A NamedTuple to structure the inputs for neural network potentials.
-#
-#     Parameters
-#     ----------
-#     """
-#
-#     E: torch.Tensor
-#     atomic_subsystem_counts: torch.Tensor
-#     atomic_subsystem_indices_referencing_dataset: torch.Tensor
-#     number_of_atoms: int
-#     F: torch.Tensor = torch.tensor([], dtype=torch.float32)
-#
-#     def to(
-#         self, device: Optional[torch.device] = None, dtype: Optional[torch.dtype] = None
-#     ):
-#         """Move all tensors in this instance to the specified device."""
-#         if device:
-#             self.E = self.E.to(device)
-#             self.F = self.F.to(device)
-#             self.atomic_subsystem_counts = self.atomic_subsystem_counts.to(device)
-#             self.atomic_subsystem_indices_referencing_dataset = (
-#                 self.atomic_subsystem_indices_referencing_dataset.to(device)
-#             )
-#         if dtype:
-#             self.E = self.E.to(dtype)
-#             self.F = self.F.to(dtype)
-#         return self
-#
-#
-# @dataclass
-# class BatchData:
-#     nnp_input: NNPInput
-#     metadata: Metadata
-#
-#     def to(
-#         self,
-#         device: Optional[torch.device] = None,
-#         dtype: Optional[torch.dtype] = None,
-#     ):
-#         self.nnp_input = self.nnp_input.to(device=device, dtype=dtype)
-#         self.metadata = self.metadata.to(device=device, dtype=dtype)
-#         return self
+    from ray import tune
 
-
-# def shared_config_prior():
-#
-#     from ray import tune
-#
-#     return {
-#         "lr": tune.loguniform(1e-5, 1e-1),
-#         "weight_decay": tune.loguniform(1e-5, 1e-1),
-#         "batch_size": tune.choice([32, 64, 128, 256, 512]),
-#     }
+    return {
+        "lr": tune.loguniform(1e-5, 1e-1),
+        "weight_decay": tune.loguniform(1e-5, 1e-1),
+        "batch_size": tune.choice([32, 64, 128, 256, 512]),
+    }
 
 
 import torch.nn.functional as F

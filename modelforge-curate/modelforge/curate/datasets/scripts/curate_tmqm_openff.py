@@ -36,8 +36,8 @@ def main():
     )
 
     tmqm_openff.process(
-        qcportal_view_filename="dataset_419_view_july.sqlite",
-        qcportal_view_path="/home/cri/mf_datasets/tmqm_openff_dataset/dataset_download_30July25",
+        qcportal_view_filename="dataset_419_view.sqlite",
+        qcportal_view_path="/home/cri/mf_datasets/tmqm_openff_dataset/dataset_download_Feb26",
         force_download=False,
     )
     # tmqm_openff.load_from_db(

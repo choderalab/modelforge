@@ -18,8 +18,8 @@ __all__ = [
     "ForceSquaredError",
     "EnergySquaredError",
     "TotalChargeError",
-    "PerAtomChargeError",
-    "DipoleMomentError",
+    "PerSystemDipoleMomentError",
+    "PerAtomError",
     "Loss",
     "LossFactory",
     "create_error_metrics",
@@ -200,14 +200,74 @@ class EnergySquaredError(Error):
         return per_system_square_error_scaled
 
 
-class PerAtomChargeError(Error):
+class PerAtomError(Error):
     """
-    Calculates the error for per-atom charge.
+    A generic class that will compute the error for a per-atom property
     """
 
-    """
-        Calculates the per-atom error and aggregates it to per-system mean squared error.
+    def calculate_error(
+        self,
+        per_atom_prediction: torch.Tensor,
+        per_atom_reference: torch.Tensor,
+    ) -> torch.Tensor:
+        """Computes the per-atom squared error."""
+        return self.calculate_squared_error(per_atom_prediction, per_atom_reference)
+
+    def forward(
+        self,
+        per_atom_prediction: torch.Tensor,
+        per_atom_reference: torch.Tensor,
+        batch: BatchData,
+    ) -> torch.Tensor:
         """
+        Computes the per-atom error and aggregates it to per-system mean squared error.
+
+        Parameters
+        ----------
+        per_atom_prediction : torch.Tensor
+            The predicted values.
+        per_atom_reference : torch.Tensor
+            The reference values provided by the dataset.
+        batch : BatchData
+            The batch data containing metadata and input information.
+
+        Returns
+        -------
+        torch.Tensor
+            The aggregated per-system error.
+        """
+
+        # Compute per-atom squared error
+        per_atom_squared_error = self.calculate_error(
+            per_atom_prediction, per_atom_reference
+        )
+
+        # Initialize per-system squared error tensor
+        per_system_squared_error = torch.zeros_like(
+            batch.metadata.per_system_energy, dtype=per_atom_squared_error.dtype
+        )
+
+        # Aggregate error per system
+        per_system_squared_error = per_system_squared_error.scatter_add(
+            0,
+            batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
+            per_atom_squared_error,
+        )
+
+        # Scale error by number of atoms
+        per_system_square_error_scaled = self.scale_by_number_of_atoms(
+            per_system_squared_error,
+            batch.metadata.atomic_subsystem_counts,
+            prefactor=1,
+        )
+
+        return per_system_square_error_scaled.contiguous()
+
+
+class PerAtomChargeError(Error):
+    """
+    Calculates the per-atom error and aggregates it to per-system mean squared error.
+    """
 
     def calculate_error(
         self,
@@ -278,11 +338,15 @@ class TotalChargeError(Error):
         total_charge_predict: torch.Tensor,
         total_charge_true: torch.Tensor,
     ) -> torch.Tensor:
-        """
-        Computes the absolute difference between predicted and true total charges.
-        """
-        error = torch.abs(total_charge_predict - total_charge_true)
-        return error  # Shape: [batch_size, 1]
+        return self.calculate_squared_error(
+            total_charge_predict, total_charge_true
+        )  # shape: [batch_size, 1]
+
+        # """
+        # Computes the absolute difference between predicted and true total charges.
+        # """
+        # error = torch.abs(total_charge_predict - total_charge_true)
+        # return error  # Shape: [batch_size, 1]
 
     def forward(
         self,
@@ -311,7 +375,7 @@ class TotalChargeError(Error):
         return error  # No scaling needed
 
 
-class QuadrupoleMomentError(Error):
+class PerSystemQuadrupoleMomentError(Error):
     """
     Calculates the error for quadrupole moment.
 
@@ -358,9 +422,9 @@ class QuadrupoleMomentError(Error):
         return error  # No scaling needed
 
 
-class DipoleMomentError(Error):
+class PerSystemDipoleMomentError(Error):
     """
-    Calculates the error for dipole moment.
+    Calculates the error for the per system dipole moment.
     """
 
     def calculate_error(
@@ -412,6 +476,7 @@ class Loss(nn.Module):
         "per_system_total_charge",
         "per_system_dipole_moment",
         "per_atom_charge",
+        "per_atom_spin_multiplicity",
         "per_system_quadrupole_moment",
     ]
 
@@ -464,15 +529,17 @@ class Loss(nn.Module):
                     scale_by_number_of_atoms=False
                 )
             elif prop == "per_system_total_charge":
-                self.loss_functions[prop] = TotalChargeError()
-            elif prop == "per_system_dipole_moment":
-                self.loss_functions[prop] = DipoleMomentError()
-            elif prop == "per_atom_charge":
-                self.loss_functions[prop] = PerAtomChargeError(
-                    scale_by_number_of_atoms=True
+                self.loss_functions[prop] = TotalChargeError(
+                    scale_by_number_of_atoms=False
                 )
+            elif prop == "per_system_dipole_moment":
+                self.loss_functions[prop] = PerSystemDipoleMomentError()
+            elif prop == "per_atom_charge":
+                self.loss_functions[prop] = PerAtomError(scale_by_number_of_atoms=True)
+            elif prop == "per_atom_spin_multiplicity":
+                self.loss_functions[prop] = PerAtomError(scale_by_number_of_atoms=True)
             elif prop == "per_system_quadrupole_moment":
-                self.loss_functions[prop] = QuadrupoleMomentError()
+                self.loss_functions[prop] = PerSystemQuadrupoleMomentError()
             else:
                 raise NotImplementedError(f"Loss type {prop} not implemented.")
 

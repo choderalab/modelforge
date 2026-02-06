@@ -353,7 +353,7 @@ def test_learning_rate_scheduler(
         potential_name=potential_name,
         dataset_name=dataset_name,
         local_cache_dir=local_cache_dir,
-        dataset_temp_dir=dataset_temp_dir,
+        dataset_cache_dir=dataset_temp_dir,
     )
 
     # Get the training configuration
@@ -412,7 +412,7 @@ def test_train_with_lightning(
         potential_name=potential_name,
         dataset_name=dataset_name,
         local_cache_dir=local_cache_dir,
-        dataset_temp_dir=dataset_temp_dir,
+        dataset_cache_dir=dataset_temp_dir,
     )
 
     if "force" in loss:
@@ -566,6 +566,7 @@ def test_loss_with_dipole_moment(
         potential_name="schnet",
         dataset_name="SPICE2",
         local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
     add_dipole_moment_to_loss_parameter(config)
     add_force_to_loss_parameter(config)
@@ -709,7 +710,10 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir):
 
     # Get the trainer object with the specified model and dataset
     config = load_configs_into_pydantic_models(
-        potential_name="schnet", dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+        potential_name="schnet",
+        dataset_name="QM9",
+        local_cache_dir=str(prep_temp_dir),
+        dataset_cache_dir=dataset_cache_dir,
     )
     add_force_to_loss_parameter(config)
 

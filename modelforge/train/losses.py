@@ -338,15 +338,16 @@ class TotalChargeError(Error):
         total_charge_predict: torch.Tensor,
         total_charge_true: torch.Tensor,
     ) -> torch.Tensor:
-        return self.calculate_squared_error(
-            total_charge_predict, total_charge_true
-        )  # shape: [batch_size, 1]
-
+        # previous code block, where we were return absolute value instead of the squared difference
         # """
         # Computes the absolute difference between predicted and true total charges.
         # """
         # error = torch.abs(total_charge_predict - total_charge_true)
         # return error  # Shape: [batch_size, 1]
+
+        return self.calculate_squared_error(
+            total_charge_predict, total_charge_true
+        )  # shape: [batch_size, 1]
 
     def forward(
         self,

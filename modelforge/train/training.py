@@ -138,6 +138,7 @@ class CalculateProperties(torch.nn.Module):
         "per_system_total_charge",
         "per_system_dipole_moment",
         "per_system_quadrupole_moment",
+        "per_atom_spin_multiplicity",
     ]
 
     def __init__(self, requested_properties: List[str]):
@@ -163,15 +164,17 @@ class CalculateProperties(torch.nn.Module):
         )
 
         self.include_per_atom_charges = "per_atom_charge" in self.requested_properties
+        self.include_quadrupole_moment = (
+            "per_system_quadrupole_moment" in self.requested_properties
+        )
+        self.include_per_atom_spin_multiplicity = (
+            "per_atom_spin_multiplicity" in self.requested_properties
+        )
 
         # Ensure all requested properties are supported
         assert all(
             prop in self._SUPPORTED_PROPERTIES for prop in self.requested_properties
         ), f"Unsupported property requested: {self.requested_properties}"
-
-        self.include_quadrupole_moment = (
-            "per_system_quadrupole_moment" in self.requested_properties
-        )
 
     @staticmethod
     def _get_forces(
@@ -393,6 +396,38 @@ class CalculateProperties(torch.nn.Module):
         }
 
     @staticmethod
+    def _get_per_atom_spin_multiplicity(
+        batch: BatchData,
+        model_prediction: Dict[str, torch.Tensor],
+    ) -> Dict[str, torch.Tensor]:
+        """
+         Compute per-atom spin-multiplicity .
+
+        Parameters
+        ----------
+        batch : BatchData
+            A batch of data containing input features and target charges.
+        model_prediction : Dict[str, torch.Tensor]
+            A dictionary containing the predicted charges from the model.
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            A dictionary containing the true and predicted per-atom spin-multiplicity.
+
+        """
+
+        per_atom_spin_multiplicity_predict = model_prediction[
+            "per_atom_spin_multiplicity"
+        ]
+        per_atom_spin_multiplicity_true = batch.metadata.per_atom_spin_multiplicity
+
+        return {
+            "per_atom_spin_multiplicity_predict": per_atom_spin_multiplicity_predict,
+            "per_atom_spin_multiplicity_true": per_atom_spin_multiplicity_true,
+        }
+
+    @staticmethod
     def _predict_quadrupole_moment(
         model_predictions: Dict[str, torch.Tensor], batch: BatchData
     ) -> torch.Tensor:
@@ -412,7 +447,7 @@ class CalculateProperties(torch.nn.Module):
         Returns
         -------
         torch.Tensor
-            The predicted quadruople moment for each system.
+            The predicted quadrupole moment for each system.
         """
 
         """
@@ -592,6 +627,13 @@ class CalculateProperties(torch.nn.Module):
         if self.include_quadrupole_moment:
             quadrupole_moment = self._get_quadrupole_moment(batch, model_prediction)
             predict_target.update(quadrupole_moment)
+
+        if self.include_per_atom_spin_multiplicity:
+            per_atom_spin_multiplicity = self._get_per_atom_spin_multiplicity(
+                batch, model_prediction
+            )
+            predict_target.update(per_atom_spin_multiplicity)
+
         return predict_target
 
 

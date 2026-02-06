@@ -452,7 +452,6 @@ def test_train_from_single_toml_file_element_filter(prep_temp_dir, dataset_temp_
     from modelforge.utils.io import get_path_string
 
     from modelforge.tests import data
-    from modelforge.train.training import read_config_and_train
 
     config_path = get_path_string(data) + f"/config_element_filter.toml"
 
@@ -466,8 +465,8 @@ def test_train_from_single_toml_file_element_filter(prep_temp_dir, dataset_temp_
         runtime_parameter,
     ) = read_config(
         condensed_config_path=config_path,
-        local_cache_dir=prep_temp_dir,
-        dataset_cache_dir=dataset_temp_dir,
+        local_cache_dir=str(prep_temp_dir),
+        dataset_cache_dir=str(dataset_temp_dir),
     )
 
     trainer = NeuralNetworkPotentialFactory.generate_trainer(

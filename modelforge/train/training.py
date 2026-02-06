@@ -2210,6 +2210,7 @@ def read_config(
     experiment_name: Optional[str] = None,
     save_dir: Optional[str] = None,
     local_cache_dir: Optional[str] = None,
+    dataset_cache_dir: Optional[str] = None,
     checkpoint_path: Optional[str] = None,
     log_every_n_steps: Optional[int] = None,
     simulation_environment: Optional[str] = None,
@@ -2252,6 +2253,9 @@ def read_config(
     local_cache_dir : Optional[str], optional
         Local cache directory. If provided, this overrides the local cache
         directory in the runtime_defaults configuration.
+    dataset_cache_dir : Optional[str], optional
+        Dataset cache directory (i.e, where to save datafiles and/or retrieve them).
+        If provided, this overrides the dataset cache directory in the runtime_defaults configuration.
     checkpoint_path : Optional[str], optional
         Path to the checkpoint file. If provided, this overrides the checkpoint
         path in the runtime_defaults configuration.
@@ -2309,6 +2313,7 @@ def read_config(
         "experiment_name": experiment_name,
         "save_dir": save_dir,
         "local_cache_dir": local_cache_dir,
+        "dataset_cache_dir": dataset_cache_dir,
         "checkpoint_path": checkpoint_path,
         "log_every_n_steps": log_every_n_steps,
         "simulation_environment": simulation_environment,
@@ -2353,6 +2358,7 @@ def read_config_and_train(
     experiment_name: Optional[str] = None,
     save_dir: Optional[str] = None,
     local_cache_dir: Optional[str] = None,
+    dataset_cache_dir: Optional[str] = None,
     checkpoint_path: Optional[str] = None,
     log_every_n_steps: Optional[int] = None,
     simulation_environment: Optional[str] = "PyTorch",
@@ -2386,6 +2392,9 @@ def read_config_and_train(
         Directory to save the model.  If provided, this overrides the save directory in the runtime_defaults configuration.
     local_cache_dir : str, optional
         Local cache directory.  If provided, this overrides the local cache directory in the runtime_defaults configuration.
+    dataset_cache_dir: str, optional
+        Dataset cache directory, i.e., the location to look for or download datasets to.
+        If provided, this overrides the dataset cache directory in the runtime_defaults configuration.
     checkpoint_path : str, optional
         Path to the checkpoint file.  If provided, this overrides the checkpoint path in the runtime_defaults configuration.
     log_every_n_steps : int, optional
@@ -2417,6 +2426,7 @@ def read_config_and_train(
         experiment_name=experiment_name,
         save_dir=save_dir,
         local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
         checkpoint_path=checkpoint_path,
         log_every_n_steps=log_every_n_steps,
         simulation_environment=simulation_environment,

@@ -458,15 +458,7 @@ class tmQMOpenFFCuration(DatasetCuration):
         np.array
             The spin multiplicity extracted from the log.
         """
-        import zstandard
 
-        # need to first decompress the log file
-        # dctx = zstandard.ZstdDecompressor()
-        # out = dctx.decompress(log)
-        # # decode the bytes to a string
-        # out2 = out.decode("utf-8", errors="ignore")
-        # # next split the string into lines and then find the line that contains the spin multiplicity title
-        # out3 = out2.split("\n")
         out3 = log.split("\n")
 
         lowdin_start = 0

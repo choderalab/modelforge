@@ -386,7 +386,7 @@ def methane() -> BatchData:
     -------
     BatchData
     """
-    from modelforge.potential.utils import BatchData, Metadata
+    from modelforge.utils.prop import BatchData, Metadata
 
     atomic_numbers = torch.tensor([6, 1, 1, 1, 1], dtype=torch.int64)
     positions = (

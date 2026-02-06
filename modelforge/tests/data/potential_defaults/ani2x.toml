@@ -24,3 +24,4 @@ properties_to_process = ['per_atom_energy']
 normalize = true
 from_atom_to_system_reduction = true
 keep_per_atom_property = true
+

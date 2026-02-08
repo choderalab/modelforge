@@ -5,7 +5,6 @@ Module of dataclass definitions of properties.
 from dataclasses import dataclass
 import torch
 from typing import NamedTuple, Optional
-from loguru import logger as log
 
 
 @dataclass
@@ -19,6 +18,7 @@ class PropertyNames:
     spin_multiplicity: Optional[str] = None  # per-system spin multiplicity
     partial_charges: Optional[str] = None  # per-atom partial charge
     quadrupole_moment: Optional[str] = None  # per-system quadrupole moment
+    per_atom_spin_multiplicity: Optional[str] = None  # per-atom spin multiplicity
 
 
 class SpeciesEnergies(NamedTuple):
@@ -141,6 +141,8 @@ class Metadata:
         Forces for each atom.
     per_system_dipole_moment : torch.Tensor, optional
         Dipole moments for each system.
+    per_atom_spin_multiplicity : torch.Tensor, optional
+        Per-atom spin multiplicity for each atom in the system.
 
     """
 
@@ -153,6 +155,7 @@ class Metadata:
         "per_system_dipole_moment",
         "per_atom_charge",
         "per_system_quadrupole_moment",
+        "per_atom_spin_multiplicity",
     )
 
     def __init__(
@@ -165,6 +168,7 @@ class Metadata:
         per_system_dipole_moment: torch.Tensor = None,
         per_atom_charge: torch.Tensor = None,
         per_system_quadrupole_moment: torch.Tensor = None,
+        per_atom_spin_multiplicity: torch.Tensor = None,
     ):
         self.per_system_energy = per_system_energy
         self.atomic_subsystem_counts = atomic_subsystem_counts
@@ -176,6 +180,7 @@ class Metadata:
         self.per_system_dipole_moment = per_system_dipole_moment
         self.per_atom_charge = per_atom_charge
         self.per_system_quadrupole_moment = per_system_quadrupole_moment
+        self.per_atom_spin_multiplicity = per_atom_spin_multiplicity
 
     def to_device(self, device: torch.device):
         """Move all tensors in this instance to the specified device."""
@@ -188,6 +193,7 @@ class Metadata:
         self.per_system_dipole_moment = self.per_system_dipole_moment.to(device)
         self.per_atom_charge = self.per_atom_charge.to(device)
         self.per_system_quadrupole_moment = self.per_system_quadrupole_moment.to(device)
+        self.per_atom_spin_multiplicity = self.per_atom_spin_multiplicity.to(device)
         return self
 
     def to_dtype(self, dtype: torch.dtype):
@@ -197,6 +203,7 @@ class Metadata:
         self.per_system_dipole_moment = self.per_system_dipole_moment.to(dtype)
         self.per_atom_charge = self.per_atom_charge.to(dtype)
         self.per_system_quadrupole_moment = self.per_system_quadrupole_moment.to(dtype)
+        self.per_atom_spin_multiplicity = self.per_atom_spin_multiplicity.to(dtype)
         return self
 
 

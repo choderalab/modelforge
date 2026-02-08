@@ -142,6 +142,15 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
                 (dataset[property_name.E].shape[0], 3, 3), dtype=torch.float32
             )
         )
+
+        properties["per_atom_spin_multiplicity"] = (
+            torch.from_numpy(dataset[property_name.per_atom_spin_multiplicity])
+            if property_name.per_atom_spin_multiplicity is not None
+            else torch.zeros(
+                (properties["positions"].shape[0], 1),
+                dtype=torch.float32,
+            )
+        )
         properties["pair_list"] = None  # Placeholder for pair list
 
         return properties
@@ -231,6 +240,10 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
         ]
         quadrupole_moment = self.properties_of_interest["quadrupole_moment"][idx]
 
+        per_atom_spin_multiplicity = self.properties_of_interest[
+            "per_atom_spin_multiplicity"
+        ][series_atom_start_idx:series_atom_end_idx]
+
         nnp_input = NNPInput(
             atomic_numbers=atomic_numbers,
             positions=positions,
@@ -250,6 +263,7 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
             per_system_dipole_moment=dipole_moment,
             per_atom_charge=per_atom_charge,
             per_system_quadrupole_moment=quadrupole_moment,
+            per_atom_spin_multiplicity=per_atom_spin_multiplicity,
         )
 
         return BatchData(nnp_input, metadata)
@@ -1678,6 +1692,7 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
     dipole_moment_list = []
     quadrupole_moment_list = []
     per_atom_charge_list = []
+    per_atom_spin_multiplicity_list = []
     atomic_subsystem_counts_list = []
     atomic_subsystem_indices_referencing_dataset_list = []
 
@@ -1704,6 +1719,7 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
         dipole_moment_list.append(conf.metadata.per_system_dipole_moment)
         quadrupole_moment_list.append(conf.metadata.per_system_quadrupole_moment)
         per_atom_charge_list.append(conf.metadata.per_atom_charge)
+        per_atom_spin_multiplicity_list.append(conf.metadata.per_atom_spin_multiplicity)
 
         E_list.append(conf.metadata.per_system_energy)
         F_list.append(conf.metadata.per_atom_force)
@@ -1727,6 +1743,9 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
     dipole_moment = torch.stack(dipole_moment_list).to(torch.float32)
     quadrupole_moment = torch.stack(quadrupole_moment_list).to(torch.float32)
     per_atom_charge = torch.cat(per_atom_charge_list).to(torch.float32)
+    per_atom_spin_multiplicity = torch.cat(per_atom_spin_multiplicity_list).to(
+        torch.float32
+    )
     E = torch.stack(E_list)
     spin_multiplicity = torch.cat(S_list).to(torch.float32)
     if pair_list_present:
@@ -1751,6 +1770,7 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
         per_system_dipole_moment=dipole_moment,
         per_atom_charge=per_atom_charge,
         per_system_quadrupole_moment=quadrupole_moment,
+        per_atom_spin_multiplicity=per_atom_spin_multiplicity,
     )
 
     return BatchData(nnp_input, metadata)

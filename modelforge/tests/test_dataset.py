@@ -119,13 +119,15 @@ def test_get_properties(
     assert (
         len(raw_data_item.nnp_input.__slots__) == 9
     )  # 9 properties are returned now that we have included spin state
-    assert len(raw_data_item.metadata.__slots__) == 8  # 8 properties are returned
+    assert (
+        len(raw_data_item.metadata.__slots__) == 9
+    )  # 9 properties are returned now that we have per-atom spin
 
 
 def test_get_different_properties_of_interest(
     load_test_dataset, prep_temp_dir, dataset_temp_dir
 ):
-    # since we have switched from separate classses to using yaml files with a single class
+    # since we have switched from separate classes to using yaml files with a single class
     # we need to test the properties of interest of a single dataset
 
     local_cache_dir = str(prep_temp_dir) + "/data_test"

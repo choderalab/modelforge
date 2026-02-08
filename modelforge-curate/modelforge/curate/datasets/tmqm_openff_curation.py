@@ -197,8 +197,9 @@ class tmQMOpenFFCuration(DatasetCuration):
                         force_refetch=force_download,
                     ):
                         # ph_db[record[0]] = [record[2].dict(), record[2].trajectory]
-
-                        ph_db[record[0]] = record[2].dict()
+                        temp_record = record[2].dict()
+                        temp_record["stdout"] = record[2].stdout
+                        ph_db[record[0]] = temp_record
                         if pbar is not None:
                             pbar.update(1)
 
@@ -406,10 +407,10 @@ class tmQMOpenFFCuration(DatasetCuration):
                         # extract the lowdin spin multiplicity
                         n_atoms = forces.n_atoms
                         try:
-                            log = record_val["compute_history_"][0]["outputs_"][
-                                "stdout"
-                            ]["data_"]
-                            # log = record_val["stdout"]
+                            # log = record_val["compute_history_"][0]["outputs_"][
+                            #     "stdout"
+                            # ]["data_"]
+                            log = record_val["stdout"]
                             spins = self._process_log_for_spin(
                                 log=log,
                                 n_atoms=n_atoms,
@@ -457,15 +458,8 @@ class tmQMOpenFFCuration(DatasetCuration):
         np.array
             The spin multiplicity extracted from the log.
         """
-        import zstandard
 
-        # need to first decompress the log file
-        dctx = zstandard.ZstdDecompressor()
-        out = dctx.decompress(log)
-        # decode the bytes to a string
-        out2 = out.decode("utf-8", errors="ignore")
-        # next split the string into lines and then find the line that contains the spin multiplicity title
-        out3 = out2.split("\n")
+        out3 = log.split("\n")
 
         lowdin_start = 0
         for i, line in enumerate(out3):

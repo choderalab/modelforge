@@ -18,7 +18,10 @@ def prep_temp_dir(tmp_path_factory):
 
 
 def load_configs_into_pydantic_models(
-    potential_name: str, dataset_name: str, local_cache_dir: str
+    potential_name: str,
+    dataset_name: str,
+    local_cache_dir: str,
+    dataset_cache_dir: str,
 ):
     from modelforge.utils.io import get_path_string
 
@@ -60,6 +63,7 @@ def load_configs_into_pydantic_models(
     runtime_parameters = RuntimeParameters(**runtime_config_dict["runtime"])
 
     runtime_parameters.local_cache_dir = local_cache_dir
+    dataset_parameters.dataset_cache_dir = dataset_cache_dir
     return {
         "potential": potential_parameters,
         "dataset": dataset_parameters,
@@ -81,6 +85,31 @@ def get_trainer(config):
         dataset_parameter=dataset_parameter,
         runtime_parameter=runtime_parameter,
     )
+
+
+def add_per_atom_spin_to_loss_parameter(config):
+    """
+    [training.loss_parameter]
+    loss_components = ['per_system_energy', 'per_atom_spin_multiplicity', ...]
+
+    [training.loss_parameter.weight]
+    per_system_energy = 0.999 #NOTE: reciprocal units
+    per_atom_spin_multiplicity = 1 #NOTE: reciprocal units
+    """
+
+    t_config = config["training"]
+    t_config.loss_parameter.loss_components.append("per_atom_spin_multiplicity")
+    t_config.loss_parameter.weight["per_atom_spin_multiplicity"] = 1.0
+    t_config.loss_parameter.target_weight["per_atom_spin_multiplicity"] = 1.0
+    t_config.loss_parameter.mixing_steps["per_atom_spin_multiplicity"] = 1
+
+    # we also need to set the per_atom_spin_multiplicity as a predicted property
+    p_config = config["potential"]
+    if "per_atom_spin_multiplicity" not in p_config.core_parameter.predicted_properties:
+        p_config.core_parameter.predicted_properties.append(
+            "per_atom_spin_multiplicity"
+        )
+        p_config.core_parameter.predicted_dim.append(1)
 
 
 def add_force_to_loss_parameter(config):
@@ -313,6 +342,7 @@ def test_learning_rate_scheduler(
     dataset_name,
     lr_scheduler,
     prep_temp_dir,
+    dataset_temp_dir,
 ):
     """
     Test that we can train, save, and load checkpoints with different learning rate schedulers.
@@ -320,7 +350,10 @@ def test_learning_rate_scheduler(
     local_cache_dir = str(prep_temp_dir) + "/test_learning_rate_scheduler"
     # Load the configuration into Pydantic models
     config = load_configs_into_pydantic_models(
-        potential_name, dataset_name, local_cache_dir
+        potential_name=potential_name,
+        dataset_name=dataset_name,
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_temp_dir,
     )
 
     # Get the training configuration
@@ -348,9 +381,12 @@ def test_learning_rate_scheduler(
         "energy_force",
         "normalized_energy_force",
         "energy_force_dipole_moment_quadrupole_moment",
+        "energy_per_atom_spin_multiplicity",
     ],
 )
-def test_train_with_lightning(loss, potential_name, dataset_name, prep_temp_dir):
+def test_train_with_lightning(
+    loss, potential_name, dataset_name, prep_temp_dir, dataset_temp_dir
+):
     """
     Test that we can train, save and load checkpoints.
 
@@ -373,7 +409,10 @@ def test_train_with_lightning(loss, potential_name, dataset_name, prep_temp_dir)
         )
 
     config = load_configs_into_pydantic_models(
-        potential_name, dataset_name, local_cache_dir
+        potential_name=potential_name,
+        dataset_name=dataset_name,
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_temp_dir,
     )
 
     if "force" in loss:
@@ -384,6 +423,8 @@ def test_train_with_lightning(loss, potential_name, dataset_name, prep_temp_dir)
         add_dipole_moment_to_loss_parameter(config)
     if "quadrupole_moment" in loss:
         add_quadrupole_moment_to_loss_parameter(config)
+    if "energy_per_atom_spin_multiplicity" in loss:
+        add_per_atom_spin_to_loss_parameter(config)
 
     # train potential
     get_trainer(config).train_potential().save_checkpoint("test.chp")  # save checkpoint
@@ -392,7 +433,7 @@ def test_train_with_lightning(loss, potential_name, dataset_name, prep_temp_dir)
 
 
 @pytest.mark.xdist_group(name="training_tests")
-def test_train_from_single_toml_file(prep_temp_dir):
+def test_train_from_single_toml_file(prep_temp_dir, dataset_temp_dir):
     from modelforge.utils.io import get_path_string
 
     from modelforge.tests import data
@@ -401,15 +442,16 @@ def test_train_from_single_toml_file(prep_temp_dir):
     config_path = get_path_string(data) + f"/config.toml"
 
     local_cache_dir = str(prep_temp_dir) + "/test_train_from_single_toml_file"
-    read_config_and_train(config_path, local_cache_dir=local_cache_dir)
+    read_config_and_train(
+        config_path, local_cache_dir=local_cache_dir, dataset_cache_dir=dataset_temp_dir
+    )
 
 
 @pytest.mark.xdist_group(name="training_tests")
-def test_train_from_single_toml_file_element_filter():
+def test_train_from_single_toml_file_element_filter(prep_temp_dir, dataset_temp_dir):
     from modelforge.utils.io import get_path_string
 
     from modelforge.tests import data
-    from modelforge.train.training import read_config_and_train
 
     config_path = get_path_string(data) + f"/config_element_filter.toml"
 
@@ -423,6 +465,8 @@ def test_train_from_single_toml_file_element_filter():
         runtime_parameter,
     ) = read_config(
         condensed_config_path=config_path,
+        local_cache_dir=str(prep_temp_dir),
+        dataset_cache_dir=str(dataset_temp_dir),
     )
 
     trainer = NeuralNetworkPotentialFactory.generate_trainer(
@@ -521,6 +565,7 @@ def test_loss_with_dipole_moment(
         potential_name="schnet",
         dataset_name="SPICE2",
         local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
     )
     add_dipole_moment_to_loss_parameter(config)
     add_force_to_loss_parameter(config)
@@ -664,7 +709,10 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir):
 
     # Get the trainer object with the specified model and dataset
     config = load_configs_into_pydantic_models(
-        potential_name="schnet", dataset_name="QM9", local_cache_dir=str(prep_temp_dir)
+        potential_name="schnet",
+        dataset_name="QM9",
+        local_cache_dir=str(prep_temp_dir),
+        dataset_cache_dir=dataset_cache_dir,
     )
     add_force_to_loss_parameter(config)
 

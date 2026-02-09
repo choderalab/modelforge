@@ -158,6 +158,7 @@ def calculate_mean_and_variance(
         batch_size=batch_size,
         collate_fn=collate_conformers,
         num_workers=4,
+        multiprocessing_context='fork'
     )
     import tqdm
 

@@ -154,7 +154,7 @@ def test_neighborlist_unique_pairs_only_local():
     )
 
     # test with smaller cutoff
-    cutoff = unit.Quantity(2.0, unit.nanometer).to(unit.nanometer).m
+    cutoff = 2.0
     nlist = NeighborListForTraining(local_cutoff=cutoff, only_unique_pairs=True)
     r = nlist(TestInput(positions, atomic_subsystem_indices, None)).local_cutoff
     pair_indices = r.pair_indices

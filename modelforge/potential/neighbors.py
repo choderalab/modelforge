@@ -21,11 +21,14 @@ class PairlistData(NamedTuple):
         A tensor of shape (n_pairs, 1) containing the Euclidean distances between the atoms in each pair.
     r_ij : torch.Tensor
         A tensor of shape (n_pairs, 3) containing the displacement vectors between the atoms in each pair.
+    only_unique_pairs : bool
+        If True, only unique pairs are include (i.e. "half" list); if False, all pairs are included (i.e., "full: list)
     """
 
     pair_indices: torch.Tensor
     d_ij: torch.Tensor
     r_ij: torch.Tensor
+    only_unique_pairs: bool
 
 
 class PairlistOutputs(NamedTuple):
@@ -47,7 +50,7 @@ class Pairlist(torch.nn.Module):
          (use the neighborlist routines for that functionality).
          - This is primarily used for constructing the initial pair list for the systems during preprocessing.
          - this includes a routine optimized for numpy that has better performance than PyTorch for computing single
-         system, as is done during preprocessing (i.e., precomputing the pairs).
+         system, as is done during preprocessing in training (i.e., precomputing the possible pairs).
 
         Parameters
         ----------
@@ -214,15 +217,27 @@ class Pairlist(torch.nn.Module):
             ]
         )
 
-        # filter out identical pairs where i==j
-        unique_pairs_mask = i_indices != j_indices
-        i_final_pairs = i_indices[unique_pairs_mask]
-        j_final_pairs = j_indices[unique_pairs_mask]
+        if self.only_unique_pairs:
+            # filter such tha tonly unique pairs
+            unique_pairs_mask = i_indices < j_indices
+            i_final_pairs = i_indices[unique_pairs_mask]
+            j_final_pairs = j_indices[unique_pairs_mask]
 
-        # concatenate to form final (2, n_pairs) vector
-        pair_indices = np.stack((i_final_pairs, j_final_pairs))
+            # concatenate to form final (2, n_pairs) vector
+            pair_indices = np.stack((i_final_pairs, j_final_pairs))
 
-        return pair_indices, npairs_by_molecule
+            return pair_indices, npairs_by_molecule / 2
+
+        else:
+            # filter out identical pairs where i==j
+            unique_pairs_mask = i_indices != j_indices
+            i_final_pairs = i_indices[unique_pairs_mask]
+            j_final_pairs = j_indices[unique_pairs_mask]
+
+            # concatenate to form final (2, n_pairs) vector
+            pair_indices = np.stack((i_final_pairs, j_final_pairs))
+
+            return pair_indices, npairs_by_molecule
 
     def calculate_r_ij(
         self, pair_indices: torch.Tensor, positions: torch.Tensor
@@ -293,6 +308,7 @@ class Pairlist(torch.nn.Module):
             pair_indices=pair_indices,
             d_ij=self.calculate_d_ij(r_ij),
             r_ij=r_ij,
+            only_unique_pairs=self.only_unique_pairs,
         )
 
 
@@ -355,9 +371,14 @@ class NeighborlistForInference(torch.nn.Module):
     """
     Neighbor list calculation for inference implemented fully in PyTorch, allowing brute and Verlet nsq methods.
 
-    By default the brute_nsq method will be used if set_strategy is not called.  ][
-    Rebuilding of the neighborlist uses an N^2 approach.  Rebuilding occurs when
-    the maximum displacement of any particle exceeds half the skin distance for Verlet lists.
+    By default the brute_nsq method will be used if set_strategy is not called to specify otherwise.
+
+    For brute_nsq, the interacting pairs are recalculated (i.e., rebuilt) each time the forward function is called.
+
+    For verlet_nsq, rebuilding occurs when the maximum displacement of any particle exceeds half the
+    skin distance.
+
+    In both cases, rebuilding of the neighborlist uses an N^2 approach.
 
     """
 
@@ -388,9 +409,8 @@ class NeighborlistForInference(torch.nn.Module):
         electrostatic_cutoff : float, optional
             The cutoff distance for electrostatic interactions, by default -1.
         only_unique_pairs : bool, optional
-            Whether to only use unique pairs in the pair list calculation, by
-            default True. This should be set to True for all message passing
-            networks.
+            Whether to only use unique pairs in the calculation for the neighborlist associated with the local_cutoff.
+            By default this is False. The should be set to true for the ANI NNP.
         use_vdw_cutoff : bool, optional
             Whether to use the van der Waals cutoff, by default False.
         use_electrostatic_cutoff : bool, optional
@@ -425,7 +445,6 @@ class NeighborlistForInference(torch.nn.Module):
 
         self.half_skin = self.skin * 0.5
         self.cutoff_plus_skin = self.largest_cutoff + self.skin
-        # self.only_unique_pairs = only_unique_pairs
 
         self.displacement_function = displacement_function
         self.indices = torch.tensor([])
@@ -463,9 +482,9 @@ class NeighborlistForInference(torch.nn.Module):
             indexing="ij",
         )
 
+        # calculate only unique pairs for efficiency
+        # if we require the full pair list we will just copy
         mask = i_pairs < j_pairs
-        # self.i_pairs = i_pairs[mask]
-        # self.j_pairs = j_pairs[mask]
 
         return i_pairs[mask], j_pairs[mask]
 
@@ -477,8 +496,6 @@ class NeighborlistForInference(torch.nn.Module):
         )
 
         in_cutoff = (d_ij < self.cutoff_plus_skin).squeeze().reshape(-1)
-        # self.nlist_i_pairs = self.i_pairs[in_cutoff]
-        # self.nlist_j_pairs = self.j_pairs[in_cutoff]
 
         self.builds += 1
         return (
@@ -552,13 +569,34 @@ class NeighborlistForInference(torch.nn.Module):
             raise ValueError(f"Unknown strategy {self.strategy}")
 
     def _in_cutoff_brute(
-        self, cutoff: float, d_ij: torch.Tensor, r_ij: torch.Tensor
+        self,
+        cutoff: float,
+        d_ij: torch.Tensor,
+        r_ij: torch.Tensor,
+        only_unique_pairs: bool,
     ) -> PairlistData:
+        """
+        Calculates which pairs are in the cutoff  using the brute force approach
 
+        Parameters
+        ----------
+        cutoff: float
+            cutoff for the brute force approach
+        d_ij: torch.Tensor
+            Tensor containing the distance between pairs
+        r_ij: torch.Tensor
+            Tensor containing the displacement vector between pairs
+        only_unique_pairs: bool
+            Whether to only use unique pairs or all
+
+        Returns
+        -------
+            PairlistData, a dataclass containing the  indices, distances, and vectors of particles in the cutoff
+        """
         in_cutoff = (d_ij <= cutoff).squeeze().reshape(-1)
         total_pairs = in_cutoff.sum()
 
-        if self.only_unique_pairs:
+        if only_unique_pairs:
             # using this instead of torch.stack to ensure that if we only have a single pair
             # we don't run into an issue with tensor shapes.
             # note this will fail if there are no interacting pairs
@@ -572,6 +610,7 @@ class NeighborlistForInference(torch.nn.Module):
                 pair_indices=pairs,
                 d_ij=d_ij[in_cutoff],
                 r_ij=r_ij[in_cutoff],
+                only_unique_pairs=only_unique_pairs,
             )
 
         else:
@@ -587,10 +626,15 @@ class NeighborlistForInference(torch.nn.Module):
                 pair_indices=pairs_full,
                 d_ij=d_ij_full,
                 r_ij=r_ij_full,
+                only_unique_pairs=only_unique_pairs,
             )
 
     def _in_cutoff_verlet(
-        self, cutoff: float, d_ij: torch.Tensor, r_ij: torch.Tensor
+        self,
+        cutoff: float,
+        d_ij: torch.Tensor,
+        r_ij: torch.Tensor,
+        only_unique_pairs: bool,
     ) -> PairlistData:
         """
         Check if the distances are within the cutoff and return the pair indices, distances, and displacement vectors.
@@ -603,18 +647,21 @@ class NeighborlistForInference(torch.nn.Module):
             The distances between atom pairs.
         r_ij : torch.Tensor
             The displacement vectors between atom pairs.
+        only_unique_pairs: bool
+            Whether to only use unique pairs or all pairs.
 
         Returns
         -------
         PairlistData
-            Contains pair indices, distances (d_ij), and displacement vectors (r_ij) for atom pairs within the cutoff.
+            Contains pair indices, distances (d_ij), displacement vectors (r_ij) for atom pairs within the cutoff and
+            wether unique pairs are included.
         """
         in_cutoff = (d_ij <= cutoff).squeeze().reshape(-1)
         total_pairs = in_cutoff.sum()
 
         # we can take advantage of the pairwise nature to just copy the unique pairs to non-unique pairs
         # copying is generally faster than the extra computations associated with considering non-unique pairs
-        if self.only_unique_pairs:
+        if only_unique_pairs:
             # using this approach instead of torch.stack to ensure that if we only have a single pair
             # we don't run into an issue with shapes.
 
@@ -627,6 +674,7 @@ class NeighborlistForInference(torch.nn.Module):
                 pair_indices=pairs,
                 d_ij=d_ij[in_cutoff],
                 r_ij=r_ij[in_cutoff],
+                only_unique_pairs=only_unique_pairs,
             )
 
         else:
@@ -641,6 +689,7 @@ class NeighborlistForInference(torch.nn.Module):
                 pair_indices=pairs_full,
                 d_ij=d_ij_full,
                 r_ij=r_ij_full,
+                only_unique_pairs=only_unique_pairs,
             )
 
     def _forward_brute(self, data: NNPInput):
@@ -699,11 +748,20 @@ class NeighborlistForInference(torch.nn.Module):
             data.is_periodic,
         )
 
-        # loop over the cutoff names and determine those in range
+        # loop over the local cutoff names and determine those in range
+        # this will use the only_unique_pairs set at initialization as this should be associated with the NNP
+        pair_output_local = self._in_cutoff_brute(
+            cutoff=self.local_cutoff,
+            d_ij=d_ij,
+            r_ij=r_ij,
+            only_unique_pairs=self.only_unique_pairs,
+        )
 
-        pair_output_local = self._in_cutoff_brute(self.local_cutoff, d_ij, r_ij)
+        # vdw cutoff should always use all pairs
         if self.use_vdw_cutoff:
-            pair_output_vdw = self._in_cutoff_brute(self.vdw_cutoff, d_ij, r_ij)
+            pair_output_vdw = self._in_cutoff_brute(
+                cutoff=self.vdw_cutoff, d_ij=d_ij, r_ij=r_ij, only_unique_pairs=False
+            )
         else:
             # if we are not using the vdw cutoff, we return an empty pair list
             pair_output_vdw = PairlistData(
@@ -712,10 +770,12 @@ class NeighborlistForInference(torch.nn.Module):
                 ),
                 d_ij=torch.empty(0, dtype=d_ij.dtype, device=d_ij.device),
                 r_ij=torch.empty(0, dtype=r_ij.dtype, device=r_ij.device),
+                only_unique_pairs=False,
             )
+        # the electrostatic cutoff should use the only unique pairs
         if self.use_electrostatic_cutoff:
             pair_output_electrostatic = self._in_cutoff_brute(
-                self.electrostatic_cutoff, d_ij, r_ij
+                self.electrostatic_cutoff, d_ij, r_ij, only_unique_pairs=True
             )
         else:
             # if we are not using the electrostatic cutoff, we return an empty pair list
@@ -726,6 +786,7 @@ class NeighborlistForInference(torch.nn.Module):
                 ),
                 d_ij=torch.empty(0, dtype=d_ij.dtype, device=d_ij.device),
                 r_ij=torch.empty(0, dtype=r_ij.dtype, device=r_ij.device),
+                only_unique_pairs=True,
             )
 
         return PairlistOutputs(
@@ -819,9 +880,13 @@ class NeighborlistForInference(torch.nn.Module):
                 data.is_periodic,
             )
 
-        pair_output_local = self._in_cutoff_verlet(self.local_cutoff, d_ij, r_ij)
+        pair_output_local = self._in_cutoff_verlet(
+            self.local_cutoff, d_ij, r_ij, self.only_unique_pairs
+        )
         if self.use_vdw_cutoff:
-            pair_output_vdw = self._in_cutoff_verlet(self.vdw_cutoff, d_ij, r_ij)
+            pair_output_vdw = self._in_cutoff_verlet(
+                self.vdw_cutoff, d_ij, r_ij, only_unique_pairs=False
+            )
         else:
             pair_output_vdw = PairlistData(
                 pair_indices=torch.empty(
@@ -829,10 +894,11 @@ class NeighborlistForInference(torch.nn.Module):
                 ),
                 d_ij=torch.empty(0, dtype=d_ij.dtype, device=d_ij.device),
                 r_ij=torch.empty(0, dtype=r_ij.dtype, device=r_ij.device),
+                only_unique_pairs=False,
             )
         if self.use_electrostatic_cutoff:
             pair_output_electrostatic = self._in_cutoff_verlet(
-                self.electrostatic_cutoff, d_ij, r_ij
+                self.electrostatic_cutoff, d_ij, r_ij, only_unique_pairs=True
             )
         else:
             pair_output_electrostatic = PairlistData(
@@ -841,6 +907,7 @@ class NeighborlistForInference(torch.nn.Module):
                 ),
                 d_ij=torch.empty(0, dtype=d_ij.dtype, device=d_ij.device),
                 r_ij=torch.empty(0, dtype=r_ij.dtype, device=r_ij.device),
+                only_unique_pairs=True,
             )
         # return a dictionary of PairlistData objects for each cutoff
         return PairlistOutputs(
@@ -864,6 +931,8 @@ class NeighborListForTraining(torch.nn.Module):
         Calculate the neighboring pairs within the specified cutoffs.
 
         This is intended for use during training, as this utilizes the pre-computed list of all pairs from the dataset.
+        If pairs are not provided, they will be recomputed.
+
 
         Parameters
         ----------
@@ -874,7 +943,7 @@ class NeighborListForTraining(torch.nn.Module):
         electrostatic_cutoff : float, optional
             The cutoff distance for electrostatic interactions (default is -1, meaning no electrostatic cutoff).
         only_unique_pairs : bool, optional
-            If True, only unique pairs are returned (default is False).
+            If True, only unique pairs are returned for the local cutoff (default is False).
         use_vdw_cutoff : bool, optional
             If True, the van der Waals cutoff is used (default is False).
         use_electrostatic_cutoff : bool, optional
@@ -884,7 +953,10 @@ class NeighborListForTraining(torch.nn.Module):
         super().__init__()
 
         # self.only_unique_pairs = only_unique_pairs
-        self.pairlist = Pairlist(only_unique_pairs)
+
+        # in case we need to generate the pairlist, we should always generate all the pairs
+        # since we may need the full list for, say VDW interactions
+        self.pairlist = Pairlist(only_unique_pairs=False)
 
         self.cutoff_names = ["local_cutoff", "vdw_cutoff", "electrostatic_cutoff"]
         self.register_buffer("local_cutoff", torch.tensor(local_cutoff))
@@ -968,6 +1040,7 @@ class NeighborListForTraining(torch.nn.Module):
         positions: torch.Tensor,
         pair_indices: torch.Tensor,
         cutoff: torch.Tensor,
+        only_unique_pairs: bool,
     ) -> PairlistData:
         """
         Compute the neighbor list considering a cutoff distance.
@@ -980,25 +1053,42 @@ class NeighborListForTraining(torch.nn.Module):
             Precomputed pair indices.
         cutoff : torch.Tensor
             Cutoff distance for filtering pairs.
+        only_unique_pairs : bool
+            If True, only consider unique pairs (half list); False has all pairs (full list)
         Returns
         -------
-        Dict[str, PairListOutputs]
-            A dictionary containing dataclasses  for the 'pair_indices', 'd_ij' (distances), and 'r_ij' (displacement vectors).
-            The keys in the dictionary correspond to the names of the provide cutoffs.
+        PairListOutputs
+           dataclasses  for the 'pair_indices', 'd_ij' (distances), 'r_ij' (displacement vectors) and only_unique_pairs status.
         """
+        # when we precompute the pairlist, we included all pairs, i.e., including non-unique
+        # since we do this before we know about which potential we are using
+        # and whether we require unique pairs or not
+        # thus, if the pairlist is provided we need to remove redundant pairs if requested
 
-        r_ij = self.calculate_r_ij(pair_indices, positions)
+        if only_unique_pairs:
+            i_indices = pair_indices[0]
+            j_indices = pair_indices[1]
+            unique_pairs_mask = i_indices < j_indices
+            i_final_pairs = i_indices[unique_pairs_mask]
+            j_final_pairs = j_indices[unique_pairs_mask]
+        else:
+            i_final_pairs = pair_indices[0]
+            j_final_pairs = pair_indices[1]
+
+        pair_indices_temp = torch.stack((i_final_pairs, j_final_pairs))
+        r_ij = self.calculate_r_ij(pair_indices_temp, positions)
         d_ij = self.calculate_d_ij(r_ij)
 
         # Create a mask for pairs within the cutoff distance
         in_cutoff = (d_ij <= cutoff).squeeze().reshape(-1)
         # Get the atom indices within the cutoff
-        pair_indices_within_cutoff = pair_indices[:, in_cutoff]
+        pair_indices_within_cutoff = pair_indices_temp[:, in_cutoff]
 
         return PairlistData(
             pair_indices=pair_indices_within_cutoff,
             d_ij=d_ij[in_cutoff],
             r_ij=r_ij[in_cutoff],
+            only_unique_pairs=only_unique_pairs,
         )
 
     def forward(self, data: Union[NNPInput, NamedTuple]) -> PairlistOutputs:
@@ -1032,29 +1122,22 @@ class NeighborListForTraining(torch.nn.Module):
         else:
             pair_list = data.pair_list
 
-            # when we precompute the pairlist, we included all pairs, including non-unique
-            # since we do this before we know about which potential we are using
-            # and whether we require unique pairs or not
-            # thus, if the pairlist is provided we need to remove redundant pairs if requested
-            if self.only_unique_pairs:
-                i_indices = pair_list[0]
-                j_indices = pair_list[1]
-                unique_pairs_mask = i_indices < j_indices
-                i_final_pairs = i_indices[unique_pairs_mask]
-                j_final_pairs = j_indices[unique_pairs_mask]
-                pair_list = torch.stack((i_final_pairs, j_final_pairs))
-
         # from the pairs list, calculate the interacting pairs
+        # this is for the local cutoff, i.e., the core of the NNP
         pairlist_output_local = self._calculate_interacting_pairs(
             positions=positions,
             pair_indices=pair_list.to(torch.int64),
             cutoff=self.local_cutoff,
+            only_unique_pairs=self.only_unique_pairs,
         )
+        # vdw will always use the full neighborlist
+        # i.e., only_unique_pairs = False
         if self.use_vdw_cutoff:
             pairlist_output_vdw = self._calculate_interacting_pairs(
                 positions=positions,
                 pair_indices=pair_list.to(torch.int64),
                 cutoff=self.vdw_cutoff,
+                only_unique_pairs=False,
             )
         else:
             # if we are not using the vdw cutoff, we return an empty pairlist
@@ -1065,12 +1148,16 @@ class NeighborListForTraining(torch.nn.Module):
                 ),
                 d_ij=torch.empty(0, dtype=torch.int64, device=positions.device),
                 r_ij=torch.empty(0, dtype=torch.int64, device=positions.device),
+                only_unique_pairs=False,
             )
+        # electrostatics only uses the half neighborlist
+        # i.e., only_unique_pairs = True
         if self.use_electrostatic_cutoff:
             pairlist_output_electrostatic = self._calculate_interacting_pairs(
                 positions=positions,
                 pair_indices=pair_list.to(torch.int64),
                 cutoff=self.electrostatic_cutoff,
+                only_unique_pairs=True,
             )
         else:
             # if we are not using the electrostatic cutoff, we return an empty pairlist
@@ -1081,6 +1168,7 @@ class NeighborListForTraining(torch.nn.Module):
                 ),
                 d_ij=torch.empty(0, dtype=torch.int64, device=positions.device),
                 r_ij=torch.empty(0, dtype=torch.int64, device=positions.device),
+                only_unique_pairs=True,
             )
 
         return PairlistOutputs(

@@ -872,7 +872,7 @@ def test_neighborlist_multiple_cutoffs():
     assert torch.allclose(output.local_cutoff.r_ij, torch.tensor([[1.0, 0.0, 0.0]]))
     assert torch.allclose(output.local_cutoff.d_ij, torch.tensor([[1.0]]))
 
-    assert output.vdw_cutoff.only_unique_pairs == False
+    assert torch.all(output.vdw_cutoff.only_unique_pairs == False)
     assert torch.allclose(
         output.vdw_cutoff.pair_indices,
         torch.tensor(
@@ -901,7 +901,7 @@ def test_neighborlist_multiple_cutoffs():
 
     # the electrostatic neighborlist returns the half neighborlist, i.e only_unique_pairs=True
 
-    assert output.electrostatic_cutoff.only_unique_pairs == True
+    assert torch.all(output.electrostatic_cutoff.only_unique_pairs == True)
     assert torch.allclose(
         output.electrostatic_cutoff.pair_indices,
         torch.tensor([[0, 0, 1, 2], [1, 2, 2, 3]]),
@@ -934,7 +934,7 @@ def test_neighborlist_multiple_cutoffs():
     # vdw cutoff will return the full neighborlist
 
     print(output.vdw_cutoff)
-    assert output.vdw_cutoff.only_unique_pairs == False
+    assert torch.all(output.vdw_cutoff.only_unique_pairs == False)
 
     assert torch.allclose(
         output.vdw_cutoff.pair_indices,

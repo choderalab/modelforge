@@ -351,7 +351,7 @@ def test_dimer_representation():
     # set up neighbor list
     nlist = NeighborListForTraining(
         local_cutoff=0.51,
-        only_unique_pairs=True,
+        local_only_unique_pairs=True,
     )
 
     nlist_output = nlist.forward(dimer_system)

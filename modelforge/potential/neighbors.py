@@ -21,14 +21,14 @@ class PairlistData(NamedTuple):
         A tensor of shape (n_pairs, 1) containing the Euclidean distances between the atoms in each pair.
     r_ij : torch.Tensor
         A tensor of shape (n_pairs, 3) containing the displacement vectors between the atoms in each pair.
-    only_unique_pairs : bool
+    only_unique_pairs : torch.Tensor
         If True, only unique pairs are include (i.e. "half" list); if False, all pairs are included (i.e., "full: list)
     """
 
     pair_indices: torch.Tensor
     d_ij: torch.Tensor
     r_ij: torch.Tensor
-    only_unique_pairs: bool
+    only_unique_pairs: torch.Tensor
 
 
 class PairlistOutputs(NamedTuple):
@@ -308,7 +308,7 @@ class Pairlist(torch.nn.Module):
             pair_indices=pair_indices,
             d_ij=self.calculate_d_ij(r_ij),
             r_ij=r_ij,
-            only_unique_pairs=self.only_unique_pairs,
+            only_unique_pairs=torch.Tensor([self.only_unique_pairs]),
         )
 
 
@@ -590,7 +590,7 @@ class NeighborlistForInference(torch.nn.Module):
         cutoff: float,
         d_ij: torch.Tensor,
         r_ij: torch.Tensor,
-        only_unique_pairs: bool,
+        only_unique_pairs: torch.Tensor,
     ) -> PairlistData:
         """
         Calculates which pairs are in the cutoff  using the brute force approach
@@ -603,7 +603,7 @@ class NeighborlistForInference(torch.nn.Module):
             Tensor containing the distance between pairs
         r_ij: torch.Tensor
             Tensor containing the displacement vector between pairs
-        only_unique_pairs: bool
+        only_unique_pairs: torch.Tensor
             Whether to only use unique pairs or all
 
         Returns
@@ -613,7 +613,7 @@ class NeighborlistForInference(torch.nn.Module):
         in_cutoff = (d_ij <= cutoff).squeeze().reshape(-1)
         total_pairs = in_cutoff.sum()
 
-        if only_unique_pairs:
+        if torch.all(only_unique_pairs == True):
             # using this instead of torch.stack to ensure that if we only have a single pair
             # we don't run into an issue with tensor shapes.
             # note this will fail if there are no interacting pairs
@@ -651,7 +651,7 @@ class NeighborlistForInference(torch.nn.Module):
         cutoff: float,
         d_ij: torch.Tensor,
         r_ij: torch.Tensor,
-        only_unique_pairs: bool,
+        only_unique_pairs: torch.Tensor,
     ) -> PairlistData:
         """
         Check if the distances are within the cutoff and return the pair indices, distances, and displacement vectors.
@@ -664,7 +664,7 @@ class NeighborlistForInference(torch.nn.Module):
             The distances between atom pairs.
         r_ij : torch.Tensor
             The displacement vectors between atom pairs.
-        only_unique_pairs: bool
+        only_unique_pairs: torch.Tensor
             Whether to only use unique pairs or all pairs.
 
         Returns
@@ -678,7 +678,7 @@ class NeighborlistForInference(torch.nn.Module):
 
         # we can take advantage of the pairwise nature to just copy the unique pairs to non-unique pairs
         # copying is generally faster than the extra computations associated with considering non-unique pairs
-        if only_unique_pairs:
+        if torch.all(only_unique_pairs == True):
             # using this approach instead of torch.stack to ensure that if we only have a single pair
             # we don't run into an issue with shapes.
 
@@ -1087,7 +1087,7 @@ class NeighborListForTraining(torch.nn.Module):
         positions: torch.Tensor,
         pair_indices: torch.Tensor,
         cutoff: torch.Tensor,
-        only_unique_pairs: bool,
+        only_unique_pairs: torch.Tensor,
     ) -> PairlistData:
         """
         Compute the neighbor list considering a cutoff distance.
@@ -1112,7 +1112,7 @@ class NeighborListForTraining(torch.nn.Module):
         # and whether we require unique pairs or not
         # thus, if the pairlist is provided we need to remove redundant pairs if requested
 
-        if only_unique_pairs:
+        if torch.all(only_unique_pairs == True):
             i_indices = pair_indices[0]
             j_indices = pair_indices[1]
             unique_pairs_mask = i_indices < j_indices

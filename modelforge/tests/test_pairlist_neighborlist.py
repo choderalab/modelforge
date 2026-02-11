@@ -8,6 +8,7 @@ def prep_temp_dir(tmp_path_factory):
 
 
 def test_pairlist_logic():
+    # note this test does not really do anything at the moment in terms of testing the code
     import torch
 
     # dummy data for illustration
@@ -76,14 +77,18 @@ def test_pairlist_logic():
 
 
 def test_neighborlist_unique_pairs_only_local():
+    # this test will look at the "local_cutoff" output from the neighborlist,
+    # when we are only considering unique pairs for a system with two molecules
     import torch
     from collections import namedtuple
-    from modelforge.potential.neighbors import NeighborListForTraining, Pairlist
+    from modelforge.potential.neighbors import NeighborListForTraining
 
+    # just set up a named tuple to simulate the input
     TestInput = namedtuple(
         "TestInput", ["positions", "atomic_subsystem_indices", "pair_list"]
     )
 
+    # a system with two molecules
     atomic_subsystem_indices = torch.tensor([0, 0, 0, 1, 1, 1])
     positions = torch.tensor(
         [
@@ -95,28 +100,40 @@ def test_neighborlist_unique_pairs_only_local():
             [5.0, 5.0, 5.0],
         ]
     )
-    from openff.units import unit
 
-    cutoff = unit.Quantity(5.0, unit.nanometer).to(unit.nanometer).m
+    # define a cutoff of 5 and initialzie the neighborlist
+    cutoff = 5.0
     nlist = NeighborListForTraining(local_cutoff=cutoff, only_unique_pairs=True)
 
-    # note, recall that nlist output is a named tuple with 3 attributes:
+    # note, the nlist output is a named tuple with 3 attributes:
     # local_cutoff, vdw_cutoff, and electrostatic_cutoff
-    # Each of these attributes contains the PairListOutput.
+    # Each of these attributes contains an instance of PairListOutput containing relevant info.
+    # just grab the information related to the local_cutoff
 
     r = nlist(TestInput(positions, atomic_subsystem_indices, None)).local_cutoff
     pair_indices = r.pair_indices
 
     # pairlist describes the pairs of interacting atoms within a batch
     # that means for the pairlist provided below:
-    # pair0: pairlist[0][0] and pairlist[1][0], i.e. (0,1)
-    # pair1: pairlist[0][1] and pairlist[1][1], i.e. (0,2)
-    # pair2: pairlist[0][2] and pairlist[1][2], i.e. (1,2)
+    # pair0: pairlist[0][0] and pairlist[1][0], i.e. pairs (0,1)
+    # pair1: pairlist[0][1] and pairlist[1][1], i.e. pairs (0,2)
+    # pair2: pairlist[0][2] and pairlist[1][2], i.e. pairs (1,2)
+    # etc.
 
+    assert r.only_unique_pairs == True
+    assert pair_indices.shape[0] == 2
+    assert pair_indices.shape[1] == 6
     assert torch.allclose(
         pair_indices, torch.tensor([[0, 0, 1, 3, 3, 4], [1, 2, 2, 4, 5, 5]])
     )
     # NOTE: pairs are defined on axis=1 and not axis=0
+    # note, the algorithm used to initialize pairs in the training neighborlist (or to calculate them in the
+    # pre-computation step) is slightly different than what is done in the inference neighborlist.
+    # The training neighborlist is designed to operate on large batches of systems whereas the inference neighborlist
+    # is designed to work on a single system (single system does not have the memory constraints as a large batch).
+    # The output in total is the same, but the order of indices of the "j-pairs" may differ
+
+    # for the 6 pairs
     assert torch.allclose(
         r.r_ij,
         torch.tensor(
@@ -130,14 +147,13 @@ def test_neighborlist_unique_pairs_only_local():
             ]
         ),
     )
-    assert r.only_unique_pairs == True
     assert torch.allclose(
         r.d_ij,
         torch.tensor([[1.7321], [3.4641], [1.7321], [1.7321], [3.4641], [1.7321]]),
         atol=1e-3,
     )
 
-    # test with smaller  cutoff
+    # test with smaller cutoff
     cutoff = unit.Quantity(2.0, unit.nanometer).to(unit.nanometer).m
     nlist = NeighborListForTraining(local_cutoff=cutoff, only_unique_pairs=True)
     r = nlist(TestInput(positions, atomic_subsystem_indices, None)).local_cutoff
@@ -159,6 +175,129 @@ def test_neighborlist_unique_pairs_only_local():
 
     assert torch.allclose(
         r.d_ij, torch.tensor([1.7321, 1.7321, 1.7321, 1.7321]), atol=1e-3
+    )
+
+
+def test_neighborlist_local_larger_batch():
+    import torch
+    from collections import namedtuple
+    from modelforge.potential.neighbors import NeighborListForTraining, Pairlist
+
+    TestInput = namedtuple(
+        "TestInput", ["positions", "atomic_subsystem_indices", "pair_list"]
+    )
+
+    atomic_subsystem_indices = torch.tensor([0, 0, 0, 1, 1, 1, 2, 2])
+    positions = torch.tensor(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [2.0, 0.0, 0.0],
+            [3.0, 0.0, 0.0],
+            [4.0, 0.0, 0.0],
+            [5.0, 0.0, 0.0],
+            [6.0, 0.0, 0.0],
+            [7.0, 0.0, 0.0],
+        ]
+    )
+
+    cutoff = 2.1
+
+    nlist = NeighborListForTraining(local_cutoff=cutoff, only_unique_pairs=True)
+
+    r = nlist(TestInput(positions, atomic_subsystem_indices, None)).local_cutoff
+    assert r.only_unique_pairs == True
+
+    assert r.pair_indices.shape[0] == 2
+    assert r.pair_indices.shape[1] == 7
+    assert torch.allclose(
+        r.pair_indices, torch.tensor([[0, 0, 1, 3, 3, 4, 6], [1, 2, 2, 4, 5, 5, 7]])
+    )
+    # NOTE: pairs are defined on axis=1 and not axis=0
+    assert torch.allclose(
+        r.r_ij,
+        torch.tensor(
+            [
+                [1.0, 0.0, 0.0],  # pair0 (0,1):
+                [2.0, 0.0, 0.0],  # pair1 (0,2):
+                [1.0, 0.0, 0.0],  # pair2 (1,2):
+                [1.0, 0.0, 0.0],  # pair3 (3,4):
+                [2.0, 0.0, 0.0],  # pair4 (3,5):
+                [1.0, 0.0, 0.0],  # pair5 (4,5):
+                [1.0, 0.0, 0.0],  # pair6 (6,7):
+            ]
+        ),
+    )
+    assert torch.allclose(
+        r.d_ij,
+        torch.tensor([[1.0], [2.0], [1.0], [1.0], [2.0], [1.0], [1.0]]),
+        atol=1e-3,
+    )
+
+    # check to see with only_unique_pairs=False
+    cutoff = 2.1
+
+    nlist = NeighborListForTraining(local_cutoff=cutoff, only_unique_pairs=False)
+
+    r = nlist(TestInput(positions, atomic_subsystem_indices, None)).local_cutoff
+    assert r.only_unique_pairs == False
+
+    assert r.pair_indices.shape[0] == 2
+    assert r.pair_indices.shape[1] == 14
+    assert torch.allclose(
+        r.pair_indices,
+        torch.tensor(
+            [
+                [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7],
+                [1, 2, 0, 2, 0, 1, 4, 5, 3, 5, 3, 4, 7, 6],
+            ]
+        ),
+    )
+    # NOTE: pairs are defined on axis=1 and not axis=0
+    assert torch.allclose(
+        r.r_ij,
+        torch.tensor(
+            [
+                [
+                    [1.0, 0.0, 0.0],
+                    [2.0, 0.0, 0.0],
+                    [-1.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                    [-2.0, 0.0, 0.0],
+                    [-1.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                    [2.0, 0.0, 0.0],
+                    [-1.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                    [-2.0, 0.0, 0.0],
+                    [-1.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                    [-1.0, 0.0, 0.0],
+                ]
+            ]
+        ),
+    )
+    assert torch.allclose(
+        r.d_ij,
+        torch.tensor(
+            [
+                [1.0],
+                [2.0],
+                [1.0],
+                [1.0],
+                [2.0],
+                [1.0],
+                [1.0],
+                [2.0],
+                [1.0],
+                [1.0],
+                [2.0],
+                [1.0],
+                [1.0],
+                [1.0],
+            ]
+        ),
+        atol=1e-3,
     )
 
 

@@ -226,7 +226,8 @@ class Pairlist(torch.nn.Module):
             # concatenate to form final (2, n_pairs) vector
             pair_indices = np.stack((i_final_pairs, j_final_pairs))
 
-            return pair_indices, npairs_by_molecule / 2
+            # use integer division to keep per-molecule pair counts as integer dtype
+            return pair_indices, npairs_by_molecule // 2
 
         else:
             # filter out identical pairs where i==j

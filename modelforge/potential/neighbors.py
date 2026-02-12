@@ -919,8 +919,8 @@ class NeighborlistForInference(torch.nn.Module):
                 pair_indices=torch.empty(
                     2, 0, dtype=torch.int64, device=positions.device
                 ),
-                d_ij=torch.empty(0, dtype=d_ij.dtype, device=d_ij.device),
-                r_ij=torch.empty(0, dtype=r_ij.dtype, device=r_ij.device),
+                d_ij=torch.empty((0, 1), dtype=d_ij.dtype, device=d_ij.device),
+                r_ij=torch.empty((0, 3), dtype=r_ij.dtype, device=r_ij.device),
                 only_unique_pairs=self.vdw_only_unique_pairs,
             )
         if self.use_electrostatic_cutoff:
@@ -935,8 +935,8 @@ class NeighborlistForInference(torch.nn.Module):
                 pair_indices=torch.empty(
                     2, 0, dtype=torch.int64, device=positions.device
                 ),
-                d_ij=torch.empty(0, dtype=d_ij.dtype, device=d_ij.device),
-                r_ij=torch.empty(0, dtype=r_ij.dtype, device=r_ij.device),
+                d_ij=torch.empty((0, 1), dtype=d_ij.dtype, device=d_ij.device),
+                r_ij=torch.empty((0, 3), dtype=r_ij.dtype, device=r_ij.device),
                 only_unique_pairs=self.electrostatic_only_unique_pairs,
             )
         # return a dictionary of PairlistData objects for each cutoff
@@ -1194,8 +1194,12 @@ class NeighborListForTraining(torch.nn.Module):
                 pair_indices=torch.empty(
                     2, 0, dtype=torch.int64, device=positions.device
                 ),
-                d_ij=torch.empty(0, dtype=torch.int64, device=positions.device),
-                r_ij=torch.empty(0, dtype=torch.int64, device=positions.device),
+                d_ij=torch.empty(
+                    (0, 1), dtype=positions.dtype, device=positions.device
+                ),
+                r_ij=torch.empty(
+                    (0, 3), dtype=positions.dtype, device=positions.device
+                ),
                 only_unique_pairs=self.vdw_only_unique_pairs,
             )
         # electrostatics only uses the half neighborlist
@@ -1214,8 +1218,12 @@ class NeighborListForTraining(torch.nn.Module):
                 pair_indices=torch.empty(
                     2, 0, dtype=torch.int64, device=positions.device
                 ),
-                d_ij=torch.empty(0, dtype=torch.int64, device=positions.device),
-                r_ij=torch.empty(0, dtype=torch.int64, device=positions.device),
+                d_ij=torch.empty(
+                    (0, 1), dtype=positions.dtype, device=positions.device
+                ),
+                r_ij=torch.empty(
+                    (0, 3), dtype=positions.dtype, device=positions.device
+                ),
                 only_unique_pairs=self.electrostatic_only_unique_pairs,
             )
 

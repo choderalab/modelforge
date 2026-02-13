@@ -8,6 +8,7 @@ def prep_temp_dir(tmp_path_factory):
 
 
 def test_pairlist_logic():
+    # note this test does not really do anything at the moment in terms of testing the code
     import torch
 
     # dummy data for illustration
@@ -75,15 +76,19 @@ def test_pairlist_logic():
     )
 
 
-def test_pairlist():
+def test_neighborlist_unique_pairs_only_local():
+    # this test will look at the "local_cutoff" output from the neighborlist,
+    # when we are only considering unique pairs for a system with two molecules
     import torch
     from collections import namedtuple
-    from modelforge.potential.neighbors import NeighborListForTraining, Pairlist
+    from modelforge.potential.neighbors import NeighborListForTraining
 
+    # just set up a named tuple to simulate the input
     TestInput = namedtuple(
         "TestInput", ["positions", "atomic_subsystem_indices", "pair_list"]
     )
 
+    # a system with two molecules
     atomic_subsystem_indices = torch.tensor([0, 0, 0, 1, 1, 1])
     positions = torch.tensor(
         [
@@ -95,45 +100,69 @@ def test_pairlist():
             [5.0, 5.0, 5.0],
         ]
     )
-    from openff.units import unit
 
-    cutoff = unit.Quantity(5.0, unit.nanometer).to(unit.nanometer).m
-    nlist = NeighborListForTraining(local_cutoff=cutoff, only_unique_pairs=True)
+    # define a cutoff of 5 and initialzie the neighborlist
+    cutoff = 5.0
+    nlist = NeighborListForTraining(local_cutoff=cutoff, local_only_unique_pairs=True)
 
-    # note, recall that nlist output is a named tuple with 3 attributes:
+    # note, the nlist output is a named tuple with 3 attributes:
     # local_cutoff, vdw_cutoff, and electrostatic_cutoff
-    # Each of these attributes contains the PairListOutput.
+    # Each of these attributes contains an instance of PairListOutput containing relevant info.
+    # just grab the information related to the local_cutoff
 
-    r = nlist(TestInput(positions, atomic_subsystem_indices, None)).local_cutoff
+    output = nlist(TestInput(positions, atomic_subsystem_indices, None))
+
+    # do a quick test to ensure that VDW and electrostatic are False and True, respectively. i.e., not impacted
+    # by the local_cutoff setting
+    assert output.vdw_cutoff.only_unique_pairs == False
+    assert output.electrostatic_cutoff.only_unique_pairs == True
+
+    r = output.local_cutoff
     pair_indices = r.pair_indices
 
     # pairlist describes the pairs of interacting atoms within a batch
     # that means for the pairlist provided below:
-    # pair1: pairlist[0][0] and pairlist[1][0], i.e. (0,1)
-    # pair2: pairlist[0][1] and pairlist[1][1], i.e. (0,2)
-    # pair3: pairlist[0][2] and pairlist[1][2], i.e. (1,2)
+    # pair0: pairlist[0][0] and pairlist[1][0], i.e. pairs (0,1)
+    # pair1: pairlist[0][1] and pairlist[1][1], i.e. pairs (0,2)
+    # pair2: pairlist[0][2] and pairlist[1][2], i.e. pairs (1,2)
+    # etc.
 
+    assert r.only_unique_pairs == True
+    assert pair_indices.shape[0] == 2
+    assert pair_indices.shape[1] == 6
     assert torch.allclose(
         pair_indices, torch.tensor([[0, 0, 1, 3, 3, 4], [1, 2, 2, 4, 5, 5]])
     )
     # NOTE: pairs are defined on axis=1 and not axis=0
+    # note, the algorithm used to initialize pairs in the training neighborlist (or to calculate them in the
+    # pre-computation step) is slightly different than what is done in the inference neighborlist.
+    # The training neighborlist is designed to operate on large batches of systems whereas the inference neighborlist
+    # is designed to work on a single system (single system does not have the memory constraints as a large batch).
+    # The output in total is the same, but the order of indices of the "j-pairs" may differ
+
+    # for the 6 pairs
     assert torch.allclose(
         r.r_ij,
         torch.tensor(
             [
-                [1.0, 1.0, 1.0],  # pair1, [1.0, 1.0, 1.0] - [0.0, 0.0, 0.0]
-                [2.0, 2.0, 2.0],  # pair2, [2.0, 2.0, 2.0] - [0.0, 0.0, 0.0]
-                [1.0, 1.0, 1.0],  # pair3, [3.0, 3.0, 3.0] - [0.0, 0.0, 0.0]
-                [1.0, 1.0, 1.0],
-                [2.0, 2.0, 2.0],
-                [1.0, 1.0, 1.0],
+                [1.0, 1.0, 1.0],  # pair0 (0,1): j-i:  [1.0, 1.0, 1.0] - [0.0, 0.0, 0.0]
+                [2.0, 2.0, 2.0],  # pair1 (0,2):  [2.0, 2.0, 2.0] - [0.0, 0.0, 0.0]
+                [1.0, 1.0, 1.0],  # pair2 (1,2): [2.0, 2.0, 3.0] - [1.0,1.0, 1.0]
+                [1.0, 1.0, 1.0],  # pair3 (3,4): [4.0, 4.0, 4.0] - [3.0, 3.0, 3.0]
+                [2.0, 2.0, 2.0],  # pair4 (3,5): [5.0, 5.0, 5.0] - [3.0, 3.0, 3.0]
+                [1.0, 1.0, 1.0],  # pair (4,5): [5.0, 5.0, 5.0] - [4.0, 4.0, 4.0]
             ]
         ),
     )
+    assert torch.allclose(
+        r.d_ij,
+        torch.tensor([[1.7321], [3.4641], [1.7321], [1.7321], [3.4641], [1.7321]]),
+        atol=1e-3,
+    )
 
-    # test with cutoff
-    cutoff = unit.Quantity(2.0, unit.nanometer).to(unit.nanometer).m
-    nlist = NeighborListForTraining(local_cutoff=cutoff, only_unique_pairs=True)
+    # test with smaller cutoff
+    cutoff = 2.0
+    nlist = NeighborListForTraining(local_cutoff=cutoff, local_only_unique_pairs=True)
     r = nlist(TestInput(positions, atomic_subsystem_indices, None)).local_cutoff
     pair_indices = r.pair_indices
 
@@ -155,11 +184,159 @@ def test_pairlist():
         r.d_ij, torch.tensor([1.7321, 1.7321, 1.7321, 1.7321]), atol=1e-3
     )
 
+
+def test_neighborlist_local_larger_batch():
+    import torch
+    from collections import namedtuple
+    from modelforge.potential.neighbors import NeighborListForTraining, Pairlist
+
+    TestInput = namedtuple(
+        "TestInput", ["positions", "atomic_subsystem_indices", "pair_list"]
+    )
+
+    atomic_subsystem_indices = torch.tensor([0, 0, 0, 1, 1, 1, 2, 2])
+    positions = torch.tensor(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [2.0, 0.0, 0.0],
+            [3.0, 0.0, 0.0],
+            [4.0, 0.0, 0.0],
+            [5.0, 0.0, 0.0],
+            [6.0, 0.0, 0.0],
+            [7.0, 0.0, 0.0],
+        ]
+    )
+
+    cutoff = 2.1
+
+    nlist = NeighborListForTraining(local_cutoff=cutoff, local_only_unique_pairs=True)
+
+    r = nlist(TestInput(positions, atomic_subsystem_indices, None)).local_cutoff
+    assert r.only_unique_pairs == True
+
+    assert r.pair_indices.shape[0] == 2
+    assert r.pair_indices.shape[1] == 7
+    assert torch.allclose(
+        r.pair_indices, torch.tensor([[0, 0, 1, 3, 3, 4, 6], [1, 2, 2, 4, 5, 5, 7]])
+    )
+    # NOTE: pairs are defined on axis=1 and not axis=0
+    assert torch.allclose(
+        r.r_ij,
+        torch.tensor(
+            [
+                [1.0, 0.0, 0.0],  # pair0 (0,1):
+                [2.0, 0.0, 0.0],  # pair1 (0,2):
+                [1.0, 0.0, 0.0],  # pair2 (1,2):
+                [1.0, 0.0, 0.0],  # pair3 (3,4):
+                [2.0, 0.0, 0.0],  # pair4 (3,5):
+                [1.0, 0.0, 0.0],  # pair5 (4,5):
+                [1.0, 0.0, 0.0],  # pair6 (6,7):
+            ]
+        ),
+    )
+    assert torch.allclose(
+        r.d_ij,
+        torch.tensor([[1.0], [2.0], [1.0], [1.0], [2.0], [1.0], [1.0]]),
+        atol=1e-3,
+    )
+
+    # check to see with only_unique_pairs=False
+    cutoff = 2.1
+
+    nlist = NeighborListForTraining(local_cutoff=cutoff, local_only_unique_pairs=False)
+
+    r = nlist(TestInput(positions, atomic_subsystem_indices, None)).local_cutoff
+    assert r.only_unique_pairs == False
+
+    assert r.pair_indices.shape[0] == 2
+    assert r.pair_indices.shape[1] == 14
+    assert torch.allclose(
+        r.pair_indices,
+        torch.tensor(
+            [
+                [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7],
+                [1, 2, 0, 2, 0, 1, 4, 5, 3, 5, 3, 4, 7, 6],
+            ]
+        ),
+    )
+    # NOTE: pairs are defined on axis=1 and not axis=0
+    assert torch.allclose(
+        r.r_ij,
+        torch.tensor(
+            [
+                [
+                    [1.0, 0.0, 0.0],
+                    [2.0, 0.0, 0.0],
+                    [-1.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                    [-2.0, 0.0, 0.0],
+                    [-1.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                    [2.0, 0.0, 0.0],
+                    [-1.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                    [-2.0, 0.0, 0.0],
+                    [-1.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                    [-1.0, 0.0, 0.0],
+                ]
+            ]
+        ),
+    )
+    assert torch.allclose(
+        r.d_ij,
+        torch.tensor(
+            [
+                [1.0],
+                [2.0],
+                [1.0],
+                [1.0],
+                [2.0],
+                [1.0],
+                [1.0],
+                [2.0],
+                [1.0],
+                [1.0],
+                [2.0],
+                [1.0],
+                [1.0],
+                [1.0],
+            ]
+        ),
+        atol=1e-3,
+    )
+
+
+def test_neighborlist_full_pairs_local():
+    import torch
+    from collections import namedtuple
+    from modelforge.potential.neighbors import NeighborListForTraining, Pairlist
+
+    TestInput = namedtuple(
+        "TestInput", ["positions", "atomic_subsystem_indices", "pair_list"]
+    )
+
+    atomic_subsystem_indices = torch.tensor([0, 0, 0, 1, 1, 1])
+    positions = torch.tensor(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 1.0, 1.0],
+            [2.0, 2.0, 2.0],
+            [3.0, 3.0, 3.0],
+            [4.0, 4.0, 4.0],
+            [5.0, 5.0, 5.0],
+        ]
+    )
+    from openff.units import unit
+
     # -------------------------------- #
     # test with complete pairlist
     cutoff = unit.Quantity(2.0, unit.nanometer).to(unit.nanometer).m
-    neigborlist = NeighborListForTraining(local_cutoff=cutoff, only_unique_pairs=False)
-    r = neigborlist(TestInput(positions, atomic_subsystem_indices, None)).local_cutoff
+    neighborlist = NeighborListForTraining(
+        local_cutoff=cutoff, local_only_unique_pairs=False
+    )
+    r = neighborlist(TestInput(positions, atomic_subsystem_indices, None)).local_cutoff
     pair_indices = r.pair_indices
 
     assert torch.equal(
@@ -171,7 +348,7 @@ def test_pairlist():
     cutoff = unit.Quantity(10.0, unit.nanometer).to(unit.nanometer).m
     only_unique_pairs = False
     neighborlist = NeighborListForTraining(
-        local_cutoff=cutoff, only_unique_pairs=only_unique_pairs
+        local_cutoff=cutoff, local_only_unique_pairs=only_unique_pairs
     )
     pairlist = Pairlist(only_unique_pairs=only_unique_pairs)
     r = pairlist(positions, atomic_subsystem_indices)
@@ -186,7 +363,7 @@ def test_pairlist():
     cutoff = unit.Quantity(10.0, unit.nanometer).to(unit.nanometer).m
     only_unique_pairs = True
     neighborlist = NeighborListForTraining(
-        local_cutoff=cutoff, only_unique_pairs=only_unique_pairs
+        local_cutoff=cutoff, local_only_unique_pairs=only_unique_pairs
     )
     pairlist = Pairlist(only_unique_pairs=only_unique_pairs)
     r = pairlist(positions, atomic_subsystem_indices)
@@ -201,7 +378,7 @@ def test_pairlist():
     cutoff = unit.Quantity(2.0, unit.nanometer).to(unit.nanometer).m
     only_unique_pairs = True
     neighborlist = NeighborListForTraining(
-        local_cutoff=cutoff, only_unique_pairs=only_unique_pairs
+        local_cutoff=cutoff, local_only_unique_pairs=only_unique_pairs
     )
     pairlist = Pairlist(only_unique_pairs=only_unique_pairs)
     r = pairlist(positions, atomic_subsystem_indices)
@@ -240,7 +417,7 @@ def test_neighborlists_for_dimer():
 
     nlist_inf = NeighborlistForInference(
         local_cutoff=0.51,
-        only_unique_pairs=True,
+        local_only_unique_pairs=True,
         displacement_function=OrthogonalDisplacementFunction(),
     )
 
@@ -249,7 +426,9 @@ def test_neighborlists_for_dimer():
     assert nlist_inf_output.r_ij.shape == (1, 3)
     assert nlist_inf_output.d_ij.shape == (1, 1)
 
-    nlist_train = NeighborListForTraining(local_cutoff=0.51, only_unique_pairs=True)
+    nlist_train = NeighborListForTraining(
+        local_cutoff=0.51, local_only_unique_pairs=True
+    )
 
     nlist_train_output = nlist_train.forward(test_system).local_cutoff
 
@@ -259,7 +438,7 @@ def test_neighborlists_for_dimer():
 
     nlist_inf = NeighborlistForInference(
         local_cutoff=0.51,
-        only_unique_pairs=False,
+        local_only_unique_pairs=False,
         displacement_function=OrthogonalDisplacementFunction(),
     )
 
@@ -268,7 +447,9 @@ def test_neighborlists_for_dimer():
     assert nlist_inf_output.r_ij.shape == (2, 3)
     assert nlist_inf_output.d_ij.shape == (2, 1)
 
-    nlist_train = NeighborListForTraining(local_cutoff=0.51, only_unique_pairs=False)
+    nlist_train = NeighborListForTraining(
+        local_cutoff=0.51, local_only_unique_pairs=False
+    )
     nlist_train_output = nlist_train.forward(test_system).local_cutoff
     assert nlist_train_output.pair_indices.shape == (2, 2)
     assert nlist_train_output.r_ij.shape == (2, 3)
@@ -283,7 +464,37 @@ def test_pairlist_precomputation():
 
     atomic_subsystem_indices = torch.tensor([0, 0, 0])
 
-    pairlist = Pairlist()
+    pairlist = Pairlist(only_unique_pairs=True)
+
+    pairs, nr_pairs = pairlist.construct_initial_pairlist_using_numpy(
+        atomic_subsystem_indices.to("cpu")
+    )
+
+    assert pairs.shape == (2, 3)
+    assert nr_pairs[0] == 3
+
+    # 3 molecules, 3 atoms each
+    atomic_subsystem_indices = torch.tensor([0, 0, 0, 1, 1, 1, 2, 2, 2])
+    pairs, nr_pairs = pairlist.construct_initial_pairlist_using_numpy(
+        atomic_subsystem_indices.to("cpu")
+    )
+
+    assert pairs.shape == (2, 9)
+    assert np.all(nr_pairs == [3, 3, 3])
+
+    # 3 molecules, 3,4, and 5 atoms each
+    atomic_subsystem_indices = torch.tensor([0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2])
+    pairs, nr_pairs = pairlist.construct_initial_pairlist_using_numpy(
+        atomic_subsystem_indices.to("cpu")
+    )
+
+    assert pairs.shape == (2, 19)
+    assert np.all(nr_pairs == [3, 6, 10])
+
+    # now set only_unique_pairs=False
+    atomic_subsystem_indices = torch.tensor([0, 0, 0])
+
+    pairlist = Pairlist(only_unique_pairs=False)
 
     pairs, nr_pairs = pairlist.construct_initial_pairlist_using_numpy(
         atomic_subsystem_indices.to("cpu")
@@ -522,7 +733,7 @@ def test_displacement_function():
     assert torch.allclose(d_ij, torch.norm(r_ij, dim=1, keepdim=True, p=2))
 
 
-def test_neigborlist_multiple_cutoffs():
+def test_neighborlist_multiple_cutoff_only_unique_pairs():
     from modelforge.potential.neighbors import (
         NeighborListForTraining,
         NeighborlistForInference,
@@ -556,7 +767,104 @@ def test_neigborlist_multiple_cutoffs():
         electrostatic_cutoff=12.0,
         use_vdw_cutoff=True,
         use_electrostatic_cutoff=True,
-        only_unique_pairs=True,
+        local_only_unique_pairs=True,
+        vdw_only_unique_pairs=True,
+        electrostatic_only_unique_pairs=True,
+    )
+
+    output = nlist_train(data)
+
+    assert output.local_cutoff.only_unique_pairs == True
+    assert output.vdw_cutoff.only_unique_pairs == True
+    assert output.electrostatic_cutoff.only_unique_pairs == True
+
+    nlist_train = NeighborListForTraining(
+        local_cutoff=2.0,
+        vdw_cutoff=6.0,
+        electrostatic_cutoff=12.0,
+        use_vdw_cutoff=True,
+        use_electrostatic_cutoff=True,
+        local_only_unique_pairs=False,
+        vdw_only_unique_pairs=False,
+        electrostatic_only_unique_pairs=False,
+    )
+
+    output = nlist_train(data)
+
+    assert output.local_cutoff.only_unique_pairs == False
+    assert output.vdw_cutoff.only_unique_pairs == False
+    assert output.electrostatic_cutoff.only_unique_pairs == False
+
+    nlist_train = NeighborListForTraining(
+        local_cutoff=2.0,
+        vdw_cutoff=6.0,
+        electrostatic_cutoff=12.0,
+        use_vdw_cutoff=True,
+        use_electrostatic_cutoff=True,
+        local_only_unique_pairs=False,
+        vdw_only_unique_pairs=True,
+        electrostatic_only_unique_pairs=False,
+    )
+
+    output = nlist_train(data)
+
+    assert output.local_cutoff.only_unique_pairs == False
+    assert output.vdw_cutoff.only_unique_pairs == True
+    assert output.electrostatic_cutoff.only_unique_pairs == False
+
+    nlist_train = NeighborListForTraining(
+        local_cutoff=2.0,
+        vdw_cutoff=6.0,
+        electrostatic_cutoff=12.0,
+        use_vdw_cutoff=True,
+        use_electrostatic_cutoff=True,
+        local_only_unique_pairs=False,
+        vdw_only_unique_pairs=False,
+        electrostatic_only_unique_pairs=True,
+    )
+
+    output = nlist_train(data)
+
+    assert output.local_cutoff.only_unique_pairs == False
+    assert output.vdw_cutoff.only_unique_pairs == False
+    assert output.electrostatic_cutoff.only_unique_pairs == True
+
+
+def test_neighborlist_multiple_cutoffs():
+    from modelforge.potential.neighbors import (
+        NeighborListForTraining,
+        NeighborlistForInference,
+        OrthogonalDisplacementFunction,
+    )
+
+    import torch
+
+    from modelforge.dataset.dataset import NNPInput
+
+    displacement_function = OrthogonalDisplacementFunction()
+
+    positions = torch.tensor(
+        [[0.0, 0, 0], [1, 0, 0], [5.0, 0, 0], [15, 0, 0]], dtype=torch.float32
+    )
+
+    data = NNPInput(
+        atomic_numbers=torch.tensor([1, 1, 1, 1], dtype=torch.int64),
+        positions=positions,
+        atomic_subsystem_indices=torch.tensor([0, 0, 0, 0], dtype=torch.int64),
+        per_system_total_charge=torch.tensor([0.0], dtype=torch.float32),
+        box_vectors=torch.tensor(
+            [[50, 0, 0], [0, 50, 0], [0, 0, 50]], dtype=torch.float32
+        ),
+        is_periodic=False,
+    )
+
+    nlist_train = NeighborListForTraining(
+        local_cutoff=2.0,
+        vdw_cutoff=6.0,
+        electrostatic_cutoff=12.0,
+        use_vdw_cutoff=True,
+        use_electrostatic_cutoff=True,
+        local_only_unique_pairs=True,
     )
 
     output = nlist_train(data)
@@ -564,15 +872,36 @@ def test_neigborlist_multiple_cutoffs():
     assert torch.allclose(output.local_cutoff.r_ij, torch.tensor([[1.0, 0.0, 0.0]]))
     assert torch.allclose(output.local_cutoff.d_ij, torch.tensor([[1.0]]))
 
+    assert torch.all(output.vdw_cutoff.only_unique_pairs == False)
     assert torch.allclose(
-        output.vdw_cutoff.pair_indices, torch.tensor([[0, 0, 1], [1, 2, 2]])
+        output.vdw_cutoff.pair_indices,
+        torch.tensor(
+            [
+                [0, 0, 1, 1, 2, 2],
+                [1, 2, 0, 2, 0, 1],
+            ]
+        ),
     )
     assert torch.allclose(
         output.vdw_cutoff.r_ij,
-        torch.tensor([[1.0, 0.0, 0.0], [5.0, 0.0, 0.0], [4.0, 0.0, 0.0]]),
+        torch.tensor(
+            [
+                [1.0, 0.0, 0.0],
+                [5.0, 0.0, 0.0],
+                [-1.0, 0.0, 0.0],
+                [4.0, 0.0, 0.0],
+                [-5.0, 0.0, 0.0],
+                [-4.0, 0.0, 0.0],
+            ]
+        ),
     )
-    assert torch.allclose(output.vdw_cutoff.d_ij, torch.tensor([[1.0], [5.0], [4.0]]))
+    assert torch.allclose(
+        output.vdw_cutoff.d_ij, torch.tensor([[1.0], [5.0], [1.0], [4.0], [5.0], [4.0]])
+    )
 
+    # the electrostatic neighborlist returns the half neighborlist, i.e only_unique_pairs=True
+
+    assert torch.all(output.electrostatic_cutoff.only_unique_pairs == True)
     assert torch.allclose(
         output.electrostatic_cutoff.pair_indices,
         torch.tensor([[0, 0, 1, 2], [1, 2, 2, 3]]),
@@ -593,24 +922,45 @@ def test_neigborlist_multiple_cutoffs():
         electrostatic_cutoff=12.0,
         use_vdw_cutoff=True,
         use_electrostatic_cutoff=True,
-        only_unique_pairs=True,
+        local_only_unique_pairs=True,
         displacement_function=displacement_function,
     )
 
     output = nlist_inf(data)
-    print(output.vdw_cutoff)
     assert torch.allclose(output.local_cutoff.pair_indices, torch.tensor([[0], [1]]))
     assert torch.allclose(output.local_cutoff.r_ij, torch.tensor([[1.0, 0.0, 0.0]]))
     assert torch.allclose(output.local_cutoff.d_ij, torch.tensor([[1.0]]))
 
+    # vdw cutoff will return the full neighborlist
+
+    print(output.vdw_cutoff)
+    assert torch.all(output.vdw_cutoff.only_unique_pairs == False)
+
     assert torch.allclose(
-        output.vdw_cutoff.pair_indices, torch.tensor([[0, 0, 1], [1, 2, 2]])
+        output.vdw_cutoff.pair_indices,
+        torch.tensor(
+            [
+                [0, 0, 1, 1, 2, 2],
+                [1, 2, 2, 0, 0, 1],
+            ]
+        ),
     )
     assert torch.allclose(
         output.vdw_cutoff.r_ij,
-        torch.tensor([[1.0, 0.0, 0.0], [5.0, 0.0, 0.0], [4.0, 0.0, 0.0]]),
+        torch.tensor(
+            [
+                [1.0, 0.0, 0.0],
+                [5.0, 0.0, 0.0],
+                [4.0, 0.0, 0.0],
+                [-1.0, 0.0, 0.0],
+                [-5.0, 0.0, 0.0],
+                [-4.0, 0.0, 0.0],
+            ]
+        ),
     )
-    assert torch.allclose(output.vdw_cutoff.d_ij, torch.tensor([[1.0], [5.0], [4.0]]))
+    assert torch.allclose(
+        output.vdw_cutoff.d_ij, torch.tensor([[1.0], [5.0], [4.0], [1.0], [5.0], [4.0]])
+    )
 
     assert torch.allclose(
         output.electrostatic_cutoff.pair_indices,
@@ -657,21 +1007,21 @@ def test_inference_neighborlist_building():
     nlist = NeighborlistForInference(
         local_cutoff=5.0,
         displacement_function=displacement_function,
-        only_unique_pairs=False,
+        local_only_unique_pairs=False,
     )
     nlist._set_strategy("brute_nsq")
-    pairs, d_ij, r_ij = nlist(data).local_cutoff
+    pairs, d_ij, r_ij, only_unique_pairs = nlist(data).local_cutoff
 
     assert pairs.shape[1] == 12
 
     nlist_verlet = NeighborlistForInference(
         local_cutoff=5.0,
         displacement_function=displacement_function,
-        only_unique_pairs=False,
+        local_only_unique_pairs=False,
     )
     nlist_verlet._set_strategy("verlet_nsq", skin=0.5)
 
-    pairs_v, d_ij_v, r_ij_v = nlist_verlet(data).local_cutoff
+    pairs_v, d_ij_v, r_ij_v, only_unique_pairs_v = nlist_verlet(data).local_cutoff
     assert pairs_v.shape[1] == pairs.shape[1]
     assert torch.all(pairs_v == pairs)
     assert torch.allclose(d_ij_v, d_ij)
@@ -680,21 +1030,21 @@ def test_inference_neighborlist_building():
     nlist = NeighborlistForInference(
         local_cutoff=5.0,
         displacement_function=displacement_function,
-        only_unique_pairs=True,
+        local_only_unique_pairs=True,
     )
 
     nlist._set_strategy("brute_nsq")
-    pairs, d_ij, r_ij = nlist(data).local_cutoff
+    pairs, d_ij, r_ij, only_unique_pairs = nlist(data).local_cutoff
 
     assert pairs.shape[1] == 6
 
     nlist_verlet = NeighborlistForInference(
         local_cutoff=5.0,
         displacement_function=displacement_function,
-        only_unique_pairs=True,
+        local_only_unique_pairs=True,
     )
     nlist_verlet._set_strategy("verlet_nsq", skin=0.5)
-    pairs_v, d_ij_v, r_ij_v = nlist_verlet(data).local_cutoff
+    pairs_v, d_ij_v, r_ij_v, only_unique_pairs_v = nlist_verlet(data).local_cutoff
     assert pairs_v.shape[1] == pairs.shape[1]
     assert torch.all(pairs_v == pairs)
     assert torch.allclose(d_ij_v, d_ij)
@@ -703,10 +1053,10 @@ def test_inference_neighborlist_building():
     nlist = NeighborlistForInference(
         local_cutoff=3.5,
         displacement_function=displacement_function,
-        only_unique_pairs=False,
+        local_only_unique_pairs=False,
     )
     nlist._set_strategy("brute_nsq")
-    pairs, d_ij, r_ij = nlist(data).local_cutoff
+    pairs, d_ij, r_ij, only_unique_pairs = nlist(data).local_cutoff
 
     assert pairs.shape[1] == 10
 
@@ -747,11 +1097,11 @@ def test_inference_neighborlist_building():
     nlist_verlet = NeighborlistForInference(
         local_cutoff=3.5,
         displacement_function=displacement_function,
-        only_unique_pairs=False,
+        local_only_unique_pairs=False,
     )
 
     nlist_verlet._set_strategy("verlet_nsq", skin=0.5)
-    pairs_v, d_ij_v, r_ij_v = nlist_verlet(data).local_cutoff
+    pairs_v, d_ij_v, r_ij_v, only_unique_pairs_v = nlist_verlet(data).local_cutoff
     assert pairs_v.shape[1] == pairs.shape[1]
     assert torch.all(pairs_v == pairs)
     assert torch.allclose(d_ij_v, d_ij)
@@ -762,12 +1112,12 @@ def test_inference_neighborlist_building():
     nlist = NeighborlistForInference(
         local_cutoff=5.0,
         displacement_function=displacement_function,
-        only_unique_pairs=False,
+        local_only_unique_pairs=False,
     )
     nlist._set_strategy("brute_nsq")
     data.is_periodic = False
 
-    pairs, d_ij, r_ij = nlist(data).local_cutoff
+    pairs, d_ij, r_ij, only_unique_pairs = nlist(data).local_cutoff
 
     assert pairs.shape[1] == 8
     assert torch.all(d_ij <= 5.0)
@@ -775,11 +1125,11 @@ def test_inference_neighborlist_building():
     nlist_verlet = NeighborlistForInference(
         local_cutoff=5.0,
         displacement_function=displacement_function,
-        only_unique_pairs=False,
+        local_only_unique_pairs=False,
     )
     nlist_verlet._set_strategy("verlet_nsq", skin=0.5)
 
-    pairs_v, d_ij_v, r_ij_v = nlist_verlet(data).local_cutoff
+    pairs_v, d_ij_v, r_ij_v, only_unique_pairs_v = nlist_verlet(data).local_cutoff
     assert pairs_v.shape[1] == pairs.shape[1]
     assert torch.all(pairs_v == pairs)
     assert torch.allclose(d_ij_v, d_ij)
@@ -824,20 +1174,20 @@ def test_verlet_inference():
     nlist_verlet = NeighborlistForInference(
         local_cutoff=1.5,
         displacement_function=displacement_function,
-        only_unique_pairs=True,
+        local_only_unique_pairs=True,
     )
     nlist_verlet._set_strategy("verlet_nsq", skin=0.5)
 
     nlist_brute = NeighborlistForInference(
         local_cutoff=1.5,
         displacement_function=displacement_function,
-        only_unique_pairs=True,
+        local_only_unique_pairs=True,
     )
     nlist_brute._set_strategy("brute_nsq")
 
-    pairs, d_ij, r_ij = nlist_brute(data).local_cutoff
+    pairs, d_ij, r_ij, only_unique_pairs = nlist_brute(data).local_cutoff
 
-    pairs_v, d_ij_v, r_ij_v = nlist_verlet(data).local_cutoff
+    pairs_v, d_ij_v, r_ij_v, only_unique_pairs_v = nlist_verlet(data).local_cutoff
 
     assert nlist_verlet.builds == 1
     assert pairs.shape[1] == 2
@@ -851,8 +1201,8 @@ def test_verlet_inference():
     )
     data = return_data(positions)
 
-    pairs, d_ij, r_ij = nlist_brute(data).local_cutoff
-    pairs_v, d_ij_v, r_ij_v = nlist_verlet(data).local_cutoff
+    pairs, d_ij, r_ij, only_unique_pairs = nlist_brute(data).local_cutoff
+    pairs_v, d_ij_v, r_ij_v, only_unique_pairs_v = nlist_verlet(data).local_cutoff
 
     # since we didn't move far enough to trigger a rebuild of the verlet list, the results should be the same
     assert nlist_verlet.builds == 1
@@ -868,8 +1218,8 @@ def test_verlet_inference():
     )
     data = return_data(positions)
 
-    pairs, d_ij, r_ij = nlist_brute(data).local_cutoff
-    pairs_v, d_ij_v, r_ij_v = nlist_verlet(data).local_cutoff
+    pairs, d_ij, r_ij, only_unique_pairs = nlist_brute(data).local_cutoff
+    pairs_v, d_ij_v, r_ij_v, only_unique_pairs_v = nlist_verlet(data).local_cutoff
 
     assert nlist_verlet.builds == 2
     assert pairs.shape[1] == 2
@@ -884,8 +1234,8 @@ def test_verlet_inference():
     )
     data = return_data(positions)
 
-    pairs, d_ij, r_ij = nlist_brute(data).local_cutoff
-    pairs_v, d_ij_v, r_ij_v = nlist_verlet(data).local_cutoff
+    pairs, d_ij, r_ij, only_unique_pairs = nlist_brute(data).local_cutoff
+    pairs_v, d_ij_v, r_ij_v, only_unique_pairs_v = nlist_verlet(data).local_cutoff
 
     assert nlist_verlet.builds == 2
     assert pairs.shape[1] == 1
@@ -899,8 +1249,8 @@ def test_verlet_inference():
     )
     data = return_data(positions)
 
-    pairs, d_ij, r_ij = nlist_brute(data).local_cutoff
-    pairs_v, d_ij_v, r_ij_v = nlist_verlet(data).local_cutoff
+    pairs, d_ij, r_ij, only_unique_pairs = nlist_brute(data).local_cutoff
+    pairs_v, d_ij_v, r_ij_v, only_unique_pairs_v = nlist_verlet(data).local_cutoff
 
     assert nlist_verlet.builds == 2
     assert pairs.shape[1] == 2
@@ -914,8 +1264,8 @@ def test_verlet_inference():
     )
     data = return_data(positions, 9)
 
-    pairs, d_ij, r_ij = nlist_brute(data).local_cutoff
-    pairs_v, d_ij_v, r_ij_v = nlist_verlet(data).local_cutoff
+    pairs, d_ij, r_ij, only_unique_pairs = nlist_brute(data).local_cutoff
+    pairs_v, d_ij_v, r_ij_v, only_unique_pairs_v = nlist_verlet(data).local_cutoff
 
     assert nlist_verlet.builds == 3
     assert pairs.shape[1] == 2
@@ -929,8 +1279,8 @@ def test_verlet_inference():
     )
     data = return_data(positions, 9)
 
-    pairs, d_ij, r_ij = nlist_brute(data).local_cutoff
-    pairs_v, d_ij_v, r_ij_v = nlist_verlet(data).local_cutoff
+    pairs, d_ij, r_ij, only_unique_pairs = nlist_brute(data).local_cutoff
+    pairs_v, d_ij_v, r_ij_v, only_unique_pairs_v = nlist_verlet(data).local_cutoff
 
     assert nlist_verlet.builds == 4
     assert pairs.shape[1] == 2

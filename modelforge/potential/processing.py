@@ -646,6 +646,9 @@ class CoulombPotential(torch.nn.Module):
 
         idx_i = data["electrostatic_pair_indices"][0]
         idx_j = data["electrostatic_pair_indices"][1]
+
+        # note, this is now explicitly as part of the neighborlist
+        # we likely can remove the unique check
         # only unique paris
         unique_pairs_mask = idx_i < idx_j
         idx_i = idx_i[unique_pairs_mask]

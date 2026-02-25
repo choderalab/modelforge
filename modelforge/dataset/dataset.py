@@ -1597,6 +1597,7 @@ class DataModule(pl.LightningDataModule):
                 shuffle=False,
                 pin_memory=False,
                 persistent_workers=False,
+                multiprocessing_context="fork",
             ),
             desc="Calculating pairlist for dataset",
         ):
@@ -1633,6 +1634,7 @@ class DataModule(pl.LightningDataModule):
             num_workers=num_workers,
             shuffle=shuffle,
             pin_memory=pin_memory,
+            multiprocessing_context="fork",
         )
 
     def val_dataloader(self, num_workers: int = 4) -> DataLoader:
@@ -1649,6 +1651,7 @@ class DataModule(pl.LightningDataModule):
             batch_size=self.batch_size,
             collate_fn=collate_conformers,
             num_workers=num_workers,
+            multiprocessing_context="fork",
         )
 
     def test_dataloader(self, num_workers: int = 4) -> DataLoader:
@@ -1665,6 +1668,7 @@ class DataModule(pl.LightningDataModule):
             batch_size=self.batch_size,
             collate_fn=collate_conformers,
             num_workers=num_workers,
+            multiprocessing_context="fork",
         )
 
 

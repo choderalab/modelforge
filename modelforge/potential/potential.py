@@ -651,6 +651,15 @@ class Potential(torch.nn.Module):
             if key == "neighborlist.calculate_distances_and_pairlist.cutoff":
                 key = "neighborlist.cutoff"
 
+            if key == "neighborlist.only_unique_pairs":
+                key = "neighborlist.local_only_unique_pairs"
+                filtered_state_dict["neighborlist.vdw_only_unique_pairs"] = (
+                    torch.tensor([False])
+                )
+                filtered_state_dict["neighborlist.electrostatic_only_unique_pairs"] = (
+                    torch.tensor([True])
+                )
+
             filtered_state_dict[key] = value
 
         if prefixes_removed:
@@ -752,7 +761,7 @@ def setup_potential(
             local_cutoff=local_cutoff,
             # vdw_cutoff=vdw_cutoff,
             electrostatic_cutoff=electrostatic_cutoff,
-            only_unique_pairs=only_unique_pairs,
+            local_only_unique_pairs=only_unique_pairs,
             # use_vdw_cutoff=use_vdw_cutoff,
             use_electrostatic_cutoff=use_electrostatic_cutoff,
         )
@@ -769,7 +778,7 @@ def setup_potential(
             # vdw_cutoff=vdw_cutoff,
             electrostatic_cutoff=electrostatic_cutoff,
             displacement_function=displacement_function,
-            only_unique_pairs=only_unique_pairs,
+            local_only_unique_pairs=only_unique_pairs,
             # use_vdw_cutoff=use_vdw_cutoff,
             use_electrostatic_cutoff=use_electrostatic_cutoff,
         )
@@ -895,7 +904,7 @@ class NeuralNetworkPotentialFactory:
         local_cache_dir: str = "./",
         only_unique_pairs: Optional[bool] = None,
         old_config_only_local_cutoff: Optional[bool] = False,
-        jit: bool = True,
+        jit: bool = False,
     ) -> Union[Potential, JAXModel]:
         """
         Load a neural network potential from a Weights & Biases run.
@@ -915,7 +924,7 @@ class NeuralNetworkPotentialFactory:
             For older models, this parameter is required to be able to read the model. Replaces neighborlist.cutoff with neighborlist.local_cutoff
             and other associated parameters for vdw and electrostatic cutoffs.
         jit : bool, optional
-            Whether to use JIT compilation (default is True).
+            Whether to use JIT compilation (default is False).
         Returns
         -------
         Union[Potential, JAXModel]
@@ -1160,9 +1169,15 @@ def load_inference_model_from_checkpoint(
         jit=jit,
     )
     if only_unique_pairs is not None:
-        checkpoint["state_dict"]["potential.neighborlist.only_unique_pairs"] = (
+        checkpoint["state_dict"]["potential.neighborlist.local_only_unique_pairs"] = (
             torch.Tensor([only_unique_pairs])
         )
+        checkpoint["state_dict"]["potential.neighborlist.vdw_only_unique_pairs"] = (
+            torch.Tensor([False])
+        )
+        checkpoint["state_dict"][
+            "potential.neighborlist.electrostatic_only_unique_pairs"
+        ] = torch.Tensor([True])
     if old_config_only_local_cutoff:
         cutoff = checkpoint["state_dict"].get("potential.neighborlist.cutoff")
         # remove the old key

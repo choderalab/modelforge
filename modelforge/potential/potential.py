@@ -125,7 +125,7 @@ class PostProcessing(torch.nn.Module):
 
     def __init__(
         self,
-        postprocessing_parameter: Dict[str, Dict[str, bool]],
+        postprocessing_parameter: Dict[str, Dict[str, Any]],
         dataset_statistic: Dict[str, Dict[str, float]],
     ):
         """
@@ -215,6 +215,8 @@ class PostProcessing(torch.nn.Module):
                     ],
                     length_conversion_factor=length_conversion_factor,
                     energy_conversion_factor=energy_conversion_factor,
+                    engine=postprocessing_parameter["per_system_vdw_energy"]["engine"],
+                    parameter_set=postprocessing_parameter["per_system_vdw_energy"]["parameter_set"],
                 )
             )
             self._registered_properties.append("per_system_vdw_energy")
@@ -725,9 +727,9 @@ def setup_potential(
     # - local_cutoff is the maximum interaction radius for the NNP core network (i.e., the local interaction radius)
     # this is always required.
     # - vdw_cutoff is the cutoff for the van der Waals interactions, which is only required in the vdw interactions are
-    # included as a post processing step.
+    # included as a post-processing step.
     # - electrostatic_cutoff is the cutoff for the electrostatic interactions, which is only required in the electrostatic
-    # interactions are included as a post processing step.
+    # interactions are included as a post-processing step.
     #
     # note zbl potential does not require a unique cutoff definition; it will use local cutoff and then calculates
     # the zbl potential based on the radii of the two atoms in the pair.
@@ -744,7 +746,6 @@ def setup_potential(
         )
         use_electrostatic_cutoff = True
 
-    # note vdw isn't implemented yet, but we can add it later
     if "per_system_vdw_energy" in postprocessing._registered_properties:
         vdw_cutoff = (
             potential_parameter.postprocessing_parameter.per_system_vdw_energy.maximum_interaction_radius

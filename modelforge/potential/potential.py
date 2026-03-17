@@ -436,10 +436,10 @@ class Potential(torch.nn.Module):
         # this is commented out for now, as the vdw energy is calculated via
         # DFTD3 which handles pair calculations internally
         # If we have other vdw implementations, we can uncomment this
-        # if "per_system_vdw_energy" in self.postprocessing._registered_properties:
-        #     core_output["vdw_pair_indices"] = pairlist_output.vdw_cutoff.pair_indices
-        #     core_output["vdw_d_ij"] = pairlist_output.vdw_cutoff.d_ij
-        #     core_output["vdw_r_ij"] = pairlist_output.vdw_cutoff.r_ij
+        if "per_system_vdw_energy" in self.postprocessing._registered_properties:
+            core_output["vdw_pair_indices"] = pairlist_output.vdw_cutoff.pair_indices
+            core_output["vdw_d_ij"] = pairlist_output.vdw_cutoff.d_ij
+            core_output["vdw_r_ij"] = pairlist_output.vdw_cutoff.r_ij
 
         if (
             "per_system_electrostatic_energy"

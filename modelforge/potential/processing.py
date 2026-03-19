@@ -5,10 +5,13 @@ This module contains utility functions and classes for processing the output of 
 from dataclasses import dataclass, field
 from typing import Dict, Iterator, Union, List
 
+import nvalchemiops.interactions.dispersion
 import torch
-from openff.units import unit
 import tad_dftd3 as d3
 import tad_mctc as mctc
+from nvalchemiops.interactions.dispersion.dftd3 import D3Parameters
+from openff.units import unit
+from pathlib import Path
 from torch.backends.quantized import engine
 
 from modelforge.dataset.utils import _ATOMIC_NUMBER_TO_ELEMENT
@@ -990,6 +993,7 @@ class DispersionPotential(torch.nn.Module):
         energy_conversion_factor: float,
         parameter_set: str = "wB97M-D3(BJ)",
         d3_engine: str = "tad-dftd3",
+        d3_parameters_path: str = "../data/dftd3_parameters/dftd3_parameters.pt",
     ):
         """
         Initializes the Dispersion potential module.
@@ -1025,6 +1029,10 @@ class DispersionPotential(torch.nn.Module):
                 s8=torch.tensor(0.3908),
                 a2=torch.tensor(3.1280),
             )
+        else:
+            raise NotImplementedError("Only 'wB97M-D3(BJ)' is supported.")
+        self.d3_parameters_path = Path(d3_parameters_path)
+
         self.length_conversion_factor = length_conversion_factor
         self.energy_conversion_factor = energy_conversion_factor
 
@@ -1032,6 +1040,8 @@ class DispersionPotential(torch.nn.Module):
         self.cutoff = cutoff * self.length_conversion_factor
 
         self.d3_engine = d3_engine
+        if self.d3_engine == "nvalchemiops":
+            self.params["d3_params"] = self.load_d3_parameters_from_pt()
 
     @staticmethod
     def calculate_neighbor_ptr_from_neighbor_list(neighbor_list: torch.Tensor):
@@ -1098,17 +1108,53 @@ class DispersionPotential(torch.nn.Module):
 
         return data
 
+    def _load_d3_parameters_from_pt(self):
+       if not self.d3_parameters_path.exists():
+           raise FileNotFoundError(
+               f"DFT-D3 parameter file not found: {self.d3_parameters_path}\n"
+               "Please follow the instructions in nvalchemi-toolkit-ops/examples/dispersion/utils.py\n"
+               "First download the DFT-D3 parameter file and then generate a pt file from it.\n"
+               "Save the pt file and use it as an input to the nvalchemiops DFT-D3 here."
+           )
+
+       state_dict = torch.load(self.d3_parameters_path, map_location="cpu", weights_only=True)
+       return D3Parameters(
+           rcov=state_dict["rcov"],
+           r4r2=state_dict["r4r2"],
+           c6ab=state_dict["c6ab"],
+           cn_ref=state_dict["cn_ref"],
+       )
+
     def _forward_nvalchemiops(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         atomic_numbers = data["atomic_numbers"]
-
         atomic_subsystem_indices = data["atomic_subsystem_indices"]
 
-        device = atomic_subsystem_indices.device
+        # make sure all data used are in the same device
+        device = str(atomic_subsystem_indices.device)
+
+        atomic_numbers = atomic_numbers.to(device)
+        atomic_subsystem_indices = atomic_subsystem_indices.to(device)
 
         # need to convert the positions to bohr units
-        positions = data["positions"] * self.length_conversion_factor
+        positions = (data["positions"] * self.length_conversion_factor).to(device)
 
-        # TODO
+        neighbor_list = data["pair_list"].to(device)
+        neighbor_ptr = self.calculate_neighbor_ptr_from_neighbor_list(neighbor_list).to(device)
+
+        energies, forces, coord_num = nvalchemiops.interactions.dispersion.dftd3(
+            positions=positions,
+            numbers=atomic_numbers.to(torch.int32),
+            neighbor_list=neighbor_list.to(torch.int32),
+            neighbor_ptr=neighbor_ptr.to(torch.int32),
+            a1=float(self.params["a1"]),
+            s8=float(self.params["s8"]),
+            a2=float(self.params["a2"]),
+            d3_params=self.params["d3_params"],
+            batch_idx=atomic_subsystem_indices.to(torch.int32),
+            device=device,
+        )
+
+        data["per_system_vdw_energy"] = (energies.reshape(-1, 1) * self.energy_conversion_factor)
 
         return data
 
@@ -1119,4 +1165,4 @@ class DispersionPotential(torch.nn.Module):
         elif self.d3_engine == "tad-dftd3":
             return self._forward_tad_dftd3(data)
         else:
-            raise NotImplementedError
+            raise NotImplementedError("Please input 'nvalchemiops' or 'tad-dftd3'.")

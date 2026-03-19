@@ -1041,7 +1041,7 @@ class DispersionPotential(torch.nn.Module):
 
         self.d3_engine = d3_engine
         if self.d3_engine == "nvalchemiops":
-            self.params["d3_params"] = self.load_d3_parameters_from_pt()
+            self.params["d3_params"] = self._load_d3_parameters_from_pt()
 
     @staticmethod
     def calculate_neighbor_ptr_from_neighbor_list(neighbor_list: torch.Tensor):
@@ -1059,7 +1059,7 @@ class DispersionPotential(torch.nn.Module):
         )
 
         # convert the COO format to CSR format to obtain the row offsets (i.e., neighbor_ptr in nvalchemiops)
-        neighbor_matrix_csr = neighbor_matrix_coo.to_sparse()
+        neighbor_matrix_csr = neighbor_matrix_coo.to_sparse_csr()
 
         return neighbor_matrix_csr.crow_indices()  # this row offsets tensor is referred to as neighbor_ptr
 
@@ -1138,7 +1138,7 @@ class DispersionPotential(torch.nn.Module):
         # need to convert the positions to bohr units
         positions = (data["positions"] * self.length_conversion_factor).to(device)
 
-        neighbor_list = data["pair_list"].to(device)
+        neighbor_list = data["neighbor_list"].to(device)
         neighbor_ptr = self.calculate_neighbor_ptr_from_neighbor_list(neighbor_list).to(device)
 
         energies, forces, coord_num = nvalchemiops.interactions.dispersion.dftd3(

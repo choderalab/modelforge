@@ -237,9 +237,7 @@ def test_electrostatics():
 
 
 @pytest.mark.parametrize("d3_engine", ["tad-dftd3", "nvalchemiops"])
-def test_dispersion_potential(
-        d3_engine
-):
+def test_dispersion_potential(d3_engine):
     from modelforge.potential.processing import DispersionPotential
     from modelforge.utils.units import GlobalUnitSystem, chem_context
 
@@ -361,8 +359,90 @@ def test_dispersion_potential(
         # neighbor info should be included in the core output when using "nvalchemiops"
         core_output_dict["neighbor_list"] = torch.tensor(
             [
-                [0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7, 8, 8, 8, 8, 9, 9, 9, 9],
-                [1, 2, 3, 4, 0, 2, 3, 4, 0, 1, 3, 4, 0, 1, 2, 4, 0, 1, 2, 3, 6, 7, 8, 9, 5, 7, 8, 9, 5, 6, 8, 9, 5, 6, 7, 9, 5, 6, 7, 8],
+                [
+                    0,
+                    0,
+                    0,
+                    0,
+                    1,
+                    1,
+                    1,
+                    1,
+                    2,
+                    2,
+                    2,
+                    2,
+                    3,
+                    3,
+                    3,
+                    3,
+                    4,
+                    4,
+                    4,
+                    4,
+                    5,
+                    5,
+                    5,
+                    5,
+                    6,
+                    6,
+                    6,
+                    6,
+                    7,
+                    7,
+                    7,
+                    7,
+                    8,
+                    8,
+                    8,
+                    8,
+                    9,
+                    9,
+                    9,
+                    9,
+                ],
+                [
+                    1,
+                    2,
+                    3,
+                    4,
+                    0,
+                    2,
+                    3,
+                    4,
+                    0,
+                    1,
+                    3,
+                    4,
+                    0,
+                    1,
+                    2,
+                    4,
+                    0,
+                    1,
+                    2,
+                    3,
+                    6,
+                    7,
+                    8,
+                    9,
+                    5,
+                    7,
+                    8,
+                    9,
+                    5,
+                    6,
+                    8,
+                    9,
+                    5,
+                    6,
+                    7,
+                    9,
+                    5,
+                    6,
+                    7,
+                    8,
+                ],
             ],
             dtype=torch.int64,
         )
@@ -378,7 +458,9 @@ def test_dispersion_potential(
             parameter_set="wB97M-D3(BJ)",
             d3_engine=d3_engine,
         )
-        vdw_output = vdw(core_output_dict)  # neighbor_list & neighbor_ptr should be contained
+        vdw_output = vdw(
+            core_output_dict
+        )  # neighbor_list & neighbor_ptr should be contained
         # this should be close using nvalchemiops, so assertions can be shared
         assert vdw_output["per_system_vdw_energy"].shape == (2, 1)
         assert torch.allclose(

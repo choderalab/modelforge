@@ -215,8 +215,12 @@ class PostProcessing(torch.nn.Module):
                     ],
                     length_conversion_factor=length_conversion_factor,
                     energy_conversion_factor=energy_conversion_factor,
-                    engine=postprocessing_parameter["per_system_vdw_energy"]["engine"],
-                    parameter_set=postprocessing_parameter["per_system_vdw_energy"]["parameter_set"],
+                    d3_engine=postprocessing_parameter["per_system_vdw_energy"][
+                        "d3_engine"
+                    ],
+                    parameter_set=postprocessing_parameter["per_system_vdw_energy"][
+                        "parameter_set"
+                    ],
                 )
             )
             self._registered_properties.append("per_system_vdw_energy")

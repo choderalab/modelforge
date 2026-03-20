@@ -6,10 +6,13 @@ from dataclasses import dataclass, field
 from typing import Dict, Iterator, Union, List
 
 import torch
-from openff.units import unit
 import tad_dftd3 as d3
 import tad_mctc as mctc
-
+from nvalchemiops.torch.interactions.dispersion import dftd3 as nv_dftd3
+from nvalchemiops.torch.interactions.dispersion._dftd3 import D3Parameters
+from openff.units import unit
+from pathlib import Path
+from torch.backends.quantized import engine
 
 from modelforge.dataset.utils import _ATOMIC_NUMBER_TO_ELEMENT
 
@@ -989,6 +992,8 @@ class DispersionPotential(torch.nn.Module):
         length_conversion_factor: float,
         energy_conversion_factor: float,
         parameter_set: str = "wB97M-D3(BJ)",
+        d3_engine: str = "tad-dftd3",
+        d3_parameters_path: str = "modelforge/data/dftd3_parameters/dftd3_parameters.pt",
     ):
         """
         Initializes the Dispersion potential module.
@@ -1024,14 +1029,45 @@ class DispersionPotential(torch.nn.Module):
                 s8=torch.tensor(0.3908),
                 a2=torch.tensor(3.1280),
             )
+        else:
+            raise NotImplementedError("Only 'wB97M-D3(BJ)' is supported.")
+        self.d3_parameters_path = Path(d3_parameters_path)
+
         self.length_conversion_factor = length_conversion_factor
         self.energy_conversion_factor = energy_conversion_factor
 
         # dftd3 uses bohr for length, so we need to convert the cutoff
         self.cutoff = cutoff * self.length_conversion_factor
 
-    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        self.d3_engine = d3_engine
+        if self.d3_engine == "nvalchemiops":
+            self.params["d3_params"] = self._load_d3_parameters_from_pt()
 
+    @staticmethod
+    def calculate_neighbor_ptr_from_neighbor_list(neighbor_list: torch.Tensor):
+        # this should be an operation with linear time complexity
+
+        # fill the matrix with ones at interacting pairs
+        interact_fillers = torch.ones(neighbor_list.shape[1], dtype=torch.int64)
+
+        # construct a neighbor matrix where row & col indices indicates pairs of atoms, and interacting pairs are filled
+        # with value one in the matrix
+        # this matrix is represented as a COO sparse matrix
+        neighbor_matrix_coo = torch.sparse_coo_tensor(
+            indices=neighbor_list,  # [[row_indices], [col_indices]], i.e., neighbor_list
+            values=interact_fillers,
+        )
+
+        # convert the COO format to CSR format to obtain the row offsets (i.e., neighbor_ptr in nvalchemiops)
+        neighbor_matrix_csr = neighbor_matrix_coo.to_sparse_csr()
+
+        return (
+            neighbor_matrix_csr.crow_indices()
+        )  # this row offsets tensor is referred to as neighbor_ptr
+
+    def _forward_tad_dftd3(
+        self, data: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
         atomic_numbers = data["atomic_numbers"]
 
         atomic_subsystem_indices = data["atomic_subsystem_indices"]
@@ -1041,7 +1077,7 @@ class DispersionPotential(torch.nn.Module):
         # need to convert the positions to bohr units
         positions = data["positions"] * self.length_conversion_factor
 
-        # let us get the atomic subsystem counts so we can breakup the systems properly for batch processing
+        # let us get the atomic subsystem counts so we can break up the systems properly for batch processing
         mol_ids, atomic_subsystem_counts = torch.unique(
             atomic_subsystem_indices, return_counts=True
         )
@@ -1075,3 +1111,70 @@ class DispersionPotential(torch.nn.Module):
         )
 
         return data
+
+    def _load_d3_parameters_from_pt(self):
+        if not self.d3_parameters_path.exists():
+            raise FileNotFoundError(
+                f"DFT-D3 parameter file not found: {self.d3_parameters_path}\n"
+                "Please follow the instructions in nvalchemi-toolkit-ops/examples/dispersion/utils.py\n"
+                "First download the DFT-D3 parameter file and then generate a pt file from it.\n"
+                "Save the pt file and use it as an input to the nvalchemiops DFT-D3 here.\n"
+            )
+
+        state_dict = torch.load(
+            self.d3_parameters_path, map_location="cpu", weights_only=True
+        )
+        return D3Parameters(
+            rcov=state_dict["rcov"],
+            r4r2=state_dict["r4r2"],
+            c6ab=state_dict["c6ab"],
+            cn_ref=state_dict["cn_ref"],
+        )
+
+    def _forward_nvalchemiops(
+        self, data: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+        atomic_numbers = data["atomic_numbers"]
+        atomic_subsystem_indices = data["atomic_subsystem_indices"]
+
+        # make sure all data used are in the same device
+        device = str(atomic_subsystem_indices.device)
+
+        atomic_numbers = atomic_numbers.to(device)
+        atomic_subsystem_indices = atomic_subsystem_indices.to(device)
+
+        # need to convert the positions to bohr units
+        positions = (data["positions"] * self.length_conversion_factor).to(device)
+
+        neighbor_list = data["neighbor_list"].to(device)
+        neighbor_ptr = self.calculate_neighbor_ptr_from_neighbor_list(neighbor_list).to(
+            device
+        )
+
+        energies, forces, coord_num = nv_dftd3(
+            positions=positions,
+            numbers=atomic_numbers.to(torch.int32),
+            neighbor_list=neighbor_list.to(torch.int32),
+            neighbor_ptr=neighbor_ptr.to(torch.int32),
+            a1=float(self.params["a1"]),
+            s8=float(self.params["s8"]),
+            a2=float(self.params["a2"]),
+            d3_params=self.params["d3_params"],
+            batch_idx=atomic_subsystem_indices.to(torch.int32),
+            device=device,
+        )
+
+        data["per_system_vdw_energy"] = (
+            energies.reshape(-1, 1) * self.energy_conversion_factor
+        )
+
+        return data
+
+    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        # the input `data` should contain neighbor info when using "nvalchemiops" as the d3 engine
+        if self.d3_engine == "nvalchemiops":
+            return self._forward_nvalchemiops(data)
+        elif self.d3_engine == "tad-dftd3":
+            return self._forward_tad_dftd3(data)
+        else:
+            raise NotImplementedError("Please input 'nvalchemiops' or 'tad-dftd3'.")

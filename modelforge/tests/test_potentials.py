@@ -236,7 +236,8 @@ def test_electrostatics():
     )
 
 
-def test_dispersion_potential():
+@pytest.mark.parametrize("d3_engine", ["tad-dftd3", "nvalchemiops"])
+def test_dispersion_potential(d3_engine):
     from modelforge.potential.processing import DispersionPotential
     from modelforge.utils.units import GlobalUnitSystem, chem_context
 
@@ -247,7 +248,8 @@ def test_dispersion_potential():
         (1.0 * unit.hartree).to(GlobalUnitSystem.get_units("energy"), "chem").m
     )
 
-    # set up a minimal dict that would represent the core output for 2 non-interacting methane molecules
+    # set up a minimal dict that would represent the core output for methane molecules
+    # test one molecule
     core_output_dict = {}
     core_output_dict["atomic_subsystem_indices"] = torch.tensor(
         [0, 0, 0, 0, 0], dtype=torch.int32
@@ -263,21 +265,58 @@ def test_dispersion_potential():
         ]
     )
 
-    vdw = DispersionPotential(
-        cutoff=100.0,
-        length_conversion_factor=length_conversion_factor,
-        energy_conversion_factor=energy_conversion_factor,
-    )
+    # dispersion calculation
+    if d3_engine == "tad-dftd3":
+        vdw = DispersionPotential(
+            cutoff=100.0,
+            length_conversion_factor=length_conversion_factor,
+            energy_conversion_factor=energy_conversion_factor,
+            parameter_set="wB97M-D3(BJ)",
+            d3_engine=d3_engine,
+        )
 
-    vdw_output = vdw(core_output_dict)
-    assert vdw_output["per_system_vdw_energy"].shape == (1, 1)
-    assert torch.allclose(
-        vdw_output["per_system_vdw_energy"],
-        torch.tensor([[-6.277308]]),
-        1e-3,
-        1e-3,
-    )
-    # test two molecules
+        vdw_output = vdw(core_output_dict)
+
+        assert vdw_output["per_system_vdw_energy"].shape == (1, 1)
+        assert torch.allclose(
+            vdw_output["per_system_vdw_energy"],
+            torch.tensor([[-6.277308]]),
+            1e-3,
+            1e-3,
+        )
+
+    elif d3_engine == "nvalchemiops":
+        # neighbor info should be included in the core output when using "nvalchemiops"
+        core_output_dict["neighbor_list"] = torch.tensor(
+            [
+                [0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4],
+                [1, 2, 3, 4, 0, 2, 3, 4, 0, 1, 3, 4, 0, 1, 2, 4, 0, 1, 2, 3],
+            ],
+            dtype=torch.int64,
+        )
+        core_output_dict["neighbor_ptr"] = torch.tensor(
+            [0, 4, 8, 12, 16, 20],
+            dtype=torch.int64,
+        )
+
+        vdw = DispersionPotential(
+            cutoff=100.0,
+            length_conversion_factor=length_conversion_factor,
+            energy_conversion_factor=energy_conversion_factor,
+            parameter_set="wB97M-D3(BJ)",
+            d3_engine=d3_engine,
+        )
+        vdw_output = vdw(core_output_dict)
+        # this should be close using nvalchemiops, so assertions can be shared
+        assert vdw_output["per_system_vdw_energy"].shape == (1, 1)
+        assert torch.allclose(
+            vdw_output["per_system_vdw_energy"],
+            torch.tensor([[-6.277308]]),
+            1e-3,
+            1e-3,
+        )
+
+    # test two molecules (batch operations)
     core_output_dict = {}
     core_output_dict["atomic_subsystem_indices"] = torch.tensor(
         [0, 0, 0, 0, 0, 1, 1, 1, 1, 1], dtype=torch.int32
@@ -298,19 +337,138 @@ def test_dispersion_potential():
         ]
     )
 
-    vdw = DispersionPotential(
-        cutoff=100.0,
-        length_conversion_factor=length_conversion_factor,
-        energy_conversion_factor=energy_conversion_factor,
-    )
-    vdw_output = vdw(core_output_dict)
-    assert vdw_output["per_system_vdw_energy"].shape == (2, 1)
-    assert torch.allclose(
-        vdw_output["per_system_vdw_energy"],
-        torch.tensor([[-6.277308], [-6.277308]]),
-        1e-3,
-        1e-3,
-    )
+    # batch dispersion calculation
+    if d3_engine == "tad-dftd3":
+        vdw = DispersionPotential(
+            cutoff=100.0,
+            length_conversion_factor=length_conversion_factor,
+            energy_conversion_factor=energy_conversion_factor,
+            parameter_set="wB97M-D3(BJ)",
+            d3_engine=d3_engine,
+        )
+        vdw_output = vdw(core_output_dict)
+        assert vdw_output["per_system_vdw_energy"].shape == (2, 1)
+        assert torch.allclose(
+            vdw_output["per_system_vdw_energy"],
+            torch.tensor([[-6.277308], [-6.277308]]),
+            1e-3,
+            1e-3,
+        )
+
+    elif d3_engine == "nvalchemiops":
+        # neighbor info should be included in the core output when using "nvalchemiops"
+        core_output_dict["neighbor_list"] = torch.tensor(
+            [
+                [
+                    0,
+                    0,
+                    0,
+                    0,
+                    1,
+                    1,
+                    1,
+                    1,
+                    2,
+                    2,
+                    2,
+                    2,
+                    3,
+                    3,
+                    3,
+                    3,
+                    4,
+                    4,
+                    4,
+                    4,
+                    5,
+                    5,
+                    5,
+                    5,
+                    6,
+                    6,
+                    6,
+                    6,
+                    7,
+                    7,
+                    7,
+                    7,
+                    8,
+                    8,
+                    8,
+                    8,
+                    9,
+                    9,
+                    9,
+                    9,
+                ],
+                [
+                    1,
+                    2,
+                    3,
+                    4,
+                    0,
+                    2,
+                    3,
+                    4,
+                    0,
+                    1,
+                    3,
+                    4,
+                    0,
+                    1,
+                    2,
+                    4,
+                    0,
+                    1,
+                    2,
+                    3,
+                    6,
+                    7,
+                    8,
+                    9,
+                    5,
+                    7,
+                    8,
+                    9,
+                    5,
+                    6,
+                    8,
+                    9,
+                    5,
+                    6,
+                    7,
+                    9,
+                    5,
+                    6,
+                    7,
+                    8,
+                ],
+            ],
+            dtype=torch.int64,
+        )
+        core_output_dict["neighbor_ptr"] = torch.tensor(
+            [0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40],
+            dtype=torch.int64,
+        )
+
+        vdw = DispersionPotential(
+            cutoff=100.0,
+            length_conversion_factor=length_conversion_factor,
+            energy_conversion_factor=energy_conversion_factor,
+            parameter_set="wB97M-D3(BJ)",
+            d3_engine=d3_engine,
+        )
+        vdw_output = vdw(
+            core_output_dict
+        )  # neighbor_list & neighbor_ptr should be contained
+        # this should be close using nvalchemiops, so assertions can be shared
+        assert vdw_output["per_system_vdw_energy"].shape == (2, 1)
+        assert torch.allclose(
+            vdw_output["per_system_vdw_energy"],
+            torch.tensor([[-6.277308], [-6.277308]]),
+            1e-3,
+            1e-3,
+        )
 
 
 def test_zbl_potential():

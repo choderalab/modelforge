@@ -1061,9 +1061,13 @@ class DispersionPotential(torch.nn.Module):
         # convert the COO format to CSR format to obtain the row offsets (i.e., neighbor_ptr in nvalchemiops)
         neighbor_matrix_csr = neighbor_matrix_coo.to_sparse_csr()
 
-        return neighbor_matrix_csr.crow_indices()  # this row offsets tensor is referred to as neighbor_ptr
+        return (
+            neighbor_matrix_csr.crow_indices()
+        )  # this row offsets tensor is referred to as neighbor_ptr
 
-    def _forward_tad_dftd3(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    def _forward_tad_dftd3(
+        self, data: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
         atomic_numbers = data["atomic_numbers"]
 
         atomic_subsystem_indices = data["atomic_subsystem_indices"]
@@ -1109,23 +1113,27 @@ class DispersionPotential(torch.nn.Module):
         return data
 
     def _load_d3_parameters_from_pt(self):
-       if not self.d3_parameters_path.exists():
-           raise FileNotFoundError(
-               f"DFT-D3 parameter file not found: {self.d3_parameters_path}\n"
-               "Please follow the instructions in nvalchemi-toolkit-ops/examples/dispersion/utils.py\n"
-               "First download the DFT-D3 parameter file and then generate a pt file from it.\n"
-               "Save the pt file and use it as an input to the nvalchemiops DFT-D3 here."
-           )
+        if not self.d3_parameters_path.exists():
+            raise FileNotFoundError(
+                f"DFT-D3 parameter file not found: {self.d3_parameters_path}\n"
+                "Please follow the instructions in nvalchemi-toolkit-ops/examples/dispersion/utils.py\n"
+                "First download the DFT-D3 parameter file and then generate a pt file from it.\n"
+                "Save the pt file and use it as an input to the nvalchemiops DFT-D3 here.\n"
+            )
 
-       state_dict = torch.load(self.d3_parameters_path, map_location="cpu", weights_only=True)
-       return D3Parameters(
-           rcov=state_dict["rcov"],
-           r4r2=state_dict["r4r2"],
-           c6ab=state_dict["c6ab"],
-           cn_ref=state_dict["cn_ref"],
-       )
+        state_dict = torch.load(
+            self.d3_parameters_path, map_location="cpu", weights_only=True
+        )
+        return D3Parameters(
+            rcov=state_dict["rcov"],
+            r4r2=state_dict["r4r2"],
+            c6ab=state_dict["c6ab"],
+            cn_ref=state_dict["cn_ref"],
+        )
 
-    def _forward_nvalchemiops(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    def _forward_nvalchemiops(
+        self, data: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
         atomic_numbers = data["atomic_numbers"]
         atomic_subsystem_indices = data["atomic_subsystem_indices"]
 
@@ -1139,7 +1147,9 @@ class DispersionPotential(torch.nn.Module):
         positions = (data["positions"] * self.length_conversion_factor).to(device)
 
         neighbor_list = data["neighbor_list"].to(device)
-        neighbor_ptr = self.calculate_neighbor_ptr_from_neighbor_list(neighbor_list).to(device)
+        neighbor_ptr = self.calculate_neighbor_ptr_from_neighbor_list(neighbor_list).to(
+            device
+        )
 
         energies, forces, coord_num = nv_dftd3(
             positions=positions,
@@ -1154,7 +1164,9 @@ class DispersionPotential(torch.nn.Module):
             device=device,
         )
 
-        data["per_system_vdw_energy"] = (energies.reshape(-1, 1) * self.energy_conversion_factor)
+        data["per_system_vdw_energy"] = (
+            energies.reshape(-1, 1) * self.energy_conversion_factor
+        )
 
         return data
 

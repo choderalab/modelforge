@@ -993,7 +993,7 @@ class DispersionPotential(torch.nn.Module):
         energy_conversion_factor: float,
         parameter_set: str = "wB97M-D3(BJ)",
         d3_engine: str = "tad-dftd3",
-        d3_parameters_path: str = "../data/dftd3_parameters/dftd3_parameters.pt",
+        d3_parameters_path: str = "modelforge/data/dftd3_parameters/dftd3_parameters.pt",
     ):
         """
         Initializes the Dispersion potential module.

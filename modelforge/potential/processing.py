@@ -5,11 +5,11 @@ This module contains utility functions and classes for processing the output of 
 from dataclasses import dataclass, field
 from typing import Dict, Iterator, Union, List
 
-import nvalchemiops.interactions.dispersion
 import torch
 import tad_dftd3 as d3
 import tad_mctc as mctc
-from nvalchemiops.interactions.dispersion.dftd3 import D3Parameters
+from nvalchemiops.torch.interactions.dispersion import dftd3 as nv_dftd3
+from nvalchemiops.jax.interactions.dispersion._dftd3 import D3Parameters
 from openff.units import unit
 from pathlib import Path
 from torch.backends.quantized import engine
@@ -1141,7 +1141,7 @@ class DispersionPotential(torch.nn.Module):
         neighbor_list = data["neighbor_list"].to(device)
         neighbor_ptr = self.calculate_neighbor_ptr_from_neighbor_list(neighbor_list).to(device)
 
-        energies, forces, coord_num = nvalchemiops.interactions.dispersion.dftd3(
+        energies, forces, coord_num = nv_dftd3(
             positions=positions,
             numbers=atomic_numbers.to(torch.int32),
             neighbor_list=neighbor_list.to(torch.int32),

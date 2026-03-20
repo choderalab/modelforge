@@ -9,7 +9,7 @@ import torch
 import tad_dftd3 as d3
 import tad_mctc as mctc
 from nvalchemiops.torch.interactions.dispersion import dftd3 as nv_dftd3
-from nvalchemiops.jax.interactions.dispersion._dftd3 import D3Parameters
+from nvalchemiops.torch.interactions.dispersion._dftd3 import D3Parameters
 from openff.units import unit
 from pathlib import Path
 from torch.backends.quantized import engine

@@ -1,4 +1,5 @@
 from typing import Literal
+import sys
 
 import pytest
 import torch
@@ -236,6 +237,7 @@ def test_electrostatics():
     )
 
 
+@pytest.mark.xfail(sys.version_info < (3, 11), reason="nvalchemiops requires python3.11 or higher")
 @pytest.mark.parametrize("d3_engine", ["tad-dftd3", "nvalchemiops"])
 def test_dispersion_potential(d3_engine):
     from modelforge.potential.processing import DispersionPotential
@@ -1717,6 +1719,7 @@ def test_sum_per_system_energy():
         sum_per_system_energy(data)
 
 
+@pytest.mark.xfail(sys.version_info < (3, 11), reason="nvalchemiops requires python3.11 or higher")
 def test_postprocessing():
     # this test will just ensure that the postprocessing module in potential loads the correct operations
 

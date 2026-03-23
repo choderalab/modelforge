@@ -43,5 +43,5 @@ dependencies:
       - pytorch2jax
       #- git+https://github.com/ArnNag/sake.git@nanometer
       - pytest-xdist
-      - nvalchemi-toolkit-ops==0.3.0; python_version < '3.11'
+      #- nvalchemi-toolkit-ops==0.3.0
 

@@ -8,8 +8,6 @@ from typing import Dict, Iterator, Union, List
 import torch
 import tad_dftd3 as d3
 import tad_mctc as mctc
-from nvalchemiops.torch.interactions.dispersion import dftd3 as nv_dftd3
-from nvalchemiops.torch.interactions.dispersion._dftd3 import D3Parameters
 from openff.units import unit
 from pathlib import Path
 from torch.backends.quantized import engine
@@ -1113,6 +1111,8 @@ class DispersionPotential(torch.nn.Module):
         return data
 
     def _load_d3_parameters_from_pt(self):
+        from nvalchemiops.torch.interactions.dispersion._dftd3 import D3Parameters
+
         if not self.d3_parameters_path.exists():
             raise FileNotFoundError(
                 f"DFT-D3 parameter file not found: {self.d3_parameters_path}\n"
@@ -1134,6 +1134,8 @@ class DispersionPotential(torch.nn.Module):
     def _forward_nvalchemiops(
         self, data: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
+        from nvalchemiops.torch.interactions.dispersion import dftd3 as nv_dftd3
+
         atomic_numbers = data["atomic_numbers"]
         atomic_subsystem_indices = data["atomic_subsystem_indices"]
 

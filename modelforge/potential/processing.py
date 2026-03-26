@@ -2,6 +2,7 @@
 This module contains utility functions and classes for processing the output of the potential model.
 """
 
+import os
 from dataclasses import dataclass, field
 from typing import Dict, Iterator, Union, List
 
@@ -991,7 +992,7 @@ class DispersionPotential(torch.nn.Module):
         energy_conversion_factor: float,
         parameter_set: str = "wB97M-D3(BJ)",
         d3_engine: str = "tad-dftd3",
-        d3_parameters_path: str = "modelforge/data/dftd3_parameters/dftd3_parameters.pt",
+        d3_parameters_path: str = None,
     ):
         """
         Initializes the Dispersion potential module.
@@ -1029,6 +1030,17 @@ class DispersionPotential(torch.nn.Module):
             )
         else:
             raise NotImplementedError("Only 'wB97M-D3(BJ)' is supported.")
+
+        # use default path str if input None
+        if d3_parameters_path is None:
+
+            from modelforge.utils.io import get_path_string
+            from modelforge.data import dftd3_parameters
+
+            d3_parameters_path = os.path.join(
+                get_path_string(dftd3_parameters),
+                "dftd3_parameters_default.pt"
+            )
         self.d3_parameters_path = Path(d3_parameters_path)
 
         self.length_conversion_factor = length_conversion_factor

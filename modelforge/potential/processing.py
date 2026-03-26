@@ -1039,7 +1039,7 @@ class DispersionPotential(torch.nn.Module):
 
             d3_parameters_path = os.path.join(
                 get_path_string(dftd3_parameters),
-                "dftd3_parameters_default.pt"
+                "dftd3_parameters_default.pt",
             )
         self.d3_parameters_path = Path(d3_parameters_path)
 

@@ -324,9 +324,6 @@ class Potential(torch.nn.Module):
             Forward pass for the potential model, computing energy and forces that accepts individual tensors rather than NNPInput class, necessary for JIT compiled model.
         forward(input_data: NNPInput) -> Dict[str, torch.Tensor]
             Forward pass for the potential model, computing energy and forces.
-
-
-
         """
 
         super().__init__()
@@ -337,14 +334,13 @@ class Potential(torch.nn.Module):
         )
         # note cannot jit compile the dispersion interactions as tad-dftd3 is not compatible with torchscript
         if "per_system_vdw_energy" in postprocessing._registered_properties:
-            # TODO
             log.warning(
-                "JIT compiling the postprocessing module with vdw interactions will not work."
+                "JIT compiling the postprocessing module with vdw interactions will not work if using tad-dftd3."
             )
             log.warning(
-                "The tad-DFTD3 packaged used is not compatible with torchscript."
+                "tad-dftd3 packaged is not compatible with torchscript."
             )
-            log.warning("Disabling JIT compilation by setting jit=False.")
+            log.warning("Use nvalchemiops as the DFTD3 engine or disable JIT compilation by setting jit=False.")
 
         self.postprocessing = (
             torch.jit.script(postprocessing) if jit else postprocessing

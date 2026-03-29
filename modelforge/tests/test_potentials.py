@@ -1312,7 +1312,7 @@ def test_calculate_energies_and_forces(
     )
     nnp_input = batch.nnp_input
 
-    # get the inference model with inference neighborlist and compilre
+    # get the inference model with inference neighborlist and compile
     # everything
     potential = setup_potential_for_test(
         potential_name,

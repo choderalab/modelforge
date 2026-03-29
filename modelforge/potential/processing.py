@@ -1011,6 +1011,15 @@ class DispersionPotential(torch.nn.Module):
             The parameter set to use for the dispersion calculation.
             Default is "wB97M-D3(BJ)".
             Currently, only "wB97M-D3(BJ)" is supported. at this time.
+        d3_engine : str, optional
+            The optional parameter to set the d3 engine to use.
+            Currently, "tad-dftd3" and "nvalchemiops" are supported.
+            Please use "nvalchemiops" for a faster implementation and/or when using openmm simulation.
+        d3_parameters_path : str, optional
+            When the d3_engine is set to "nvalchemiops", please provide the path to the d3 parameters.
+            Not necessary if d3_engine is set to "tad-dftd3".
+            The d3 parameter file should be a pt file containing "rcov", "r4r2", "c6ab", "cn_ref" tensors.
+            If not provided, a default parameter file in "modelforge/data/dftd3_parameters/" will be used.
         """
         super().__init__()
 
@@ -1021,7 +1030,7 @@ class DispersionPotential(torch.nn.Module):
         An extensive analysis with special emphasis on the B97M-V and ωB97M-V approaches." 
         Journal of Chemical Theory and Computation 14.11 (2018): 5725-5738.
         DOI:10.1021/acs.jctc.8b00842
-         """
+        """
         if parameter_set == "wB97M-D3(BJ)":
             self.params = dict(
                 a1=torch.tensor(0.5660),
@@ -1185,7 +1194,7 @@ class DispersionPotential(torch.nn.Module):
         return data
 
     def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
-        # the input `data` should contain neighbor info when using "nvalchemiops" as the d3 engine
+        # the input `data` should include neighbor info when using "nvalchemiops" as the d3 engine
         if self.d3_engine == "nvalchemiops":
             return self._forward_nvalchemiops(data)
         elif self.d3_engine == "tad-dftd3":

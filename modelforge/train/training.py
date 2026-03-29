@@ -431,7 +431,7 @@ class CalculateProperties(torch.nn.Module):
     def _predict_quadrupole_moment(
         model_predictions: Dict[str, torch.Tensor], batch: BatchData
     ) -> torch.Tensor:
-        """
+        r"""
         Compute the predicted quadrupole moment for each system based on the
         predicted partial atomic charges and positions (which requires
         that the coordinates are centered).

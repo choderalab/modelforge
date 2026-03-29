@@ -337,10 +337,10 @@ class Potential(torch.nn.Module):
             log.warning(
                 "JIT compiling the postprocessing module with vdw interactions will not work if using tad-dftd3."
             )
+            log.warning("tad-dftd3 packaged is not compatible with torchscript.")
             log.warning(
-                "tad-dftd3 packaged is not compatible with torchscript."
+                "Use nvalchemiops as the DFTD3 engine or disable JIT compilation by setting jit=False."
             )
-            log.warning("Use nvalchemiops as the DFTD3 engine or disable JIT compilation by setting jit=False.")
 
         self.postprocessing = (
             torch.jit.script(postprocessing) if jit else postprocessing
@@ -438,9 +438,7 @@ class Potential(torch.nn.Module):
         core_output["local_r_ij"] = pairlist_output.local_cutoff.r_ij
 
         if "per_system_vdw_energy" in self.postprocessing._registered_properties:
-            core_output["vdw_pair_indices"] = (
-                pairlist_output.vdw_cutoff.pair_indices
-            )
+            core_output["vdw_pair_indices"] = pairlist_output.vdw_cutoff.pair_indices
             core_output["vdw_d_ij"] = pairlist_output.vdw_cutoff.d_ij
             core_output["vdw_r_ij"] = pairlist_output.vdw_cutoff.r_ij
 

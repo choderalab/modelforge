@@ -991,8 +991,8 @@ class DispersionPotential(torch.nn.Module):
         length_conversion_factor: float,
         energy_conversion_factor: float,
         parameter_set: str = "wB97M-D3(BJ)",
-        d3_engine: str = "tad-dftd3",
-        d3_parameters_path: str = None,
+        d3_engine: str = "nvalchemiops",
+        d3_parameters_path: str = "None",
     ):
         """
         Initializes the Dispersion potential module.
@@ -1041,7 +1041,7 @@ class DispersionPotential(torch.nn.Module):
             raise NotImplementedError("Only 'wB97M-D3(BJ)' is supported.")
 
         # use default path str if input None
-        if d3_parameters_path is None:
+        if d3_parameters_path == "None":
 
             from modelforge.utils.io import get_path_string
             from modelforge.data import dftd3_parameters

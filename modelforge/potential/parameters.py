@@ -194,7 +194,7 @@ class DispersionPotential(ParametersBase):
     maximum_interaction_radius: float
     parameter_set: str = "wB97M-D3(BJ)"
     d3_engine: str = "nvalchemiops"
-    d3_parameters_path: str = None
+    d3_parameters_path: str = "None"
 
     converted_units = field_validator(
         "maximum_interaction_radius",

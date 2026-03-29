@@ -292,7 +292,7 @@ def test_dispersion_potential(d3_engine):
 
     elif d3_engine == "nvalchemiops":
         # neighbor info should be included in the core output when using "nvalchemiops"
-        core_output_dict["neighbor_list"] = torch.tensor(
+        core_output_dict["vdw_pair_indices"] = torch.tensor(
             [
                 [0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4],
                 [1, 2, 3, 4, 0, 2, 3, 4, 0, 1, 3, 4, 0, 1, 2, 4, 0, 1, 2, 3],
@@ -364,7 +364,7 @@ def test_dispersion_potential(d3_engine):
 
     elif d3_engine == "nvalchemiops":
         # neighbor info should be included in the core output when using "nvalchemiops"
-        core_output_dict["neighbor_list"] = torch.tensor(
+        core_output_dict["vdw_pair_indices"] = torch.tensor(
             [
                 [
                     0,

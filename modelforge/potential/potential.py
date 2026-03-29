@@ -442,31 +442,11 @@ class Potential(torch.nn.Module):
         core_output["local_r_ij"] = pairlist_output.local_cutoff.r_ij
 
         if "per_system_vdw_energy" in self.postprocessing._registered_properties:
-
-            if (
-                self.postprocessing.postprocessing_parameter["per_system_vdw_energy"][
-                    "d3_engine"
-                ]
-                == "nvalchemiops"
-            ):
-                # When using nvalchemi-toolkit-ops,
-                # the neighbor list can be provided for a faster process
-                core_output["vdw_pair_indices"] = (
-                    pairlist_output.vdw_cutoff.pair_indices
-                )
-                core_output["vdw_d_ij"] = pairlist_output.vdw_cutoff.d_ij
-                core_output["vdw_r_ij"] = pairlist_output.vdw_cutoff.r_ij
-
-            elif (
-                self.postprocessing.postprocessing_parameter["per_system_vdw_energy"][
-                    "d3_engine"
-                ]
-                == "tad-dftd3"
-            ):
-                # When using tad-dftd3 to handle DFTD3 calculation,
-                # there is no need to parse the neighbor list
-                # as the neighbor list is handled internally
-                pass
+            core_output["vdw_pair_indices"] = (
+                pairlist_output.vdw_cutoff.pair_indices
+            )
+            core_output["vdw_d_ij"] = pairlist_output.vdw_cutoff.d_ij
+            core_output["vdw_r_ij"] = pairlist_output.vdw_cutoff.r_ij
 
         if (
             "per_system_electrostatic_energy"

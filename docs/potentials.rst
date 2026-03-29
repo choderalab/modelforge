@@ -281,7 +281,8 @@ Rather than having all 3 of these energy contributions returned by the core netw
 
 
     [potential.postprocessing_parameter.per_system_vdw_energy]
-    maximum_interaction_radius = "10.0 angstrom"
+    maximum_interaction_radius = "10.0 angstrom"  # this will only take effect when d3_engine is set to "nvalchemiops"
+                                                  # otherwise the "tad-dftd3" will handle neighbor list internally
     parameter_set: str = "wB97M-D3(BJ)"
     d3_engine = "nvalchemiops"
     d3_parameters_path = "None"

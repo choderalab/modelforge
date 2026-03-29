@@ -972,8 +972,12 @@ class ZBLPotential(torch.nn.Module):
 class DispersionPotential(torch.nn.Module):
     """
     Computes the dispersion energy using DFTD3 method.
+    Two DFTD3 implementations are available:
+        - "tad-dftd3"
+        - "nvalchemiops"
 
-    This uses the tad-dftd3 library, which is a PyTorch implementation of the DFT-D3 method
+    When setting d3_engine to "tad-dftd3",
+    this class uses the tad-dftd3 library, which is a PyTorch implementation of the DFT-D3 method.
 
     https://github.com/dftd3/tad-dftd3
     J. Chem. Phys., 2024, 161, 062501. https://doi.org/10.1063/5.0216715
@@ -982,6 +986,10 @@ class DispersionPotential(torch.nn.Module):
     which provides a set of parameters for various functionals.
 
     https://github.com/dftd3/simple-dftd3/blob/main/assets/parameters.toml
+
+    When setting d3_engine to "nvalchemiops",
+    this class uses the nvalchemi-toolkit-ops library.
+
 
     """
 
@@ -1169,7 +1177,7 @@ class DispersionPotential(torch.nn.Module):
         # need to convert the positions to bohr units
         positions = (data["positions"] * self.length_conversion_factor).to(device)
 
-        neighbor_list = data["neighbor_list"].to(device)
+        neighbor_list = data["vdw_pair_indices"].to(device)
         neighbor_ptr = self.calculate_neighbor_ptr_from_neighbor_list(neighbor_list).to(
             device
         )

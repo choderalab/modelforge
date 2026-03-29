@@ -682,9 +682,9 @@ class TrainingAdapter(pL.LightningModule):
         self.potential = setup_potential(
             potential_parameter=potential_parameter,
             dataset_statistic=dataset_statistic,
+            use_training_mode_neighborlist=True,
             potential_seed=potential_seed,
             jit=False,
-            use_training_mode_neighborlist=True,
         )
 
         # Determine which properties to include based on loss components

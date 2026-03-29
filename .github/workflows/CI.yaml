@@ -75,6 +75,11 @@ jobs:
 
           micromamba list
 
+      # Skip nvalchemiops if Python version is 3.10
+      - name: Install nvalchemi-toolkit-ops
+        if: matrix.python-version != '3.10'
+        run: pip install nvalchemi-toolkit-ops==0.3.0
+
       # this will figure out what datasets we will use in our tests
       # and save them to a file so we can hash this file to see if the cache needs updating
       # this will save "downloaded_datasets.txt" in the modelforge testing cache folder

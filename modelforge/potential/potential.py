@@ -221,9 +221,9 @@ class PostProcessing(torch.nn.Module):
                     d3_engine=postprocessing_parameter["per_system_vdw_energy"][
                         "d3_engine"
                     ],
-                    d3_parameters_path=postprocessing_parameter["per_system_vdw_energy"][
-                        "d3_parameters_path"
-                    ]
+                    d3_parameters_path=postprocessing_parameter[
+                        "per_system_vdw_energy"
+                    ]["d3_parameters_path"],
                 )
             )
             self._registered_properties.append("per_system_vdw_energy")
@@ -337,6 +337,7 @@ class Potential(torch.nn.Module):
         )
         # note cannot jit compile the dispersion interactions as tad-dftd3 is not compatible with torchscript
         if "per_system_vdw_energy" in postprocessing._registered_properties:
+            # TODO
             log.warning(
                 "JIT compiling the postprocessing module with vdw interactions will not work."
             )
@@ -440,13 +441,32 @@ class Potential(torch.nn.Module):
         core_output["local_d_ij"] = pairlist_output.local_cutoff.d_ij
         core_output["local_r_ij"] = pairlist_output.local_cutoff.r_ij
 
-        # this is commented out for now, as the vdw energy is calculated via
-        # DFTD3 which handles pair calculations internally
-        # If we have other vdw implementations, we can uncomment this
         if "per_system_vdw_energy" in self.postprocessing._registered_properties:
-            core_output["vdw_pair_indices"] = pairlist_output.vdw_cutoff.pair_indices
-            core_output["vdw_d_ij"] = pairlist_output.vdw_cutoff.d_ij
-            core_output["vdw_r_ij"] = pairlist_output.vdw_cutoff.r_ij
+
+            if (
+                self.postprocessing.postprocessing_parameter["per_system_vdw_energy"][
+                    "d3_engine"
+                ]
+                == "nvalchemiops"
+            ):
+                # When using nvalchemi-toolkit-ops,
+                # the neighbor list can be provided for a faster process
+                core_output["vdw_pair_indices"] = (
+                    pairlist_output.vdw_cutoff.pair_indices
+                )
+                core_output["vdw_d_ij"] = pairlist_output.vdw_cutoff.d_ij
+                core_output["vdw_r_ij"] = pairlist_output.vdw_cutoff.r_ij
+
+            elif (
+                self.postprocessing.postprocessing_parameter["per_system_vdw_energy"][
+                    "d3_engine"
+                ]
+                == "tad-dftd3"
+            ):
+                # When using tad-dftd3 to handle DFTD3 calculation,
+                # there is no need to parse the neighbor list
+                # as the neighbor list is handled internally
+                pass
 
         if (
             "per_system_electrostatic_energy"
@@ -764,13 +784,15 @@ def setup_potential(
     if use_training_mode_neighborlist:
         from modelforge.potential.neighbors import NeighborListForTraining
 
-        # note vdw_cutoff is not being used as this is handled internally by the DFTD3 implementation
+        # note: vdw_cutoff won't be used when using "tad-dftd3" as the internal DFTD3 engine
+        #       as it handles neighbor list internally
+        #       It will only take effect when selecting "nvalchemiops" as the DFTD3 engine.
         neighborlist = NeighborListForTraining(
             local_cutoff=local_cutoff,
-            # vdw_cutoff=vdw_cutoff,
+            vdw_cutoff=vdw_cutoff,
             electrostatic_cutoff=electrostatic_cutoff,
             local_only_unique_pairs=only_unique_pairs,
-            # use_vdw_cutoff=use_vdw_cutoff,
+            use_vdw_cutoff=use_vdw_cutoff,
             use_electrostatic_cutoff=use_electrostatic_cutoff,
         )
     else:
@@ -780,14 +802,16 @@ def setup_potential(
 
         from modelforge.potential.neighbors import NeighborlistForInference
 
-        # note vdw_cutoff is not being used as this is handled internally by the DFTD3 implementation
+        # note: vdw_cutoff won't be used when using "tad-dftd3" as the internal DFTD3 engine
+        #       as it handles neighbor list internally.
+        #       It will only take effect when selecting "nvalchemiops" as the DFTD3 engine.
         neighborlist = NeighborlistForInference(
             local_cutoff=local_cutoff,
-            # vdw_cutoff=vdw_cutoff,
+            vdw_cutoff=vdw_cutoff,
             electrostatic_cutoff=electrostatic_cutoff,
             displacement_function=displacement_function,
             local_only_unique_pairs=only_unique_pairs,
-            # use_vdw_cutoff=use_vdw_cutoff,
+            use_vdw_cutoff=use_vdw_cutoff,
             use_electrostatic_cutoff=use_electrostatic_cutoff,
         )
         # we can set the strategy here before passing this to the Potential

@@ -277,7 +277,7 @@ def test_dispersion_potential(d3_engine):
             energy_conversion_factor=energy_conversion_factor,
             parameter_set="wB97M-D3(BJ)",
             d3_engine=d3_engine,
-            d3_parameters_path=None,
+            d3_parameters_path="None",
         )
 
         vdw_output = vdw(core_output_dict)
@@ -310,7 +310,7 @@ def test_dispersion_potential(d3_engine):
             energy_conversion_factor=energy_conversion_factor,
             parameter_set="wB97M-D3(BJ)",
             d3_engine=d3_engine,
-            d3_parameters_path=None,
+            d3_parameters_path="None",
         )
         vdw_output = vdw(core_output_dict)
         # this should be close using nvalchemiops, so assertions can be shared
@@ -351,7 +351,7 @@ def test_dispersion_potential(d3_engine):
             energy_conversion_factor=energy_conversion_factor,
             parameter_set="wB97M-D3(BJ)",
             d3_engine=d3_engine,
-            d3_parameters_path=None,
+            d3_parameters_path="None",
         )
         vdw_output = vdw(core_output_dict)
         assert vdw_output["per_system_vdw_energy"].shape == (2, 1)
@@ -464,7 +464,7 @@ def test_dispersion_potential(d3_engine):
             energy_conversion_factor=energy_conversion_factor,
             parameter_set="wB97M-D3(BJ)",
             d3_engine=d3_engine,
-            d3_parameters_path=None,
+            d3_parameters_path="None",
         )
         vdw_output = vdw(
             core_output_dict

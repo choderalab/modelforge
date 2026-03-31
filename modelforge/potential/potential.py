@@ -437,7 +437,9 @@ class Potential(torch.nn.Module):
         core_output["local_d_ij"] = pairlist_output.local_cutoff.d_ij
         core_output["local_r_ij"] = pairlist_output.local_cutoff.r_ij
 
-        if "per_system_vdw_energy" in self.postprocessing._registered_properties:  # FIXME: no need running tad-dftd3
+        if (
+            "per_system_vdw_energy" in self.postprocessing._registered_properties
+        ):  # FIXME: no need when running tad-dftd3
             core_output["vdw_pair_indices"] = pairlist_output.vdw_cutoff.pair_indices
             core_output["vdw_d_ij"] = pairlist_output.vdw_cutoff.d_ij
             core_output["vdw_r_ij"] = pairlist_output.vdw_cutoff.r_ij

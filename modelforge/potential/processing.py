@@ -1049,18 +1049,6 @@ class DispersionPotential(torch.nn.Module):
         else:
             raise NotImplementedError("Only 'wB97M-D3(BJ)' is supported.")
 
-        # use default path str if input None
-        if d3_parameters_path == "None":
-
-            from modelforge.utils.io import get_path_string
-            from modelforge.data import dftd3_parameters
-
-            d3_parameters_path = os.path.join(
-                get_path_string(dftd3_parameters),
-                "dftd3_parameters_0.pt",
-            )
-        self.d3_parameters_path = Path(d3_parameters_path)
-
         self.length_conversion_factor = length_conversion_factor
         self.energy_conversion_factor = energy_conversion_factor
 
@@ -1068,7 +1056,20 @@ class DispersionPotential(torch.nn.Module):
         self.cutoff = cutoff * self.length_conversion_factor
 
         self.d3_engine = d3_engine
+
+        # load d3 parameter for nvalchemiops
         if self.d3_engine == "nvalchemiops":
+            # use default path str if input "None"
+            if d3_parameters_path == "None":
+                from modelforge.utils.io import get_path_string
+                from modelforge.data import dftd3_parameters
+
+                d3_parameters_path = os.path.join(
+                    get_path_string(dftd3_parameters),
+                    "dftd3_parameters_0.pt",
+                )
+            self.d3_parameters_path = Path(d3_parameters_path)
+
             self.params["d3_params"] = self._load_d3_parameters_from_pt()
 
     @staticmethod

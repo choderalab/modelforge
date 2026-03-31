@@ -334,6 +334,7 @@ class Potential(torch.nn.Module):
         )
         # note cannot jit compile the dispersion interactions as tad-dftd3 is not compatible with torchscript
         if "per_system_vdw_energy" in postprocessing._registered_properties:
+            # double check if nvalchemiops works with JIT
             log.warning(
                 "JIT compiling the postprocessing module with vdw interactions will not work if using tad-dftd3."
             )

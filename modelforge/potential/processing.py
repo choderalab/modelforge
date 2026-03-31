@@ -1073,8 +1073,29 @@ class DispersionPotential(torch.nn.Module):
             self.params["d3_params"] = self._load_d3_parameters_from_pt()
 
     @staticmethod
-    def calculate_neighbor_ptr_from_neighbor_list(neighbor_list: torch.Tensor):
-        # this should be an operation with linear time complexity
+    def calculate_neighbor_ptr_from_neighbor_list(
+        neighbor_list: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Calculate the corresponding neighbor pointer from a given neighbor list.
+        The neighbor list used in modelforge is a COO format representation of the full neighbor matrix,
+        each element $e_ij$ of which denotes if atom pair $i-j$ is within the cutoff distance.
+        This function transform the COO format to the CSR format, and returns the row offset of the CSR representation.
+        The neighbor pointer is a term used in the nvalchemi-toolkit-ops, which is identical to the row offset of the
+        CSR representation.
+
+        This transformation should be an operation with linear time complexity.
+
+        Parameters
+        ----------
+        neighbor_list : torch.Tensor
+            The neighbor list used in modelforge.
+
+        Returns
+        -------
+        torch.Tensor
+            The row offset of the CSR representation, same as the neighbor pointer in this context.
+        """
 
         # fill the matrix with ones at interacting pairs
         interact_fillers = torch.ones(neighbor_list.shape[1], dtype=torch.int64)

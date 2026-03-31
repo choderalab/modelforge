@@ -758,9 +758,6 @@ def setup_potential(
     if use_training_mode_neighborlist:
         from modelforge.potential.neighbors import NeighborListForTraining
 
-        # note: vdw_cutoff won't be used when using "tad-dftd3" as the internal DFTD3 engine
-        #       as it handles neighbor list internally
-        #       It will only take effect when selecting "nvalchemiops" as the DFTD3 engine.
         neighborlist = NeighborListForTraining(
             local_cutoff=local_cutoff,
             vdw_cutoff=vdw_cutoff,
@@ -776,9 +773,6 @@ def setup_potential(
 
         from modelforge.potential.neighbors import NeighborlistForInference
 
-        # note: vdw_cutoff won't be used when using "tad-dftd3" as the internal DFTD3 engine
-        #       as it handles neighbor list internally.
-        #       It will only take effect when selecting "nvalchemiops" as the DFTD3 engine.
         neighborlist = NeighborlistForInference(
             local_cutoff=local_cutoff,
             vdw_cutoff=vdw_cutoff,

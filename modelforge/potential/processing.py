@@ -990,6 +990,7 @@ class DispersionPotential(torch.nn.Module):
     When setting d3_engine to "nvalchemiops",
     this class uses the nvalchemi-toolkit-ops library.
 
+    https://github.com/NVIDIA/nvalchemi-toolkit-ops
 
     """
 

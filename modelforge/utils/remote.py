@@ -234,13 +234,15 @@ def download_from_url(
     output_path: str,
     output_filename: str,
     length: Optional[int] = None,
-    force_download=False,
+    force_download: bool = False,
     max_retries: int = 5,
     retry_delay: List[int] = [1, 2, 5, 10, 20],  # in seconds
     scheme: str = "auto",
 ):
     """
     Download a file from a URL, with retries and checksum verification and fallbacks if the default request method fails.
+
+    Note, this no longer works with figshare, as it appears to be blocking.
 
 
     Parameters

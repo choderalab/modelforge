@@ -3,6 +3,7 @@ from modelforge.curate.properties import (
     PropertyBaseModel,
     PropertyClassification,
     PropertyType,
+    MetaData,
 )
 
 from openff.units import unit
@@ -315,7 +316,10 @@ class Record:
         -------
 
         """
-        if property.classification == PropertyClassification.atomic_numbers:
+        if (
+            property.classification == PropertyClassification.atomic_numbers
+            or property.classification == PropertyClassification.atomic_numbers_grouped
+        ):
             # we will not allow atomic numbers to be set twice
             if self.atomic_numbers is not None:
                 if self.append_property == False:
@@ -334,7 +338,10 @@ class Record:
             # We will later validate that per_atom properties are consistent with this value later
             # since we are not enforcing that atomic_numbers need to be set before any other property
 
-        elif property.classification == PropertyClassification.meta_data:
+        elif (
+            property.classification == PropertyClassification.meta_data
+            or property.property_type == PropertyType.meta_data
+        ):
             if property.name in self.meta_data.keys():
                 log.warning(
                     f"Metadata with name {property.name} already exists in the record {self.name}."
@@ -906,3 +913,127 @@ def calculate_reference_energy(
     ]
 
     return sum(reference_energy)
+
+
+class RecordGroup(Record):
+    """
+    Groups records together that have the same system size (i.e., same number of atoms)
+
+    For datasets with a large number of unique systems, this is necessary to make
+    writing of HDF5 files for efficient, as it will enable writing fewer, larger numpy arrays
+    (which is more space and time efficient than many smaller arrays).
+
+    """
+
+    def __init__(self, name: str):
+
+        # call init of the parent class
+        super().__init__(name)
+
+        self.grouped_names = []
+        self.grouped_n_configs = []
+        self.append_property = True
+
+    def add_record(self, record: Record):
+        assert isinstance(record, Record)
+
+        # assert that we have atomic_numbers defined in the record
+        if record.atomic_numbers is None:
+            raise ValueError(
+                f"atomic numbers need to be set before adding to a RecordGroup"
+            )
+
+        # we need to loop over all the pieces in the record and update them
+        self.grouped_names.append(record.name)
+        self.grouped_n_configs.append(record.n_configs)
+
+        # update the atomic numbers
+        from modelforge.curate.properties import AtomicNumbers
+
+        if self.atomic_numbers is None:
+            self.atomic_numbers = AtomicNumbers(
+                value=record.atomic_numbers.value.reshape(1, -1, 1),
+                classification="atomic_numbers_grouped",
+            )
+
+        else:
+            assert (
+                self.atomic_numbers.value.shape[1]
+                == record.atomic_numbers.value.shape[0]
+            )
+            # append the atomic numbers to the numpy array
+            self.atomic_numbers.value = np.vstack(
+                (
+                    self.atomic_numbers.value,
+                    record.atomic_numbers.value.reshape(1, -1, 1),
+                )
+            )
+
+        # get properties for each type
+        for prop in record.per_atom.keys():
+            self.add_property(record.get_property(prop))
+
+        for prop in record.per_system.keys():
+            self.add_property(record.get_property(prop))
+
+        # metadata will be appended as lists in the dictionary, rather than just a singular property
+        # these will be converted later, if we can
+        for prop in record.meta_data.keys():
+            if prop not in self.meta_data.keys():
+                self.meta_data[prop] = [record.get_property(prop)]
+            else:
+                self.meta_data[prop].append(record.get_property(prop))
+
+    def add_records(self, records: List[Record]):
+        assert isinstance(records, list)
+
+        for record in records:
+            self.add_record(record)
+
+    def get_records(self) -> List[Record]:
+        """
+        Return a list of the Records that were grouped together
+
+        Returns
+        -------
+        List[Record]
+
+
+        """
+
+        counts = np.array(self.grouped_n_configs)
+        # get the cumulative sum of counts
+        cumulative_counts = np.cumsum(counts)
+
+        records_list = []
+        end_id = 0
+        for i in range(0, len(counts)):
+
+            start_id = end_id
+            end_id = cumulative_counts[i]
+
+            record = self.slice_record(start_id, end_id)
+
+            record.name = self.grouped_names[i]
+            from modelforge.curate.properties import AtomicNumbers
+
+            record.atomic_numbers = AtomicNumbers(
+                value=self.atomic_numbers.value[i].reshape(-1, 1)
+            )
+            for prop in self.meta_data.keys():
+                record.remove_property(prop)
+
+                temp_value = self.meta_data[prop][i].value
+
+                temp_metadata = MetaData(
+                    name=self.meta_data[prop][i].name,
+                    value=temp_value,
+                    classification=self.meta_data[prop][i].classification,
+                    property_type=self.meta_data[prop][i].property_type,
+                )
+                print(temp_metadata)
+                record.add_property(temp_metadata)
+
+            records_list.append(record)
+
+        return records_list

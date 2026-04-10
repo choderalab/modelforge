@@ -1,10 +1,25 @@
-from modelforge.curate import Record, SourceDataset
-from modelforge.curate.properties import AtomicNumbers, Positions, Energies, Forces
+from modelforge.curate import (
+    Record,
+    SourceDataset,
+    PartialCharges,
+    DipoleMomentPerSystem,
+)
+from modelforge.curate.properties import (
+    AtomicNumbers,
+    Positions,
+    Energies,
+    Forces,
+    TotalCharge,
+    PartialCharges,
+    DipoleMomentPerSystem,
+    QuadrupoleMomentPerSystem,
+)
 from modelforge.curate.datasets.curation_baseclass import DatasetCuration
 
 from typing import Optional
 from loguru import logger
 from openff.units import unit
+import numpy as np
 
 
 class Aimnet2Curation(DatasetCuration):
@@ -48,7 +63,7 @@ class Aimnet2Curation(DatasetCuration):
         self,
         dataset_name: str,
         local_cache_dir: str = "./",
-        version_select: str = "wB97M_v0",
+        version_select: str = "wb97m_v0",
     ):
         """
         Sets input and output parameters.
@@ -63,7 +78,9 @@ class Aimnet2Curation(DatasetCuration):
             Version of the dataset to use as defined in the associated yaml file.
 
         """
-        # since we want the default to be wB97M_v0, not latest
+        # since we may have different levels of theory in the same yaml file, we want the default to be wb97m_v0,
+        # not necessarily "latest" to avoid any ambiguity
+        # this is fine because I can be explicit in the curation scripts as well
         super().__init__(dataset_name, local_cache_dir, version_select)
 
     def _init_dataset_parameters(self) -> None:
@@ -75,15 +92,15 @@ class Aimnet2Curation(DatasetCuration):
         # this yaml file should be stored along with the curated dataset
 
         from importlib import resources
-        from modelforge.curation import yaml_files
+        from modelforge.curate.datasets import yaml_files
         import yaml
 
-        yaml_file = resources.files(yaml_files) / "ani2x_curation.yaml"
+        yaml_file = resources.files(yaml_files) / "aimnet2_curation.yaml"
         logger.debug(f"Loading config data from {yaml_file}")
         with open(yaml_file, "r") as file:
             data_inputs = yaml.safe_load(file)
 
-        assert data_inputs["dataset_name"] == "ani2x"
+        assert data_inputs["dataset_name"] == "aimnet2"
 
         if self.version_select == "latest":
             self.version_select = data_inputs["latest"]
@@ -101,6 +118,19 @@ class Aimnet2Curation(DatasetCuration):
         logger.debug(
             f"Dataset: {self.version_select} version: {data_inputs[self.version_select]['version']}"
         )
+
+    def _convert_quadrupole(self, components: np.ndarray):
+        # we need to map the orca components to a symmetric 3x3 matrix
+        # with the appropriate scaling
+
+        psi4_array = []
+        for i in range(components.shape[0]):
+            xx, yy, zz, xy, yz, xz = components[i]
+
+            orca_matrix = 1.5 * np.array([[xx, xy, xz], [xy, yy, yz], [xz, yz, zz]])
+            psi4_array.append(orca_matrix)
+
+        return np.concatenate(psi4_array)
 
     def _process_downloaded(
         self,
@@ -133,23 +163,37 @@ class Aimnet2Curation(DatasetCuration):
             name=self.dataset_name, local_db_dir=self.local_cache_dir
         )
         with h5py.File(input_file_name, "r") as hf:
-            #  The ani2x hdf5 file groups molecules by number of atoms
+            #  The aimnet2 hdf5 file groups molecules by number of atoms
             # we need to break up each of these groups into individual molecules
             mol_counter = 0
 
-            for num_atoms, properties in hf.items():
-                species = properties["species"][:]
-                coordinates = properties["coordinates"][:]
-                energies = properties["energies"][:]
-                forces = properties["forces"][:]
+            # note openff units do not support eV
+            # we will use the conversation factor of
+            eV_to_kjmol = 96.485332125
 
-                # in the HDF5 file provided for the ANI2x data set,  all configurations of the same size are grouped
+            # it lists
+            for key, properties in hf.items():
+                species = properties["numbers"][()]
+                coordinates = properties["coord"][()]  # in angstrom
+                energies = properties["energy"][()]  # eV
+                forces = properties["forces"][()]  # eV/Angstrom
+                charges = properties["charges"][()]  # e
+                charge = properties["charge"][()]  # e
+                dipole = properties["dipole"][
+                    ()
+                ]  # e * angstrom (note, mislabeled in the dataset readme)
+                quadrupole = properties["quadrupole"][
+                    ()
+                ]  # e * angstrom^2 (note, mislabeled in the dataset readme)
+
+                # in the HDF5 file provided for the aimnet data set,  all configurations of the same size are grouped
                 # together into a single array, even if they correspond to different molecules.
-                # As a reasonable way to break these up, we use species array to identify unique molecules.
-                # This assumes that the species array is a unique way to define a molecule, which of course
-                # may not be true, e.g., isomers, etc. (although, if generated from SMILES they will more than likely
-                # be in a different order). To get the numbers to match up with what is reported (indirectly),
-                # we need to assuming non-consecutive species patterns corresponded to different molecules.
+                # As a reasonable way to break these up, we use atomic numbers array to identify unique molecules,
+                # assuming that sequential identical patterns of atomic numbers correspond to conformers
+                # of the same system (same assumption was used in the ani2x dataset).
+                # This assumes that isomers either have a different order of atomic numbers
+                # (if generated from SMILES they will more than likely be in a different order)
+                # or do not occur sequentially.
 
                 import numpy as np
 
@@ -163,6 +207,8 @@ class Aimnet2Curation(DatasetCuration):
 
                 molecules[molecule_name] = []
 
+                # first loop over all entries in the array
+                # to figure out how to break them up
                 for i in range(species.shape[0]):
                     if np.all(species[i] == last):
                         molecules[molecule_name].append(i)
@@ -177,38 +223,65 @@ class Aimnet2Curation(DatasetCuration):
                     record_temp = Record(name=molecule_name)
 
                     base_index = molecules[molecule_name][0]
+
+                    # a list of the indices from the array to include
                     indices = molecules[molecule_name]
+
+                    n_conformers = len(molecules[molecule_name])
+                    n_atoms = species[base_index].shape[0]
 
                     atomic_numbers = AtomicNumbers(
                         value=species[base_index].reshape(-1, 1)
                     )
                     record_temp.add_property(atomic_numbers)
 
-                    conformers_per_molecule = len(molecules[molecule_name])
-
-                    positions = Positions(
-                        value=coordinates[indices],
+                    positions_prop = Positions(
+                        value=coordinates[indices].reshape(-1, n_atoms, 3),
                         units=unit.angstrom,
                     )
-                    record_temp.add_property(positions)
+                    record_temp.add_property(positions_prop)
 
-                    energies_mod = Energies(
-                        value=energies[indices].reshape(-1, 1)[
-                            0:conformers_per_molecule
-                        ],
-                        units=unit.hartree,
+                    energies_prop = Energies(
+                        value=energies[indices].reshape(-1, 1) * eV_to_kjmol,
+                        units=unit.kilojoules_per_mole,
                     )
-                    record_temp.add_property(energies_mod)
+                    record_temp.add_property(energies_prop)
 
-                    forces_mod = Forces(
-                        value=forces[indices],
-                        units=unit.hartree / unit.angstrom,
+                    forces_prop = Forces(
+                        value=forces[indices].reshape(-1, n_atoms, 3) * eV_to_kjmol,
+                        units=unit.kilojoules_per_mole / unit.angstrom,
                     )
 
-                    record_temp.add_property(forces_mod)
+                    record_temp.add_property(forces_prop)
+
+                    total_charge_prop = TotalCharge(
+                        value=charge[indices].reshape(-1, 1),
+                        units=unit.elementary_charge,
+                    )
+                    record_temp.add_property(total_charge_prop)
+
+                    partial_charges_prop = PartialCharges(
+                        value=charges[indices].reshape(-1, n_atoms, 1),
+                        units=unit.elementary_charge,
+                    )
+                    record_temp.add_property(partial_charges_prop)
+
+                    dipole_moment_prop = DipoleMomentPerSystem(
+                        value=dipole[indices].reshape(-1, 3),
+                        units=unit.elementary_charge * unit.angstrom,
+                    )
+                    record_temp.add_property(dipole_moment_prop)
+
+                    quadruopole_moment = self._convert_quadrupole(
+                        quadrupole[indices].reshape(-1, 6)
+                    )
+                    quadrupole_moment_prop = QuadrupoleMomentPerSystem(
+                        value=quadruopole_moment.reshape(-1, 3, 3),
+                        units=unit.elementary_charge * unit.angstrom * unit.angstrom,
+                    )
+                    record_temp.add_property(quadrupole_moment_prop)
 
                     dataset.add_record(record_temp)
-                    conformers_counter += conformers_per_molecule
 
         return dataset
 
@@ -234,35 +307,34 @@ class Aimnet2Curation(DatasetCuration):
 
         """
 
-        from modelforge.utils.remote import download_from_url
+        from modelforge.curate.utils import download_from_figshare
 
         url = self.dataset_download_url
 
         # download the dataset
-        download_from_url(
+        download_from_figshare(
             url=url,
             md5_checksum=self.dataset_md5_checksum,
             output_path=self.local_cache_dir,
             output_filename=self.dataset_filename,
-            length=self.dataset_length,
             force_download=force_download,
         )
 
-        # untar and uncompress the dataset
-        from modelforge.utils.misc import extract_tarred_file
-
-        extract_tarred_file(
-            input_path_dir=self.local_cache_dir,
-            file_name=self.dataset_filename,
-            output_path_dir=self.local_cache_dir,
-            mode="r:gz",
-        )
+        # # untar and uncompress the dataset
+        # from modelforge.utils.misc import extract_tarred_file
+        #
+        # extract_tarred_file(
+        #     input_path_dir=self.local_cache_dir,
+        #     file_name=self.dataset_filename,
+        #     output_path_dir=self.local_cache_dir,
+        #     mode="r:gz",
+        # )
 
         # the untarred file will be in a directory named 'final_h5' within the local_cache_dir,
-        hdf5_filename = f"{self.dataset_filename.replace('.tar.gz', '')}.h5"
+        # hdf5_filename = f"{self.dataset_filename.replace('.tar.gz', '')}.h5"
 
         # process the rest of the dataset
         self.dataset = self._process_downloaded(
-            f"{self.local_cache_dir}/final_h5/",
-            hdf5_filename,
+            f"{self.local_cache_dir}",
+            self.dataset_filename,
         )

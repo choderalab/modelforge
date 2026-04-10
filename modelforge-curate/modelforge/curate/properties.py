@@ -55,6 +55,8 @@ class PropertyClassification(CaseInsensitiveEnum):
     per_system: properties have shape [n_configs, X]
     atomic_numbers: special case with shape of [n_atoms, 1].
                     Atomic numbers do not change as configuration changes and thus this reduces memory footprint.
+    atomic_numbers_grouped: special case with shape of [n_groups, n_atoms, 1]
+                    This is used when grouping systems together
     meta_data: A single entry that may be a string, float, int, or array of any shape.
                     In general, meta_data is ignored when reading in a dataset for training in modelforge
 
@@ -63,6 +65,7 @@ class PropertyClassification(CaseInsensitiveEnum):
     per_atom = "per_atom"
     per_system = "per_system"
     atomic_numbers = "atomic_numbers"
+    atomic_numbers_grouped = "atomic_numbers_grouped"
     meta_data = "meta_data"
 
 
@@ -136,6 +139,15 @@ class PropertyBaseModel(BaseModel):
                 raise ValueError(
                     f"Shape of '{self.name}' should be [n_atoms,1], found {self.value.shape}"
                 )
+        elif self.classification == PropertyClassification.atomic_numbers_grouped:
+            if len(self.value.shape) != 3:
+                raise ValueError(
+                    f"Shape of '{self.name}' should be [n_grouped_records, n_atoms,1], found {self.value.shape}"
+                )
+            if self.value.shape[2] != 1:
+                raise ValueError(
+                    f"Shape of '{self.name}' should be [n_grouped_records, n_atoms,1], found {self.value.shape}"
+                )
         elif self.classification == PropertyClassification.per_system:
             # shape of a per_system property should be 2d for most properties, but it is possible to have a 3d shape if the property is a tensor.
             if len(self.value.shape) < 2:
@@ -160,7 +172,7 @@ class PropertyBaseModel(BaseModel):
     @model_validator(mode="after")
     def _check_unit_type(self) -> Self:
 
-        if self.classification != "meta_data":
+        if self.classification != "meta_data" and self.property_type != "meta_data":
             if not self.units.is_compatible_with(
                 GlobalUnitSystem.get_units(self.property_type), "chem"
             ):
@@ -1036,9 +1048,9 @@ class AtomicNumbers(PropertyBaseModel):
     # make sure no one has changed the type or classification of the property
     @model_validator(mode="after")
     def _assert_classification_and_type_unchanged(self) -> Self:
-        if self.classification != PropertyClassification.atomic_numbers:
+        if self.classification != PropertyClassification.atomic_numbers and self.classification != PropertyClassification.atomic_numbers_grouped:
             raise ValueError(
-                f"Classification of atomic numbers should be atomic_numbers, found {self.classification}"
+                f"Classification of atomic numbers should be atomic_numbers or atomic_numbers_grouped, found {self.classification}"
             )
         if self.property_type != PropertyType.atomic_numbers:
             raise ValueError(

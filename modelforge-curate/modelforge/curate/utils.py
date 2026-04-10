@@ -3,6 +3,7 @@ from pydantic import BeforeValidator, PlainSerializer
 
 import numpy as np
 from typing import Union
+from loguru import logger
 
 __all__ = ["NdArray"]
 
@@ -250,3 +251,96 @@ class VersionMetadata:
         else:
             with open(f"{file_path}/{file_name}", "w") as f:
                 yaml.dump(self._local_dataset_to_dict(), f)
+
+
+def download_from_figshare(
+    url: str,
+    output_path: str,
+    output_filename: str,
+    md5_checksum: str,
+    force_download: bool = False,
+) -> bool:
+    """
+    Downloads from figshare.
+
+    This relies upon playwright package as figshare does not work with requests, wget, or curl.
+
+    Parameters
+    ----------
+    url: str
+        url to download
+    output_path: str
+        Path to the directory to download to.
+    output_filename: str
+        Filename to save the downloaded file to in the output_path directory.
+    md5_checksum: str
+        Checksum of the downloaded file against the md5 checksum.
+    force_download: bool
+        If we should download the file, even if it exists.
+
+    Returns
+    -------
+
+    """
+
+    from playwright.sync_api import sync_playwright
+    from modelforge.utils.remote import calculate_md5_checksum
+    from modelforge.utils.misc import OpenWithLock
+
+    import os
+
+    full_path = os.path.join(output_path, output_filename)
+    os.makedirs(output_path, exist_ok=True)
+
+    with OpenWithLock(
+        f"{output_path}/._{output_filename}_download.lockfile", "w"
+    ) as fl:
+
+        if os.path.isfile(full_path):
+            # if the file exists, we need to check to make sure that the file that is stored in the output path
+            # note, we will check if the file has a lock on it inside calculate_md5_checksum to ensure
+            # that we aren't looking at a file that is still being written to
+            calculated_checksum = calculate_md5_checksum(
+                file_name=output_filename, file_path=output_path
+            )
+            if calculated_checksum != md5_checksum:
+                force_download = True
+                logger.debug(
+                    f"Checksum {calculated_checksum} of existing file {output_filename} does not match expected checksum {md5_checksum}, re-downloading."
+                )
+
+        if not os.path.isfile(full_path) or force_download:
+            logger.debug(
+                f"Downloading datafile from {url} to {output_path}/{output_filename}."
+            )
+
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                context = browser.new_context(accept_downloads=True)
+                page = context.new_page()
+
+                with page.expect_download() as download_info:
+                    page.goto(url)
+
+                download = download_info.value
+
+                download.save_as(full_path)
+                browser.close()
+
+            # check the checksum
+            calculated_checksum = calculate_md5_checksum(
+                file_name=output_filename, file_path=output_path
+            )
+            if calculated_checksum != md5_checksum:
+                raise Exception(
+                    f"Checksum of downloaded file {calculated_checksum} does not match expected checksum {md5_checksum}."
+                )
+            else:
+                return True  # success, exit the function
+
+        else:  # if the file exists and we don't set force_download to True, just use the cached version
+            logger.debug(f"Datafile {output_filename} already exists in {output_path}.")
+            logger.debug(
+                "Using previously downloaded file; set force_download=True to re-download."
+            )
+            return True

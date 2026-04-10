@@ -1,0 +1,8 @@
+dataset_name: aimnet2
+latest: wb97m_v0
+wb97m_v0:
+  version: 0
+  dataset_download_url: https://kilthub.cmu.edu/ndownloader/files/50299092
+  dataset_md5_checksum: 3e59843c55d7739cd49936c55d6825ff
+  dataset_length: 14669307950
+  dataset_filename: aimnet2_wb97m.h5

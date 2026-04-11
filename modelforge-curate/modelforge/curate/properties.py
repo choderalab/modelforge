@@ -179,7 +179,7 @@ class PropertyBaseModel(BaseModel):
                 raise ValueError(
                     f"Unit {self.units} of {self.name} are not compatible with the property type {self.property_type}.\n"
                 )
-            return self
+        return self
 
     @computed_field
     @property
@@ -1048,7 +1048,10 @@ class AtomicNumbers(PropertyBaseModel):
     # make sure no one has changed the type or classification of the property
     @model_validator(mode="after")
     def _assert_classification_and_type_unchanged(self) -> Self:
-        if self.classification != PropertyClassification.atomic_numbers and self.classification != PropertyClassification.atomic_numbers_grouped:
+        if (
+            self.classification != PropertyClassification.atomic_numbers
+            and self.classification != PropertyClassification.atomic_numbers_grouped
+        ):
             raise ValueError(
                 f"Classification of atomic numbers should be atomic_numbers or atomic_numbers_grouped, found {self.classification}"
             )

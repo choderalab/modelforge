@@ -29,7 +29,7 @@ def test_add_properties_to_records_directly(prep_temp_dir):
     positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
     energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
     atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
-    meta_data = MetaData(name="smiles", value="[CH]")
+    meta_data = MetaData(name="smiles", value="[CH+3]")
 
     record.add_property(property=atomic_numbers)
     record.add_properties([positions, energies, meta_data])
@@ -93,7 +93,7 @@ def test_record_failures():
     positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
     energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
     atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
-    meta_data = MetaData(name="smiles", value="[CH]")
+    meta_data = MetaData(name="smiles", value="[CH+3]")
 
     record.add_property(property=atomic_numbers)
     record.add_properties([positions, energies, meta_data])
@@ -137,7 +137,7 @@ def test_record_to_rdkit():
     )
     energies = Energies(value=np.array([[0.1], [0.2]]), units=unit.hartree)
     atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
-    meta_data = MetaData(name="smiles", value="[CH]")
+    meta_data = MetaData(name="smiles", value="[CH+3]")
 
     record.add_properties([positions, energies, atomic_numbers, meta_data])
 
@@ -184,7 +184,7 @@ def test_record_remove_property():
     atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
     positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
     energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
-    meta_data = MetaData(name="smiles", value="[CH]")
+    meta_data = MetaData(name="smiles", value="[CH+3]")
     record.add_properties([positions, energies, atomic_numbers, meta_data])
 
     record.remove_property("positions")
@@ -211,7 +211,7 @@ def test_get_property():
     atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
     positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
     energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
-    meta_data = MetaData(name="smiles", value="[CH]")
+    meta_data = MetaData(name="smiles", value="[CH+3]")
 
     record.add_properties([positions, energies, atomic_numbers, meta_data])
 
@@ -244,7 +244,7 @@ def test_get_property_value():
     atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
     positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
     energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
-    meta_data = MetaData(name="smiles", value="[CH]")
+    meta_data = MetaData(name="smiles", value="[CH+3]")
 
     record.add_properties([positions, energies, atomic_numbers, meta_data])
 
@@ -298,7 +298,7 @@ def test_record_repr(capsys):
     positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
     energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
     atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
-    smiles = MetaData(name="smiles", value="[CH]")
+    smiles = MetaData(name="smiles", value="[CH+3]")
     print(record)
     out, err = capsys.readouterr()
 
@@ -330,7 +330,7 @@ def test_record_repr(capsys):
         in out
     )
     assert (
-        " name='smiles' value='[CH]' units=<Unit('dimensionless')> classification='meta_data' property_type='meta_data' n_configs=None n_atoms=None"
+        " name='smiles' value='[CH+3]' units=<Unit('dimensionless')> classification='meta_data' property_type='meta_data' n_configs=None n_atoms=None"
         in out
     )
 
@@ -341,7 +341,7 @@ def test_record_to_dict():
     positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
     energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
     atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
-    smiles = MetaData(name="smiles", value="[CH]")
+    smiles = MetaData(name="smiles", value="[CH+3]")
 
     record.add_properties([positions, energies, atomic_numbers, smiles])
     record_dict = record.to_dict()
@@ -359,7 +359,7 @@ def test_record_validation():
     positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
     energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
     atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
-    meta_data = MetaData(name="smiles", value="[CH]")
+    meta_data = MetaData(name="smiles", value="[CH+3]")
 
     record.add_properties([positions, energies, atomic_numbers, meta_data])
     assert record._validate_n_configs() == True
@@ -414,7 +414,7 @@ def test_add_properties_failures():
     positions = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="nanometer")
     energies = Energies(value=np.array([[0.1]]), units=unit.hartree)
     atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
-    meta_data = MetaData(name="smiles", value="[CH]")
+    meta_data = MetaData(name="smiles", value="[CH+3]")
 
     record.add_properties([positions, energies, atomic_numbers, meta_data])
     # try adding the same properties again
@@ -440,10 +440,10 @@ def test_add_properties_failures():
     with pytest.raises(ValueError):
         record.add_property(energies)
 
-    meta_data = MetaData(name="positions", value="[CH]")
+    meta_data = MetaData(name="positions", value="[CH+3]")
     with pytest.raises(ValueError):
         record.add_property(meta_data)
-    meta_data = MetaData(name="energies", value="[CH]")
+    meta_data = MetaData(name="energies", value="[CH+3]")
     with pytest.raises(ValueError):
         record.add_property(meta_data)
 
@@ -494,7 +494,7 @@ def test_slicing_properties(prep_temp_dir):
         value=np.array([[0.1], [0.2], [0.3], [0.4]]), units=unit.hartree
     )
     atomic_numbers = AtomicNumbers(value=np.array([[1], [6]]))
-    meta_data = MetaData(name="smiles", value="[CH]")
+    meta_data = MetaData(name="smiles", value="[CH+3]")
 
     record.add_property(property=atomic_numbers)
     record.add_properties([positions, energies, meta_data])
@@ -588,7 +588,7 @@ def test_merge_records(prep_temp_dir):
     energies1 = Energies(value=np.array([[0.1]]), units=unit.hartree)
     atomic_numbers1 = AtomicNumbers(value=np.array([[1], [6]]))
 
-    meta_data1 = MetaData(name="smiles", value="[CH]")
+    meta_data1 = MetaData(name="smiles", value="[CH+3]")
     record1.add_properties([positions1, energies1, atomic_numbers1, meta_data1])
     assert record1.append_property == False
 
@@ -598,7 +598,7 @@ def test_merge_records(prep_temp_dir):
     )
     energies2 = Energies(value=np.array([[0.5]]), units=unit.hartree)
     atomic_numbers2 = AtomicNumbers(value=np.array([[1], [6]]))
-    meta_data2 = MetaData(name="smiles", value="[CH]")
+    meta_data2 = MetaData(name="smiles", value="[CH+3]")
 
     record2.add_properties([positions2, energies2, atomic_numbers2, meta_data2])
 
@@ -631,7 +631,7 @@ def test_record_group_single_configurations(prep_temp_dir):
     positions1 = Positions(value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]], units="angstrom")
     energies1 = Energies(value=np.array([[0.1]]), units=unit.hartree)
     atomic_numbers1 = AtomicNumbers(value=np.array([[1], [6]]))
-    smiles1 = MetaData(name="smiles", value="[CH]")
+    smiles1 = MetaData(name="smiles", value="[CH+3]")
     record1.add_properties([positions1, energies1, atomic_numbers1, smiles1])
 
     record2 = Record(name="mol2")
@@ -639,7 +639,7 @@ def test_record_group_single_configurations(prep_temp_dir):
     positions2 = Positions(value=[[[3.0, 3.0, 3.0], [4.0, 4.0, 4.0]]], units="angstrom")
     energies2 = Energies(value=np.array([[0.2]]), units=unit.hartree)
     atomic_numbers2 = AtomicNumbers(value=np.array([[1], [8]]))
-    smiles2 = MetaData(name="smiles", value="[HO]")
+    smiles2 = MetaData(name="smiles", value="[OH+]")
     record2.add_properties([positions2, energies2, atomic_numbers2, smiles2])
 
     record_group = RecordGroup(name="group1")
@@ -784,7 +784,7 @@ def test_record_group_multiple_configurations(prep_temp_dir):
     )
     energies1 = Energies(value=np.array([[0.1], [0.11]]), units=unit.hartree)
     atomic_numbers1 = AtomicNumbers(value=np.array([[1], [6]]))
-    smiles1 = MetaData(name="smiles", value="[CH]")
+    smiles1 = MetaData(name="smiles", value="[CH+3]")
     record1.add_properties([positions1, energies1, atomic_numbers1, smiles1])
 
     record2 = Record(name="mol2")
@@ -795,7 +795,7 @@ def test_record_group_multiple_configurations(prep_temp_dir):
     )
     energies2 = Energies(value=np.array([[0.2], [0.22]]), units=unit.hartree)
     atomic_numbers2 = AtomicNumbers(value=np.array([[1], [8]]))
-    smiles2 = MetaData(name="smiles", value="[HO]")
+    smiles2 = MetaData(name="smiles", value="[OH+]")
     record2.add_properties([positions2, energies2, atomic_numbers2, smiles2])
 
     record_group = RecordGroup(name="group1")
@@ -857,8 +857,8 @@ def test_grouped_record_round_trip(prep_temp_dir):
     )
     energies1 = Energies(value=np.array([[0.1], [0.11]]), units=unit.hartree)
     atomic_numbers1 = AtomicNumbers(value=np.array([[1], [6]]))
-    smiles1 = MetaData(name="smiles", value="[CH]")
-    temperature1 = MetaData(name="temperature", value="298.0", units=unit.kelvin)
+    smiles1 = MetaData(name="smiles", value="[CH+3]")
+    temperature1 = MetaData(name="temperature", value=298.0, units=unit.kelvin)
     record1.add_properties(
         [positions1, energies1, atomic_numbers1, smiles1, temperature1]
     )
@@ -871,8 +871,8 @@ def test_grouped_record_round_trip(prep_temp_dir):
     )
     energies2 = Energies(value=np.array([[0.2], [0.22]]), units=unit.hartree)
     atomic_numbers2 = AtomicNumbers(value=np.array([[1], [8]]))
-    smiles2 = MetaData(name="smiles", value="[HO]")
-    temperature2 = MetaData(name="temperature", value="350.0", units=unit.kelvin)
+    smiles2 = MetaData(name="smiles", value="[OH+]")
+    temperature2 = MetaData(name="temperature", value=350.0, units=unit.kelvin)
     record2.add_properties(
         [positions2, energies2, atomic_numbers2, smiles2, temperature2]
     )

@@ -1538,7 +1538,9 @@ def test_dataset_grouped_records_to_hdf5(prep_temp_dir):
     atomic_numbers1 = AtomicNumbers(value=np.array([[1], [6]]))
     smiles1 = MetaData(name="smiles", value="[CH+3]")
     temperature1 = MetaData(name="temperature", value=298.0, units=unit.kelvin)
-    vector_property1 = MetaData(name="vector_property", value=[[1.0, 1.0, 1.0]])
+    vector_property1 = MetaData(
+        name="vector_property", value=np.array([[1.0, 1.0, 1.0]])
+    )
     record1.add_properties(
         [
             positions1,
@@ -1567,7 +1569,9 @@ def test_dataset_grouped_records_to_hdf5(prep_temp_dir):
     atomic_numbers2 = AtomicNumbers(value=np.array([[1], [6]]))
     smiles2 = MetaData(name="smiles", value="[CH+3]")
     temperature2 = MetaData(name="temperature", value=325.0, units=unit.kelvin)
-    vector_property2 = MetaData(name="vector_property", value=[[2.0, 2.0, 2.0]])
+    vector_property2 = MetaData(
+        name="vector_property", value=np.array([[2.0, 2.0, 2.0]])
+    )
     record2.add_properties(
         [
             positions2,
@@ -1591,7 +1595,9 @@ def test_dataset_grouped_records_to_hdf5(prep_temp_dir):
     atomic_numbers3 = AtomicNumbers(value=np.array([[1], [8]]))
     smiles3 = MetaData(name="smiles", value="[OH+]")
     temperature3 = MetaData(name="temperature", value=350.0, units=unit.kelvin)
-    vector_property3 = MetaData(name="vector_property", value=[[3.0, 3.0, 3.0]])
+    vector_property3 = MetaData(
+        name="vector_property", value=np.array([[3.0, 3.0, 3.0]])
+    )
 
     record3.add_properties(
         [
@@ -1613,7 +1619,9 @@ def test_dataset_grouped_records_to_hdf5(prep_temp_dir):
     energies4 = Energies(value=np.array([[0.4]]), units=unit.kilojoule_per_mole)
     smiles4 = MetaData(name="smiles", value="O")
     temperature4 = MetaData(name="temperature", value=354.0, units=unit.kelvin)
-    vector_property4 = MetaData(name="vector_property", value=[[4.0, 4.0, 4.0]])
+    vector_property4 = MetaData(
+        name="vector_property", value=np.array([[4.0, 4.0, 4.0]])
+    )
 
     record4.add_properties(
         [
@@ -1640,7 +1648,9 @@ def test_dataset_grouped_records_to_hdf5(prep_temp_dir):
     energies5 = Energies(value=np.array([[0.5], [0.51]]), units=unit.kilojoule_per_mole)
     smiles5 = MetaData(name="smiles", value="O")
     temperature5 = MetaData(name="temperature", value=354.0, units=unit.kelvin)
-    vector_property5 = MetaData(name="vector_property", value=[[5.0, 5.0, 5.0]])
+    vector_property5 = MetaData(
+        name="vector_property", value=np.array([[5.0, 5.0, 5.0]])
+    )
 
     record5.add_properties(
         [
@@ -1680,7 +1690,9 @@ def test_dataset_grouped_records_to_hdf5(prep_temp_dir):
     energies6 = Energies(value=np.array([[0.6]]), units=unit.kilojoule_per_mole)
     smiles6 = MetaData(name="smiles", value="C")
     temperature6 = MetaData(name="temperature", value=356.0)
-    vector_property6 = MetaData(name="vector_property", value=[[6.0, 6.0, 6.0]])
+    vector_property6 = MetaData(
+        name="vector_property", value=np.array([[6.0, 6.0, 6.0]])
+    )
 
     record6.add_properties(
         [
@@ -1724,7 +1736,8 @@ def test_dataset_grouped_records_to_hdf5(prep_temp_dir):
         assert "group_3" in group_keys
         assert "group_5" in group_keys
 
-        # look at group_n2 to ensure we have 3 entries we expect
+        # look at group_n2 to start to do some manual evaulation
+        # to ensure we have the entries we expect
         group_n2 = f["group_2"]
         atomic_numbers = group_n2["atomic_numbers"][()]
         assert atomic_numbers.shape[0] == 3  # we have 3 molecules
@@ -1788,6 +1801,7 @@ def test_dataset_grouped_records_to_hdf5(prep_temp_dir):
             == np.array([[1.0, 1.0, 1.0], [2.0, 2.0, 2.0], [3.0, 3.0, 3.0]])
         )
 
+        # let us loop over all the groups and comparing to the values in the original records we defined above
         group_names = ["group_2", "group_3", "group_5"]
         records_in_groups = [[record1, record2, record3], [record4, record5], [record6]]
 
@@ -1842,5 +1856,20 @@ def test_dataset_grouped_records_to_hdf5(prep_temp_dir):
 
                 start_id = end_id
 
-        # for key in group_n2.keys():
-        #     print(key, group_n2[key][()])
+    # let us try using create_dataset_from_hdf5 to read back in the records from the datset
+    from modelforge.curate.sourcedataset import create_dataset_from_hdf5
+
+    property_map = {
+        "energies": Energies,
+        "positions": Positions,
+        "atomic_numbers": AtomicNumbers,
+        "smiles": MetaData,
+    }
+    dataset_from_hdf5 = create_dataset_from_hdf5(
+        hdf5_filename=full_path,
+        dataset_name="test_round_trip",
+        dataset_local_db_dir=prep_temp_dir,
+        property_map=property_map,
+    )
+
+    assert dataset_from_hdf5.total_records() == 6

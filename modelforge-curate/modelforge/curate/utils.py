@@ -24,6 +24,10 @@ NdArray = Annotated[
 ]
 
 
+def _do_nothing(value: Union[list, np.ndarray]) -> Union[list, np.ndarray]:
+    return value
+
+
 def _convert_list_to_ndarray(value: Union[list, np.ndarray]):
     """
     This will convert a list to a numpy ndarray

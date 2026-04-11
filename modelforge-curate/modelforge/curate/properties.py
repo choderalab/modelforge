@@ -10,13 +10,10 @@ from pydantic import (
     computed_field,
 )
 from enum import Enum
-from typing import Union, List
+from typing import Union
 from typing_extensions import Self
 
-from modelforge.curate.utils import (
-    NdArray,
-    _convert_list_to_ndarray,
-)
+from modelforge.curate.utils import NdArray, _convert_list_to_ndarray, _do_nothing
 from loguru import logger as log
 
 from openff.units import unit
@@ -104,7 +101,7 @@ class PropertyBaseModel(BaseModel):
     """
 
     name: str
-    value: Union[NdArray, List, str, int, float]
+    value: Union[NdArray, list, str, int, float]
     units: unit.Unit
     classification: PropertyClassification
     property_type: PropertyType
@@ -1000,7 +997,7 @@ class MetaData(PropertyBaseModel):
     ----------
     name : str
         The name of the property
-    value : Union[str, int, float, List, np.ndarray]
+    value : Union[str, int, float, list, np.ndarray]
         The metadata value
     units : unit.Unit, default=unit.dimensionless
         The units of the metadata
@@ -1012,10 +1009,12 @@ class MetaData(PropertyBaseModel):
     """
 
     name: str
-    value: Union[str, int, float, List, NdArray]
+    value: Union[str, int, float, list, NdArray]
     units: unit.Unit = unit.dimensionless
     classification: PropertyClassification = PropertyClassification.meta_data
     property_type: PropertyType = PropertyType.meta_data
+
+    converted_array = field_validator("value", mode="before")(_do_nothing)
 
 
 class AtomicNumbers(PropertyBaseModel):

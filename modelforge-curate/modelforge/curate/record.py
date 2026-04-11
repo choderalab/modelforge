@@ -980,9 +980,17 @@ class RecordGroup(Record):
         # these will be converted later, if we can
         for prop in record.meta_data.keys():
             if prop not in self.meta_data.keys():
-                self.meta_data[prop] = [record.get_property(prop)]
+                temp_prop = record.get_property(prop)
+                # note pydantic base model automatically converts a list to a numpy array
+                temp_prop.value = [temp_prop.value]
+
+                self.meta_data[prop] = temp_prop
+
             else:
-                self.meta_data[prop].append(record.get_property(prop))
+                print("should be appending prop ", prop)
+                temp_prop = record.get_property(prop)
+                self.meta_data[prop].value.append(temp_prop.value)
+                print(self.meta_data[prop])
 
     def add_records(self, records: List[Record]):
         assert isinstance(records, list)
@@ -1023,13 +1031,13 @@ class RecordGroup(Record):
             for prop in self.meta_data.keys():
                 record.remove_property(prop)
 
-                temp_value = self.meta_data[prop][i].value
+                temp_value = self.meta_data[prop].value[i]
 
                 temp_metadata = MetaData(
-                    name=self.meta_data[prop][i].name,
+                    name=self.meta_data[prop].name,
                     value=temp_value,
-                    classification=self.meta_data[prop][i].classification,
-                    property_type=self.meta_data[prop][i].property_type,
+                    classification=self.meta_data[prop].classification,
+                    property_type=self.meta_data[prop].property_type,
                 )
                 print(temp_metadata)
                 record.add_property(temp_metadata)

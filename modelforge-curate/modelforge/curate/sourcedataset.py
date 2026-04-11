@@ -1126,60 +1126,52 @@ class SourceDataset:
             record_group[key].attrs["property_type"] = str(property.property_type)
 
         for key, property in record.meta_data.items():
-            # A RecordGroup will have a list for the metadata that is stored as lists
-            # we will try to convert these to formats we can write easily in hdf5 files
-            # e.g., converting lists of numpy arrays to a single numpy array
-            # or just writing out lists of strings
-            if isinstance(property, list):
+
+            if isinstance(property.value, list):
                 # if we have a list, let us see if we can write it out
 
-                # convert contents to a list
-                prop_list = []
-                for prop in property:
-                    prop_list.append(prop.value)
-
-                if all(isinstance(prop_temp, str) for prop_temp in prop_list):
+                if all(isinstance(prop_temp, str) for prop_temp in property.value):
                     # we can write out lists of strings
-                    record_group.create_dataset(key, data=prop_list, dtype=dt)
-                    record_group[key].attrs["u"] = str(property[0].units)
+                    record_group.create_dataset(key, data=property.value, dtype=dt)
+                    record_group[key].attrs["u"] = str(property.units)
                     record_group[key].attrs["format"] = "meta_data"
                     record_group[key].attrs["property_type"] = "meta_data"
-                elif all(isinstance(prop_temp, np.ndarray) for prop_temp in prop_list):
+                elif all(
+                    isinstance(prop_temp, np.ndarray) for prop_temp in property.value
+                ):
                     # if metadata list contains numpy arrays
                     # we need to ensure the shapes are the same for the numpy arrays in the list
                     state = True
-                    for prop in property:
+                    for prop in property.value:
                         if not np.all(
-                            prop.value.shape[1:-1] == property[0].value.shape[1:-1]
+                            prop.shape[1:-1] == property.value[0].shape[1:-1]
                         ):
                             state = False
 
                     if state:
-                        temp_array = np.concat([prop.value for prop in property])
+                        temp_array = np.concat([prop for prop in property.value])
                         record_group.create_dataset(
                             key, data=temp_array, shape=temp_array.shape
                         )
-                        record_group[key].attrs["u"] = str(property[0].units)
+                        record_group[key].attrs["u"] = str(property.units)
                         # note, we could potentially define meta_data as per_atom or per_system if we define
                         # an array
-                        record_group[key].attrs["format"] = str(
-                            property[0].classification
-                        )
+                        record_group[key].attrs["format"] = str(property.classification)
                         record_group[key].attrs["property_type"] = "meta_data"
 
                     else:
                         log.warning(f"cannot save property {key} in the grouped format")
                 elif all(
-                    isinstance(prop_temp, (float, int)) for prop_temp in prop_list
+                    isinstance(prop_temp, (float, int)) for prop_temp in property.value
                 ):
                     # if the property just contains floats or ints, we can easily convert to a numpy array
 
-                    temp_array = np.array([val.value for val in property])
+                    temp_array = np.array([val for val in property.value])
 
                     record_group.create_dataset(
                         key, data=temp_array, shape=temp_array.shape
                     )
-                    record_group[key].attrs["u"] = str(property[0].units)
+                    record_group[key].attrs["u"] = str(property.units)
                     record_group[key].attrs["format"] = "meta_data"
                     record_group[key].attrs["property_type"] = "meta_data"
 
@@ -1433,7 +1425,7 @@ def create_dataset_from_hdf5(
                         value = f[key][pk][()]
                         if type(value) is bytes:
                             value = f[key][pk][()].decode("utf-8")
-                        print(value, property_type, unit_str, property_classification)
+
                         if pk in property_map:
                             property = property_map[pk](
                                 name=pk,

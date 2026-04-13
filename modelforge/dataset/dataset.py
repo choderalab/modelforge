@@ -420,8 +420,6 @@ class HDF5Dataset:
         This also handles file validation for any local datasets defined in a local_yaml_file.
 
         """
-        # Right now this function needs to be defined for each dataset.
-        # once all datasets are moved to zenodo, we should only need a single function defined in the base class
         from modelforge.utils.remote import download_from_url
         from modelforge.utils.misc import OpenWithLock
 
@@ -804,7 +802,7 @@ class HDF5Dataset:
             )
 
         else:
-            # if a local yaml file is provided, the "name" field provides the full path to the file
+            # if a local yaml file is provided, the "file_name" field provides the full path to the file
             # we will expand the path to handle ~ if provided
             temp_hdf5_file = os.path.expanduser(self.hdf5_data_file_dict["file_name"])
 
@@ -852,8 +850,10 @@ class HDF5Dataset:
                 log.debug(f"n_entries: {len(hf.keys())}")
 
                 for record in tqdm.tqdm(list(hf.keys())):
+                    is_grouped = False
                     # if we have a record with no conformers, we'll skip it to avoid failures
                     if hf[record]["n_configs"][()] != 0:
+
                         # There may be cases where a specific property of interest
                         # has not been computed for a given record
                         # in that case, we'll want to just skip over that entry

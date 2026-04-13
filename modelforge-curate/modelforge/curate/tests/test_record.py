@@ -2,7 +2,14 @@ import pytest
 import numpy as np
 from openff.units import unit
 
-from modelforge.curate import Record, SourceDataset, AtomicNumbers, RecordGroup
+from modelforge.curate import (
+    Record,
+    SourceDataset,
+    AtomicNumbers,
+    RecordGroup,
+    Energies,
+    PartialCharges,
+)
 from modelforge.curate.properties import *
 
 
@@ -672,8 +679,10 @@ def test_record_group_single_configurations(prep_temp_dir):
     assert np.all(record_group.per_atom["positions"].value == positions1.value)
 
     # check the smiles metadata
-    assert len(record_group.meta_data["smiles"]) == 1
-    assert record_group.meta_data["smiles"][0].value == smiles1.value
+    # the record_group instance stores the smile string in a list, even if only one entry
+    # the original property is just the string
+    assert len(record_group.meta_data["smiles"].value) == 1
+    assert record_group.meta_data["smiles"].value[0] == smiles1.value
 
     # check the grouped_names and grouped_n_configs fields
     assert len(record_group.grouped_names) == 1
@@ -710,9 +719,9 @@ def test_record_group_single_configurations(prep_temp_dir):
 
     # check the metadata; because metadata is most likely not a numpy array that can just be stacked
     # we just create a list when they are added
-    assert len(record_group.meta_data["smiles"]) == 2
-    assert record_group.meta_data["smiles"][0].value == smiles1.value
-    assert record_group.meta_data["smiles"][1].value == smiles2.value
+    assert len(record_group.meta_data["smiles"].value) == 2
+    assert record_group.meta_data["smiles"].value[0] == smiles1.value
+    assert record_group.meta_data["smiles"].value[1] == smiles2.value
 
     # check the grouped_names and grouped_n_configs fields
     assert len(record_group.grouped_names) == 2
@@ -758,9 +767,9 @@ def test_record_group_single_configurations(prep_temp_dir):
 
     # check the metadata; because metadata is most likely not a numpy array that can just be stacked
     # we just create a list when they are added
-    assert len(record_group.meta_data["smiles"]) == 2
-    assert record_group.meta_data["smiles"][0].value == smiles1.value
-    assert record_group.meta_data["smiles"][1].value == smiles2.value
+    assert len(record_group.meta_data["smiles"].value) == 2
+    assert record_group.meta_data["smiles"].value[0] == smiles1.value
+    assert record_group.meta_data["smiles"].value[1] == smiles2.value
 
     # check the grouped_names and grouped_n_configs fields
     assert len(record_group.grouped_names) == 2
@@ -834,9 +843,9 @@ def test_record_group_multiple_configurations(prep_temp_dir):
 
     # check the metadata; because metadata is most likely not a numpy array that can just be stacked
     # we just create a list when they are added
-    assert len(record_group.meta_data["smiles"]) == 2
-    assert record_group.meta_data["smiles"][0].value == smiles1.value
-    assert record_group.meta_data["smiles"][1].value == smiles2.value
+    assert len(record_group.meta_data["smiles"].value) == 2
+    assert record_group.meta_data["smiles"].value[0] == smiles1.value
+    assert record_group.meta_data["smiles"].value[1] == smiles2.value
 
     # check the grouped_names and grouped_n_configs fields
     assert len(record_group.grouped_names) == 2
@@ -846,6 +855,118 @@ def test_record_group_multiple_configurations(prep_temp_dir):
     assert len(record_group.grouped_n_configs) == 2
     assert record_group.grouped_n_configs[0] == 2
     assert record_group.grouped_n_configs[1] == 2
+
+
+def test_grouped_record_errors(prep_temp_dir):
+    # we need to throw errors if the records we are trying to group do not have the same properties
+
+    record1 = Record(name="mol1")
+    atomic_numbers1 = AtomicNumbers(value=np.array([[1], [6]]))
+
+    # per_atom properties
+    positions1 = Positions(
+        value=[[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]], [[1.1, 1.1, 1.1], [2.1, 2.1, 2.1]]],
+        units="angstrom",
+    )
+    charges1 = PartialCharges(
+        value=np.array([[[1], [2]], [[1], [2]]]), units=unit.elementary_charge
+    )
+
+    # per system properties
+    energies1 = Energies(
+        value=np.array([[0.1], [0.11]]), units=unit.kilojoules_per_mole
+    )
+    energies_b1 = Energies(
+        name="dft_energy",
+        value=np.array([[0.1], [0.11]]),
+        units=unit.kilojoules_per_mole,
+    )
+
+    # meta data
+    smiles1 = MetaData(name="smiles", value="[CH+3]")
+    temperature1 = MetaData(name="temperature", value=298.0, units=unit.kelvin)
+    record1.add_properties(
+        [
+            positions1,
+            energies1,
+            atomic_numbers1,
+            smiles1,
+            temperature1,
+            charges1,
+            energies_b1,
+        ]
+    )
+    # First set of tests should fail simply because we do not have the same number of
+    # properties defined
+
+    # this will be the same except not have energies_b1
+    record2 = Record(name="mol2")
+    record2.add_properties(
+        [positions1, energies1, atomic_numbers1, smiles1, temperature1, charges1]
+    )
+
+    group = RecordGroup(name="group1")
+    with pytest.raises(ValueError):
+        group.add_records([record1, record2])
+
+    # this will be the same except not have charges1
+    record2 = Record(name="mol2")
+    record2.add_properties(
+        [positions1, energies1, atomic_numbers1, smiles1, temperature1, energies_b1]
+    )
+
+    with pytest.raises(ValueError):
+        group.add_records([record1, record2])
+
+    # this will be the same but without temperatuer 1
+    record2 = Record(name="mol2")
+    record2.add_properties(
+        [positions1, energies1, atomic_numbers1, smiles1, charges1, energies_b1]
+    )
+    with pytest.raises(ValueError):
+        group.add_records([record1, record2])
+
+    # now define with same number of properties but with different names, i.e., we actually ensure properties are same
+
+    # swap energies1 for energies_b1
+    record2 = Record(name="mol2")
+    record1 = Record(name="mol1")
+    record1.add_properties(
+        [positions1, energies1, atomic_numbers1, smiles1, temperature1, charges1]
+    )
+    record2.add_properties(
+        [positions1, energies_b1, atomic_numbers1, smiles1, temperature1, charges1]
+    )
+
+    group = RecordGroup(name="group1")
+    with pytest.raises(ValueError):
+        group.add_records([record1, record2])
+
+    # swap smiles1 for temperature1
+    record2 = Record(name="mol2")
+    record1 = Record(name="mol1")
+    record1.add_properties([positions1, energies1, atomic_numbers1, smiles1, charges1])
+    record2.add_properties(
+        [positions1, energies1, atomic_numbers1, temperature1, charges1]
+    )
+
+    group = RecordGroup(name="group1")
+    with pytest.raises(ValueError):
+        group.add_records([record1, record2])
+
+    # swap positions2 for charges1
+    record2 = Record(name="mol2")
+    record1 = Record(name="mol1")
+    record1.add_properties(
+        [positions1, energies1, atomic_numbers1, smiles1, temperature1]
+    )
+    record2.add_properties(
+        [energies1, atomic_numbers1, smiles1, temperature1, charges1]
+    )
+
+    group = RecordGroup(name="group1")
+    with pytest.raises(ValueError):
+        group.add_records([record1, record2])
 
 
 def test_grouped_record_round_trip(prep_temp_dir):

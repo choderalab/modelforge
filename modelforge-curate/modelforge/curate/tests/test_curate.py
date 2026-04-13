@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 from openff.units import unit
 
-from modelforge.curate import Record, SourceDataset, Energies, AtomicNumbers
+from modelforge.curate import Record, SourceDataset, Energies, AtomicNumbers, MetaData
 from modelforge.utils.units import GlobalUnitSystem
 from modelforge.curate.properties import *
 
@@ -1807,7 +1807,6 @@ def test_dataset_grouped_records_to_hdf5(prep_temp_dir):
 
         for i in range(len(group_names)):
             group_name = group_names[i]
-            n_atoms = group_name.split("_")[-1]
             group = f[group_name]
             records_in_group = records_in_groups[i]
 
@@ -1818,6 +1817,9 @@ def test_dataset_grouped_records_to_hdf5(prep_temp_dir):
             vector_property = group["vector_property"][()]
             grouped_names_hdf5 = group["grouped_names"][()]
             grouped_names_hdf5 = [val.decode("utf-8") for val in grouped_names_hdf5]
+            n_configs = group["n_configs"][()]
+            assert n_configs > 0
+
             # figure out the start and end points to split the numpy arrays
 
             grouped_indices = group["grouped_indices"][()]
@@ -1864,6 +1866,8 @@ def test_dataset_grouped_records_to_hdf5(prep_temp_dir):
         "positions": Positions,
         "atomic_numbers": AtomicNumbers,
         "smiles": MetaData,
+        "temperature": MetaData,
+        "vector_property": MetaData,
     }
     dataset_from_hdf5 = create_dataset_from_hdf5(
         hdf5_filename=full_path,
@@ -1873,3 +1877,33 @@ def test_dataset_grouped_records_to_hdf5(prep_temp_dir):
     )
 
     assert dataset_from_hdf5.total_records() == 6
+
+    record_names = dataset_from_hdf5.record_names()
+    for record in [record1, record2, record3, record4, record5, record6]:
+        # validate the original records to what we read from the dataset
+        record_name = record.name
+        record_from_dataset = dataset_from_hdf5.get_record(record_name)
+        assert record_from_dataset.name == record.name
+        assert np.all(
+            record_from_dataset.atomic_numbers.value == record.atomic_numbers.value
+        )
+        assert np.all(
+            record_from_dataset.per_atom["positions"].value
+            == record.per_atom["positions"].value
+        )
+        assert np.all(
+            record_from_dataset.per_system["energies"].value
+            == record.per_system["energies"].value
+        )
+        assert np.all(
+            record_from_dataset.meta_data["smiles"].value
+            == record.meta_data["smiles"].value
+        )
+        assert np.all(
+            record_from_dataset.meta_data["temperature"].value
+            == record.meta_data["temperature"].value
+        )
+        assert np.all(
+            record_from_dataset.meta_data["vector_property"].value
+            == record.meta_data["vector_property"].value
+        )

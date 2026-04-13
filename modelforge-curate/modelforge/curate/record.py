@@ -950,11 +950,17 @@ class RecordGroup(Record):
         # update the atomic numbers
         from modelforge.curate.properties import AtomicNumbers
 
+        # we want to know if this is the first record being added to the group
+        # this will be set based on whether self.atomic_numbers is None
+        # i.e., not defined yet.
+        is_first = False
+
         if self.atomic_numbers is None:
             self.atomic_numbers = AtomicNumbers(
                 value=record.atomic_numbers.value.reshape(1, -1, 1),
                 classification="atomic_numbers_grouped",
             )
+            is_first = True
 
         else:
             assert (
@@ -968,6 +974,47 @@ class RecordGroup(Record):
                     record.atomic_numbers.value.reshape(1, -1, 1),
                 )
             )
+
+        # if we are NOT the first record being added, we want to validate that all properties are identical
+        # if we do not have identical properties it will cause problems when trying to extract, as indices will not
+        # be consistent.  We could revise this such that each property has an indexing array, but that is a lot more
+        # book keeping and not sure it is worth while;  In those cases, we could probably just define arrays with NaN
+        # when setting them up (which is what is done I believe in the few datasets that may be an issue).
+
+        if not is_first:
+            # validate properties are the same
+            # first check the length of the keys
+            # if they do not match, then we clearly have a problem
+            if not len(record.meta_data.keys()) == len(self.meta_data.keys()):
+                raise ValueError(
+                    f"Record meta_data properties do not match, found {record.meta_data.keys()} expected {self.meta_data.keys()}"
+                )
+            if not len(record.per_atom.keys()) == len(self.per_atom.keys()):
+                raise ValueError(
+                    f"Record per_atom properties do not match, found {record.per_atom.keys()} expected {self.per_atom.keys()}"
+                )
+            if not len(record.per_system.keys()) == len(self.per_system.keys()):
+                raise ValueError(
+                    f"Record per_system properties do not match, found {record.per_system.keys()} expected {self.per_system.keys()}"
+                )
+
+            # then check that the keys in the record exist in the GroupedRecord
+            # if the length matches and each property is found, then we have fully validatyed
+            for prop in record.meta_data.keys():
+                if not prop in self.meta_data.keys():
+                    raise ValueError(
+                        f"Record meta_data properties do not match, found {record.meta_data.keys()} expected {self.meta_data.keys()}"
+                    )
+            for prop in record.per_atom.keys():
+                if not prop in self.per_atom.keys():
+                    raise ValueError(
+                        f"Record per_atom properties do not match, found {record.per_atom.keys()} expected {self.per_atom.keys()}"
+                    )
+            for prop in record.per_system.keys():
+                if not prop in self.per_system.keys():
+                    raise ValueError(
+                        f"Record per_system properties do not match, found {record.per_system.keys()} expected {self.per_system.keys()}"
+                    )
 
         # get properties for each type
         for prop in record.per_atom.keys():

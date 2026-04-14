@@ -1,0 +1,28 @@
+dataset: local_grouped
+latest: grouped_v1
+latest_test: grouped_v1
+
+description: "Fictional dataset where records are grouped by number of atoms"
+
+atomic_self_energies:
+  H: -1313.4668615546 * kilojoule_per_mole
+  C: -99366.70745535441 * kilojoule_per_mole
+  N: -143309.9379722722 * kilojoule_per_mole
+  O: -197082.0671774158 * kilojoule_per_mole
+  F: -261811.54555874597 * kilojoule_per_mole
+
+grouped_v1:
+  about: This provides a curated hdf5 file for a subset of the qm9 dataset designed
+    to be compatible with modelforge where records are grouped
+  available_properties:
+  - atomic_numbers
+  - positions
+  - energies
+  - smiles
+  - temperature
+  - vector_property
+  hdf5_schema: 2
+  local_dataset:
+    hdf5_data_file:
+      file_name: path_to_file/test_dataset_grouped.hdf5 # note in general this should be the full path to the file
+      md5: e9f29c1eba86203829a38b58c2a0ffe2

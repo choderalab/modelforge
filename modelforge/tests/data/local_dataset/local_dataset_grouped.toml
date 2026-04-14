@@ -1,0 +1,15 @@
+[dataset]
+dataset_name = "local_grouped"
+version_select = "grouped_v1"
+num_workers = 4
+pin_memory = true
+properties_of_interest = ["atomic_numbers", "positions", "energies"]
+element_filter = []
+local_yaml_file = "path_to_file/local_dataset_grouped.yaml" #note, this should in general be the full path to the yaml file,
+                                                        #but for testing purposes on CI, we need to use a placeholder
+                                                        #i.e., path_to_file, which the test will replace.
+
+[dataset.properties_assignment]
+atomic_numbers = "atomic_numbers"
+positions = "positions"
+E = "energies"

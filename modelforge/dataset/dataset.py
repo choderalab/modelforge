@@ -830,7 +830,10 @@ class HDF5Dataset:
 
                 for value in self.properties_of_interest:
                     value_format = hf[next(iter(hf.keys()))][value].attrs["format"]
-                    if value_format == "atomic_numbers":
+                    if (
+                        value_format == "atomic_numbers"
+                        or value_format == "atomic_numbers_grouped"
+                    ):
                         atomic_numbers_data[value] = []
                     elif value_format == "per_system":
                         per_system_data[value] = []

@@ -1663,7 +1663,8 @@ def test_element_filter_setting(prep_temp_dir, load_test_dataset, dataset_temp_d
     assert data.element_filter is None
 
 
-def test_local_dataset(prep_temp_dir):
+@pytest.mark.parametrize("grouped", [True, False])
+def test_local_dataset(grouped, prep_temp_dir):
 
     from modelforge.dataset.dataset import initialize_datamodule
 
@@ -1682,7 +1683,11 @@ def test_local_dataset(prep_temp_dir):
     path_to_local_dataset_dir = get_path_string(local_dataset)
 
     # read the toml file
-    toml_file = f"{path_to_local_dataset_dir}/local_dataset.toml"
+    if grouped:
+        toml_file = f"{path_to_local_dataset_dir}/local_dataset_grouped.toml"
+
+    else:
+        toml_file = f"{path_to_local_dataset_dir}/local_dataset.toml"
 
     # check to ensure the yaml file exists
     if not os.path.exists(toml_file):
@@ -1706,9 +1711,15 @@ def test_local_dataset(prep_temp_dir):
     # copy the hdf5 file to the local cache directory
     import shutil
 
-    shutil.copy(
-        f"{path_to_local_dataset_dir}/qm9_dataset_v1.1_ntc_10.hdf5", local_cache_dir
-    )
+    if grouped:
+        shutil.copy(
+            f"{path_to_local_dataset_dir}/test_dataset_grouped.hdf5",
+            local_cache_dir,
+        )
+    else:
+        shutil.copy(
+            f"{path_to_local_dataset_dir}/qm9_dataset_v1.1_ntc_10.hdf5", local_cache_dir
+        )
 
     # we will read in the yaml file and then update the path to the hdf5 file
     # write this to the local_cache_dir

@@ -1034,10 +1034,8 @@ class RecordGroup(Record):
                 self.meta_data[prop] = temp_prop
 
             else:
-                print("should be appending prop ", prop)
                 temp_prop = record.get_property(prop)
                 self.meta_data[prop].value.append(temp_prop.value)
-                print(self.meta_data[prop])
 
     def add_records(self, records: List[Record]):
         assert isinstance(records, list)
@@ -1091,7 +1089,6 @@ class RecordGroup(Record):
                     classification=self.meta_data[prop].classification,
                     property_type=self.meta_data[prop].property_type,
                 )
-                print(temp_metadata)
                 record.add_property(temp_metadata)
 
             records_list.append(record)

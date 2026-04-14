@@ -1062,11 +1062,16 @@ class RecordGroup(Record):
 
         records_list = []
         end_id = 0
-        for i in range(0, len(counts)):
+        for i in range(0, counts.shape[0]):
 
             start_id = end_id
             end_id = cumulative_counts[i]
 
+            # adding the slice_record command will appropriately
+            # break up the grouped record into individual records
+            # however it does not apply to metadata
+            # nor does it change the atomic numbers
+            # so we will have to do those separately
             record = self.slice_record(start_id, end_id)
 
             record.name = self.grouped_names[i]

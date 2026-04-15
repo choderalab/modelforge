@@ -874,12 +874,12 @@ def test_grouped_record_errors(prep_temp_dir):
 
     # per system properties
     energies1 = Energies(
-        value=np.array([[0.1], [0.11]]), units=unit.kilojoules_per_mole
+        value=np.array([[0.1], [0.11]]), units=unit.kilojoule_per_mole
     )
     energies_b1 = Energies(
         name="dft_energy",
         value=np.array([[0.1], [0.11]]),
-        units=unit.kilojoules_per_mole,
+        units=unit.kilojoule_per_mole,
     )
 
     # meta data

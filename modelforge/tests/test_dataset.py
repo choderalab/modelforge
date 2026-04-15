@@ -1764,3 +1764,15 @@ def test_local_dataset(grouped, prep_temp_dir):
     )
 
     assert os.path.exists(f"{local_cache_dir}/{dataset_name.lower()}.npz")
+
+    # if we have the grouped data, let us validate that we extracted
+    # all the records properly
+    # the dataset itself was created from 6 records, with 10 total configurations
+    # 3 records with n_atoms=2, 2 records with n_atoms=3, 1 records with n_atoms = 5
+    #  (which means length of atomic_numbers array is 17)
+    if grouped:
+        dm.prepare_data()
+        print("number of records")
+        assert dm.torch_dataset.number_of_records == 6
+        assert dm.torch_dataset.length == 10
+        assert dm.torch_dataset.number_of_atoms == 17

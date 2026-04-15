@@ -743,7 +743,6 @@ def test_dataset_neighborlist(
     # methane will have 5 choose 2 unique pairs, or 20 total non-unique pairs
 
     methane_pairs = pair_list[:, :20]
-    print(methane_pairs)
 
     methane_pairs_known = torch.tensor(
         [
@@ -1087,7 +1086,6 @@ def test_dataset_splitting(
         or splitting_strategy == FirstComeFirstServeSplittingStrategy
     ):
         total = len(train_dataset2) + len(val_dataset2) + len(test_dataset2)
-        print(len(train_dataset2), len(val_dataset2), len(test_dataset2), total)
         assert np.isclose(len(train_dataset2) / total, 0.6, atol=0.01)
         assert np.isclose(len(val_dataset2) / total, 0.3, atol=0.01)
         assert np.isclose(len(test_dataset2) / total, 0.1, atol=0.01)

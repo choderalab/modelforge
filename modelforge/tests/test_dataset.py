@@ -1772,7 +1772,6 @@ def test_local_dataset(grouped, prep_temp_dir):
     #  (which means length of atomic_numbers array is 17)
     if grouped:
         dm.prepare_data()
-        print("number of records")
         assert dm.torch_dataset.number_of_records == 6
         assert dm.torch_dataset.length == 10
         assert dm.torch_dataset.number_of_atoms == 17

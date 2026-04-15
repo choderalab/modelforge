@@ -3,8 +3,6 @@ from openff.units import unit
 
 from modelforge.curate import Record, SourceDataset, Energies, AtomicNumbers, MetaData
 
-from build.lib.modelforge.tests.temp_download import prep_temp_dir
-from modelforge.utils.units import GlobalUnitSystem
 from modelforge.curate.properties import *
 
 prep_temp_dir = "./data/local_dataset/"

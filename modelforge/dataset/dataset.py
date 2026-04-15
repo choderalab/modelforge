@@ -884,26 +884,38 @@ class HDF5Dataset:
                                 ]
                                 # this tells us how many unique systems there are
                                 n_unique_systems = n_configs_total.shape[0]
+                                cumulative_counts = np.cumsum(n_configs_total)
 
                             else:
                                 # n_configs_total= n_configs for non-grouped records so we can use the same code
                                 n_configs_total = hf[record]["n_configs"][()]
                                 n_unique_systems = 1
                                 grouped_names = [record]
+                                cumulative_counts = np.cumsum(
+                                    np.array([n_configs_total])
+                                )
 
                             # this is the cumulative sum of the number of configurations per system
-                            cumulative_counts = np.cumsum(n_configs_total)
 
                             # fetch the atomic numbers first
                             # note, we will need to slice these later if we have grouped records
                             atomic_numbers_total = hf[record]["atomic_numbers"]
+
+                            record_array_total: Dict[str, np.ndarray] = (
+                                OrderedDict()
+                            )  # ndarray.size (n_configs, )
+
+                            for value in list(per_system_data.keys()) + list(
+                                per_atom_data.keys()
+                            ):
+                                # fetch the array from the hdf5 file
+                                record_array_total[value] = hf[record][value][()]
 
                             # loop over each unique system
                             # if we do not have grouped records, this will just grab the entire array, not slices
 
                             end_id = 0
                             for i in range(0, n_unique_systems):
-                                print(i)
                                 start_id = end_id
                                 end_id = cumulative_counts[i]
 
@@ -936,12 +948,11 @@ class HDF5Dataset:
                                     for value in list(per_system_data.keys()) + list(
                                         per_atom_data.keys()
                                     ):
-                                        # fetch the array from the hdf5 file
-                                        record_array_total = hf[record][value][()]
-
-                                        record_array = record_array_total[
+                                        # fetch the slice of the array we want for each data key
+                                        record_array = record_array_total[value][
                                             start_id:end_id
                                         ]
+                                        # save just the subset we want to work with
                                         values_per_prop_temp[value] = record_array
 
                                         # This will generate a boolean array of size (n_configs, )

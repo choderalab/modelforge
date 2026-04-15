@@ -1149,7 +1149,7 @@ class SourceDataset:
                             state = False
 
                     if state:
-                        temp_array = np.concat([prop for prop in property.value])
+                        temp_array = np.concatenate([prop for prop in property.value])
                         record_group.create_dataset(
                             key, data=temp_array, shape=temp_array.shape
                         )
@@ -1414,8 +1414,6 @@ def create_dataset_from_hdf5(
                     elif pk == "grouped_indices":
                         record.grouped_indices = f[key][pk][()]
                     else:
-                        print(f"{key} {pk}")
-                        print(f"{f[key][pk]}")
                         property_type = f[key][pk].attrs["property_type"]
                         property_classification = f[key][pk].attrs["format"]
                         if "u" in f[key][pk].attrs.keys():

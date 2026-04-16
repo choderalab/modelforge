@@ -125,7 +125,7 @@ class PostProcessing(torch.nn.Module):
 
     def __init__(
         self,
-        postprocessing_parameter: Dict[str, Dict[str, bool]],
+        postprocessing_parameter: Dict[str, Dict[str, Any]],
         dataset_statistic: Dict[str, Dict[str, float]],
     ):
         """
@@ -215,6 +215,15 @@ class PostProcessing(torch.nn.Module):
                     ],
                     length_conversion_factor=length_conversion_factor,
                     energy_conversion_factor=energy_conversion_factor,
+                    parameter_set=postprocessing_parameter["per_system_vdw_energy"][
+                        "parameter_set"
+                    ],
+                    d3_engine=postprocessing_parameter["per_system_vdw_energy"][
+                        "d3_engine"
+                    ],
+                    d3_parameters_path=postprocessing_parameter[
+                        "per_system_vdw_energy"
+                    ]["d3_parameters_path"],
                 )
             )
             self._registered_properties.append("per_system_vdw_energy")
@@ -315,9 +324,6 @@ class Potential(torch.nn.Module):
             Forward pass for the potential model, computing energy and forces that accepts individual tensors rather than NNPInput class, necessary for JIT compiled model.
         forward(input_data: NNPInput) -> Dict[str, torch.Tensor]
             Forward pass for the potential model, computing energy and forces.
-
-
-
         """
 
         super().__init__()
@@ -328,13 +334,14 @@ class Potential(torch.nn.Module):
         )
         # note cannot jit compile the dispersion interactions as tad-dftd3 is not compatible with torchscript
         if "per_system_vdw_energy" in postprocessing._registered_properties:
+            # double check if nvalchemiops works with JIT
             log.warning(
-                "JIT compiling the postprocessing module with vdw interactions will not work."
+                "JIT compiling the postprocessing module with vdw interactions will not work if using tad-dftd3."
             )
+            log.warning("tad-dftd3 packaged is not compatible with torchscript.")
             log.warning(
-                "The tad-DFTD3 packaged used is not compatible with torchscript."
+                "Use nvalchemiops as the DFTD3 engine or disable JIT compilation by setting jit=False."
             )
-            log.warning("Disabling JIT compilation by setting jit=False.")
 
         self.postprocessing = (
             torch.jit.script(postprocessing) if jit else postprocessing
@@ -431,13 +438,12 @@ class Potential(torch.nn.Module):
         core_output["local_d_ij"] = pairlist_output.local_cutoff.d_ij
         core_output["local_r_ij"] = pairlist_output.local_cutoff.r_ij
 
-        # this is commented out for now, as the vdw energy is calculated via
-        # DFTD3 which handles pair calculations internally
-        # If we have other vdw implementations, we can uncomment this
-        # if "per_system_vdw_energy" in self.postprocessing._registered_properties:
-        #     core_output["vdw_pair_indices"] = pairlist_output.vdw_cutoff.pair_indices
-        #     core_output["vdw_d_ij"] = pairlist_output.vdw_cutoff.d_ij
-        #     core_output["vdw_r_ij"] = pairlist_output.vdw_cutoff.r_ij
+        if (
+            "per_system_vdw_energy" in self.postprocessing._registered_properties
+        ):  # FIXME: no need when running tad-dftd3
+            core_output["vdw_pair_indices"] = pairlist_output.vdw_cutoff.pair_indices
+            core_output["vdw_d_ij"] = pairlist_output.vdw_cutoff.d_ij
+            core_output["vdw_r_ij"] = pairlist_output.vdw_cutoff.r_ij
 
         if (
             "per_system_electrostatic_energy"
@@ -725,9 +731,9 @@ def setup_potential(
     # - local_cutoff is the maximum interaction radius for the NNP core network (i.e., the local interaction radius)
     # this is always required.
     # - vdw_cutoff is the cutoff for the van der Waals interactions, which is only required in the vdw interactions are
-    # included as a post processing step.
+    # included as a post-processing step.
     # - electrostatic_cutoff is the cutoff for the electrostatic interactions, which is only required in the electrostatic
-    # interactions are included as a post processing step.
+    # interactions are included as a post-processing step.
     #
     # note zbl potential does not require a unique cutoff definition; it will use local cutoff and then calculates
     # the zbl potential based on the radii of the two atoms in the pair.
@@ -744,7 +750,6 @@ def setup_potential(
         )
         use_electrostatic_cutoff = True
 
-    # note vdw isn't implemented yet, but we can add it later
     if "per_system_vdw_energy" in postprocessing._registered_properties:
         vdw_cutoff = (
             potential_parameter.postprocessing_parameter.per_system_vdw_energy.maximum_interaction_radius
@@ -756,13 +761,12 @@ def setup_potential(
     if use_training_mode_neighborlist:
         from modelforge.potential.neighbors import NeighborListForTraining
 
-        # note vdw_cutoff is not being used as this is handled internally by the DFTD3 implementation
         neighborlist = NeighborListForTraining(
             local_cutoff=local_cutoff,
-            # vdw_cutoff=vdw_cutoff,
+            vdw_cutoff=vdw_cutoff,
             electrostatic_cutoff=electrostatic_cutoff,
             local_only_unique_pairs=only_unique_pairs,
-            # use_vdw_cutoff=use_vdw_cutoff,
+            use_vdw_cutoff=use_vdw_cutoff,
             use_electrostatic_cutoff=use_electrostatic_cutoff,
         )
     else:
@@ -772,14 +776,13 @@ def setup_potential(
 
         from modelforge.potential.neighbors import NeighborlistForInference
 
-        # note vdw_cutoff is not being used as this is handled internally by the DFTD3 implementation
         neighborlist = NeighborlistForInference(
             local_cutoff=local_cutoff,
-            # vdw_cutoff=vdw_cutoff,
+            vdw_cutoff=vdw_cutoff,
             electrostatic_cutoff=electrostatic_cutoff,
             displacement_function=displacement_function,
             local_only_unique_pairs=only_unique_pairs,
-            # use_vdw_cutoff=use_vdw_cutoff,
+            use_vdw_cutoff=use_vdw_cutoff,
             use_electrostatic_cutoff=use_electrostatic_cutoff,
         )
         # we can set the strategy here before passing this to the Potential

@@ -168,7 +168,7 @@ class Aimnet2Curation(DatasetCuration):
             mol_counter = 0
 
             # note openff units do not support eV
-            # we will use the conversation factor of
+            # we will use the conversion factor of
             eV_to_kjmol = 96.485332125
 
             # it lists

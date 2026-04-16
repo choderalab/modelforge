@@ -3,6 +3,7 @@ from modelforge.curate.properties import (
     PropertyBaseModel,
     PropertyClassification,
     PropertyType,
+    MetaData,
 )
 
 from openff.units import unit
@@ -315,7 +316,10 @@ class Record:
         -------
 
         """
-        if property.classification == PropertyClassification.atomic_numbers:
+        if (
+            property.classification == PropertyClassification.atomic_numbers
+            or property.classification == PropertyClassification.atomic_numbers_grouped
+        ):
             # we will not allow atomic numbers to be set twice
             if self.atomic_numbers is not None:
                 if self.append_property == False:
@@ -334,7 +338,10 @@ class Record:
             # We will later validate that per_atom properties are consistent with this value later
             # since we are not enforcing that atomic_numbers need to be set before any other property
 
-        elif property.classification == PropertyClassification.meta_data:
+        elif (
+            property.classification == PropertyClassification.meta_data
+            or property.property_type == PropertyType.meta_data
+        ):
             if property.name in self.meta_data.keys():
                 log.warning(
                     f"Metadata with name {property.name} already exists in the record {self.name}."
@@ -906,3 +913,184 @@ def calculate_reference_energy(
     ]
 
     return sum(reference_energy)
+
+
+class RecordGroup(Record):
+    """
+    Groups records together that have the same system size (i.e., same number of atoms)
+
+    For datasets with a large number of unique systems, this is necessary to make
+    writing of HDF5 files for efficient, as it will enable writing fewer, larger numpy arrays
+    (which is more space and time efficient than many smaller arrays).
+
+    """
+
+    def __init__(self, name: str):
+
+        # call init of the parent class
+        super().__init__(name)
+
+        self.grouped_names = []
+        self.grouped_n_configs = []
+        self.append_property = True
+
+    def add_record(self, record: Record):
+        assert isinstance(record, Record)
+
+        # assert that we have atomic_numbers defined in the record
+        if record.atomic_numbers is None:
+            raise ValueError(
+                f"atomic numbers need to be set before adding to a RecordGroup"
+            )
+
+        # we need to loop over all the pieces in the record and update them
+        self.grouped_names.append(record.name)
+        self.grouped_n_configs.append(record.n_configs)
+
+        # update the atomic numbers
+        from modelforge.curate.properties import AtomicNumbers
+
+        # we want to know if this is the first record being added to the group
+        # this will be set based on whether self.atomic_numbers is None
+        # i.e., not defined yet.
+        is_first = False
+
+        if self.atomic_numbers is None:
+            self.atomic_numbers = AtomicNumbers(
+                value=record.atomic_numbers.value.reshape(1, -1, 1),
+                classification="atomic_numbers_grouped",
+            )
+            is_first = True
+
+        else:
+            assert (
+                self.atomic_numbers.value.shape[1]
+                == record.atomic_numbers.value.shape[0]
+            )
+            # append the atomic numbers to the numpy array
+            self.atomic_numbers.value = np.vstack(
+                (
+                    self.atomic_numbers.value,
+                    record.atomic_numbers.value.reshape(1, -1, 1),
+                )
+            )
+
+        # if we are NOT the first record being added, we want to validate that all properties are identical
+        # if we do not have identical properties it will cause problems when trying to extract, as indices will not
+        # be consistent.  We could revise this such that each property has an indexing array, but that is a lot more
+        # book keeping and not sure it is worth while;  In those cases, we could probably just define arrays with NaN
+        # when setting them up (which is what is done I believe in the few datasets that may be an issue).
+
+        if not is_first:
+            # validate properties are the same
+            # first check the length of the keys
+            # if they do not match, then we clearly have a problem
+            if not len(record.meta_data.keys()) == len(self.meta_data.keys()):
+                raise ValueError(
+                    f"Record meta_data properties do not match, found {record.meta_data.keys()} expected {self.meta_data.keys()}"
+                )
+            if not len(record.per_atom.keys()) == len(self.per_atom.keys()):
+                raise ValueError(
+                    f"Record per_atom properties do not match, found {record.per_atom.keys()} expected {self.per_atom.keys()}"
+                )
+            if not len(record.per_system.keys()) == len(self.per_system.keys()):
+                raise ValueError(
+                    f"Record per_system properties do not match, found {record.per_system.keys()} expected {self.per_system.keys()}"
+                )
+
+            # then check that the keys in the record exist in the GroupedRecord
+            # if the length matches and each property is found, then we have fully validatyed
+            for prop in record.meta_data.keys():
+                if not prop in self.meta_data.keys():
+                    raise ValueError(
+                        f"Record meta_data properties do not match, found {record.meta_data.keys()} expected {self.meta_data.keys()}"
+                    )
+            for prop in record.per_atom.keys():
+                if not prop in self.per_atom.keys():
+                    raise ValueError(
+                        f"Record per_atom properties do not match, found {record.per_atom.keys()} expected {self.per_atom.keys()}"
+                    )
+            for prop in record.per_system.keys():
+                if not prop in self.per_system.keys():
+                    raise ValueError(
+                        f"Record per_system properties do not match, found {record.per_system.keys()} expected {self.per_system.keys()}"
+                    )
+
+        # get properties for each type
+        for prop in record.per_atom.keys():
+            self.add_property(record.get_property(prop))
+
+        for prop in record.per_system.keys():
+            self.add_property(record.get_property(prop))
+
+        # metadata will be appended as lists in the dictionary, rather than just a singular property
+        # these will be converted later, if we can
+        for prop in record.meta_data.keys():
+            if prop not in self.meta_data.keys():
+                temp_prop = record.get_property(prop)
+                # note pydantic base model automatically converts a list to a numpy array
+                temp_prop.value = [temp_prop.value]
+
+                self.meta_data[prop] = temp_prop
+
+            else:
+                temp_prop = record.get_property(prop)
+                self.meta_data[prop].value.append(temp_prop.value)
+
+    def add_records(self, records: List[Record]):
+        assert isinstance(records, list)
+
+        for record in records:
+            self.add_record(record)
+
+    def get_records(self) -> List[Record]:
+        """
+        Return a list of the Records that were grouped together
+
+        Returns
+        -------
+        List[Record]
+
+
+        """
+
+        counts = np.array(self.grouped_n_configs)
+        # get the cumulative sum of counts
+        cumulative_counts = np.cumsum(counts)
+
+        records_list = []
+        end_id = 0
+        for i in range(0, counts.shape[0]):
+
+            start_id = end_id
+            end_id = cumulative_counts[i]
+
+            # adding the slice_record command will appropriately
+            # break up the grouped record into individual records
+            # however it does not apply to metadata
+            # nor does it change the atomic numbers
+            # so we will have to do those separately
+            record = self.slice_record(start_id, end_id)
+
+            record.name = self.grouped_names[i]
+            from modelforge.curate.properties import AtomicNumbers
+
+            record.atomic_numbers = AtomicNumbers(
+                value=self.atomic_numbers.value[i].reshape(-1, 1)
+            )
+            for prop in self.meta_data.keys():
+                record.remove_property(prop)
+
+                temp_value = self.meta_data[prop].value[i]
+
+                temp_metadata = MetaData(
+                    name=self.meta_data[prop].name,
+                    value=temp_value,
+                    classification=self.meta_data[prop].classification,
+                    property_type=self.meta_data[prop].property_type,
+                )
+                record.add_property(temp_metadata)
+
+            records_list.append(record)
+
+        return records_list

@@ -420,8 +420,6 @@ class HDF5Dataset:
         This also handles file validation for any local datasets defined in a local_yaml_file.
 
         """
-        # Right now this function needs to be defined for each dataset.
-        # once all datasets are moved to zenodo, we should only need a single function defined in the base class
         from modelforge.utils.remote import download_from_url
         from modelforge.utils.misc import OpenWithLock
 
@@ -804,7 +802,7 @@ class HDF5Dataset:
             )
 
         else:
-            # if a local yaml file is provided, the "name" field provides the full path to the file
+            # if a local yaml file is provided, the "file_name" field provides the full path to the file
             # we will expand the path to handle ~ if provided
             temp_hdf5_file = os.path.expanduser(self.hdf5_data_file_dict["file_name"])
 
@@ -832,7 +830,10 @@ class HDF5Dataset:
 
                 for value in self.properties_of_interest:
                     value_format = hf[next(iter(hf.keys()))][value].attrs["format"]
-                    if value_format == "atomic_numbers":
+                    if (
+                        value_format == "atomic_numbers"
+                        or value_format == "atomic_numbers_grouped"
+                    ):
                         atomic_numbers_data[value] = []
                     elif value_format == "per_system":
                         per_system_data[value] = []
@@ -851,149 +852,231 @@ class HDF5Dataset:
 
                 log.debug(f"n_entries: {len(hf.keys())}")
 
+                # first loop over the records
                 for record in tqdm.tqdm(list(hf.keys())):
+                    is_grouped = False
                     # if we have a record with no conformers, we'll skip it to avoid failures
                     if hf[record]["n_configs"][()] != 0:
+
                         # There may be cases where a specific property of interest
                         # has not been computed for a given record
                         # in that case, we'll want to just skip over that entry
+
                         property_found = [
                             value in hf[record].keys()
                             for value in self.properties_of_interest
                         ]
 
-                        # filter by elements
-                        satisfy_element_filter = self._satisfy_element_filter(
-                            hf[record]["atomic_numbers"]
-                        )
-                        # we want to exclude a record if the element filter is not satisfied
-                        # or if we don't have all properties of interest (i.e., an incomplete record)
+                        # we want to exclude a record if we don't have all properties of interest
+                        # (i.e., an incomplete record)
+                        # no sense doing all the operations if we do not have all the info we want
 
-                        if all(property_found) and satisfy_element_filter:
+                        if all(property_found):
 
-                            # we want to exclude configurations with NaN values for any property of interest
-                            configs_nan_by_prop: Dict[str, np.ndarray] = (
+                            # we need to see if the records are grouped in order to know how to break up the arrays
+                            is_grouped = False
+                            if "grouped_n_configs" in hf[record].keys():
+                                is_grouped = True
+                                n_configs_total = hf[record]["grouped_n_configs"][()]
+                                grouped_names_temp = hf[record]["grouped_names"]
+                                grouped_names = [
+                                    val.decode("utf-8") for val in grouped_names_temp
+                                ]
+                                # this tells us how many unique systems there are
+                                n_unique_systems = n_configs_total.shape[0]
+                                cumulative_counts = np.cumsum(n_configs_total)
+
+                            else:
+                                # n_configs_total= n_configs for non-grouped records so we can use the same code
+                                n_configs_total = hf[record]["n_configs"][()]
+                                n_unique_systems = 1
+                                grouped_names = [record]
+                                cumulative_counts = np.cumsum(
+                                    np.array([n_configs_total])
+                                )
+
+                            # this is the cumulative sum of the number of configurations per system
+
+                            # fetch the atomic numbers first
+                            # note, we will need to slice these later if we have grouped records
+                            atomic_numbers_total = hf[record]["atomic_numbers"]
+
+                            record_array_total: Dict[str, np.ndarray] = (
                                 OrderedDict()
                             )  # ndarray.size (n_configs, )
 
-                            # loop over the properties in the per_system_data and per_atom_data dicts
                             for value in list(per_system_data.keys()) + list(
                                 per_atom_data.keys()
                             ):
                                 # fetch the array from the hdf5 file
-                                record_array = hf[record][value][()]
+                                record_array_total[value] = hf[record][value][()]
 
-                                # This will generate a boolean array of size (n_configs, )
-                                # # where True indicates that the property has NaN values
-                                configs_nan_by_prop[value] = np.isnan(record_array).any(
-                                    axis=tuple(range(1, record_array.ndim))
+                            # loop over each unique system
+                            # if we do not have grouped records, this will just grab the entire array, not slices
+
+                            end_id = 0
+                            for i in range(0, n_unique_systems):
+                                start_id = end_id
+                                end_id = cumulative_counts[i]
+
+                                # The convention we decided atomic numbers is that it should be defined as a 2d array,
+                                # i.e., [[1],[6]], and defined only once per record, as it is the same for all configs.
+                                # To handle grouped records, we follow the same convention, but make this a 3d array
+                                # where the first dimension is for each unique system that is grouped.
+                                # For all other properties we don't change any of the shapes, and just slice them.
+                                if is_grouped:
+                                    atomic_numbers = atomic_numbers_total[i]
+                                else:
+                                    atomic_numbers = atomic_numbers_total
+
+                                # apply the elements filter  to see if we want to include this record
+                                satisfy_element_filter = self._satisfy_element_filter(
+                                    atomic_numbers
                                 )
-                            # check that all values have the same number of conformers
+                                if satisfy_element_filter:
+                                    # we want to exclude configurations with NaN values for any property of interest
+                                    configs_nan_by_prop: Dict[str, np.ndarray] = (
+                                        OrderedDict()
+                                    )  # ndarray.size (n_configs, )
 
-                            if (
-                                len(
-                                    set(
-                                        [
+                                    # temporary array to store each record so we don't have to refetch after validation
+                                    values_per_prop_temp: Dict[str, np.ndarray] = (
+                                        OrderedDict()
+                                    )  # ndarray.size (n_configs, )
+
+                                    # fetch the per_atom and per_system properties first, then we will slice and examine them:
+                                    for value in list(per_system_data.keys()) + list(
+                                        per_atom_data.keys()
+                                    ):
+                                        # fetch the slice of the array we want for each data key
+                                        record_array = record_array_total[value][
+                                            start_id:end_id
+                                        ]
+                                        # save just the subset we want to work with
+                                        values_per_prop_temp[value] = record_array
+
+                                        # This will generate a boolean array of size (n_configs, )
+                                        # where True indicates that the property has NaN values
+                                        configs_nan_by_prop[value] = np.isnan(
+                                            record_array
+                                        ).any(axis=tuple(range(1, record_array.ndim)))
+
+                                    # check that all values have the same number of conformers
+                                    if (
+                                        len(
+                                            set(
+                                                [
+                                                    value.shape
+                                                    for value in configs_nan_by_prop.values()
+                                                ]
+                                            )
+                                        )
+                                        != 1
+                                    ):
+                                        val_temp = [
                                             value.shape
                                             for value in configs_nan_by_prop.values()
                                         ]
-                                    )
-                                )
-                                != 1
-                            ):
-                                val_temp = [
-                                    value.shape
-                                    for value in configs_nan_by_prop.values()
-                                ]
-                                raise ValueError(
-                                    f"Number of conformers is inconsistent across properties for record {record}: values {val_temp}"
-                                )
-
-                            configs_nan = np.logical_or.reduce(
-                                list(configs_nan_by_prop.values())
-                            )  # boolean array of size (n_config, self.properties_of_interest, )
-                            n_confs_rec = sum(~configs_nan)
-
-                            atomic_subsystem_counts_rec = hf[record][
-                                next(iter(atomic_numbers_data.keys()))
-                            ].shape[0]
-
-                            self.n_confs.append(n_confs_rec)
-                            self.atomic_subsystem_counts.append(
-                                atomic_subsystem_counts_rec
-                            )
-
-                            for value in atomic_numbers_data.keys():
-                                record_array = hf[record][value][()]
-
-                                if record_array.shape[0] != atomic_subsystem_counts_rec:
-                                    raise ValueError(
-                                        f"Number of atoms for property {value} is inconsistent with other properties for record {record}"
-                                    )
-                                else:
-                                    atomic_numbers_data[value].append(record_array)
-
-                            for value in per_atom_data.keys():
-                                record_array = hf[record][value][()][~configs_nan]
-                                if "u" in hf[record][value].attrs:
-                                    units = hf[record][value].attrs["u"]
-                                    property_type = hf[record][value].attrs[
-                                        "property_type"
-                                    ]
-
-                                    if units != "dimensionless":
-                                        record_array = Quantity(record_array, units).to(
-                                            GlobalUnitSystem.get_units(property_type),
-                                            "chem",
-                                        )
-                                        record_array = record_array.magnitude
-
-                                try:
-                                    if (
-                                        record_array.shape[1]
-                                        != atomic_subsystem_counts_rec
-                                    ):
                                         raise ValueError(
-                                            f"Number of atoms for property {value} is inconsistent with other properties for record {record}"
+                                            f"Number of conformers is inconsistent across properties for record {record}: values {val_temp}"
                                         )
-                                    else:
-                                        per_atom_data[value].append(
-                                            record_array.reshape(
-                                                n_confs_rec
-                                                * atomic_subsystem_counts_rec,
-                                                -1,
-                                            )
-                                        )
-                                except IndexError:
-                                    log.warning(
-                                        f"Property {value} has an index error for record {record}."
-                                    )
-                                    log.warning(
-                                        record_array.shape,
-                                        atomic_subsystem_counts_rec,
-                                    )
 
-                            for value in per_system_data.keys():
-
-                                record_array = hf[record][value][()][~configs_nan]
-                                if "u" in hf[record][value].attrs:
-                                    units = hf[record][value].attrs["u"]
-                                    property_type = hf[record][value].attrs[
-                                        "property_type"
+                                    configs_nan = np.logical_or.reduce(
+                                        list(configs_nan_by_prop.values())
+                                    )  # boolean array of size (n_config, self.properties_of_interest, )
+                                    n_confs_rec = sum(~configs_nan)
+                                    atomic_subsystem_counts_rec = atomic_numbers.shape[
+                                        0
                                     ]
 
-                                    if units != "dimensionless":
-                                        record_array = Quantity(record_array, units).to(
-                                            GlobalUnitSystem.get_units(property_type),
-                                            "chem",
-                                        )
-                                        record_array = record_array.magnitude
-                                per_system_data[value].append(record_array)
+                                    self.n_confs.append(n_confs_rec)
 
+                                    self.atomic_subsystem_counts.append(
+                                        atomic_subsystem_counts_rec
+                                    )
+                                    for value in atomic_numbers_data.keys():
+                                        atomic_numbers_data[value].append(
+                                            atomic_numbers
+                                        )
+
+                                    for value in per_atom_data.keys():
+                                        # exclude any configurations that are nan
+                                        record_array = values_per_prop_temp[value][
+                                            ~configs_nan
+                                        ]
+                                        if "u" in hf[record][value].attrs:
+                                            units = hf[record][value].attrs["u"]
+                                            property_type = hf[record][value].attrs[
+                                                "property_type"
+                                            ]
+
+                                            if units != "dimensionless":
+                                                record_array = Quantity(
+                                                    record_array, units
+                                                ).to(
+                                                    GlobalUnitSystem.get_units(
+                                                        property_type
+                                                    ),
+                                                    "chem",
+                                                )
+                                                record_array = record_array.magnitude
+
+                                        try:
+                                            if (
+                                                record_array.shape[1]
+                                                != atomic_subsystem_counts_rec
+                                            ):
+                                                raise ValueError(
+                                                    f"Number of atoms for property {value} is inconsistent with other properties for record {record}"
+                                                )
+                                            else:
+                                                per_atom_data[value].append(
+                                                    record_array.reshape(
+                                                        n_confs_rec
+                                                        * atomic_subsystem_counts_rec,
+                                                        -1,
+                                                    )
+                                                )
+                                        except IndexError:
+                                            log.warning(
+                                                f"Property {value} has an index error for record {record}."
+                                            )
+                                            log.warning(
+                                                record_array.shape,
+                                                atomic_subsystem_counts_rec,
+                                            )
+
+                                    for value in per_system_data.keys():
+
+                                        record_array = values_per_prop_temp[value][
+                                            ~configs_nan
+                                        ]
+                                        if "u" in hf[record][value].attrs:
+                                            units = hf[record][value].attrs["u"]
+                                            property_type = hf[record][value].attrs[
+                                                "property_type"
+                                            ]
+
+                                            if units != "dimensionless":
+                                                record_array = Quantity(
+                                                    record_array, units
+                                                ).to(
+                                                    GlobalUnitSystem.get_units(
+                                                        property_type
+                                                    ),
+                                                    "chem",
+                                                )
+                                                record_array = record_array.magnitude
+                                        per_system_data[value].append(record_array)
+                                else:
+                                    log.debug(
+                                        f"skipping record {grouped_names[i]} based on element filter"
+                                    )
                         else:
                             log.warning(
                                 f"Skipping record {record} as not all properties of interest are present."
                             )
+
                 # convert lists of arrays to single arrays
 
                 data = OrderedDict()

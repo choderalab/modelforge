@@ -154,8 +154,6 @@ class ANI2xCuration(DatasetCuration):
                     )
                     record_temp.add_property(atomic_numbers)
 
-                    conformers_per_molecule = len(molecules[molecule_name])
-
                     positions = Positions(
                         value=coordinates[indices],
                         units=unit.angstrom,
@@ -163,9 +161,7 @@ class ANI2xCuration(DatasetCuration):
                     record_temp.add_property(positions)
 
                     energies_mod = Energies(
-                        value=energies[indices].reshape(-1, 1)[
-                            0:conformers_per_molecule
-                        ],
+                        value=energies[indices].reshape(-1, 1),
                         units=unit.hartree,
                     )
                     record_temp.add_property(energies_mod)
@@ -178,7 +174,6 @@ class ANI2xCuration(DatasetCuration):
                     record_temp.add_property(forces_mod)
 
                     dataset.add_record(record_temp)
-                    conformers_counter += conformers_per_molecule
 
         return dataset
 

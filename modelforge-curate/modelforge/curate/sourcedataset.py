@@ -7,13 +7,15 @@ from modelforge.curate.properties import (
     Energies,
     AtomicNumbers,
 )
-from modelforge.curate.record import Record
+from modelforge.curate.record import Record, RecordGroup
 
 from openff.units import unit
 
 import numpy as np
 import os
 from typing import Union, List, Type, Optional, Dict
+
+import h5py
 
 from typing_extensions import Self
 
@@ -40,6 +42,7 @@ class SourceDataset:
         append_property: bool, optional, default=False
             If True, append an array to existing array if a property with the same name is added multiple times to a record.
             If False, an error will be raised if trying to add a property with the same name already exists in a record
+
         local_db_dir: str, optional, default="./"
             Directory to store the local database
         local_db_name: str, optional, default=None
@@ -135,8 +138,8 @@ class SourceDataset:
         Get the total number of configurations in the dataset.
         """
         total_config = 0
-        for record in self.records.keys():
-            record = self.get_record(record)
+        for record_name in self.records.keys():
+            record = self.get_record(record_name)
             total_config += record.n_configs
         return total_config
 
@@ -1045,7 +1048,174 @@ class SourceDataset:
         """
         os.remove(f"{self.local_db_dir}/{self.local_db_name}")
 
-    def to_hdf5(self, file_path: str, file_name: str):
+    def _write_record_to_hdf5(
+        self, record: Type[Record], file_handle: h5py.File
+    ) -> None:
+
+        import h5py
+
+        dt = h5py.special_dtype(vlen=str)
+
+        name = record.name
+
+        record_group = file_handle.create_group(name)
+
+        record_group.create_dataset(
+            "atomic_numbers",
+            data=record.atomic_numbers.value,
+            shape=record.atomic_numbers.value.shape,
+        )
+        record_group["atomic_numbers"].attrs["format"] = str(
+            record.atomic_numbers.classification
+        )
+        record_group["atomic_numbers"].attrs["property_type"] = str(
+            record.atomic_numbers.property_type
+        )
+
+        record_group.create_dataset("n_configs", data=record.n_configs)
+        record_group["n_configs"].attrs["format"] = "meta_data"
+
+        if isinstance(record, RecordGroup):
+
+            # write out the grouped_indices; i.e., for a given set of entries, which are configurations of the same
+            # system
+            counts = np.array(record.grouped_n_configs)
+            indices = np.arange(counts.shape[0])
+
+            configuration_subsystem_indices = np.repeat(indices, counts)
+
+            record_group.create_dataset(
+                "grouped_indices", data=configuration_subsystem_indices
+            )
+            record_group.create_dataset(
+                "grouped_n_configs",
+                data=np.array(record.grouped_n_configs),
+                dtype=np.int64,
+            )
+            # write a list of system names in the group
+            record_group.create_dataset(
+                "grouped_names", data=record.grouped_names, dtype=dt
+            )
+
+        for key, property in record.per_atom.items():
+
+            target_units = GlobalUnitSystem.get_units(property.property_type)
+            record_group.create_dataset(
+                key,
+                data=unit.Quantity(property.value, property.units)
+                .to(target_units, "chem")
+                .magnitude,
+                shape=property.value.shape,
+            )
+            record_group[key].attrs["u"] = str(target_units)
+            record_group[key].attrs["format"] = str(property.classification)
+            record_group[key].attrs["property_type"] = str(property.property_type)
+
+        for key, property in record.per_system.items():
+            target_units = GlobalUnitSystem.get_units(property.property_type)
+            record_group.create_dataset(
+                key,
+                data=unit.Quantity(property.value, property.units)
+                .to(target_units, "chem")
+                .magnitude,
+                shape=property.value.shape,
+            )
+
+            record_group[key].attrs["u"] = str(target_units)
+            record_group[key].attrs["format"] = str(property.classification)
+            record_group[key].attrs["property_type"] = str(property.property_type)
+
+        for key, property in record.meta_data.items():
+
+            if isinstance(property.value, list):
+                # if we have a list, let us see if we can write it out
+
+                if all(isinstance(prop_temp, str) for prop_temp in property.value):
+                    # we can write out lists of strings
+                    record_group.create_dataset(key, data=property.value, dtype=dt)
+                    record_group[key].attrs["u"] = str(property.units)
+                    record_group[key].attrs["format"] = "meta_data"
+                    record_group[key].attrs["property_type"] = "meta_data"
+                elif all(
+                    isinstance(prop_temp, np.ndarray) for prop_temp in property.value
+                ):
+                    # if metadata list contains numpy arrays
+                    # we need to ensure the shapes are the same for the numpy arrays in the list
+                    state = True
+                    for prop in property.value:
+                        if not np.all(
+                            prop.shape[1:-1] == property.value[0].shape[1:-1]
+                        ):
+                            state = False
+
+                    if state:
+                        temp_array = np.concatenate([prop for prop in property.value])
+                        record_group.create_dataset(
+                            key, data=temp_array, shape=temp_array.shape
+                        )
+                        record_group[key].attrs["u"] = str(property.units)
+                        # note, we could potentially define meta_data as per_atom or per_system if we define
+                        # an array
+                        record_group[key].attrs["format"] = str(property.classification)
+                        record_group[key].attrs["property_type"] = "meta_data"
+
+                    else:
+                        log.warning(f"cannot save property {key} in the grouped format")
+                elif all(
+                    isinstance(prop_temp, (float, int)) for prop_temp in property.value
+                ):
+                    # if the property just contains floats or ints, we can easily convert to a numpy array
+
+                    temp_array = np.array([val for val in property.value])
+
+                    record_group.create_dataset(
+                        key, data=temp_array, shape=temp_array.shape
+                    )
+                    record_group[key].attrs["u"] = str(property.units)
+                    record_group[key].attrs["format"] = "meta_data"
+                    record_group[key].attrs["property_type"] = "meta_data"
+
+            elif isinstance(property.value, str):
+                record_group.create_dataset(
+                    key,
+                    data=property.value,
+                    dtype=dt,
+                )
+                record_group[key].attrs["u"] = str(property.units)
+                record_group[key].attrs["format"] = str(property.classification)
+                record_group[key].attrs["property_type"] = str(property.property_type)
+
+            elif isinstance(property.value, (float, int)):
+
+                record_group.create_dataset(
+                    key,
+                    data=property.value,
+                )
+                record_group[key].attrs["u"] = str(property.units)
+                record_group[key].attrs["format"] = str(property.classification)
+
+                record_group[key].attrs["property_type"] = str(property.property_type)
+
+            elif isinstance(property.value, np.ndarray):
+
+                record_group.create_dataset(
+                    key, data=property.value, shape=property.value.shape
+                )
+                record_group[key].attrs["u"] = str(property.units)
+                record_group[key].attrs["format"] = str(property.classification)
+                record_group[key].attrs["property_type"] = str(property.property_type)
+            else:
+                raise ValueError(
+                    f"Unsupported type ({type(property.value)}) for metadata {key}"
+                )
+
+    def to_hdf5(
+        self,
+        file_path: str,
+        file_name: str,
+        validate_records: bool = True,
+        group_records: bool = False,
+    ):
         """
         Write the dataset to an HDF5 file.
 
@@ -1055,18 +1225,24 @@ class SourceDataset:
             Path where the file should be written.
         file_name: str
             Name of the file to write. Must end in .hdf5
+        validate_records: bool, optional, default=True
+            Whether to run record validation
+        group_records: bool, optional, default=False
+            Whether to group records by the system size. This may be necessary for large datasets.
 
         Returns
         -------
-        chksum: str
+        checksum: str
             MD5 checksum of the hdf5_ file.
         """
         import h5py
-        import os
-
-        import h5py
         from tqdm import tqdm
         import numpy as np
+
+        if validate_records:
+            # validate entries
+            log.info("Validating records")
+            self.validate_records()
 
         assert file_name.endswith(".hdf5")
         file_path = os.path.expanduser(file_path)
@@ -1075,11 +1251,26 @@ class SourceDataset:
         full_file_path = f"{file_path}/{file_name}"
         dt = h5py.special_dtype(vlen=str)
 
-        # validate entries
-        log.info("Validating records")
-        self.validate_records()
+        if group_records:
+            log.info(f"Grouping records by system size.")
+            log.info(
+                f"Note, certain pieces of metadata may not be written to file when grouping records."
+            )
+            # if we want to group the records, let us determine
+            # which systems should be grouped
+            records_by_n_atoms = {}
+
+            for record_name in self.records.keys():
+                record = self.get_record(record_name)
+                n_atoms = record.n_atoms
+
+                if n_atoms not in records_by_n_atoms:
+                    records_by_n_atoms[n_atoms] = [record_name]
+                else:
+                    records_by_n_atoms[n_atoms].append(record_name)
 
         log.info(f"Writing records to {full_file_path}")
+
         from modelforge.utils.misc import OpenWithLock
 
         with OpenWithLock(f"{full_file_path}.lockfile", "w") as lockfile:
@@ -1087,111 +1278,20 @@ class SourceDataset:
                 with SqliteDict(
                     f"{self.local_db_dir}/{self.local_db_name}",
                 ) as db:
-                    for name in tqdm(self.records.keys()):
-                        record_group = f.create_group(name)
 
-                        record = db[name]
+                    if group_records:
+                        for n_atoms in records_by_n_atoms.keys():
+                            temp_group = RecordGroup(name=f"group_{n_atoms}")
+                            for record_name in records_by_n_atoms[n_atoms]:
+                                record = db[record_name]
+                                temp_group.add_record(record)
+                            self._write_record_to_hdf5(record=temp_group, file_handle=f)
 
-                        record_group.create_dataset(
-                            "atomic_numbers",
-                            data=record.atomic_numbers.value,
-                            shape=record.atomic_numbers.value.shape,
-                        )
-                        record_group["atomic_numbers"].attrs["format"] = str(
-                            record.atomic_numbers.classification
-                        )
-                        record_group["atomic_numbers"].attrs["property_type"] = str(
-                            record.atomic_numbers.property_type
-                        )
+                    else:
+                        for name in tqdm(self.records.keys()):
+                            record = db[name]
+                            self._write_record_to_hdf5(record=record, file_handle=f)
 
-                        record_group.create_dataset("n_configs", data=record.n_configs)
-                        record_group["n_configs"].attrs["format"] = "meta_data"
-
-                        for key, property in record.per_atom.items():
-
-                            target_units = GlobalUnitSystem.get_units(
-                                property.property_type
-                            )
-                            record_group.create_dataset(
-                                key,
-                                data=unit.Quantity(property.value, property.units)
-                                .to(target_units, "chem")
-                                .magnitude,
-                                shape=property.value.shape,
-                            )
-                            record_group[key].attrs["u"] = str(target_units)
-                            record_group[key].attrs["format"] = str(
-                                property.classification
-                            )
-                            record_group[key].attrs["property_type"] = str(
-                                property.property_type
-                            )
-
-                        for key, property in record.per_system.items():
-                            target_units = GlobalUnitSystem.get_units(
-                                property.property_type
-                            )
-                            record_group.create_dataset(
-                                key,
-                                data=unit.Quantity(property.value, property.units)
-                                .to(target_units, "chem")
-                                .magnitude,
-                                shape=property.value.shape,
-                            )
-
-                            record_group[key].attrs["u"] = str(target_units)
-                            record_group[key].attrs["format"] = str(
-                                property.classification
-                            )
-                            record_group[key].attrs["property_type"] = str(
-                                property.property_type
-                            )
-
-                        for key, property in record.meta_data.items():
-                            if isinstance(property.value, str):
-                                record_group.create_dataset(
-                                    key,
-                                    data=property.value,
-                                    dtype=dt,
-                                )
-                                record_group[key].attrs["u"] = str(property.units)
-                                record_group[key].attrs["format"] = str(
-                                    property.classification
-                                )
-                                record_group[key].attrs["property_type"] = str(
-                                    property.property_type
-                                )
-
-                            elif isinstance(property.value, (float, int)):
-
-                                record_group.create_dataset(
-                                    key,
-                                    data=property.value,
-                                )
-                                record_group[key].attrs["u"] = str(property.units)
-                                record_group[key].attrs["format"] = str(
-                                    property.classification
-                                )
-                                record_group[key].attrs["property_type"] = str(
-                                    property.property_type
-                                )
-
-                            elif isinstance(property.value, np.ndarray):
-
-                                record_group.create_dataset(
-                                    key, data=property.value, shape=property.value.shape
-                                )
-                                record_group[key].attrs["u"] = str(property.units)
-                                record_group[key].attrs["format"] = str(
-                                    property.classification
-                                )
-                                record_group[key].attrs["property_type"] = str(
-                                    property.property_type
-                                )
-                            else:
-                                raise ValueError(
-                                    f"Unsupported type ({type(property.value)}) for metadata {key}"
-                                )
         from modelforge.utils.remote import calculate_md5_checksum
 
         hdf5_checksum = calculate_md5_checksum(file_path=file_path, file_name=file_name)
@@ -1291,14 +1391,29 @@ def create_dataset_from_hdf5(
                 keys = keys[:n_records]
             for key in tqdm(keys):
 
-                record = Record(name=key)
-                n_configs = 0
+                # let us figure out if the record is grouped and needs to be broken up
+                is_grouped = False
+
                 properties_keys = f[key].keys()
+                if "grouped_indices" in properties_keys:
+                    is_grouped = True
+
+                if is_grouped:
+                    record = RecordGroup(name=key)
+                else:
+                    record = Record(name=key)
                 for pk in properties_keys:
                     if pk == "n_configs":
                         n_configs = f[key][pk][()]
-                    else:
+                    elif pk == "grouped_n_configs":
+                        record.grouped_n_configs = f[key][pk][()]
+                    elif pk == "grouped_names":
+                        temp = f[key][pk][()]
+                        record.grouped_names = [val.decode("utf-8") for val in temp]
 
+                    elif pk == "grouped_indices":
+                        record.grouped_indices = f[key][pk][()]
+                    else:
                         property_type = f[key][pk].attrs["property_type"]
                         property_classification = f[key][pk].attrs["format"]
                         if "u" in f[key][pk].attrs.keys():
@@ -1327,7 +1442,14 @@ def create_dataset_from_hdf5(
                             )
 
                         record.add_property(property)
-                assert n_configs == record.n_configs
-                dataset.add_record(record)
+
+                if is_grouped:
+                    records_temp = record.get_records()
+
+                    dataset.add_records(records_temp)
+                else:
+                    assert n_configs == record.n_configs
+
+                    dataset.add_record(record)
 
         return dataset

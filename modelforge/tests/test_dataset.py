@@ -743,7 +743,6 @@ def test_dataset_neighborlist(
     # methane will have 5 choose 2 unique pairs, or 20 total non-unique pairs
 
     methane_pairs = pair_list[:, :20]
-    print(methane_pairs)
 
     methane_pairs_known = torch.tensor(
         [
@@ -1087,7 +1086,6 @@ def test_dataset_splitting(
         or splitting_strategy == FirstComeFirstServeSplittingStrategy
     ):
         total = len(train_dataset2) + len(val_dataset2) + len(test_dataset2)
-        print(len(train_dataset2), len(val_dataset2), len(test_dataset2), total)
         assert np.isclose(len(train_dataset2) / total, 0.6, atol=0.01)
         assert np.isclose(len(val_dataset2) / total, 0.3, atol=0.01)
         assert np.isclose(len(test_dataset2) / total, 0.1, atol=0.01)
@@ -1663,7 +1661,8 @@ def test_element_filter_setting(prep_temp_dir, load_test_dataset, dataset_temp_d
     assert data.element_filter is None
 
 
-def test_local_dataset(prep_temp_dir):
+@pytest.mark.parametrize("grouped", [True, False])
+def test_local_dataset(grouped, prep_temp_dir):
 
     from modelforge.dataset.dataset import initialize_datamodule
 
@@ -1682,7 +1681,11 @@ def test_local_dataset(prep_temp_dir):
     path_to_local_dataset_dir = get_path_string(local_dataset)
 
     # read the toml file
-    toml_file = f"{path_to_local_dataset_dir}/local_dataset.toml"
+    if grouped:
+        toml_file = f"{path_to_local_dataset_dir}/local_dataset_grouped.toml"
+
+    else:
+        toml_file = f"{path_to_local_dataset_dir}/local_dataset.toml"
 
     # check to ensure the yaml file exists
     if not os.path.exists(toml_file):
@@ -1706,9 +1709,15 @@ def test_local_dataset(prep_temp_dir):
     # copy the hdf5 file to the local cache directory
     import shutil
 
-    shutil.copy(
-        f"{path_to_local_dataset_dir}/qm9_dataset_v1.1_ntc_10.hdf5", local_cache_dir
-    )
+    if grouped:
+        shutil.copy(
+            f"{path_to_local_dataset_dir}/test_dataset_grouped.hdf5",
+            local_cache_dir,
+        )
+    else:
+        shutil.copy(
+            f"{path_to_local_dataset_dir}/qm9_dataset_v1.1_ntc_10.hdf5", local_cache_dir
+        )
 
     # we will read in the yaml file and then update the path to the hdf5 file
     # write this to the local_cache_dir
@@ -1753,3 +1762,14 @@ def test_local_dataset(prep_temp_dir):
     )
 
     assert os.path.exists(f"{local_cache_dir}/{dataset_name.lower()}.npz")
+
+    # if we have the grouped data, let us validate that we extracted
+    # all the records properly
+    # the dataset itself was created from 6 records, with 10 total configurations
+    # 3 records with n_atoms=2, 2 records with n_atoms=3, 1 records with n_atoms = 5
+    #  (which means length of atomic_numbers array is 17)
+    if grouped:
+        dm.prepare_data()
+        assert dm.torch_dataset.number_of_records == 6
+        assert dm.torch_dataset.length == 10
+        assert dm.torch_dataset.number_of_atoms == 17

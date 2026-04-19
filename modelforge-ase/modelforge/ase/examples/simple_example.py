@@ -1,40 +1,32 @@
-checkpoint_file_path = "/home/cri/Downloads/model.ckpt"
+# initialize a potential from a checkpoint file
 
+from modelforge.utils.io import get_path_string
+from modelforge.ase.tests import data
 from modelforge.potential.potential import load_inference_model_from_checkpoint
 
+# checkpoint file is saved in tests/data
+checkpoint_file_path = get_path_string(data) + "/model.ckpt"
 potential = load_inference_model_from_checkpoint(checkpoint_file_path, jit=False)
 
+# to use the potential wtih ASE we can need to import the ModelForgeCalculator class,
+# which wraps the potential in an ASE-compatible calculator interface
 from modelforge.ase.calculator import ModelForgeCalculator
 
+# let us use one of ase's built in molecules
 from ase.build import molecule
 
 atoms = molecule("H2O")
 atoms.calc = ModelForgeCalculator(potential)
 
+# extract the energy adn forces
 pe = atoms.get_potential_energy()
 forces = atoms.get_forces()
-print(pe)
-print(forces)
+print("potential energy: ", pe)
+print("forces: ", forces)
 
+# let us try doing an optimization
 from ase.optimize import BFGS
 
 #
 opt = BFGS(atoms)
 opt.run(fmax=0.05)
-
-
-def ase_to_rdkit(atoms):
-    from rdkit import Chem
-    from rdkit.Chem import Conformer
-
-    mol = Chem.RWMol()
-    conf = Conformer(len(atoms))
-    for i, atom in enumerate(atoms):
-        rd_atom = Chem.Atom(int(atom.number))
-        idx = mol.AddAtom(rd_atom)
-        conf.SetAtomPosition(idx, atom.position)
-    mol.AddConformer(conf)
-    return mol.GetMol()
-
-
-mol = ase_to_rdkit(atoms)

@@ -113,7 +113,7 @@ Examples
     :maxdepth: 2
     :caption: Contents:
 
-    _collections/notebooks/simple_example.ipynb
+    _collections/notebooks_ase/simple_example.ipynb
 
 Using a model for inference in OpenMM
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

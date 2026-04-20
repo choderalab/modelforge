@@ -36,7 +36,6 @@ micromamba activate modelforge
 
 install via pip in editable mode:
 ```bash
-
 pip install -e . --config-settings editable-mode=strict
 ```
 

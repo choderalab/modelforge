@@ -32,12 +32,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
+        os: [macOS-latest, ubuntu-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13"]
         include:
           - os: ubuntu-latest
             n_procs: auto
-
+          - os: macOS-latest
+            n_procs: 0
 
     steps:
       - uses: actions/checkout@v3
@@ -49,6 +50,15 @@ jobs:
           ulimit -a
 
       # More info on options: https://github.com/marketplace/actions/provision-with-micromamba
+      - uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-file: devtools/conda-envs/test_env_modelforge_ase.yaml
+          cache-environment: true
+          cache-downloads: true
+          create-args: >-
+            python=${{ matrix.python-version }}
+        if : matrix.os == 'ubuntu-latest'
+
       - uses: mamba-org/setup-micromamba@v1
         with:
           environment-file: devtools/conda-envs/test_env_mac_modelforge_ase.yaml

@@ -18,7 +18,7 @@ from ase.build import molecule
 atoms = molecule("H2O")
 atoms.calc = ModelForgeCalculator(potential)
 
-# extract the energy adn forces
+# extract the energy and forces
 pe = atoms.get_potential_energy()
 forces = atoms.get_forces()
 print("potential energy: ", pe)

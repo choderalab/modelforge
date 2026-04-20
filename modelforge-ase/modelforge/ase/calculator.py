@@ -76,10 +76,10 @@ def _init_nnp_input(
     atomic_subsystem_indices = torch.zeros(n_atoms, dtype=torch.int64, device=device)
 
     total_charge_tensor = torch.tensor(
-        [per_system_total_charge], dtype=torch.int64, device=device
+        [[per_system_total_charge]], dtype=torch.int64, device=device
     )
     total_spin_tensor = torch.tensor(
-        [per_system_spin_state], dtype=torch.int64, device=device
+        [[per_system_spin_state]], dtype=torch.int64, device=device
     )
 
     is_periodic = False
@@ -190,7 +190,6 @@ class ModelForgeCalculator(Calculator):
                     raise RuntimeWarning("Force calculation did not return a gradient")
                 # check if nan in the gradient
                 if torch.isnan(grad).any():
-                    print(grad)
                     raise RuntimeError(
                         "Gradient of energy used for force calculation contains NaN values."
                     )
@@ -202,4 +201,3 @@ class ModelForgeCalculator(Calculator):
             self.results["forces"] = (
                 forces.cpu().numpy().astype(np.float64) * _KJ_PER_MOL_NM_TO_EV_ANG
             )
-        print(self.results)

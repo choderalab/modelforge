@@ -153,7 +153,6 @@ def test_forward(single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir):
     )
 
     y_hat = aimnet(batch.nnp_input)
-
     assert y_hat is not None, "Aimnet model should be able to make predictions."
 
     ref_per_system_energy = torch.tensor(

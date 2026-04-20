@@ -1,21 +1,12 @@
 # Helper functions to convert between RDKit and ASE
 
 from rdkit import Chem
-from rdkit.Chem import AllChem, Draw
+from rdkit.Chem import AllChem
 from rdkit.Chem.rdchem import Mol
-import numpy as np
-
-try:
-    from ase import Atoms
-    from ase.io import write as ase_write
-
-    ASE_AVAILABLE = True
-except ImportError:
-    ASE_AVAILABLE = False
-    print("ASE not installed. Install with: pip install ase")
+from ase import Atoms
 
 
-def rdkit_mol_to_ase(mol: Mol, smiles: str = "") -> "Atoms":
+def rdkit_mol_to_ase(mol: Mol, smiles: str = "") -> Atoms:
     """
     Convert an RDKit Mol (with 3D conformer) to an ASE Atoms object.
 
@@ -36,12 +27,12 @@ def rdkit_mol_to_ase(mol: Mol, smiles: str = "") -> "Atoms":
 
     symbols = [atom.GetSymbol() for atom in mol.GetAtoms()]
 
-    atoms = Atoms(symbols=symbols, positions=positions)
-    atoms.info["smiles"] = smiles
-    return atoms
+    ase_system = Atoms(symbols=symbols, positions=positions)
+    ase_system.info["smiles"] = smiles
+    return ase_system
 
 
-def smiles_to_ase(smiles: str, optimize: bool = True, seed: int = 42) -> "Atoms":
+def smiles_to_ase(smiles: str, optimize: bool = True, seed: int = 42) -> Atoms:
     """
     Full pipeline: SMILES → RDKit Mol → 3-D embedding → ASE Atoms.
 
@@ -79,13 +70,12 @@ def smiles_to_ase(smiles: str, optimize: bool = True, seed: int = 42) -> "Atoms"
     return rdkit_mol_to_ase(mol, smiles=smiles)
 
 
-def ase_to_rdkit(atoms):
-    from rdkit import Chem
+def ase_to_rdkit(ase_system: Atoms) -> Chem.Mol:
     from rdkit.Chem import Conformer
 
     mol = Chem.RWMol()
-    conf = Conformer(len(atoms))
-    for i, atom in enumerate(atoms):
+    conf = Conformer(len(ase_system))
+    for i, atom in enumerate(ase_system):
         rd_atom = Chem.Atom(int(atom.number))
         idx = mol.AddAtom(rd_atom)
         conf.SetAtomPosition(idx, atom.position)

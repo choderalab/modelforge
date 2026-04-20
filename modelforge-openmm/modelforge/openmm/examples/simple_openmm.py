@@ -1,5 +1,5 @@
 """
-Demonstrate wrapping a modelforge potential for use with OpenMM TorchForce
+Demonstrate wrapping a modelforge potential for use with OpenMM PythonForce
 
 """
 

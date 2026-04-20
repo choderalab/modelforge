@@ -37,8 +37,6 @@ jobs:
         include:
           - os: ubuntu-latest
             n_procs: auto
-          - os: macOS-latest
-            n_procs: 0
 
     steps:
       - uses: actions/checkout@v3

@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING, Optional, List
 
 import numpy as np
 import torch
+from enum import Enum
 
 
 from ase.calculators.calculator import Calculator, all_changes
@@ -31,6 +32,16 @@ if TYPE_CHECKING:
 _kJ_PER_MOL_TO_EV = 0.010364274
 _KJ_PER_MOL_NM_TO_EV_ANG = 0.0010364274
 _ANG_TO_NM = 0.1
+
+
+class NeighborlistStrategy(Enum):
+    """
+    Enum class for the neighborlist strategy to use
+
+    """
+
+    brute_nsq = "brute_nsq"
+    verlet_nsq = "verlet_nsq"
 
 
 # note, we'll need to
@@ -129,6 +140,13 @@ class ModelForgeCalculator(Calculator):
         Device for pytorch tensors.
     precision: [torch.device], default torch.float32
         precision for pytorch float tensors.
+    neighborlist_strategy: NeighborlistStrategy, default brute_nsq
+        Neighborlist strategy to use for the potential. Options are:
+         "brute_nsq" which is the brute force neighbor list which scales as N**2
+         "verlet_nsq" which is a verlet neighborlist, where rebuilds are N**2
+    neighborlist_verlet_skin: [float], default 0.1
+        Skin distance for verlet neighborlist rebuilds, in nm. Only used if neighborlist_strategy is "verlet_nsq".
+
     """
 
     implemented_properties: List[str] = ["energy", "forces"]
@@ -140,12 +158,19 @@ class ModelForgeCalculator(Calculator):
         per_system_spin_multiplicity: int = 1,
         device: Optional[str | torch.device] = None,
         precision: torch.dtype = torch.float32,
+        neighborlist_strategy: NeighborlistStrategy = "brute_nsq",
+        neighborlist_verlet_skin: float = 0.1,
         **kwargs,
     ):
         super().__init__(**kwargs)
         if device is None:
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.potential = potential.to(device).eval()
+        # set the neighborlist strategy for the potential
+        self.potential.set_neighborlist_strategy(
+            neighborlist_strategy, neighborlist_verlet_skin
+        )
+
         self.per_system_total_charge = per_system_total_charge
         self.device = torch.device(device)
         self.precision = precision

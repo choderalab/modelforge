@@ -36,7 +36,6 @@ micromamba activate modelforge
 
 install via pip in editable mode:
 ```bash
-
 pip install -e . --config-settings editable-mode=strict
 ```
 
@@ -45,6 +44,10 @@ Install the curate package:
 pip install -e modelforge-curate --config-settings editable-mode=strict
 ```
 
+Install the ASE package (GPL Licensed):
+```bash
+pip install -e modelforge-ase --config-settings editable-mode=strict
+```
 
 
 ### Copyright

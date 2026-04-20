@@ -1,4 +1,4 @@
-name: test
+name: test-modelforge-ase
 channels:
   - conda-forge
   - pytorch

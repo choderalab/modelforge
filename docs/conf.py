@@ -57,12 +57,18 @@ extensions = [
 ]
 
 collections = {
-    "notebooks": {
+    "notebooks_curate": {
         "driver": "copy_folder",
         "source": "../modelforge-curate/modelforge/curate/examples",
-        "target": "notebooks",
+        "target": "notebooks_curate",
         "ignore": [".sqlite", ".db", ".py"],
-    }
+    },
+    "notebooks_ase": {
+        "driver": "copy_folder",
+        "source": "../modelforge-ase/modelforge/ase/examples",
+        "target": "notebooks_ase",
+        "ignore": [".sqlite", ".db", ".py"],
+    },
 }
 
 autosummary_generate = True

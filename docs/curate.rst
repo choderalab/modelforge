@@ -61,6 +61,6 @@ Examples
     :maxdepth: 2
     :caption: Contents:
 
-    _collections/notebooks/basic_usage.ipynb
-    _collections/notebooks/properties
-    _collections/notebooks/record_and_sourcedataset
+    _collections/notebooks_curate/basic_usage.ipynb
+    _collections/notebooks_curate/properties
+    _collections/notebooks_curate/record_and_sourcedataset

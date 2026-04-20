@@ -3,34 +3,36 @@
 Edit the USER SETTINGS section below, then run this file.
 """
 
+from ase.build import molecule
 from ase.optimize import BFGS
-from pathlib import Path
 
-from modelforge.ase.calculator import ModelForgeCalculator
-from modelforge.ase.examples.helper_functions import smiles_to_ase
+from modelforge.ase import ModelForgeCalculator
 from modelforge.potential.potential import load_inference_model_from_checkpoint
+from modelforge.utils.io import get_path_string
+import modelforge.ase.tests as ase_tests
 
 
 # =========================
 # USER SETTINGS (EDIT HERE)
 # =========================
-SMILES = "O"  # Example: "O", "CCO", "NCCCCCCO"
-RDKIT_OPTIMIZE = False  # Set True to run an MMFF94 geometry optimization in RDKit.
-MODEL_PATH = str(Path(__file__).resolve().parent.parent / "tests" / "data" / "model.ckpt")
+# `molecule()` expects an ASE-recognized structure name string.
+# Common examples include: "H2O", "NH3", "CH4", "CO2", and "C6H6".
+ASE_MOLECULE_NAME = "H2O"
+MODEL_PATH = f"{get_path_string(ase_tests)}/data/model.ckpt"
 OPT_FMAX_EV_PER_ANGSTROM = 0.05
 OPT_LOGFILE = "simple_example_opt.log"
 OPT_TRAJECTORY = "simple_example_opt.traj"
 # =========================
 
 print("=== modelforge-ase simple example ===")
-print(f"Checkpoint: {CHECKPOINT_PATH}")
-print(f"SMILES: {SMILES}")
+print(f"Checkpoint: {MODEL_PATH}")
+print(f"ASE molecule name: {ASE_MOLECULE_NAME}")
 
 # 1) Load the trained model checkpoint.
 potential = load_inference_model_from_checkpoint(MODEL_PATH, jit=False)
 
-# 2) Build an ASE Atoms object from a SMILES string.
-atoms = smiles_to_ase(SMILES, optimize=RDKIT_OPTIMIZE)
+# 2) Build an ASE Atoms object from a named ASE structure.
+atoms = molecule(ASE_MOLECULE_NAME)
 
 # 3) Attach the modelforge calculator so ASE can compute energies/forces.
 atoms.calc = ModelForgeCalculator(potential)

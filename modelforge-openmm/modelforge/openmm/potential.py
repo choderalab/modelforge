@@ -4,8 +4,8 @@ import torch
 from modelforge.utils.prop import NNPInput
 from typing import List, Optional
 from enum import Enum
-import openmm
 import numpy as np
+from functools import partial
 
 
 class NeighborlistStrategy(Enum):
@@ -19,7 +19,7 @@ class NeighborlistStrategy(Enum):
 
 
 def _build_nnp_input(
-    atomic_numbers: list[int],
+    atomic_numbers: np.ndarray,
     positions: np.ndarray,
     is_periodic: bool,
     precision: torch.dtype,
@@ -33,7 +33,7 @@ def _build_nnp_input(
 
     Parameters
     -----------
-    atomic_numbers: list[int]
+    atomic_numbers: np.ndarray[
         List of atomic numbers for each atom in the system, in the same order as OpenMM
     positions: np.ndarray
         (N, 3) array of atomic positions in nm, as passed by OpenMM
@@ -55,7 +55,8 @@ def _build_nnp_input(
     -------
     NNPInput for input to modelforge potential
     """
-    n_atoms = len(atomic_numbers)
+    atomic_numbers = atomic_numbers.reshape(-1)
+    n_atoms = atomic_numbers.shape[0]
 
     positions_tensor = torch.tensor(positions, dtype=precision, device=device)
     atomic_numbers_tensor = torch.tensor(
@@ -98,7 +99,7 @@ class ModelForgeForce:
     Parameters
     ----------
     potential : modelforge potential instance
-        Any ModelForge potential object that implements ``forward(input_dict)``.
+        Any ModelForge potential object that implements ``forward(nnp_input)``.
         The model is moved to ``device`` and put in eval mode in ``__init__``.
 
     atomic_numbers : list[int]
@@ -143,65 +144,101 @@ class ModelForgeForce:
             neighborlist_strategy, neighborlist_verlet_skin
         )
         self._potential.eval()
+        self._potential.to(device)
 
-        self._atomic_numbers = list(atomic_numbers)
-        self._n_atoms = len(atomic_numbers)
-        self._periodic = periodic
-        self._dtype = precision
+        self._atomic_numbers = np.array(atomic_numbers)
+        self._precision = precision
         self._device = device
         self._per_system_total_charge = per_system_total_charge
         self._per_system_spin_multiplicity = per_system_spin_multiplicity
+        self._periodic = periodic
 
-    def compute(self, state) -> tuple[float, np.ndarray]:
-        """
-        Evaluate the NNP potential and return energy + forces.
-
-        Parameters
-        ----------
-        state, openmm state object
-        Returns
-        -------
-        energy : float
-            Potential energy in **kJ/mol**.
-        forces : (N, 3) float64 ndarray
-            Forces in **kJ/mol/nm**.
-        """
-        import openmm.unit as omm_unit
-
-        nnp_input = _build_nnp_input(
+    def generate_force(self) -> partial:
+        compute = partial(
+            _compute_modelforge,
+            potential=self._potential,
             atomic_numbers=self._atomic_numbers,
-            positions=state.getPositions(asNumpy=True).value_in_unit(
-                omm_unit.nanometer
-            ),
-            is_periodic=self._periodic,
-            box_vectors=(
-                state.getPeriodicBoxVectors(asNumpy=True).value_in_unit(
-                    omm_unit.nanometer
-                )
-                if self._periodic
-                else None
-            ),
-            precision=self._dtype,
-            device=self._device,
             per_system_total_charge=self._per_system_total_charge,
-            per_system_spin_state=self._per_system_spin_multiplicity,
+            per_system_spin_multiplicity=self._per_system_spin_multiplicity,
+            is_periodic=self._periodic,
+            precision=self._precision,
+            device=self._device,
         )
 
-        # Enable gradient on positions so we can autograd the forces
-        positions_t: torch.Tensor = nnp_input.positions.detach().requires_grad_(True)
-        nnp_input.positions = positions_t
+        return compute
 
-        output = self._potential(nnp_input)
-        energy = torch.Tensor = output["per_system_energy"]
 
+def _compute_modelforge(
+    state,
+    potential,
+    atomic_numbers: np.ndarray,
+    per_system_total_charge: int,
+    per_system_spin_multiplicity: int,
+    is_periodic: bool,
+    precision: torch.dtype,
+    device: torch.device,
+) -> tuple[float, np.ndarray]:
+    """
+    Evaluate the NNP potential and return energy + forces.
+
+    Parameters
+    ----------
+    state: openmm.State
+        openmm state object
+    potential: modelforge.Potential instance
+        Potential instance that implements ``forward(nnp_input)``.
+    atomic_numbers: np.ndarray
+        Atomic numbers for every particle in the System, in the same order as
+    per_system_total_charge: int
+        Integer total charge of the system.
+    per_system_spin_multiplicity: int
+        Integer total spin multiplicity of the system.
+    is_periodic: bool
+        Whether the system is periodic. If True, box vectors will be passed in the state and included in the NNP input.
+
+    Returns
+    -------
+    energy : float
+        Potential energy in **kJ/mol**.
+    forces : (N, 3) float64 ndarray
+        Forces in **kJ/mol/nm**.
+    """
+    import openmm.unit as omm_unit
+
+    nnp_input = _build_nnp_input(
+        atomic_numbers=atomic_numbers,
+        positions=state.getPositions(asNumpy=True).value_in_unit(omm_unit.nanometer),
+        is_periodic=is_periodic,
+        box_vectors=(
+            state.getPeriodicBoxVectors(asNumpy=True).value_in_unit(omm_unit.nanometer)
+            if is_periodic
+            else None
+        ),
+        precision=precision,
+        device=device,
+        per_system_total_charge=per_system_total_charge,
+        per_system_spin_state=per_system_spin_multiplicity,
+    )
+
+    # Enable gradient on positions so we can autograd the forces
+    positions_t: torch.Tensor = nnp_input.positions.detach().requires_grad_(True)
+    nnp_input.positions = positions_t
+
+    output = potential(nnp_input)
+    energy = torch.Tensor = output["per_system_energy"]
+
+    if "per_atom_forces" in output:
+        forces = torch.Tensor = output["per_atom_forces"]
+        forces = forces.detach().cpu().numpy().astype(np.float64)
+    else:
         # Forces = -dE/dr  (autograd, result is eV/Å)
         grad = torch.autograd.grad(
             energy.sum(), positions_t, create_graph=False, retain_graph=False
         )[0]
         forces = -grad.detach().cpu().numpy().astype(np.float64)
 
-        return (
-            energy.detach().cpu().numpy().astype(np.float64).sum()
-            * omm_unit.kilojoules_per_mole,
-            forces * omm_unit.kilojoules_per_mole / omm_unit.nanometer,
-        )
+    energy = energy.detach().cpu().numpy().astype(np.float64).sum()
+    return (
+        energy * omm_unit.kilojoules_per_mole,
+        forces * omm_unit.kilojoules_per_mole / omm_unit.nanometer,
+    )

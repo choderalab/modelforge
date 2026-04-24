@@ -55,37 +55,58 @@ def test_potential_wrapping(is_periodic, potential_name, prep_temp_dir):
 
     modelforge_energy = modelforge_potential(nnp_input)["per_system_energy"]
 
-    # convert the potential to a torchscript model and save it
-    jit_modelforge_potential = torch.jit.script(modelforge_potential)
-    jit_modelforge_potential.save(
-        f"{prep_temp_dir}/{potential_name.lower()}_{is_periodic}_test.pt"
-    )
+    from modelforge.openmm.potential import ModelForgeCompute
 
-    # load the torchscript model in the openmm wrapper
-    from modelforge.openmm.potential import Potential
-
-    wrapped_potential = Potential(
-        modelforge_potential_path=f"{prep_temp_dir}/{potential_name.lower()}_{is_periodic}_test.pt",
+    openmm_force_compute = ModelForgeCompute(
+        potential=modelforge_potential,
         atomic_numbers=water_atomic_numbers,
         is_periodic=is_periodic,
         neighborlist_strategy="verlet_nsq",
-        energy_contributions=["per_system_energy"],
+    ).generate_compute()
+
+    import openmm
+
+    system = openmm.System()
+    for atom in water_topology.atoms():
+        system.addParticle(atom.element.mass)
+
+    force = openmm.PythonForce(modelforge_potential)
+
+    system.addForce(force)
+
+    import sys
+    from openmm import LangevinMiddleIntegrator
+    from openmm.app import Simulation, StateDataReporter
+    from openmm.unit import kelvin, picosecond, femtosecond
+
+    # Create an integrator with a time step of 1 fs
+    temperature = 298.15 * kelvin
+    frictionCoeff = 1 / picosecond
+    timeStep = 1 * femtosecond
+    integrator = LangevinMiddleIntegrator(temperature, frictionCoeff, timeStep)
+
+    # Create a simulation and set the initial positions and velocities
+    simulation = Simulation(water_topology, system, integrator)
+    simulation.context.setPositions(water_positions)
+
+    state = simulation.context.getState(getEnergy=True)
+    potential_energy = state.getPotentialEnergy()
+    print(potential_energy)
+    print(modelforge_energy)
+    assert np.isclose(potential_energy, modelforge_energy)
+    # Configure a reporter to print to the console every 0.1 ps (100 steps)
+    reporter = StateDataReporter(
+        file=sys.stdout,
+        reportInterval=1,
+        step=True,
+        time=True,
+        potentialEnergy=True,
+        temperature=True,
     )
+    simulation.reporters.append(reporter)
 
-    wrapped_potential_energy = wrapped_potential(
-        torch.tensor(water_positions), box_vectors
-    )
-
-    assert torch.isclose(modelforge_energy, wrapped_potential_energy)
-
-    # first ensure that we can call jit on the potential, then assert the energy is the same
-    jit_wrapped_potential = torch.jit.script(wrapped_potential)
-
-    jit_wrapped_energy = jit_wrapped_potential(
-        torch.tensor(water_positions), box_vectors
-    )
-
-    assert torch.isclose(modelforge_energy, jit_wrapped_energy)
+    # Run the simulation
+    simulation.step(10)
 
 
 def test_openmm(prep_temp_dir):

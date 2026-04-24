@@ -109,6 +109,7 @@ from modelforge.potential.processing import (
     ZBLPotential,
     DispersionPotential,
     SumPerSystemEnergy,
+    PerAtomForce,
 )
 
 
@@ -121,6 +122,7 @@ class PostProcessing(torch.nn.Module):
         "per_system_vdw_energy",
         "general_postprocessing_operation",
         "sum_per_system_energy",
+        "per_atom_force",
     ]
 
     def __init__(
@@ -193,13 +195,15 @@ class PostProcessing(torch.nn.Module):
                     "Only Coulomb potential is supported for electrostatics."
                 )
         if "per_system_zbl_energy" in properties_to_process:
-
-            self.registered_chained_operations["per_system_zbl_energy"] = ZBLPotential()
-            self._registered_properties.append("per_system_zbl_energy")
-            assert all(
-                prop in PostProcessing._SUPPORTED_PROPERTIES
-                for prop in self._registered_properties
-            )
+            if properties_to_process["per_system_zbl_energy"]["calculate_zbl"] == True:
+                self.registered_chained_operations["per_system_zbl_energy"] = (
+                    ZBLPotential()
+                )
+                self._registered_properties.append("per_system_zbl_energy")
+                assert all(
+                    prop in PostProcessing._SUPPORTED_PROPERTIES
+                    for prop in self._registered_properties
+                )
         if "per_system_vdw_energy" in properties_to_process:
             length_conversion_factor = (
                 (1.0 * GlobalUnitSystem.get_units("length")).to("bohr").magnitude
@@ -256,6 +260,15 @@ class PostProcessing(torch.nn.Module):
                     )
                 )
                 self._registered_properties.append("sum_per_system_energy")
+                assert all(
+                    prop in PostProcessing._SUPPORTED_PROPERTIES
+                    for prop in self._registered_properties
+                )
+        # per_atom_force needs to go last, as it requires all energies to be processed first
+        if "per_atom_force" in properties_to_process:
+            if postprocessing_parameter["per_atom_force"]["calculate_force"] == True:
+                self.registered_chained_operations["per_atom_force"] = PerAtomForce()
+                self._registered_properties.append("per_atom_force")
                 assert all(
                     prop in PostProcessing._SUPPORTED_PROPERTIES
                     for prop in self._registered_properties
@@ -343,9 +356,10 @@ class Potential(torch.nn.Module):
                 "Use nvalchemiops as the DFTD3 engine or disable JIT compilation by setting jit=False."
             )
 
-        self.postprocessing = (
-            torch.jit.script(postprocessing) if jit else postprocessing
-        )
+        # self.postprocessing = (
+        #     torch.jit.script(postprocessing) if jit else postprocessing
+        # )
+        self.postprocessing = postprocessing
 
     def _add_total_charge(
         self, core_output: Dict[str, torch.Tensor], input_data: NNPInput
@@ -565,7 +579,11 @@ class Potential(torch.nn.Module):
         core_output = self._add_total_charge(core_output, input_data)
         core_output = self._add_pairlist(core_output, pairlist_output)
 
-        if "per_system_vdw_energy" in self.postprocessing._registered_properties:
+        # we need positions for both vdw energy and force computation
+        if (
+            "per_system_vdw_energy" in self.postprocessing._registered_properties
+            or "per_atom_force" in self.postprocessing._registered_properties
+        ):
             core_output = self._add_positions(core_output, input_data.positions)
 
         processed_output = self.postprocessing.forward(core_output)
@@ -723,8 +741,15 @@ def setup_potential(
 
     log.debug(f"Only unique pairs: {only_unique_pairs}")
 
+    # when in inference mode, let us add per_atom_force to our postprocessing operations
+    potential_parameter.postprocessing_parameter.properties_to_process.append(
+        "per_atom_force"
+    )
+    post_processing_dict = potential_parameter.postprocessing_parameter.model_dump()
+    post_processing_dict["per_atom_force"] = {"calculate_force": True}
+
     postprocessing = PostProcessing(
-        postprocessing_parameter=potential_parameter.postprocessing_parameter.model_dump(),
+        postprocessing_parameter=post_processing_dict,
         dataset_statistic=remove_units_from_dataset_statistics(dataset_statistic),
     )
     # we will define the possible cutoffs.
@@ -795,7 +820,7 @@ def setup_potential(
         neighborlist,
         postprocessing,
         jit=jit,
-        jit_neighborlist=False if use_training_mode_neighborlist else True,
+        jit_neighborlist=False,  # if use_training_mode_neighborlist else True, # will be removing jit support
     )
     potential.eval()
     return potential
@@ -1171,6 +1196,7 @@ def load_inference_model_from_checkpoint(
         potential_seed=potential_seed,
         jit=jit,
     )
+
     if only_unique_pairs is not None:
         checkpoint["state_dict"]["potential.neighborlist.local_only_unique_pairs"] = (
             torch.Tensor([only_unique_pairs])

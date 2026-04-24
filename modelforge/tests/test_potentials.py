@@ -1255,7 +1255,6 @@ def test_calculate_energies_and_forces(
         dataset_cache_dir=dataset_cache_dir,
     )
     nnp_input = batch.nnp_input
-
     # read default parameters
     trainer = setup_potential_for_test(
         potential_name,
@@ -1269,6 +1268,8 @@ def test_calculate_energies_and_forces(
         E_training.sum(), nnp_input.positions, create_graph=True, retain_graph=True
     )[0]
 
+    print("finished training")
+
     # compare to inference model
     potential = setup_potential_for_test(
         potential_name,
@@ -1280,10 +1281,12 @@ def test_calculate_energies_and_forces(
     )
 
     # get energy and force
-    E_inference = potential(nnp_input)["per_system_energy"]
-    F_inference = -torch.autograd.grad(
-        E_inference.sum(), nnp_input.positions, create_graph=True, retain_graph=True
-    )[0]
+    output = potential(nnp_input)
+    E_inference = output["per_system_energy"]
+    F_inference = output["per_atom_force"]
+    # F_inference = -torch.autograd.grad(
+    #     E_inference.sum(), nnp_input.positions, create_graph=True, retain_graph=True
+    # )[0]
 
     print(f"Energy training: {E_training}")
     print(f"Energy inference: {E_inference}")
@@ -1324,10 +1327,13 @@ def test_calculate_energies_and_forces(
     )
 
     # get energy and force
-    E_inference = potential(nnp_input)["per_system_energy"]
-    F_inference = -torch.autograd.grad(
-        E_inference.sum(), nnp_input.positions, create_graph=True, retain_graph=True
-    )[0]
+    output = potential(nnp_input)
+    E_inference = output["per_system_energy"]
+    F_inference = output["per_atom_force"]
+    # F_inference = -torch.autograd.grad(
+    #     E_inference.sum(), nnp_input.positions, create_graph=True, retain_graph=True
+    # )[0]
+
     # get energy and force
     E_training = potential(nnp_input)["per_system_energy"]
     F_training = -torch.autograd.grad(

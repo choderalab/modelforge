@@ -82,7 +82,7 @@ def _build_nnp_input(
 
     return NNPInput(
         atomic_numbers=atomic_numbers_tensor,
-        positions=positions_tensor,
+        positions=positions_tensor.detach().requires_grad_(True),
         atomic_subsystem_indices=atomic_subsystem_indices,
         per_system_total_charge=total_charge_tensor,
         per_system_spin_state=total_spin_tensor,
@@ -91,10 +91,9 @@ def _build_nnp_input(
     )
 
 
-class ModelForgeForce:
+class ModelForgeCompute:
     """
     Wrapper to work with OpenMM 8.5+ ``PythonForce``
-
 
     Parameters
     ----------
@@ -153,19 +152,36 @@ class ModelForgeForce:
         self._per_system_spin_multiplicity = per_system_spin_multiplicity
         self._periodic = periodic
 
-    def generate_force(self) -> partial:
-        compute = partial(
-            _compute_modelforge,
-            potential=self._potential,
-            atomic_numbers=self._atomic_numbers,
-            per_system_total_charge=self._per_system_total_charge,
-            per_system_spin_multiplicity=self._per_system_spin_multiplicity,
-            is_periodic=self._periodic,
-            precision=self._precision,
-            device=self._device,
-        )
 
-        return compute
+def generate_compute(
+    potential: torch.nn.Module,
+    atomic_numbers: list[int],
+    per_system_total_charge: int = 0,
+    per_system_spin_multiplicity: int = 1,
+    periodic: bool = False,
+    precision: torch.dtype = torch.float32,
+    device: str = "cpu",
+    neighborlist_strategy: NeighborlistStrategy = "brute_nsq",
+    neighborlist_verlet_skin: float = 0.1,
+) -> partial:
+
+    potential.to(device)
+    potential.set_neighborlist_strategy(neighborlist_strategy, neighborlist_verlet_skin)
+    potential.eval()
+
+    atomic_numbers = np.array(atomic_numbers)
+    compute = partial(
+        _compute_modelforge,
+        potential=potential,
+        atomic_numbers=atomic_numbers,
+        per_system_total_charge=per_system_total_charge,
+        per_system_spin_multiplicity=per_system_spin_multiplicity,
+        is_periodic=periodic,
+        precision=precision,
+        device=device,
+    )
+
+    return compute
 
 
 def _compute_modelforge(
@@ -219,25 +235,26 @@ def _compute_modelforge(
         per_system_total_charge=per_system_total_charge,
         per_system_spin_state=per_system_spin_multiplicity,
     )
+    # just make sure that we are really on the right device
+    nnp_input.to_device(device)
+    nnp_input.to_dtype(precision)
 
     # Enable gradient on positions so we can autograd the forces
-    positions_t: torch.Tensor = nnp_input.positions.detach().requires_grad_(True)
-    nnp_input.positions = positions_t
 
     output = potential(nnp_input)
     energy = torch.Tensor = output["per_system_energy"]
 
-    if "per_atom_forces" in output:
-        forces = torch.Tensor = output["per_atom_forces"]
+    if "per_atom_force" in output:
+        forces = torch.Tensor = output["per_atom_force"]
         forces = forces.detach().cpu().numpy().astype(np.float64)
     else:
-        # Forces = -dE/dr  (autograd, result is eV/Å)
-        grad = torch.autograd.grad(
-            energy.sum(), positions_t, create_graph=False, retain_graph=False
-        )[0]
-        forces = -grad.detach().cpu().numpy().astype(np.float64)
-
+        # raise an error if we didn't have per_atom_force output by the potential
+        raise ValueError(
+            "The potential did not return per_atom_forces in the output dict. Please ensure that your potential is implemented to return forces for use with OpenMM."
+        )
     energy = energy.detach().cpu().numpy().astype(np.float64).sum()
+    # forces = np.zeros([3, 3])
+    print(energy, energy * omm_unit.kilojoules_per_mole)
     return (
         energy * omm_unit.kilojoules_per_mole,
         forces * omm_unit.kilojoules_per_mole / omm_unit.nanometer,

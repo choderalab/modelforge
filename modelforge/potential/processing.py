@@ -978,8 +978,6 @@ class PerAtomForce(torch.nn.Module):
         total_energy: torch.Tensor = data["per_system_energy"]
         positions: torch.Tensor = data["positions"]
 
-        assert positions.requires_grad == True
-
         # Calculate forces as the negative gradient of energy w.r.t. positions
         grad = torch.autograd.grad(
             total_energy.sum(), positions, create_graph=True, retain_graph=True

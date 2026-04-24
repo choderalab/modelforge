@@ -859,6 +859,7 @@ def test_energy_between_simulation_environments(
         simulation_environment="PyTorch",
         local_cache_dir=local_cache_dir,
     )
+    # nnp_input.positions = nnp_input.positions.requires_grad_(True)
     output_torch = potential(nnp_input)["per_system_energy"]
 
     potential = setup_potential_for_test(
@@ -871,6 +872,7 @@ def test_energy_between_simulation_environments(
     from modelforge.jax import convert_NNPInput_to_jax
 
     nnp_input = convert_NNPInput_to_jax(batch.nnp_input)
+    print(nnp_input.positions)
     output_jax = potential(nnp_input)["per_system_energy"]
 
     # test tat we get an energie per molecule
@@ -1531,11 +1533,14 @@ def test_equivariant_energies_and_forces(
         dataset_cache_dir=dataset_cache_dir,
     ).nnp_input.to_dtype(dtype=precision)
 
-    reference_result = potential(nnp_input)["per_system_energy"]
-    reference_forces = -torch.autograd.grad(
-        reference_result.sum(),
-        nnp_input.positions,
-    )[0]
+    output = potential(nnp_input)
+
+    reference_result = output["per_system_energy"]
+    reference_forces = output["per_atom_force"]
+    # reference_forces = -torch.autograd.grad(
+    #     reference_result.sum(),
+    #     nnp_input.positions,
+    # )[0]
 
     # --------------------------------------- #
     # translation test
@@ -1549,17 +1554,18 @@ def test_equivariant_energies_and_forces(
     translation_nnp_input = nnp_input.to_dtype(dtype=precision)
     translation_nnp_input.positions = translation(translation_nnp_input.positions)
 
-    translation_result = potential(translation_nnp_input)["per_system_energy"]
+    output = translation(translation_nnp_input)
+    translation_result = output["per_system_energy"]
     assert torch.allclose(
         translation_result,
         reference_result,
         atol=atol,
     )
-
-    translation_forces = -torch.autograd.grad(
-        translation_result.sum(),
-        translation_nnp_input.positions,
-    )[0]
+    translation_forces = output["per_atom_force"]
+    # translation_forces = -torch.autograd.grad(
+    #     translation_result.sum(),
+    #     translation_nnp_input.positions,
+    # )[0]
 
     for t, r in zip(translation_forces, reference_forces):
         if not torch.allclose(t, r, atol=atol):
@@ -1582,7 +1588,9 @@ def test_equivariant_energies_and_forces(
     ).nnp_input.to_dtype(dtype=precision)
     rotation_input_data = nnp_input.to_dtype(dtype=precision)
     rotation_input_data.positions = rotation(rotation_input_data.positions)
-    rotation_result = potential(rotation_input_data)["per_system_energy"]
+
+    output = rotation(rotation_input_data)
+    rotation_result = output["per_system_energy"]
 
     for t, r in zip(rotation_result, reference_result):
         if not torch.allclose(t, r, atol=atol):
@@ -1593,13 +1601,13 @@ def test_equivariant_energies_and_forces(
         reference_result,
         atol=atol,
     )
-
-    rotation_forces = -torch.autograd.grad(
-        rotation_result.sum(),
-        rotation_input_data.positions,
-        create_graph=True,
-        retain_graph=True,
-    )[0]
+    rotation_forces = output["per_atom_force"]
+    # rotation_forces = -torch.autograd.grad(
+    #     rotation_result.sum(),
+    #     rotation_input_data.positions,
+    #     create_graph=True,
+    #     retain_graph=True,
+    # )[0]
 
     rotate_reference = rotation(reference_forces)
     print(rotation_forces, rotate_reference)
@@ -1620,13 +1628,18 @@ def test_equivariant_energies_and_forces(
     ).nnp_input.to_dtype(dtype=precision)
     reflection_input_data = nnp_input.to_dtype(dtype=precision)
     reflection_input_data.positions = reflection(reflection_input_data.positions)
-    reflection_result = potential(reflection_input_data)["per_system_energy"]
-    reflection_forces = -torch.autograd.grad(
-        reflection_result.sum(),
-        reflection_input_data.positions,
-        create_graph=True,
-        retain_graph=True,
-    )[0]
+
+    output = reflection(reflection_input_data)
+    reflection_result = output["per_system_energy"]
+
+    reflection_forces = output["per_atom_force"]
+    #
+    # reflection_forces = -torch.autograd.grad(
+    #     reflection_result.sum(),
+    #     reflection_input_data.positions,
+    #     create_graph=True,
+    #     retain_graph=True,
+    # )[0]
     for t, r in zip(reflection_result, reference_result):
         if not torch.allclose(t, r, atol=atol):
             print(t, r)

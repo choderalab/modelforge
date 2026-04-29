@@ -242,20 +242,19 @@ def _compute_modelforge(
     # Enable gradient on positions so we can autograd the forces
 
     output = potential(nnp_input)
-    energy = torch.Tensor = output["per_system_energy"]
 
-    if "per_atom_force" in output:
-        forces = torch.Tensor = output["per_atom_force"]
-        forces = forces.detach().cpu().numpy().astype(np.float64)
-    else:
-        # raise an error if we didn't have per_atom_force output by the potential
-        raise ValueError(
-            "The potential did not return per_atom_forces in the output dict. Please ensure that your potential is implemented to return forces for use with OpenMM."
-        )
+    energy = output["per_system_energy"]
+    grad = torch.autograd.grad(
+        energy.sum(), nnp_input.positions, create_graph=False, retain_graph=False
+    )[0]
+
+    force = -grad.detach().cpu().numpy().astype(np.float64)
+
     energy = energy.detach().cpu().numpy().astype(np.float64).sum()
     # forces = np.zeros([3, 3])
-    print(energy, energy * omm_unit.kilojoules_per_mole)
-    return (
-        energy * omm_unit.kilojoules_per_mole,
-        forces * omm_unit.kilojoules_per_mole / omm_unit.nanometer,
-    )
+
+    return energy, force
+    # return (
+    #     energy * omm_unit.kilojoules_per_mole,
+    #     force * omm_unit.kilojoules_per_mole / omm_unit.nanometer,
+    # )

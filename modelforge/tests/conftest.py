@@ -564,8 +564,8 @@ def equivariance_test_utils():
     """
 
     # Define translation function
-    # CRI: Let us manually seed the random number generator to ensure that we perfrom the same tests each time.
-    # While our tests of translation and rotation should ALWAYS pass regardless of the seed,
+    # CRI: Let us manually seed the random number generator to ensure that we perform the same tests each time.
+    # While our tests of translation and rotation should ALWAYS pass regardless of the seed
     # if the code is correctly implemented, there may be instances where the tolerance we set is not
     # sufficient to pass the test, and without the workflow being deterministic, it may be hard to
     # debug if it is an underlying issue with the code or just the tolerance.

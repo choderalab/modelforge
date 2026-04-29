@@ -969,37 +969,6 @@ class ZBLPotential(torch.nn.Module):
         return data
 
 
-class PerAtomForce(torch.nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
-
-        total_energy: torch.Tensor = data["per_system_energy"]
-        positions: torch.Tensor = data["positions"]
-
-        # Calculate forces as the negative gradient of energy w.r.t. positions
-        grad = torch.autograd.grad(
-            total_energy.sum(), positions, create_graph=True, retain_graph=True
-        )[0]
-        if grad is None:
-            raise RuntimeWarning("Force calculation did not return a gradient")
-        # check if nan in the gradient
-        if torch.isnan(grad).any():
-            print(grad)
-            raise RuntimeError(
-                "Gradient of energy used for force calculation contains NaN values."
-            )
-
-        per_atom_force = (
-            -grad.contiguous()
-        )  # Forces are the negative gradient of energy
-
-        data["per_atom_force"] = per_atom_force
-
-        return data
-
-
 class DispersionPotential(torch.nn.Module):
     """
     Computes the dispersion energy using DFTD3 method.

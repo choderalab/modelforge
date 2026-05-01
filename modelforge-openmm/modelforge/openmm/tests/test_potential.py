@@ -5,6 +5,82 @@ from openmm.app import *
 from modelforge.potential import _Implemented_NNPs as Implemented_NNPs
 
 
+def test_simple():
+
+    # We next need to read in the modelforge potential torchscript file
+    from modelforge.utils.io import get_path_string
+    from modelforge.openmm.examples import data
+
+    checkpoint_file_path = get_path_string(data) + "/model.ckpt"
+
+    from modelforge.potential.potential import load_inference_model_from_checkpoint
+
+    potential = load_inference_model_from_checkpoint(checkpoint_file_path, jit=False)
+    from modelforge.openmm.examples.openmm_water_topology import openmm_water_topology
+
+    water, positions = openmm_water_topology()
+    atomic_numbers = [atom.element.atomic_number for atom in water.atoms()]
+
+    from modelforge.openmm.potential import ModelForgeCompute, generate_compute
+    from modelforge.openmm.potential import _build_nnp_input
+    import torch
+    import openmm
+    from openmm import PythonForce
+    from openmm.unit import (
+        kelvin,
+        picosecond,
+        femtosecond,
+        nanometer,
+        kilojoules_per_mole,
+    )
+    import numpy as np
+
+    system = openmm.System()
+    for atom in water.atoms():
+        system.addParticle(atom.element.mass)
+
+    comp = generate_compute(potential=potential, atomic_numbers=atomic_numbers)
+
+    print(type(comp))
+    system_force = PythonForce(comp)
+
+    system.addForce(system_force)
+
+    import sys
+    from openmm import LangevinMiddleIntegrator
+    from openmm.app import Simulation, StateDataReporter
+
+    # Create an integrator with a time step of 1 fs
+    temperature = 298.15 * kelvin
+    frictionCoeff = 1 / picosecond
+    timeStep = 0.01 * femtosecond
+    integrator = LangevinMiddleIntegrator(temperature, frictionCoeff, timeStep)
+
+    # Create a simulation and set the initial positions and velocities
+    simulation = Simulation(water, system, integrator)
+    simulation.context.setPositions(positions)
+
+    reporter = StateDataReporter(
+        file=sys.stdout,
+        reportInterval=1,
+        step=True,
+        time=True,
+        potentialEnergy=True,
+        temperature=True,
+    )
+    simulation.reporters.append(reporter)
+    state = simulation.context.getState(getEnergy=True, getPositions=True)
+    energy = state.getPotentialEnergy()
+
+    assert np.isclose(energy.value_in_unit(kilojoules_per_mole), 5104.08740234375)
+
+    simulation.step(10)
+    state = simulation.context.getState(getEnergy=True, getPositions=True)
+    energy = state.getPotentialEnergy()
+    print(energy)
+    assert np.isclose(energy.value_in_unit(kilojoules_per_mole), 1041.0731201171875)
+
+
 @pytest.mark.parametrize("is_periodic", [True, False])
 # @pytest.mark.parametrize(
 #     "potential_name", Implemented_NNPs.get_all_neural_network_names()

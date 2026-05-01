@@ -91,9 +91,21 @@ def _build_nnp_input(
     )
 
 
-class ModelForgeCompute:
+def generate_compute(
+    potential: torch.nn.Module,
+    atomic_numbers: list[int],
+    per_system_total_charge: int = 0,
+    per_system_spin_multiplicity: int = 1,
+    periodic: bool = False,
+    precision: torch.dtype = torch.float32,
+    device: str = "cpu",
+    neighborlist_strategy: NeighborlistStrategy = "brute_nsq",
+    neighborlist_verlet_skin: float = 0.1,
+) -> partial:
     """
     Wrapper to work with OpenMM 8.5+ ``PythonForce``
+
+    Returns a function to pass to PythonForce.
 
     Parameters
     ----------
@@ -124,46 +136,6 @@ class ModelForgeCompute:
     neighborlist_verlet_skin: [float], default 0.1
         Skin distance for verlet neighborlist rebuilds, in nm. Only used if neighborlist_strategy is "verlet_nsq".
     """
-
-    def __init__(
-        self,
-        potential: torch.nn.Module,
-        atomic_numbers: list[int],
-        per_system_total_charge: int = 0,
-        per_system_spin_multiplicity: int = 1,
-        periodic: bool = False,
-        precision: torch.dtype = torch.float32,
-        device: str = "cpu",
-        neighborlist_strategy: NeighborlistStrategy = "brute_nsq",
-        neighborlist_verlet_skin: float = 0.1,
-    ) -> None:
-
-        self._potential = potential.to(device)
-        self._potential.set_neighborlist_strategy(
-            neighborlist_strategy, neighborlist_verlet_skin
-        )
-        self._potential.eval()
-        self._potential.to(device)
-
-        self._atomic_numbers = np.array(atomic_numbers)
-        self._precision = precision
-        self._device = device
-        self._per_system_total_charge = per_system_total_charge
-        self._per_system_spin_multiplicity = per_system_spin_multiplicity
-        self._periodic = periodic
-
-
-def generate_compute(
-    potential: torch.nn.Module,
-    atomic_numbers: list[int],
-    per_system_total_charge: int = 0,
-    per_system_spin_multiplicity: int = 1,
-    periodic: bool = False,
-    precision: torch.dtype = torch.float32,
-    device: str = "cpu",
-    neighborlist_strategy: NeighborlistStrategy = "brute_nsq",
-    neighborlist_verlet_skin: float = 0.1,
-) -> partial:
 
     potential.to(device)
     potential.set_neighborlist_strategy(neighborlist_strategy, neighborlist_verlet_skin)
@@ -235,11 +207,10 @@ def _compute_modelforge(
         per_system_total_charge=per_system_total_charge,
         per_system_spin_state=per_system_spin_multiplicity,
     )
+
     # just make sure that we are really on the right device
     nnp_input.to_device(device)
     nnp_input.to_dtype(precision)
-
-    # Enable gradient on positions so we can autograd the forces
 
     output = potential(nnp_input)
 
@@ -251,10 +222,5 @@ def _compute_modelforge(
     force = -grad.detach().cpu().numpy().astype(np.float64)
 
     energy = energy.detach().cpu().numpy().astype(np.float64).sum()
-    # forces = np.zeros([3, 3])
 
     return energy, force
-    # return (
-    #     energy * omm_unit.kilojoules_per_mole,
-    #     force * omm_unit.kilojoules_per_mole / omm_unit.nanometer,
-    # )

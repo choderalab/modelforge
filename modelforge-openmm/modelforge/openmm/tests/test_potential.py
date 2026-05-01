@@ -202,5 +202,4 @@ def test_potential_wrapping(is_periodic, potential_name, prep_temp_dir):
     simulation.reporters.append(reporter)
     state = simulation.context.getState(getEnergy=True, getPositions=True)
     energy = state.getPotentialEnergy()
-
     assert np.allclose(energy.value_in_unit(kilojoules_per_mole), modelforge_energy)

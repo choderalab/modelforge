@@ -79,6 +79,7 @@ Using a model for inference in ASE
 To use the trained model for inference in ASE, we need to load up a modelforge potential, and use ASE calculator wrapper in `modelforge.ase.calculator` to put this in a form that will work with the ASE calculator.  The follow code snippet demonstrates loading a state dict, generating a potential, setting up the ASE calculator wrapper, and using this to calculate the energy and forces for a given system.
 
 .. code-block:: python
+
     from modelforge.utils.io import get_path_string
     from modelforge.ase.tests import data
     from modelforge.potential.potential import load_inference_model_from_checkpoint
@@ -123,7 +124,7 @@ To use the trained model for inference in OpenMM, we can use a similar approach 
 .. code-block:: python
 
     from modelforge.utils.io import get_path_string
-    from modelforge.modelforge.examples import data
+    from modelforge.openmm.examples import data
     from modelforge.potential.potential import load_inference_model_from_checkpoint
 
     # checkpoint file is saved in tests/data
@@ -143,6 +144,7 @@ To use the trained model for inference in OpenMM, we can use a similar approach 
 
     # set up the PythonForce with the compute object.  This will allow us to use the potential for inference within OpenMM.
     from openmm import PythonForce
+
     system_force = PythonForce(comp)
 
     # OpenMM simulation setup
@@ -181,3 +183,7 @@ To use the trained model for inference in OpenMM, we can use a similar approach 
         step=True,
         time=True,
         potentialEnergy=True,
+    )
+    simulation.reporters.append(reporter)
+    simulation.step(10)
+

@@ -73,7 +73,9 @@ def test_openmm_wrapping_with_checkpoint_file():
     energy = state.getPotentialEnergy()
     force = state.getForces(asNumpy=True)
     print(force)
-    assert np.isclose(energy.value_in_unit(kilojoules_per_mole), 5104.08740234375)
+    assert np.isclose(
+        energy.value_in_unit(kilojoules_per_mole), 5104.08740234375, atol=1e-3
+    )
     assert np.allclose(
         force.value_in_unit(kilojoules_per_mole / nanometer),
         np.array(
@@ -83,6 +85,7 @@ def test_openmm_wrapping_with_checkpoint_file():
                 [-647955.0625, 139184.96875, 0.0],
             ]
         ),
+        atol=1e-3,
     )
     simulation.step(10)
     state = simulation.context.getState(

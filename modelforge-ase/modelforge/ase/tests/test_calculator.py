@@ -12,7 +12,7 @@ from modelforge.potential import _Implemented_NNPs as Implemented_NNPs
     "potential_name", ["SCHNET", "ANI2X", "PHYSNET", "PAINN", "AIMNET2"]
 )
 def test_potential_wrapping(is_periodic, potential_name, prep_temp_dir):
-    from modelforge.ase.examples.helper_functions import smiles_to_ase
+    from modelforge.ase import smiles_to_ase
 
     ase_system = smiles_to_ase("C", optimize=False)
 
@@ -62,7 +62,7 @@ def test_potential_wrapping(is_periodic, potential_name, prep_temp_dir):
     modelforge_energy = output["per_system_energy"]
 
     # load up the ase calculator
-    from modelforge.ase.calculator import ModelForgeCalculator
+    from modelforge.ase import ModelForgeCalculator
 
     ase_system.calc = ModelForgeCalculator(modelforge_potential)
     pe = ase_system.get_potential_energy()

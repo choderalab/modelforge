@@ -1,0 +1,40 @@
+name: modelforge-openmm
+channels:
+  - conda-forge
+  - pytorch
+dependencies:
+  # Base modelforge runtime dependencies
+  - python
+  - pip
+  - h5py
+  - tqdm
+  - toml
+  - qcportal>=0.50
+  - qcelemental
+  - pytorch>=2.1
+  - loguru
+  - lightning>=2.0.8
+  - tensorboard
+  - torchvision
+  - openff-units>=0.3.1
+  - torchmetrics>=1.4
+  - pint>=0.24.1
+  - rdkit
+  - retry
+  - sqlitedict
+  - pydantic>=2
+  - ray-all
+  - graphviz
+  - wandb>=0.18.5
+  - tad-dftd3
+  - tad-mctc
+
+  # OpenMM integration dependencies
+  - openmm
+  - openmm-torch
+
+  # Python-only runtime dependencies not available from conda-forge
+  - pip:
+      - jax == 0.4.34
+      - flax==0.10.1
+      - pytorch2jax

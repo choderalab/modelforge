@@ -13,10 +13,14 @@ Windows testing if you only plan to deploy on specific platforms. These are just
 
 ### Conda Environment:
 
-This directory contains the files to setup the Conda environment for testing purposes
+This directory contains YAML files that describe Conda environments for runtime, examples, and testing.
 
 * `conda-envs`: directory containing the YAML file(s) which fully describe Conda Environments, their dependencies, and those dependency provenance's
-  * `test_env.yaml`: Simple test environment file with base dependencies. Channels are not specified here and therefore respect global Conda configuration
+  * `env.yaml`: Base environment for core `modelforge` development/runtime use
+  * `env_modelforge_ase.yaml`: ASE integration runtime environment
+  * `env_modelforge_ase_examples.yaml`: ASE examples/notebooks environment (includes `ipykernel` and `nglview`)
+  * `test_env.yaml`: Core testing environment used by CI
+  * `test_env_modelforge_ase.yaml`: ASE testing environment used by CI
   
 ### Additional Scripts:
 

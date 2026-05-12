@@ -317,7 +317,6 @@ class Potential(torch.nn.Module):
         postprocessing,
         jit: bool = False,
         jit_neighborlist: bool = True,
-        # compute_forces: bool = True,
     ):
         """
         Neural network potential model composed of a core network, neighborlist,
@@ -336,8 +335,6 @@ class Potential(torch.nn.Module):
             (default: False).
         jit_neighborlist : bool, optional
             Whether to JIT compile the neighborlist (default: True).
-        compute_forces : bool, optional
-            Whether to compute potential forces (default: True).
         Methods
         -------
         forward(input_data: NNPInput) -> Dict[str, torch.Tensor]
@@ -375,7 +372,6 @@ class Potential(torch.nn.Module):
         #     torch.jit.script(postprocessing) if jit else postprocessing
         # )
         self.postprocessing = postprocessing
-        # self.compute_forces = compute_forces
 
     def _add_total_charge(
         self, core_output: Dict[str, torch.Tensor], input_data: NNPInput
@@ -928,10 +924,6 @@ class NeuralNetworkPotentialFactory:
             except ValueError:
                 log.debug("NNPInput already registered as pytree")
                 pass
-            # Disable PyTorch-side force computation by setting
-            # potentia.compute_forces = False.
-            # The JAXModel computes forces via jax.grad on the JAX side instead
-            # potential.compute_forces = False
             return PyTorch2JAXConverter().convert_to_jax_model(potential)
         else:
             return potential
@@ -1064,7 +1056,7 @@ class PyTorch2JAXConverter:
     deprecated standalone ``functorch`` package) and JAX >= 0.4.1 (uses the
     ``__dlpack__`` protocol instead of the old capsule-based DLPack API).
 
-    Also correctly handles NNP potentials that call ``torch.autograd.grad``
+    This also correctly handles NNP potentials that call ``torch.autograd.grad``
     internally (e.g. to compute forces from energies): the conversion layer
     re-attaches a gradient tape to *positions* before every forward pass so
     that ``torch.autograd.grad`` succeeds inside the model.
@@ -1113,15 +1105,6 @@ class PyTorch2JAXConverter:
         from modelforge.utils.prop import NNPInput
 
         from modelforge.jax import torch_to_jax, jax_to_torch
-
-        # def _jax_to_torch(array, *, as_bool: bool = False):
-        #     """jax.Array → torch.Tensor via DLPack, returns None unchanged."""
-        #     if array is None:
-        #         return None
-        #     tensor = torch.from_dlpack(array)
-        #     if as_bool:
-        #         tensor = tensor.to(torch.bool)
-        #     return tensor
 
         # Build dtype-aware param/buffer converters.
         # We record which parameter/buffer names were originally bool so we
@@ -1177,15 +1160,6 @@ class PyTorch2JAXConverter:
             tuple-of-tuples (after pytree flattening).  Both cases are handled.
             """
 
-            # def _to_bool_tensor(t):
-            #     """Convert int8-encoded is_periodic back to torch.bool."""
-            #     if t is None:
-            #         return torch.tensor([False])
-            #     if isinstance(t, torch.Tensor):
-            #         return t.to(torch.bool)
-            #     # jax.Array — convert via DLPack then cast
-            #     return torch.from_dlpack(t).to(torch.bool)
-
             from modelforge.jax import nnpinput_unflatten, convert_NNPInput_jax_to_torch
 
             if isinstance(data, NNPInput):
@@ -1193,17 +1167,7 @@ class PyTorch2JAXConverter:
                 # aux_data fields are still torch.Tensors / None.
 
                 return convert_NNPInput_jax_to_torch(data)
-                return NNPInput(
-                    atomic_numbers=data.atomic_numbers,  # torch int64
-                    positions=jax_to_torch(data.positions),
-                    atomic_subsystem_indices=data.atomic_subsystem_indices,  # torch int64
-                    per_system_total_charge=jax_to_torch(data.per_system_total_charge),
-                    box_vectors=jax_to_torch(data.box_vectors),
-                    per_system_spin_state=jax_to_torch(data.per_system_spin_state),
-                    is_periodic=jax_to_torch(data.is_periodic),
-                    pair_list=data.pair_list,  # torch int64 | None
-                    per_atom_partial_charge=jax_to_torch(data.per_atom_partial_charge),
-                )
+
             else:
                 #
 
@@ -1214,17 +1178,6 @@ class PyTorch2JAXConverter:
                 aux_data = list(aux_data)
 
                 return nnpinput_unflatten(aux_data=aux_data, children=children)
-                # return NNPInput(
-                #     atomic_numbers=aux_data[0],  # torch int64
-                #     positions=jax_to_torch(children[0]),
-                #     atomic_subsystem_indices=aux_data[1],  # torch int64
-                #     per_system_total_charge=jax_to_torch(children[1]),
-                #     box_vectors=jax_to_torch(children[2]),
-                #     per_system_spin_state=jax_to_torch(children[3]),
-                #     is_periodic=_to_bool_tensor(aux_data[2]),
-                #     pair_list=aux_data[3],  # torch int64 | None
-                #     per_atom_partial_charge=jax_to_torch(children[4]),
-                # )
 
         # Compatibility shim: functorch (standalone) -> torch.func (>= 2.0)
         try:
@@ -1279,7 +1232,6 @@ class PyTorch2JAXConverter:
         # ------------------------------------------------------------------
 
         def _run_model(torch_params, torch_buffers, nnp_input: NNPInput):
-            # compute_forces=False on the potential, so no autograd tape
             # is needed for the forward pass. JAXModel.__call__ computes
             # forces via jax.grad on the JAX side.
             with torch.no_grad():

@@ -35,9 +35,5 @@ dependencies:
   - nglview
   - ipywidgets
   - jupyterlab
-
-  # Python-only runtime dependencies not available from conda-forge
-  - pip:
-      - jax == 0.4.34
-      - flax==0.10.1
-      - pytorch2jax
+  - jax
+  - flax

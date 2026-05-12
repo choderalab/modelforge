@@ -1,5 +1,7 @@
-from openmm.app import *
+from openmm.app import Topology, Element
 import numpy as np
+from rdkit import Chem
+from rdkit.Chem import AllChem
 
 
 def openmm_water_topology():

@@ -3,6 +3,7 @@ import sys
 
 import pytest
 import torch
+import numpy as np
 from openff.units import unit
 
 from modelforge.dataset import _ImplementedDatasets
@@ -38,9 +39,9 @@ def initialize_model(
 def prepare_input_for_model(nnp_input, model):
     """Prepare the input for the model based on the simulation environment."""
     if "JAX" in str(type(model)):
-        from modelforge.jax import convert_NNPInput_to_jax
+        from modelforge.jax import convert_NNPInput_torch_to_jax
 
-        return convert_NNPInput_to_jax(nnp_input)
+        return convert_NNPInput_torch_to_jax(nnp_input)
     return nnp_input
 
 
@@ -117,19 +118,20 @@ def retrieve_molecular_charges(output, atomic_subsystem_indices):
 
 def convert_to_pytorch_if_needed(output, nnp_input, model):
     """Convert output to PyTorch tensors if the model is in JAX."""
+    from modelforge.jax import jax_to_torch
+
     if "JAX" in str(type(model)):
-        convert_to_pyt = import_("pytorch2jax").pytorch2jax.convert_to_pyt
-        output["per_system_energy"] = convert_to_pyt(output["per_system_energy"])
-        output["per_atom_energy"] = convert_to_pyt(output["per_atom_energy"])
+        output["per_system_energy"] = jax_to_torch(output["per_system_energy"])
+        output["per_atom_energy"] = jax_to_torch(output["per_atom_energy"])
 
         if "per_atom_charge" in output:
-            output["per_atom_charge"] = convert_to_pyt(output["per_atom_charge"])
+            output["per_atom_charge"] = jax_to_torch(output["per_atom_charge"])
         if "per_system_total_charge" in output:
-            output["per_system_total_charge"] = convert_to_pyt(
+            output["per_system_total_charge"] = jax_to_torch(
                 output["per_system_total_charge"]
             ).to(torch.float32)
 
-        atomic_subsystem_indices = convert_to_pyt(nnp_input.atomic_subsystem_indices)
+        atomic_subsystem_indices = jax_to_torch(nnp_input.atomic_subsystem_indices)
     else:
         atomic_subsystem_indices = nnp_input.atomic_subsystem_indices
     return output, atomic_subsystem_indices
@@ -499,7 +501,6 @@ def test_zbl_potential():
     zbl = ZBLPotential()
     zbl_output = zbl(core_output_dict)
     assert zbl_output["per_system_zbl_energy"].shape == (5, 1)
-    print(zbl_output["per_system_zbl_energy"])
     assert torch.allclose(
         zbl_output["per_system_zbl_energy"],
         torch.tensor([[4.6440e06], [8.5328e03], [3.3545e02], [3.3711e00], [0.0000e00]]),
@@ -515,6 +516,8 @@ def test_JAX_wrapping(
     potential_name, single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
 ):
 
+    import jax
+
     local_cache_dir = f"{str(prep_temp_dir)}/{potential_name.lower()}_test_jax"
     dataset_cache_dir = str(dataset_temp_dir)
 
@@ -526,25 +529,71 @@ def test_JAX_wrapping(
     )
 
     # read default parameters
-    potential = setup_potential_for_test(
+    potential_jax = setup_potential_for_test(
         use="inference",
         potential_seed=42,
         potential_name=potential_name,
         simulation_environment="JAX",
         local_cache_dir=local_cache_dir,
     )
-    from modelforge.jax import convert_NNPInput_to_jax
+    from modelforge.jax import (
+        convert_NNPInput_torch_to_jax,
+        convert_NNPInput_jax_to_torch,
+    )
 
-    nnp_input = convert_NNPInput_to_jax(batch.nnp_input)
-    out = potential(nnp_input)["per_system_energy"]
-    import jax
+    nnp_input_jax = convert_NNPInput_torch_to_jax(batch.nnp_input)
+    out_jax = potential_jax(nnp_input_jax)
 
-    assert "JAX" in str(type(potential))
+    energy_jax = out_jax["per_system_energy"]
+    # calculate the forces as -de/dr
 
-    grad_fn = jax.grad(lambda pos: out.sum())  # Create a gradient function
-    forces = -grad_fn(
-        nnp_input.positions
-    )  # Evaluate gradient function and apply negative sign
+    def energy_fn(positions):
+        nnp_input_jax.positions = positions
+        out_jax = potential_jax(nnp_input_jax)
+        return out_jax["per_system_energy"].sum(), out_jax
+
+    grad_fn = jax.value_and_grad(energy_fn, has_aux=True)
+    (_, output), d_energy_d_pos = grad_fn(nnp_input_jax.positions)
+
+    forces_jax = -d_energy_d_pos
+
+    if potential_name == "SCHNET":
+        # reference values from evaluating using pure pytorch
+        energy_reference = np.array([0.7397])
+        force_reference = np.array(
+            [
+                [1.4371e-04, -1.2332e-04, 9.6560e-06],
+                [-9.2450e-02, 6.7981e00, 3.7524e-02],
+                [-6.3784e00, -2.3532e00, 4.8088e-02],
+                [3.2883e00, -2.2522e00, 5.5081e00],
+                [3.1824e00, -2.1925e00, -5.5937e00],
+            ]
+        )
+        assert np.allclose(energy_jax, energy_reference, atol=1e-3)
+        assert np.allclose(forces_jax, force_reference, atol=1e-3)
+    """
+    Code snippet to generate reference energy 
+    # read default parameters
+    potential_torch = setup_potential_for_test(
+        use="inference",
+        potential_seed=42,
+        potential_name=potential_name,
+        simulation_environment="PyTorch",
+        local_cache_dir=local_cache_dir,
+    )
+
+    # check to see if we can round trip the conversions properly
+    # nnp_input_torch = convert_NNPInput_jax_to_torch(nnp_input_jax)
+    nnp_input_torch = batch.nnp_input
+    out_torch = potential_torch(nnp_input_torch)
+    energy_torch = out_torch["per_system_energy"]
+    # compute forces using torch
+    forces_torch = -torch.autograd.grad(energy_torch.sum(), nnp_input_torch.positions)[
+        0
+    ]
+    print(energy_torch.sum())
+    print(forces_torch)
+    """
 
 
 @pytest.mark.parametrize(
@@ -859,6 +908,7 @@ def test_energy_between_simulation_environments(
         simulation_environment="PyTorch",
         local_cache_dir=local_cache_dir,
     )
+    # nnp_input.positions = nnp_input.positions.requires_grad_(True)
     output_torch = potential(nnp_input)["per_system_energy"]
 
     potential = setup_potential_for_test(
@@ -868,9 +918,9 @@ def test_energy_between_simulation_environments(
         simulation_environment="JAX",
         local_cache_dir=local_cache_dir,
     )
-    from modelforge.jax import convert_NNPInput_to_jax
+    from modelforge.jax import convert_NNPInput_torch_to_jax
 
-    nnp_input = convert_NNPInput_to_jax(batch.nnp_input)
+    nnp_input = convert_NNPInput_torch_to_jax(batch.nnp_input)
     output_jax = potential(nnp_input)["per_system_energy"]
 
     # test tat we get an energie per molecule
@@ -1255,7 +1305,6 @@ def test_calculate_energies_and_forces(
         dataset_cache_dir=dataset_cache_dir,
     )
     nnp_input = batch.nnp_input
-
     # read default parameters
     trainer = setup_potential_for_test(
         potential_name,
@@ -1269,6 +1318,8 @@ def test_calculate_energies_and_forces(
         E_training.sum(), nnp_input.positions, create_graph=True, retain_graph=True
     )[0]
 
+    print("finished training")
+
     # compare to inference model
     potential = setup_potential_for_test(
         potential_name,
@@ -1280,7 +1331,8 @@ def test_calculate_energies_and_forces(
     )
 
     # get energy and force
-    E_inference = potential(nnp_input)["per_system_energy"]
+    output = potential(nnp_input)
+    E_inference = output["per_system_energy"]
     F_inference = -torch.autograd.grad(
         E_inference.sum(), nnp_input.positions, create_graph=True, retain_graph=True
     )[0]
@@ -1324,10 +1376,12 @@ def test_calculate_energies_and_forces(
     )
 
     # get energy and force
-    E_inference = potential(nnp_input)["per_system_energy"]
+    output = potential(nnp_input)
+    E_inference = output["per_system_energy"]
     F_inference = -torch.autograd.grad(
         E_inference.sum(), nnp_input.positions, create_graph=True, retain_graph=True
     )[0]
+
     # get energy and force
     E_training = potential(nnp_input)["per_system_energy"]
     F_training = -torch.autograd.grad(
@@ -1376,7 +1430,7 @@ def test_calculate_energies_and_forces_with_jax(
     Test the calculation of energies and forces for a molecule.
     """
     import torch
-    from modelforge.jax import convert_NNPInput_to_jax
+    from modelforge.jax import convert_NNPInput_torch_to_jax
 
     local_cache_dir = f"{str(prep_temp_dir)}/{potential_name.lower()}_test_calculate_energies_and_forces_with_jax"
     dataset_cache_dir = str(dataset_temp_dir)
@@ -1390,7 +1444,7 @@ def test_calculate_energies_and_forces_with_jax(
     )
 
     # convert input to jax
-    nnp_input = convert_NNPInput_to_jax(batch.nnp_input)
+    nnp_input = convert_NNPInput_torch_to_jax(batch.nnp_input)
 
     potential = setup_potential_for_test(
         potential_name,
@@ -1525,7 +1579,9 @@ def test_equivariant_energies_and_forces(
         dataset_cache_dir=dataset_cache_dir,
     ).nnp_input.to_dtype(dtype=precision)
 
-    reference_result = potential(nnp_input)["per_system_energy"]
+    output = potential(nnp_input)
+
+    reference_result = output["per_system_energy"]
     reference_forces = -torch.autograd.grad(
         reference_result.sum(),
         nnp_input.positions,
@@ -1543,13 +1599,13 @@ def test_equivariant_energies_and_forces(
     translation_nnp_input = nnp_input.to_dtype(dtype=precision)
     translation_nnp_input.positions = translation(translation_nnp_input.positions)
 
-    translation_result = potential(translation_nnp_input)["per_system_energy"]
+    output = potential(translation_nnp_input)
+    translation_result = output["per_system_energy"]
     assert torch.allclose(
         translation_result,
         reference_result,
         atol=atol,
     )
-
     translation_forces = -torch.autograd.grad(
         translation_result.sum(),
         translation_nnp_input.positions,
@@ -1576,7 +1632,9 @@ def test_equivariant_energies_and_forces(
     ).nnp_input.to_dtype(dtype=precision)
     rotation_input_data = nnp_input.to_dtype(dtype=precision)
     rotation_input_data.positions = rotation(rotation_input_data.positions)
-    rotation_result = potential(rotation_input_data)["per_system_energy"]
+
+    output = potential(rotation_input_data)
+    rotation_result = output["per_system_energy"]
 
     for t, r in zip(rotation_result, reference_result):
         if not torch.allclose(t, r, atol=atol):
@@ -1587,7 +1645,6 @@ def test_equivariant_energies_and_forces(
         reference_result,
         atol=atol,
     )
-
     rotation_forces = -torch.autograd.grad(
         rotation_result.sum(),
         rotation_input_data.positions,
@@ -1614,7 +1671,10 @@ def test_equivariant_energies_and_forces(
     ).nnp_input.to_dtype(dtype=precision)
     reflection_input_data = nnp_input.to_dtype(dtype=precision)
     reflection_input_data.positions = reflection(reflection_input_data.positions)
-    reflection_result = potential(reflection_input_data)["per_system_energy"]
+
+    output = potential(reflection_input_data)
+    reflection_result = output["per_system_energy"]
+
     reflection_forces = -torch.autograd.grad(
         reflection_result.sum(),
         reflection_input_data.positions,

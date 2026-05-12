@@ -44,7 +44,9 @@ def test_potential_wrapping(is_periodic, potential_name, prep_temp_dir):
         [atom.number for atom in ase_system], dtype=torch.int64
     )
     positions = torch.tensor(
-        [atom.position * 0.1 for atom in ase_system], dtype=torch.float32
+        [atom.position * 0.1 for atom in ase_system],
+        dtype=torch.float32,
+        requires_grad=True,
     )
 
     nnp_input = NNPInput(
@@ -55,8 +57,9 @@ def test_potential_wrapping(is_periodic, potential_name, prep_temp_dir):
         per_system_total_charge=torch.zeros(1, 1),
         box_vectors=box_vectors,
     )
+    output = modelforge_potential(nnp_input)
 
-    modelforge_energy = modelforge_potential(nnp_input)["per_system_energy"]
+    modelforge_energy = output["per_system_energy"]
 
     # load up the ase calculator
     from modelforge.ase import ModelForgeCalculator

@@ -1,8 +1,11 @@
 import torch
 
-from modelforge.openmm.utils import NNPInput
+# from modelforge.openmm.utils import NNPInput
+from modelforge.utils.prop import NNPInput
 from typing import List, Optional
 from enum import Enum
+import numpy as np
+from functools import partial
 
 
 class NeighborlistStrategy(Enum):
@@ -15,89 +18,209 @@ class NeighborlistStrategy(Enum):
     verlet_nsq = "verlet_nsq"
 
 
-class Potential(torch.nn.Module):
+def _build_nnp_input(
+    atomic_numbers: np.ndarray,
+    positions: np.ndarray,
+    is_periodic: bool,
+    precision: torch.dtype,
+    device: str,
+    box_vectors: np.ndarray | None,
+    per_system_total_charge: Optional[int] = None,
+    per_system_spin_state: Optional[int] = None,
+) -> NNPInput:
     """
-    Class that wraps a modelforge potential, making it compatible with OpenMM TorchForce
+    Convert raw OpenMM position data into the dict expected by ModelForge.
 
-    Examples
-    --------
-    >>> import torch
-    >>> from modelforge.openmm.potential import Potential
-    >>>
-    >>> # Create a Potential object, loading in a modelforge potential saved as a pt file
-    >>> openmm_potential = Potential("path/to/modelforge_potential.pt", atomic_numbers=[1, 1], is_periodic=False)
-    >>> openmm_potential_jit = torch.jit.script(openmm_potential)
-    >>>
-    >>> # Create a TorchForce object using the jitted Potential object
-    >>> from openmmtorch import TorchForce
-    >>> force = TorchForce(openmm_potential_jit)
+    Parameters
+    -----------
+    atomic_numbers: np.ndarray[
+        List of atomic numbers for each atom in the system, in the same order as OpenMM
+    positions: np.ndarray
+        (N, 3) array of atomic positions in nm, as passed by OpenMM
+    is_periodic: bool
+        is the system periodic
+    precision: torch.dtype
+        Precision of the position and box vector tensors
+    device: str
+        Torch device string, e.g. 'cpu' or 'cuda'
+    box_vectors: np.ndarray |None
+        box vectors in nm, as passed by OpenMM
+    per_system_total_charge: Optional[int]
+        The total charge of the system
+    per_system_spin_state:  Optional[int]
+        To spin multiplicity of the system
 
+
+    Returns
+    -------
+    NNPInput for input to modelforge potential
+    """
+    atomic_numbers = atomic_numbers.reshape(-1)
+    n_atoms = atomic_numbers.shape[0]
+
+    positions_tensor = torch.tensor(positions, dtype=precision, device=device)
+    atomic_numbers_tensor = torch.tensor(
+        atomic_numbers, dtype=torch.int64, device=device
+    )
+
+    atomic_subsystem_indices = torch.zeros(n_atoms, dtype=torch.long, device=device)
+
+    if box_vectors is not None:
+        box_vectors_tensor = torch.tensor(box_vectors, dtype=precision, device=device)
+    else:
+        box_vectors_tensor = torch.tensor(
+            [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
+            dtype=precision,
+            device=device,
+        )
+    total_charge_tensor = torch.tensor(
+        [[per_system_total_charge]], dtype=torch.int64, device=device
+    )
+    total_spin_tensor = torch.tensor(
+        [[per_system_spin_state]], dtype=torch.int64, device=device
+    )
+
+    return NNPInput(
+        atomic_numbers=atomic_numbers_tensor,
+        positions=positions_tensor.detach().requires_grad_(True),
+        atomic_subsystem_indices=atomic_subsystem_indices,
+        per_system_total_charge=total_charge_tensor,
+        per_system_spin_state=total_spin_tensor,
+        is_periodic=torch.tensor([is_periodic]),
+        box_vectors=box_vectors_tensor,
+    )
+
+
+def generate_compute(
+    potential: torch.nn.Module,
+    atomic_numbers: list[int],
+    per_system_total_charge: int = 0,
+    per_system_spin_multiplicity: int = 1,
+    periodic: bool = False,
+    precision: torch.dtype = torch.float32,
+    device: str = "cpu",
+    neighborlist_strategy: NeighborlistStrategy = "brute_nsq",
+    neighborlist_verlet_skin: float = 0.1,
+) -> partial:
+    """
+    Wrapper to work with OpenMM 8.5+ ``PythonForce``
+
+    Returns a function to pass to PythonForce.
+
+    Parameters
+    ----------
+    potential : modelforge potential instance
+        Any ModelForge potential object that implements ``forward(nnp_input)``.
+        The model is moved to ``device`` and put in eval mode in ``__init__``.
+
+    atomic_numbers : list[int]
+        Atomic numbers for every particle in the System, in the same order as
+        ``system.addParticle`` / ``context.setPositions``.
+    per_system_total_charge: [int] =0
+        Integer total charge of the system.
+    per_system_spin_multiplicity: [int] =1
+        Integer total spin multiplicity of the system.
+    periodic : bool, optional
+        Set to ``True`` for periodic simulations. OpenMM will then pass box
+        vectors to ``computeForce``. Default: ``False``.
+    precision : torch.dtype, optional
+        Floating-point precision used internally. ``torch.float32`` (default)
+        works for all production ModelForge models. Use ``torch.float64`` only
+        if the model was trained at double precision.
+    device : str, optional
+        Torch device string, e.g. ``'cpu'`` (default) or ``'cuda'``
+    neighborlist_strategy: NeighborlistStrategy, default brute_nsq
+        Neighborlist strategy to use for the potential. Options are:
+         "brute_nsq" which is the brute force neighbor list which scales as N**2
+         "verlet_nsq" which is a verlet neighborlist, where rebuilds are N**2
+    neighborlist_verlet_skin: [float], default 0.1
+        Skin distance for verlet neighborlist rebuilds, in nm. Only used if neighborlist_strategy is "verlet_nsq".
     """
 
-    def __init__(
-        self,
-        modelforge_potential_path: str,
-        atomic_numbers: List,
-        is_periodic: bool,
-        neighborlist_strategy: NeighborlistStrategy = "brute_nsq",
-        neighborlist_verlet_skin: float = 0.1,
-        energy_contributions: List[str] = [
-            "per_system_energy"
-        ],  # this will be a list of dictionary keys to sum into the energy, e.g., local_energy, coulombic_energy, vdw_energy
-    ):
-        super().__init__()
+    potential.to(device)
+    potential.set_neighborlist_strategy(neighborlist_strategy, neighborlist_verlet_skin)
+    potential.eval()
 
-        # Store the atomic numbers
-        self.atomic_numbers = torch.tensor(atomic_numbers).squeeze()
-        self.is_periodic = is_periodic
-        self.energy_contributions = energy_contributions
+    atomic_numbers = np.array(atomic_numbers)
+    compute = partial(
+        _compute_modelforge,
+        potential=potential,
+        atomic_numbers=atomic_numbers,
+        per_system_total_charge=per_system_total_charge,
+        per_system_spin_multiplicity=per_system_spin_multiplicity,
+        is_periodic=periodic,
+        precision=precision,
+        device=device,
+    )
 
-        n_atoms = self.atomic_numbers.shape[0]
+    return compute
 
-        self.precision = torch.float32
 
-        self.nnp_input = NNPInput(
-            atomic_numbers=self.atomic_numbers,
-            positions=torch.zeros((n_atoms, 3), dtype=self.precision),
-            atomic_subsystem_indices=torch.zeros(n_atoms),
-            is_periodic=torch.tensor([self.is_periodic]),
-            per_system_total_charge=torch.zeros(1),
-            per_system_spin_state=torch.zeros(1),
-        )
-        self.modelforge_potential = torch.jit.load(modelforge_potential_path)
+def _compute_modelforge(
+    state,
+    potential,
+    atomic_numbers: np.ndarray,
+    per_system_total_charge: int,
+    per_system_spin_multiplicity: int,
+    is_periodic: bool,
+    precision: torch.dtype,
+    device: torch.device,
+) -> tuple[float, np.ndarray]:
+    """
+    Evaluate the NNP potential and return energy + forces.
 
-        # Set the neighborlist strategy
-        self.modelforge_potential.set_neighborlist_strategy(
-            neighborlist_strategy, neighborlist_verlet_skin
-        )
+    Parameters
+    ----------
+    state: openmm.State
+        openmm state object
+    potential: modelforge.Potential instance
+        Potential instance that implements ``forward(nnp_input)``.
+    atomic_numbers: np.ndarray
+        Atomic numbers for every particle in the System, in the same order as
+    per_system_total_charge: int
+        Integer total charge of the system.
+    per_system_spin_multiplicity: int
+        Integer total spin multiplicity of the system.
+    is_periodic: bool
+        Whether the system is periodic. If True, box vectors will be passed in the state and included in the NNP input.
 
-    def forward(
-        self, positions: torch.Tensor, box_vectors: Optional[torch.Tensor] = None
-    ):
-        if box_vectors is None:
-            box_vectors = torch.tensor(
-                [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
-                dtype=self.precision,
-            )
-        # if the system isn't periodic, we won't do anything with the box vectors, but we still need to pass them
-        self.nnp_input.positions = positions.to(dtype=self.precision)
-        self.nnp_input.box_vectors = box_vectors.to(dtype=self.precision)
-        self.nnp_input.to_device(positions.device)
+    Returns
+    -------
+    energy : float
+        Potential energy in **kJ/mol**.
+    forces : (N, 3) float64 ndarray
+        Forces in **kJ/mol/nm**.
+    """
+    import openmm.unit as omm_unit
 
-        output = self.modelforge_potential.forward_for_jit_inference(
-            atomic_numbers=self.nnp_input.atomic_numbers,
-            positions=self.nnp_input.positions,
-            atomic_subsystem_indices=self.nnp_input.atomic_subsystem_indices,
-            per_system_total_charge=self.nnp_input.per_system_total_charge,
-            pair_list=self.nnp_input.pair_list,
-            per_atom_partial_charge=self.nnp_input.per_atom_partial_charge,
-            box_vectors=self.nnp_input.box_vectors,
-            is_periodic=self.nnp_input.is_periodic,
-            per_system_spin_state=self.nnp_input.per_system_spin_state,
-        )
+    nnp_input = _build_nnp_input(
+        atomic_numbers=atomic_numbers,
+        positions=state.getPositions(asNumpy=True).value_in_unit(omm_unit.nanometer),
+        is_periodic=is_periodic,
+        box_vectors=(
+            state.getPeriodicBoxVectors(asNumpy=True).value_in_unit(omm_unit.nanometer)
+            if is_periodic
+            else None
+        ),
+        precision=precision,
+        device=device,
+        per_system_total_charge=per_system_total_charge,
+        per_system_spin_state=per_system_spin_multiplicity,
+    )
 
-        energy = torch.zeros(1, dtype=self.precision, device=positions.device)
-        for key in self.energy_contributions:
-            energy = energy.add(output[key])
+    # just make sure that we are really on the right device
+    nnp_input.to_device(device)
+    nnp_input.to_dtype(precision)
 
-        return energy
+    output = potential(nnp_input)
+
+    energy = output["per_system_energy"]
+    grad = torch.autograd.grad(
+        energy.sum(), nnp_input.positions, create_graph=False, retain_graph=False
+    )[0]
+
+    force = -grad.detach().cpu().numpy().astype(np.float64)
+
+    energy = energy.detach().cpu().numpy().astype(np.float64).sum()
+
+    return energy, force

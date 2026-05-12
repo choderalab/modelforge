@@ -5,6 +5,104 @@ from openmm.app import *
 from modelforge.potential import _Implemented_NNPs as Implemented_NNPs
 
 
+def test_openmm_wrapping_with_checkpoint_file():
+
+    # We next need to read in the modelforge potential torchscript file
+    from modelforge.utils.io import get_path_string
+    from modelforge.openmm.examples import data
+
+    checkpoint_file_path = get_path_string(data) + "/model.ckpt"
+
+    from modelforge.potential.potential import load_inference_model_from_checkpoint
+
+    potential = load_inference_model_from_checkpoint(checkpoint_file_path, jit=False)
+    from modelforge.openmm.examples.openmm_water_topology import openmm_water_topology
+
+    water, positions = openmm_water_topology()
+    atomic_numbers = [atom.element.atomic_number for atom in water.atoms()]
+
+    from modelforge.openmm.potential import generate_compute
+    from modelforge.openmm.potential import _build_nnp_input
+    import openmm
+    from openmm import PythonForce
+    from openmm.unit import (
+        kelvin,
+        picosecond,
+        femtosecond,
+        nanometer,
+        kilojoules_per_mole,
+    )
+    import numpy as np
+
+    system = openmm.System()
+    for atom in water.atoms():
+        system.addParticle(atom.element.mass)
+
+    comp = generate_compute(potential=potential, atomic_numbers=atomic_numbers)
+
+    system_force = PythonForce(comp)
+
+    system.addForce(system_force)
+
+    import sys
+    from openmm import LangevinMiddleIntegrator
+    from openmm.app import Simulation, StateDataReporter
+
+    # Create an integrator with a time step of 1 fs
+    temperature = 298.15 * kelvin
+    frictionCoeff = 1 / picosecond
+    timeStep = 0.01 * femtosecond
+    integrator = LangevinMiddleIntegrator(temperature, frictionCoeff, timeStep)
+
+    # Create a simulation and set the initial positions and velocities
+    simulation = Simulation(water, system, integrator)
+    simulation.context.setPositions(positions)
+
+    reporter = StateDataReporter(
+        file=sys.stdout,
+        reportInterval=1,
+        step=True,
+        time=True,
+        potentialEnergy=True,
+        temperature=True,
+    )
+    simulation.reporters.append(reporter)
+    state = simulation.context.getState(
+        getEnergy=True, getPositions=True, getForces=True
+    )
+    energy = state.getPotentialEnergy()
+    force = state.getForces(asNumpy=True)
+    print(force)
+    assert np.isclose(
+        energy.value_in_unit(kilojoules_per_mole), 5104.08740234375, atol=1e-3
+    )
+    # we need a high tolerance here because the values are large and we only really care about capturing this to
+    assert np.allclose(
+        force.value_in_unit(kilojoules_per_mole / nanometer),
+        np.array(
+            [
+                [0.0, -278369.9375, 0.0],
+                [647955.0625, 139184.96875, 0.0],
+                [-647955.0625, 139184.96875, 0.0],
+            ]
+        ),
+        atol=1e5,
+    )
+    simulation.step(10)
+    state = simulation.context.getState(
+        getEnergy=True, getPositions=True, getForces=True
+    )
+    energy = state.getPotentialEnergy()
+    force = state.getForces(asNumpy=True)
+
+    # we want to check to ensure we aren't just getting zero energies and forces while running
+    assert not np.isclose(
+        energy.value_in_unit(kilojoules_per_mole),
+        0.0,
+    )
+    assert not np.allclose(force.value_in_unit(kilojoules_per_mole / nanometer), 0.0)
+
+
 @pytest.mark.parametrize("is_periodic", [True, False])
 # @pytest.mark.parametrize(
 #     "potential_name", Implemented_NNPs.get_all_neural_network_names()
@@ -36,7 +134,7 @@ def test_potential_wrapping(is_periodic, potential_name, prep_temp_dir):
         jit=False,
     )
 
-    from modelforge.openmm.utils import NNPInput
+    from modelforge.utils.prop import NNPInput
 
     if is_periodic:
         box_vectors = torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
@@ -55,93 +153,48 @@ def test_potential_wrapping(is_periodic, potential_name, prep_temp_dir):
 
     modelforge_energy = modelforge_potential(nnp_input)["per_system_energy"]
 
-    # convert the potential to a torchscript model and save it
-    jit_modelforge_potential = torch.jit.script(modelforge_potential)
-    jit_modelforge_potential.save(
-        f"{prep_temp_dir}/{potential_name.lower()}_{is_periodic}_test.pt"
-    )
-
-    # load the torchscript model in the openmm wrapper
-    from modelforge.openmm.potential import Potential
-
-    wrapped_potential = Potential(
-        modelforge_potential_path=f"{prep_temp_dir}/{potential_name.lower()}_{is_periodic}_test.pt",
-        atomic_numbers=water_atomic_numbers,
-        is_periodic=is_periodic,
-        neighborlist_strategy="verlet_nsq",
-        energy_contributions=["per_system_energy"],
-    )
-
-    wrapped_potential_energy = wrapped_potential(
-        torch.tensor(water_positions), box_vectors
-    )
-
-    assert torch.isclose(modelforge_energy, wrapped_potential_energy)
-
-    # first ensure that we can call jit on the potential, then assert the energy is the same
-    jit_wrapped_potential = torch.jit.script(wrapped_potential)
-
-    jit_wrapped_energy = jit_wrapped_potential(
-        torch.tensor(water_positions), box_vectors
-    )
-
-    assert torch.isclose(modelforge_energy, jit_wrapped_energy)
-
-
-def test_openmm(prep_temp_dir):
-    from modelforge.openmm.examples.openmm_water_topology import openmm_water_topology
-
     water, positions = openmm_water_topology()
     atomic_numbers = [atom.element.atomic_number for atom in water.atoms()]
 
-    # We next need to read in the modelforge potential torchscript file
-    from importlib import resources
-
-    potential_file_path = resources.files("modelforge.openmm.examples.data").joinpath(
-        "ani2x_test.pt"
-    )
-
-    from modelforge.openmm.potential import Potential
-    import torch
-
-    ani2x_potential = Potential(
-        modelforge_potential_path=potential_file_path,
-        atomic_numbers=atomic_numbers,
-        is_periodic=False,
-        neighborlist_strategy="verlet_nsq",
-        energy_contributions=["per_system_energy"],
-    )
-
-    ani2x_jit_potential = torch.jit.script(ani2x_potential)
-
+    from modelforge.openmm.potential import generate_compute
+    from modelforge.openmm.potential import _build_nnp_input
     import openmm
+    from openmm import PythonForce
+    from openmm.unit import (
+        kelvin,
+        picosecond,
+        femtosecond,
+        nanometer,
+        kilojoules_per_mole,
+    )
+    import numpy as np
 
     system = openmm.System()
     for atom in water.atoms():
         system.addParticle(atom.element.mass)
 
-    from openmmtorch import TorchForce
+    comp = generate_compute(
+        potential=modelforge_potential, atomic_numbers=atomic_numbers
+    )
 
-    force = TorchForce(ani2x_jit_potential)
+    system_force = PythonForce(comp)
 
-    system.addForce(force)
+    system.addForce(system_force)
 
     import sys
     from openmm import LangevinMiddleIntegrator
     from openmm.app import Simulation, StateDataReporter
-    from openmm.unit import kelvin, picosecond, femtosecond
 
     # Create an integrator with a time step of 1 fs
     temperature = 298.15 * kelvin
     frictionCoeff = 1 / picosecond
-    timeStep = 1 * femtosecond
+    timeStep = 0.01 * femtosecond
     integrator = LangevinMiddleIntegrator(temperature, frictionCoeff, timeStep)
 
     # Create a simulation and set the initial positions and velocities
     simulation = Simulation(water, system, integrator)
     simulation.context.setPositions(positions)
 
-    # Configure a reporter to print to the console every 0.1 ps (100 steps)
     reporter = StateDataReporter(
         file=sys.stdout,
         reportInterval=1,
@@ -151,6 +204,6 @@ def test_openmm(prep_temp_dir):
         temperature=True,
     )
     simulation.reporters.append(reporter)
-
-    # Run the simulation
-    simulation.step(10)
+    state = simulation.context.getState(getEnergy=True, getPositions=True)
+    energy = state.getPotentialEnergy()
+    assert np.allclose(energy.value_in_unit(kilojoules_per_mole), modelforge_energy)

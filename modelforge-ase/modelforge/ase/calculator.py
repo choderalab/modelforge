@@ -196,33 +196,25 @@ class ModelForgeCalculator(Calculator):
         output: dict = self.potential(nnp_input)
 
         energy_kJ = output["per_system_energy"]
-        self.results["energy"] = float(energy_kJ[0].cpu().item()) * _kJ_PER_MOL_TO_EV
+        # self.results["energy"] = float(energy_kJ[0].cpu().item()) * _kJ_PER_MOL_TO_EV
 
-        if "per_atom_force" in output:
-            forces = output["per_atom_force"]
-            self.results["forces"] = (
-                forces.cpu().numpy().astype(np.float64) * _KJ_PER_MOL_NM_TO_EV_ANG
-            )
-        else:
-            with torch.enable_grad():
-                grad = torch.autograd.grad(
-                    energy_kJ.sum(),
-                    nnp_input.positions,
-                    create_graph=False,
-                    retain_graph=False,
-                )[0]
-                if grad is None:
-                    raise RuntimeWarning("Force calculation did not return a gradient")
-                # check if nan in the gradient
-                if torch.isnan(grad).any():
-                    raise RuntimeError(
-                        "Gradient of energy used for force calculation contains NaN values."
-                    )
+        with torch.enable_grad():
+            grad = torch.autograd.grad(
+                energy_kJ.sum(),
+                nnp_input.positions,
+                create_graph=False,
+                retain_graph=False,
+            )[0]
+            if grad is None:
+                raise RuntimeWarning("Force calculation did not return a gradient")
+            # check if nan in the gradient
+            if torch.isnan(grad).any():
+                raise RuntimeError(
+                    "Gradient of energy used for force calculation contains NaN values."
+                )
 
-            forces = -grad.detach()  #
-            self.results["energy"] = (
-                energy_kJ[0].detach().cpu().item() * _kJ_PER_MOL_TO_EV
-            )
-            self.results["forces"] = (
-                forces.cpu().numpy().astype(np.float64) * _KJ_PER_MOL_NM_TO_EV_ANG
-            )
+        forces = -grad.detach()  #
+        self.results["energy"] = energy_kJ[0].detach().cpu().item() * _kJ_PER_MOL_TO_EV
+        self.results["forces"] = (
+            forces.cpu().numpy().astype(np.float64) * _KJ_PER_MOL_NM_TO_EV_ANG
+        )

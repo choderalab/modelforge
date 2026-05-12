@@ -188,6 +188,10 @@ class ZBLPotential(ParametersBase):
     calculate_zbl: bool = True
 
 
+class PerAtomForce(ParametersBase):
+    calculate_force: bool = True
+
+
 class DispersionPotential(ParametersBase):
     # note maximum interaction radius should be passed as a string with units or unit.Quantity;
     # it will be converted to float in appropriate unit system
@@ -209,6 +213,7 @@ class PropertiesToProcess(CaseInsensitiveEnum):
     per_system_zbl_energy = "per_system_zbl_energy"
     per_system_vdw_energy = "per_system_vdw_energy"
     sum_per_system_energy = "sum_per_system_energy"
+    per_atom_force = "per_atom_force"
     general_postprocessing_operation = "general_postprocessing_operation"
 
 
@@ -221,6 +226,7 @@ class PostProcessingParameter(ParametersBase):
     per_system_vdw_energy: Optional[DispersionPotential] = None
     sum_per_system_energy: Optional[SumPerSystemEnergy] = None
     general_postprocessing_operation: Optional[GeneralPostProcessingOperation] = None
+    per_atom_force: Optional[PerAtomForce] = None
 
 
 class AimNet2Parameters(ParametersBase):

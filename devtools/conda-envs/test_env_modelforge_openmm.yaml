@@ -36,12 +36,10 @@ dependencies:
   - codecov
   - requests
   - versioneer
-
+  - jax
+  - flax
+  -
   - pip:
-      - jax
-      - flax
-      - pytorch2jax
+
       #- git+https://github.com/ArnNag/sake.git@nanometer
-      - flax
-      #- torch
       - pytest-xdist

@@ -270,6 +270,8 @@ class DatasetCuration(ABC):
         final_configuration_only: Optional[bool] = False,
         spin_multiplicity_to_limit: Optional[int] = None,
         spin_multiplicity_key: Optional[str] = "per_system_spin_multiplicity",
+        total_charge_to_limit: Optional[int] = None,
+        total_charge_key: Optional[str] = "total_charge",
     ) -> Tuple[int, int]:
         """
         Writes the dataset to an hdf5 file.
@@ -304,6 +306,11 @@ class DatasetCuration(ABC):
             This is useful for filtering the dataset based on spin multiplicity.
         spin_multiplicity_key: str, optional, default="per_system_spin_multiplicity"
             Key to use for the spin multiplicity. If not defined, the default key 'per_system_spin_multiplicity' will be used.
+        total_charge_to_limit: Optional[int], optional, default=None
+            If set to an integer, 'n_q', the routine will only process records with a total charge equal to 'n_q'.
+            This is useful for filtering the dataset based on total charge.
+        total_charge_key: str, optional, default="total_charge"
+            Key to use for the total charge. If not defined, the default key 'total_charge' will be used.
 
         Returns
         -------
@@ -365,6 +372,7 @@ class DatasetCuration(ABC):
             or total_records is not None
             or final_configuration_only
             or spin_multiplicity_to_limit is not None
+            or total_charge_to_limit is not None
         ):
             import time
             import random
@@ -376,6 +384,10 @@ class DatasetCuration(ABC):
             number = random.randint(10000, 99999)
 
             new_dataset_name = f"{self.dataset.name}_temp_{number}"
+            if total_charge_to_limit is not None:
+                logger.info(
+                    f"Filtering dataset for total charge: {total_charge_to_limit}"
+                )
 
             if spin_multiplicity_to_limit is not None:
                 logger.info(

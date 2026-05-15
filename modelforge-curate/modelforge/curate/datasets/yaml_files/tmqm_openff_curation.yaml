@@ -7,4 +7,12 @@ v_0:
 v0_ext_sm1:
   version: 0
   collection_names:
-  - 462
+  - 469
+v0_ext_sm3:
+  version: 0
+  collection_names:
+  - 468
+v0_ext_sm5:
+  version: 0
+  collection_names:
+  - 463

@@ -431,6 +431,8 @@ class SourceDataset:
         final_configuration_only: Optional[bool] = False,
         spin_multiplicity_to_limit: Optional[int] = None,
         spin_multiplicity_key: Optional[str] = "spin_multiplicities_per_system",
+        total_charge_to_lmit: Optional[np.ndarray] = None,
+        total_charge_key: Optional[str] = "total_charge",
         local_db_dir: Optional[str] = None,
         local_db_name: Optional[str] = None,
         seed: Optional[int] = 42,
@@ -466,6 +468,10 @@ class SourceDataset:
             If set, only configurations with the specified per-system spin multiplicity will be included in the subset.
         spin_multiplicity_key: Optional[str], default="spin_multiplicities_per_system"
             The key in the record properties that contains the spin multiplicity. Default is "spin_multiplicities_per_system".
+        total_charge_to_lmit: Optional[np.ndarray], default=None
+            If set, configurations with the specified total charge will be included in the subset.
+        total_charge_key: Optional[str], default="total_charge"
+            The key in the record properties that contains the total charge. Default is "total_charge".
         local_db_dir: str, optional, default=None
             Directory to store the local database for the new dataset.  If not defined, will use the same directory as the current dataset.
         local_db_name: str, optional, default=None
@@ -520,6 +526,10 @@ class SourceDataset:
             # assert we have an integer
             if isinstance(spin_multiplicity_to_limit, int) == False:
                 raise ValueError("spin_multiplicity_to_limit must be an integer value.")
+        if total_charge_to_lmit is not None:
+            # assert we have an integer
+            if isinstance(total_charge_to_lmit, int) == False:
+                raise ValueError("total_charge_to_lmit must be an integer value.")
 
         if local_db_dir is None:
             local_db_dir = self.local_db_dir
@@ -566,6 +576,17 @@ class SourceDataset:
                             record = record.remove_configs(
                                 indices_to_include=indices_to_include
                             )
+                        # next check by total charge
+                        if total_charge_to_lmit is not None:
+                            total_charge = record.get_property_value(total_charge_key)
+
+                            indices_to_include = list(
+                                np.where(total_charge.flatten() == total_charge_to_lmit)
+                            )[0]
+                            record = record.remove_configs(
+                                indices_to_include=indices_to_include
+                            )
+
                         # if we have a max force, we will remove configurations with forces greater than the max_force
                         # we will just overwrite the record with the new record
                         if max_force is not None:

@@ -26,7 +26,7 @@ class SPICE2Curation(DatasetCuration):
     Routines to fetch  the spice 2 dataset from zenodo and process into a curated hdf5 file.
 
     Small-molecule/Protein Interaction Chemical Energies (SPICE).
-    The SPICE dataset containsconformations for a diverse set of small molecules,
+    The SPICE dataset contains conformations for a diverse set of small molecules,
     dimers, dipeptides, and solvated amino acids. It includes 15 elements, charged and
     uncharged molecules, and a wide range of covalent and non-covalent interactions.
     It provides both forces and energies calculated at the ωB97M-D3(BJ)/def2-TZVPPD level of theory,

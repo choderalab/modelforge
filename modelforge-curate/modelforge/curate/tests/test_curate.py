@@ -787,6 +787,131 @@ def test_limit_atomic_numbers(prep_temp_dir):
         )
 
 
+def test_limit_to_total_charge(prep_temp_dir):
+    atomic_numbers = AtomicNumbers(
+        value=np.array(
+            [
+                [6],
+                [1],
+            ]
+        )
+    )
+    energies = Energies(
+        value=np.array(
+            [
+                [1.0],
+                [2.0],
+                [3.0],
+                [4.0],
+                [5.0],
+            ]
+        ),
+        units=unit.kilojoule_per_mole,
+    )
+    positions = Positions(
+        value=np.array(
+            [
+                [
+                    [1.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                ],
+                [
+                    [2.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                ],
+                [
+                    [3.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                ],
+                [
+                    [4.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                ],
+                [
+                    [5.0, 0.0, 0.0],
+                    [0.0, 1.5, 1.5],
+                ],
+            ]
+        ),
+        units=unit.nanometer,
+    )
+    total_charge = TotalCharge(
+        value=np.array([[1], [0], [0], [1], [-1]]), units="elementary_charge"
+    )
+
+    record = Record("mol1")
+    record.add_properties([atomic_numbers, energies, positions, total_charge])
+
+    dataset = SourceDataset(name="test_dataset_charge", local_db_dir=str(prep_temp_dir))
+    dataset.add_record(record)
+
+    # test that we can limit to a specific total charge
+    new_dataset = dataset.subset_dataset(
+        new_dataset_name="test_dataset12_sub",
+        total_charge_to_limit=0,
+    )
+    # this should produce 1 record with 2 configurations
+    assert new_dataset.total_records() == 1
+    assert new_dataset.total_configs() == 2
+
+    record = new_dataset.get_record("mol1")
+    charges = record.get_property("total_charge").value
+    assert np.all(charges == np.array([[0], [0]]))
+
+    new_dataset = dataset.subset_dataset(
+        new_dataset_name="test_dataset13_sub",
+        total_charge_to_limit=1,
+    )
+    assert new_dataset.total_records() == 1
+    assert new_dataset.total_configs() == 2
+    record = new_dataset.get_record("mol1")
+    charges = record.get_property("total_charge").value
+
+    assert np.all(charges == np.array([[1], [1]]))
+
+    new_dataset = dataset.subset_dataset(
+        new_dataset_name="test_dataset14_sub", total_charge_to_limit=-1
+    )
+    assert new_dataset.total_records() == 1
+    assert new_dataset.total_configs() == 1
+    record = new_dataset.get_record("mol1")
+    charges = record.get_property("total_charge").value
+    assert np.all(charges == np.array([[-1]]))
+
+    # test this where we limit number of configurations as well
+    new_dataset = dataset.subset_dataset(
+        new_dataset_name="test_dataset12_sub",
+        total_charge_to_limit=0,
+        total_configurations=1,
+    )
+    # this should produce 1 record with 2 configurations
+    assert new_dataset.total_records() == 1
+    assert new_dataset.total_configs() == 1
+
+    record = new_dataset.get_record("mol1")
+    charges = record.get_property("total_charge").value
+    assert np.all(charges == np.array([[0]]))
+
+    # test where we limit the number of records
+    # we will just make a copy of the record and add it a few times
+    record = Record("mol2")
+    record.add_properties([atomic_numbers, energies, positions, total_charge])
+    dataset.add_record(record)
+
+    record = Record("mol3")
+    record.add_properties([atomic_numbers, energies, positions, total_charge])
+    dataset.add_record(record)
+
+    new_dataset = dataset.subset_dataset(
+        new_dataset_name="test_dataset12_sub",
+        total_charge_to_limit=0,
+        total_records=2,
+    )
+
+    assert new_dataset.total_records() == 2
+    assert new_dataset.total_configs() == 4
+
+
 def test_limit_to_spin_multiplicity(prep_temp_dir):
 
     atomic_numbers = AtomicNumbers(

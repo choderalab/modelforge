@@ -431,7 +431,7 @@ class SourceDataset:
         final_configuration_only: Optional[bool] = False,
         spin_multiplicity_to_limit: Optional[int] = None,
         spin_multiplicity_key: Optional[str] = "spin_multiplicities_per_system",
-        total_charge_to_lmit: Optional[np.ndarray] = None,
+        total_charge_to_limit: Optional[unit.Quantity] = None,
         total_charge_key: Optional[str] = "total_charge",
         local_db_dir: Optional[str] = None,
         local_db_name: Optional[str] = None,
@@ -447,7 +447,7 @@ class SourceDataset:
         total_records: Optional[int], default=None
             Maximum number of records to include in the subset. Cannot be used in conjunction with total_configurations.
         total_configurations: Optional[int], default=None
-            Total number of conformers to include in the subset. annot be used in conjunction with total_records
+            Total number of conformers to include in the subset. cannot be used in conjunction with total_records
         max_configurations_per_record: Optional[int], default=None
             Maximum number of conformers to include per record. If None, all conformers in a record will be included.
             By default, configurations to include are taken from the start of the record.
@@ -468,7 +468,7 @@ class SourceDataset:
             If set, only configurations with the specified per-system spin multiplicity will be included in the subset.
         spin_multiplicity_key: Optional[str], default="spin_multiplicities_per_system"
             The key in the record properties that contains the spin multiplicity. Default is "spin_multiplicities_per_system".
-        total_charge_to_lmit: Optional[np.ndarray], default=None
+        total_charge_to_limit: Optional[int], default=None
             If set, configurations with the specified total charge will be included in the subset.
         total_charge_key: Optional[str], default="total_charge"
             The key in the record properties that contains the total charge. Default is "total_charge".
@@ -526,10 +526,13 @@ class SourceDataset:
             # assert we have an integer
             if isinstance(spin_multiplicity_to_limit, int) == False:
                 raise ValueError("spin_multiplicity_to_limit must be an integer value.")
-        if total_charge_to_lmit is not None:
-            # assert we have an integer
-            if isinstance(total_charge_to_lmit, int) == False:
-                raise ValueError("total_charge_to_lmit must be an integer value.")
+        if total_charge_to_limit is not None:
+
+            # assert we have a single int value
+            if isinstance(total_charge_to_limit, int) == False:
+                raise ValueError(
+                    "total_charge_to_limit must be a single integer value of elementary charge."
+                )
 
         if local_db_dir is None:
             local_db_dir = self.local_db_dir
@@ -562,9 +565,9 @@ class SourceDataset:
                         # first let us check the spin multiplicity if we are limiting it
                         # before we attempt to limit any other properties
                         if spin_multiplicity_to_limit is not None:
-                            spin_multiplicities = record.get_property_value(
+                            spin_multiplicities = record.get_property(
                                 spin_multiplicity_key
-                            )
+                            ).value
 
                             # see what elements have matching spin multiplicity
                             indices_to_include = list(
@@ -577,12 +580,15 @@ class SourceDataset:
                                 indices_to_include=indices_to_include
                             )
                         # next check by total charge
-                        if total_charge_to_lmit is not None:
-                            total_charge = record.get_property_value(total_charge_key)
+                        if total_charge_to_limit is not None:
+                            total_charge = record.get_property(total_charge_key).value
 
                             indices_to_include = list(
-                                np.where(total_charge.flatten() == total_charge_to_lmit)
+                                np.where(
+                                    total_charge.flatten() == total_charge_to_limit
+                                )
                             )[0]
+
                             record = record.remove_configs(
                                 indices_to_include=indices_to_include
                             )
@@ -670,9 +676,9 @@ class SourceDataset:
                         # first let us check the spin multiplicity if we are limiting it
                         # before we attempt to limit any other properties
                         if spin_multiplicity_to_limit is not None:
-                            spin_multiplicities = record.get_property_value(
+                            spin_multiplicities = record.get_property(
                                 spin_multiplicity_key
-                            )
+                            ).value
 
                             # see what elements have matching spin multiplicity
                             indices_to_include = list(
@@ -684,7 +690,19 @@ class SourceDataset:
                             record = record.remove_configs(
                                 indices_to_include=indices_to_include
                             )
+                        # next check by total charge
+                        if total_charge_to_limit is not None:
+                            total_charge = record.get_property(total_charge_key).value
 
+                            indices_to_include = list(
+                                np.where(
+                                    total_charge.flatten() == total_charge_to_limit
+                                )
+                            )[0]
+
+                            record = record.remove_configs(
+                                indices_to_include=indices_to_include
+                            )
                         # if we have a max force, we will remove configurations with forces greater than the max_force
                         # we will just overwrite the record with the new record
                         if max_force is not None:
@@ -741,9 +759,9 @@ class SourceDataset:
                     # first let us check the spin multiplicity if we are limiting it
                     # before we attempt to limit any other properties
                     if spin_multiplicity_to_limit is not None:
-                        spin_multiplicities = record.get_property_value(
+                        spin_multiplicities = record.get_property(
                             spin_multiplicity_key
-                        )
+                        ).value
 
                         # see what elements have matching spin multiplicity
                         indices_to_include = list(
@@ -752,6 +770,17 @@ class SourceDataset:
                                 == spin_multiplicity_to_limit
                             )[0]
                         )
+                        record = record.remove_configs(
+                            indices_to_include=indices_to_include
+                        )
+                    # next check by total charge
+                    if total_charge_to_limit is not None:
+                        total_charge = record.get_property(total_charge_key).value
+
+                        indices_to_include = list(
+                            np.where(total_charge.flatten() == total_charge_to_limit)
+                        )[0]
+
                         record = record.remove_configs(
                             indices_to_include=indices_to_include
                         )

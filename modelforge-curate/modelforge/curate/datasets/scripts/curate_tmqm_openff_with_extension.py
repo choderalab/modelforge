@@ -282,7 +282,7 @@ def main():
 
             print("total dataset")
 
-            n_total_records, n_total_configs = tmqm_openff.to_hdf5(
+            n_total_records, n_total_configs = tmqm_openff_base.to_hdf5(
                 hdf5_file_name=hdf5_file_name,
                 output_file_dir=output_file_dir,
                 max_force=1.0 * unit.hartree / unit.bohr,

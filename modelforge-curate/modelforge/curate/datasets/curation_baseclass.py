@@ -420,6 +420,8 @@ class DatasetCuration(ABC):
                 final_configuration_only=final_configuration_only,
                 spin_multiplicity_to_limit=spin_multiplicity_to_limit,
                 spin_multiplicity_key=spin_multiplicity_key,
+                total_charge_to_limit=total_charge_to_limit,
+                total_charge_key=total_charge_key,
             )
             if dataset_trimmed.total_records() == 0:
                 raise ValueError("No records found in the dataset after filtering.")

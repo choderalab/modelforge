@@ -588,7 +588,6 @@ class SourceDataset:
                                     total_charge.flatten() == total_charge_to_limit
                                 )
                             )[0]
-
                             record = record.remove_configs(
                                 indices_to_include=indices_to_include
                             )

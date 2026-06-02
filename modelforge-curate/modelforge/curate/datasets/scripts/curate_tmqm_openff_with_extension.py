@@ -11,6 +11,8 @@ This will generate separate HDF5 files for:
 from modelforge.curate.datasets.tmqm_openff_curation import tmQMOpenFFCuration
 from modelforge.curate.utils import VersionMetadata
 
+from modelforge.curate import SourceDataset
+
 
 def main():
 
@@ -25,7 +27,7 @@ def main():
 
     # We'll want to provide some simple means of versioning
     # if we make updates to either the underlying dataset, curation modules, or parameters given to the code
-    version = "1.4"
+    version_str = "1.4"
     # version of the dataset to curate
     version_select = f"v_0"
 
@@ -44,15 +46,15 @@ def main():
     )
 
     # rather than fetching the dataset directly, we will use a local view file
-    # tmqm_openff_base.process(
-    #     qcportal_view_filename="dataset_419_view.sqlite",
-    #     qcportal_view_path="/home/cri/mf_datasets/tmqm_openff_dataset/dataset_download_Feb26",
-    #     force_download=False,
-    # )
-    tmqm_openff_base.load_from_db(
-        local_db_dir=local_cache_dir,
-        local_db_name="tmqm_openff.sqlite",
+    tmqm_openff_base.process(
+        qcportal_view_filename="dataset_419_view.sqlite",
+        qcportal_view_path="/home/cri/mf_datasets/tmqm_openff_dataset/dataset_download_Feb26",
+        force_download=False,
     )
+    # tmqm_openff_base.load_from_db(
+    #     local_db_dir=local_cache_dir,
+    #     local_db_name="tmqm_openff.sqlite",
+    # )
     # set up the extensions
     # spin multiplicty = 1
     tmqm_openff_ext_sm1 = tmQMOpenFFCuration(
@@ -127,6 +129,8 @@ def main():
     ext_sm3_record_names = tmqm_openff_ext_sm3.dataset.record_names()
     ext_sm5_record_names = tmqm_openff_ext_sm5.dataset.record_names()
 
+    new_dataset_full = SourceDataset(name="tmqm_openff_full_extended")
+    ext_dataset_full = SourceDataset(name="tmqm_openff_extended_only")
     for record_name in tmqm_openff_base.dataset.record_names():
         record_base = tmqm_openff_base.dataset.get_record(record_name)
         if record_name in ext_sm1_record_names:
@@ -139,14 +143,18 @@ def main():
             record_ext_sm5 = tmqm_openff_ext_sm5.dataset.get_record(record_name)
             record_base.merge(record_ext_sm5)
 
+        new_dataset_full.add_record(record_base)
         # update the record in the base dataset
-        tmqm_openff_base.dataset.update_record(record_base)
+        # tmqm_openff_base.dataset.update_record(record_base)
+
+    # create a source dataset that only contains the extension
 
     for record_name in missed_records:
         if record_name in ext_sm1_record_names:
             record_ext = tmqm_openff_ext_sm1.dataset.get_record(record_name)
             # since this will be ecountered first, there is no chance the record already exists
-            tmqm_openff_base.dataset.add_record(record_ext)
+            # tmqm_openff_base.dataset.add_record(record_ext)
+            new_dataset_full.add_record(record_ext)
 
         if record_name in ext_sm3_record_names:
             record_ext = tmqm_openff_ext_sm3.dataset.get_record(record_name)
@@ -156,246 +164,284 @@ def main():
             if record_name in tmqm_openff_base.dataset.record_names():
                 record_base = tmqm_openff_base.dataset.get_record(record_name)
                 record_base.merge(record_ext)
-                tmqm_openff_base.dataset.update_record(record_base)
+                # tmqm_openff_base.dataset.update_record(record_base)
+                new_dataset_full.add_record(record_base)
+
             else:
-                tmqm_openff_base.dataset.add_record(record_ext)
+                # tmqm_openff_base.dataset.add_record(record_ext)
+                new_dataset_full.add_record(record_ext)
+
         if record_name in ext_sm5_record_names:
             record_ext = tmqm_openff_ext_sm5.dataset.get_record(record_name)
             if record_name in tmqm_openff_base.dataset.record_names():
                 record_base = tmqm_openff_base.dataset.get_record(record_name)
                 record_base.merge(record_ext)
-                tmqm_openff_base.dataset.update_record(record_base)
+                # tmqm_openff_base.dataset.update_record(record_base)
+                new_dataset_full.add_record(record_base)
+
             else:
+                new_dataset_full.add_record(record_ext)
 
-                tmqm_openff_base.dataset.add_record(record_ext)
+                # tmqm_openff_base.dataset.add_record(record_ext)
+    # loop over each of the extensions and add to the dataset
 
-    # we now need to loop over all the records and calculate the self_energy as a function of charge and spin multiplicity
-    # this uses the regressed values calculated above
+    for record_name in ext_sm1_record_names:
+        record_ext = tmqm_openff_ext_sm1.dataset.get_record(record_name)
+        if record_name in ext_dataset_full.record_names():
+            record_base = ext_dataset_full.get_record(record_name)
+            record_base.merge(record_ext)
+            ext_dataset_full.update_record(record_base)
+        else:
+            ext_dataset_full.add_record(record_ext)
 
-    available_properties = (
-        [
-            "atomic_numbers",
-            "positions",
-            "total_charge",
-            "per_system_spin_multiplicity",
-            "dft_total_energy",
-            "dft_total_force",
-            "scf_dipole",
-            "scf_quadrupole",
-            "mulliken_partial_charges",
-            "lowdin_partial_charges",
-            "spin_multiplicity_per_atom",
-        ],
-    )
-    #################
-    # 1000 configuration version
-    #################
+    for record_name in ext_sm3_record_names:
+        record_ext = tmqm_openff_ext_sm3.dataset.get_record(record_name)
+        if record_name in ext_dataset_full.record_names():
+            record_base = ext_dataset_full.get_record(record_name)
+            record_base.merge(record_ext)
+            ext_dataset_full.update_record(record_base)
+        else:
+            ext_dataset_full.add_record(record_ext)
+    for record_name in ext_sm5_record_names:
+        record_ext = tmqm_openff_ext_sm5.dataset.get_record(record_name)
+        if record_name in ext_dataset_full.record_names():
+            record_base = ext_dataset_full.get_record(record_name)
+            record_base.merge(record_ext)
+            ext_dataset_full.update_record(record_base)
+        else:
+            ext_dataset_full.add_record(record_ext)
 
-    # curate dataset with 1000 total configurations, max of 10 configurations per record
-    hdf5_file_name = f"tmqm_openff_dataset_v{version}_ntc_1000.hdf5"
+    for dataset, name in zip([new_dataset_full, ext_dataset_full], ["full", "ext"]):
+        # reassign the underlying source dataset instance inside of tmqm_openff_base
+        tmqm_openff_base.dataset = dataset
+        # we now need to loop over all the records and calculate the self_energy as a function of charge and spin multiplicity
+        # this uses the regressed values calculated above
 
-    n_total_records, n_total_configs = tmqm_openff_base.to_hdf5(
-        hdf5_file_name=hdf5_file_name,
-        output_file_dir=output_file_dir,
-        total_configurations=1000,
-        max_configurations_per_record=10,
-        max_force=1.0 * unit.hartree / unit.bohr,
-        max_force_key="dft_total_force",
-    )
-    version_name = f"nc_1000_v{version}"
-    about = f"""This provides a curated hdf5 file for a subset of the tmqm openff dataset designed
-            to be compatible with modelforge. This dataset contains {n_total_records} unique records
-            for {n_total_configs} total configurations, with a maximum of 10 configurations per record.
-            This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
-            """
-    metadata = VersionMetadata(
-        version_name=version_name,
-        about=about,
-        hdf5_file_name=hdf5_file_name,
-        hdf5_file_dir=output_file_dir,
-        available_properties=available_properties,
-    )
-    # we need to compress the hdf5 file to get the checksum and length for the gzipped file
-    metadata.to_yaml(
-        file_name=f"{version_name}_metadata.yaml", file_path=output_file_dir
-    )
+        version = f"{version_str}_{name}"
+        available_properties = (
+            [
+                "atomic_numbers",
+                "positions",
+                "total_charge",
+                "per_system_spin_multiplicity",
+                "dft_total_energy",
+                "dft_total_force",
+                "scf_dipole",
+                "scf_quadrupole",
+                "mulliken_partial_charges",
+                "lowdin_partial_charges",
+                "spin_multiplicity_per_atom",
+            ],
+        )
+        #################
+        # 1000 configuration version
+        #################
 
-    print("1000 configuration subset")
-    print(f"Total records: {n_total_records}")
-    print(f"Total configs: {n_total_configs}")
+        # curate dataset with 1000 total configurations, max of 10 configurations per record
+        hdf5_file_name = f"tmqm_openff_dataset_v{version}_ntc_1000.hdf5"
 
-    ###############
-    # full dataset
-    ##############
-    # curate the full dataset
-    hdf5_file_name = f"tmqm_openff_dataset_v{version}.hdf5"
-    print("total dataset")
+        n_total_records, n_total_configs = tmqm_openff_base.to_hdf5(
+            hdf5_file_name=hdf5_file_name,
+            output_file_dir=output_file_dir,
+            total_configurations=1000,
+            max_configurations_per_record=10,
+            max_force=1.0 * unit.hartree / unit.bohr,
+            max_force_key="dft_total_force",
+        )
+        version_name = f"nc_1000_v{version}"
+        about = f"""This provides a curated hdf5 file for a subset of the tmqm openff dataset designed
+                to be compatible with modelforge. This dataset contains {n_total_records} unique records
+                for {n_total_configs} total configurations, with a maximum of 10 configurations per record.
+                This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
+                """
+        metadata = VersionMetadata(
+            version_name=version_name,
+            about=about,
+            hdf5_file_name=hdf5_file_name,
+            hdf5_file_dir=output_file_dir,
+            available_properties=available_properties,
+        )
+        # we need to compress the hdf5 file to get the checksum and length for the gzipped file
+        metadata.to_yaml(
+            file_name=f"{version_name}_metadata.yaml", file_path=output_file_dir
+        )
 
-    n_total_records, n_total_configs = tmqm_openff_base.to_hdf5(
-        hdf5_file_name=hdf5_file_name,
-        output_file_dir=output_file_dir,
-        max_force=1.0 * unit.hartree / unit.bohr,
-        max_force_key="dft_total_force",
-    )
+        print("1000 configuration subset")
+        print(f"Total records: {n_total_records}")
+        print(f"Total configs: {n_total_configs}")
 
-    version_name = f"full_dataset_v{version}"
+        ###############
+        # full dataset
+        ##############
+        # curate the full dataset
+        hdf5_file_name = f"tmqm_openff_dataset_v{version}.hdf5"
+        print("total dataset")
 
-    about = f"""This provides a curated hdf5 file for the tmqm openff dataset designed
-            to be compatible with modelforge. This dataset contains {n_total_records} unique records
-            for {n_total_configs} total configurations.
-            This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
-            """
+        n_total_records, n_total_configs = tmqm_openff_base.to_hdf5(
+            hdf5_file_name=hdf5_file_name,
+            output_file_dir=output_file_dir,
+            max_force=1.0 * unit.hartree / unit.bohr,
+            max_force_key="dft_total_force",
+        )
 
-    metadata = VersionMetadata(
-        version_name=version_name,
-        about=about,
-        hdf5_file_name=hdf5_file_name,
-        hdf5_file_dir=output_file_dir,
-        available_properties=available_properties,
-    )
-    # we need to compress the hdf5 file to get the checksum and length for the gzipped file
-    metadata.to_yaml(
-        file_name=f"{version_name}_metadata.yaml", file_path=output_file_dir
-    )
+        version_name = f"full_dataset_v{version}"
 
-    print(f"Total records: {n_total_records}")
-    print(f"Total configs: {n_total_configs}")
+        about = f"""This provides a curated hdf5 file for the tmqm openff dataset designed
+                to be compatible with modelforge. This dataset contains {n_total_records} unique records
+                for {n_total_configs} total configurations.
+                This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
+                """
 
-    ###############
-    # full dataset, spin multiplicity restrictions
-    ##############
-    for sm in [1, 3, 5]:
-        for charge in [-1, 0, 1, None]:
-            # curate the full dataset
-            if not charge is None:
-                if charge == -1:
-                    charge_str = "neg1"
-                elif charge == 0:
-                    charge_str = "neutral"
-                elif charge == 1:
-                    charge_str = "plus1"
-                hdf5_file_name = (
-                    f"tmqm_openff_dataset_sm{sm}_{charge_str}_v{version}.hdf5"
+        metadata = VersionMetadata(
+            version_name=version_name,
+            about=about,
+            hdf5_file_name=hdf5_file_name,
+            hdf5_file_dir=output_file_dir,
+            available_properties=available_properties,
+        )
+        # we need to compress the hdf5 file to get the checksum and length for the gzipped file
+        metadata.to_yaml(
+            file_name=f"{version_name}_metadata.yaml", file_path=output_file_dir
+        )
+
+        print(f"Total records: {n_total_records}")
+        print(f"Total configs: {n_total_configs}")
+
+        ###############
+        # full dataset, spin multiplicity restrictions
+        ##############
+        for sm in [1, 3, 5]:
+            for charge in [-1, 0, 1, None]:
+                # curate the full dataset
+                if not charge is None:
+                    if charge == -1:
+                        charge_str = "neg1"
+                    elif charge == 0:
+                        charge_str = "neutral"
+                    elif charge == 1:
+                        charge_str = "plus1"
+                    hdf5_file_name = (
+                        f"tmqm_openff_dataset_sm{sm}_{charge_str}_v{version}.hdf5"
+                    )
+                else:
+                    hdf5_file_name = f"tmqm_openff_dataset_sm{sm}_v{version}.hdf5"
+
+                print("total dataset")
+
+                n_total_records, n_total_configs = tmqm_openff_base.to_hdf5(
+                    hdf5_file_name=hdf5_file_name,
+                    output_file_dir=output_file_dir,
+                    max_force=1.0 * unit.hartree / unit.bohr,
+                    max_force_key="dft_total_force",
+                    spin_multiplicity_to_limit=sm,
+                    spin_multiplicity_key="per_system_spin_multiplicity",
+                    total_charge_to_limit=charge,
+                    total_charge_key="total_charge",
                 )
-            else:
-                hdf5_file_name = f"tmqm_openff_dataset_sm{sm}_v{version}.hdf5"
 
-            print("total dataset")
+                version_name = f"full_dataset_sm{sm}_v{version}"
 
-            n_total_records, n_total_configs = tmqm_openff_base.to_hdf5(
-                hdf5_file_name=hdf5_file_name,
-                output_file_dir=output_file_dir,
-                max_force=1.0 * unit.hartree / unit.bohr,
-                max_force_key="dft_total_force",
-                spin_multiplicity_to_limit=sm,
-                spin_multiplicity_key="per_system_spin_multiplicity",
-                total_charge_to_limit=charge,
-                total_charge_key="total_charge",
-            )
+                if charge is not None:
+                    about = f"""This provides a curated hdf5 file for the tmqm openff dataset designed 
+                                    to be compatible with modelforge. This dataset contains {n_total_records} unique records
+                                    for {n_total_configs} total configurations, restricted to spin multiplicity {sm} and charge {charge}.
+                                    This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
+                                    """
+                else:
+                    about = f"""This provides a curated hdf5 file for the tmqm openff dataset designed 
+                                    to be compatible with modelforge. This dataset contains {n_total_records} unique records
+                                    for {n_total_configs} total configurations, restricted to spin multiplicity {sm}.
+                                    This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
+                                    """
 
-            version_name = f"full_dataset_sm{sm}_v{version}"
+                metadata = VersionMetadata(
+                    version_name=version_name,
+                    about=about,
+                    hdf5_file_name=hdf5_file_name,
+                    hdf5_file_dir=output_file_dir,
+                    available_properties=available_properties,
+                )
+                # we need to compress the hdf5 file to get the checksum and length for the gzipped file
+                metadata.to_yaml(
+                    file_name=f"{version_name}_metadata.yaml", file_path=output_file_dir
+                )
 
-            if charge is not None:
-                about = f"""This provides a curated hdf5 file for the tmqm openff dataset designed 
-                                to be compatible with modelforge. This dataset contains {n_total_records} unique records
-                                for {n_total_configs} total configurations, restricted to spin multiplicity {sm} and charge {charge}.
-                                This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
-                                """
-            else:
-                about = f"""This provides a curated hdf5 file for the tmqm openff dataset designed 
-                                to be compatible with modelforge. This dataset contains {n_total_records} unique records
-                                for {n_total_configs} total configurations, restricted to spin multiplicity {sm}.
-                                This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
-                                """
+                print(f"Total records: {n_total_records}")
+                print(f"Total configs: {n_total_configs}")
 
-            metadata = VersionMetadata(
-                version_name=version_name,
-                about=about,
-                hdf5_file_name=hdf5_file_name,
-                hdf5_file_dir=output_file_dir,
-                available_properties=available_properties,
-            )
-            # we need to compress the hdf5 file to get the checksum and length for the gzipped file
-            metadata.to_yaml(
-                file_name=f"{version_name}_metadata.yaml", file_path=output_file_dir
-            )
+        ######################################
+        # 1000 conformer, last configuration only
+        ######################################
+        # curate dataset with 1000 total configurations, last only
+        hdf5_file_name = f"tmqm_openff_dataset_v{version}_ntc_1000_minimal.hdf5"
 
-            print(f"Total records: {n_total_records}")
-            print(f"Total configs: {n_total_configs}")
+        n_total_records, n_total_configs = tmqm_openff_base.to_hdf5(
+            hdf5_file_name=hdf5_file_name,
+            output_file_dir=output_file_dir,
+            total_configurations=1000,
+            max_force=1.0 * unit.hartree / unit.bohr,
+            max_force_key="dft_total_force",
+            final_configuration_only=True,
+        )
+        version_name = f"nc_1000_v{version}_minimal"
+        about = f"""This provides a curated hdf5 file for a subset of the tmqm openff dataset designed
+                to be compatible with modelforge. This dataset contains {n_total_records} unique records
+                for {n_total_configs} total configurations, with only the final configuration of the optimization.
+                This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
+                """
 
-    ######################################
-    # 1000 conformer, last configuration only
-    ######################################
-    # curate dataset with 1000 total configurations, last only
-    hdf5_file_name = f"tmqm_openff_dataset_v{version}_ntc_1000_minimal.hdf5"
+        metadata = VersionMetadata(
+            version_name=version_name,
+            about=about,
+            hdf5_file_name=hdf5_file_name,
+            hdf5_file_dir=output_file_dir,
+            available_properties=available_properties,
+        )
+        # we need to compress the hdf5 file to get the checksum and length for the gzipped file
+        metadata.to_yaml(
+            file_name=f"{version_name}_metadata.yaml", file_path=output_file_dir
+        )
 
-    n_total_records, n_total_configs = tmqm_openff_base.to_hdf5(
-        hdf5_file_name=hdf5_file_name,
-        output_file_dir=output_file_dir,
-        total_configurations=1000,
-        max_force=1.0 * unit.hartree / unit.bohr,
-        max_force_key="dft_total_force",
-        final_configuration_only=True,
-    )
-    version_name = f"nc_1000_v{version}_minimal"
-    about = f"""This provides a curated hdf5 file for a subset of the tmqm openff dataset designed
-            to be compatible with modelforge. This dataset contains {n_total_records} unique records
-            for {n_total_configs} total configurations, with only the final configuration of the optimization.
-            This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
-            """
+        print("1000 configuration subset last configurations only")
+        print(f"Total records: {n_total_records}")
+        print(f"Total configs: {n_total_configs}")
 
-    metadata = VersionMetadata(
-        version_name=version_name,
-        about=about,
-        hdf5_file_name=hdf5_file_name,
-        hdf5_file_dir=output_file_dir,
-        available_properties=available_properties,
-    )
-    # we need to compress the hdf5 file to get the checksum and length for the gzipped file
-    metadata.to_yaml(
-        file_name=f"{version_name}_metadata.yaml", file_path=output_file_dir
-    )
+        #######################################3
+        # full dataset last configuration only
+        #######################################3
 
-    print("1000 configuration subset last configurations only")
-    print(f"Total records: {n_total_records}")
-    print(f"Total configs: {n_total_configs}")
+        # curate the full dataset last config only
 
-    #######################################3
-    # full dataset last configuration only
-    #######################################3
+        hdf5_file_name = f"tmqm_openff_dataset_v{version}_minimal.hdf5"
 
-    # curate the full dataset last config only
+        n_total_records, n_total_configs = tmqm_openff_base.to_hdf5(
+            hdf5_file_name=hdf5_file_name,
+            output_file_dir=output_file_dir,
+            max_force=1.0 * unit.hartree / unit.bohr,
+            max_force_key="dft_total_force",
+            final_configuration_only=True,
+        )
+        version_name = f"full_dataset_v{version}_minimal"
+        about = f"""This provides a curated hdf5 file for the tmqm openff dataset designed
+                to be compatible with modelforge. This dataset contains {n_total_records} unique records
+                for {n_total_configs} total configurations, with only the final configuration of the optimization.
+                This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
+                """
 
-    hdf5_file_name = f"tmqm_openff_dataset_v{version}_minimal.hdf5"
-
-    n_total_records, n_total_configs = tmqm_openff_base.to_hdf5(
-        hdf5_file_name=hdf5_file_name,
-        output_file_dir=output_file_dir,
-        max_force=1.0 * unit.hartree / unit.bohr,
-        max_force_key="dft_total_force",
-        final_configuration_only=True,
-    )
-    version_name = f"full_dataset_v{version}_minimal"
-    about = f"""This provides a curated hdf5 file for the tmqm openff dataset designed
-            to be compatible with modelforge. This dataset contains {n_total_records} unique records
-            for {n_total_configs} total configurations, with only the final configuration of the optimization.
-            This excludes any configurations where the magnitude of any forces on the atoms are greater than 1 hartree/bohr.
-            """
-
-    metadata = VersionMetadata(
-        version_name=version_name,
-        about=about,
-        hdf5_file_name=hdf5_file_name,
-        hdf5_file_dir=output_file_dir,
-        available_properties=available_properties,
-    )
-    # we need to compress the hdf5 file to get the checksum and length for the gzipped file
-    metadata.to_yaml(
-        file_name=f"{version_name}_metadata.yaml", file_path=output_file_dir
-    )
-    print("full dataset last configurations only")
-    print(f"Total records: {n_total_records}")
-    print(f"Total configs: {n_total_configs}")
+        metadata = VersionMetadata(
+            version_name=version_name,
+            about=about,
+            hdf5_file_name=hdf5_file_name,
+            hdf5_file_dir=output_file_dir,
+            available_properties=available_properties,
+        )
+        # we need to compress the hdf5 file to get the checksum and length for the gzipped file
+        metadata.to_yaml(
+            file_name=f"{version_name}_metadata.yaml", file_path=output_file_dir
+        )
+        print("full dataset last configurations only")
+        print(f"Total records: {n_total_records}")
+        print(f"Total configs: {n_total_configs}")
 
 
 if __name__ == "__main__":

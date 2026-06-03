@@ -429,7 +429,10 @@ class SourceDataset:
         max_force: Optional[unit.Quantity] = None,
         max_force_key: Optional[str] = "forces",
         final_configuration_only: Optional[bool] = False,
+        spin_multiplicity_to_limit: Optional[int] = None,
+        spin_multiplicity_key: Optional[str] = "spin_multiplicities_per_system",
         total_charge_to_limit: Optional[int] = None,
+        total_charge_key: Optional[str] = "total_charge",
         local_db_dir: Optional[str] = None,
         local_db_name: Optional[str] = None,
         seed: Optional[int] = 42,
@@ -444,7 +447,7 @@ class SourceDataset:
         total_records: Optional[int], default=None
             Maximum number of records to include in the subset. Cannot be used in conjunction with total_configurations.
         total_configurations: Optional[int], default=None
-            Total number of conformers to include in the subset. cannot be used in conjunction with total_records
+            Total number of conformers to include in the subset. Cannot be used in conjunction with total_records
         max_configurations_per_record: Optional[int], default=None
             Maximum number of conformers to include per record. If None, all conformers in a record will be included.
             By default, configurations to include are taken from the start of the record.

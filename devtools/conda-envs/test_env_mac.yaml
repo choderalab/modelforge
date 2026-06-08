@@ -22,20 +22,22 @@ dependencies:
   - rdkit
   - retry
   - sqlitedict
-  - jax
-  - flax
   - pydantic>=2.0
   - graphviz
   - wandb>=0.18.5
+  - msgpack-python
+  - jax
+  - flax
+  - requests
+
 
   # Testing
   - pytest>=2.1
   - pytest-cov
   - codecov
-  - requests
   - versioneer
-  - jax
-  - flax
+
+
   # pip installs
   - pip:
       #- git+https://github.com/ArnNag/sake.git@nanometer

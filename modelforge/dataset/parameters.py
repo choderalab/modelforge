@@ -30,6 +30,7 @@ class ParametersBase(BaseModel):
 
 class DataSetName(CaseInsensitiveEnum):
     QM9 = "QM9"
+    GEOM_QM9 = "GEOM_QM9"
     ANI1X = "ANI1X"
     ANI2X = "ANI2X"
     SPICE1 = "SPICE1"

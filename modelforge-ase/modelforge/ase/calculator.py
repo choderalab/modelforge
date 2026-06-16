@@ -165,6 +165,7 @@ class ModelForgeCalculator(Calculator):
         super().__init__(**kwargs)
         if device is None:
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            print(f"Running on device {device}.")
         self.potential = potential.to(device).eval()
         # set the neighborlist strategy for the potential
         self.potential.set_neighborlist_strategy(

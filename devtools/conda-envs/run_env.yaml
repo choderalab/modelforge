@@ -1,0 +1,41 @@
+name: modelforge_env
+channels:
+  - conda-forge
+  - pytorch
+  - nvidia
+dependencies:
+  # Base depends
+  - python
+  - pip
+  - h5py
+  - tqdm
+  - toml
+  - qcportal>=0.50
+  - qcelemental
+  - pytorch>=2.1
+  - loguru
+  - lightning>=2.0.8
+  - tensorboard
+  - torchvision
+  - openff-units>=0.3.1
+  - torchmetrics>=1.4
+  - pint>=0.24.1
+  - rdkit
+  - retry
+  - sqlitedict
+  - pydantic>=2
+  - graphviz
+  - wandb>=0.18.5
+  - pytorch
+  - tad-dftd3
+  - tad-mctc #==0.4.3
+  - msgpack-python
+  - jax
+  - requests
+  - ase
+  - versioneer
+  - openmm>=8.5.0
+
+  - pip:
+      - nvalchemi-toolkit-ops
+

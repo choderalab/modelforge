@@ -1,0 +1,14 @@
+[dataset]
+dataset_name = "GEOM_QM9"
+version_select = "nc_1000_v1.0"
+num_workers = 4
+pin_memory = true
+properties_of_interest = ["atomic_numbers", "positions", "total_charge", "dft_total_energy"]
+element_filter = []
+regresssion_ase = false
+
+
+[dataset.properties_assignment]
+atomic_numbers = "atomic_numbers"
+positions = "positions"
+E = "dft_total_energy"

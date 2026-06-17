@@ -122,16 +122,15 @@ class GEOMQM9Curation(DatasetCuration):
         )
 
         # load up the message pack file
-        source_unpacker = msgpack.Unpacker(open(local_file_path, "rb"))
+        with open(local_file_path, "rb") as fh:
+            source_unpacker = msgpack.Unpacker(fh)
 
-        # grab all the records so we don't have issues with records
-        # being broken up across different chunks
-        # then having to stitch them back together
-
-        all_records = {}
-        for data_chunk in source_unpacker:
-            all_records.update(data_chunk)
-
+            # grab all the records so we don't have issues with records
+            # being broken up across different chunks
+            # then having to stitch them back together
+            all_records = {}
+            for data_chunk in source_unpacker:
+                all_records.update(data_chunk)
         data_keys = list(all_records.keys())
 
         # data_keys correspond to the SMILES string representing the molecule

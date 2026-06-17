@@ -30,8 +30,7 @@ dependencies:
   - tad-mctc
 
   # OpenMM integration dependencies
-  - openmm
-  - openmm-torch
+  - openmm>=8.5.0
   - jax
   - flax
 

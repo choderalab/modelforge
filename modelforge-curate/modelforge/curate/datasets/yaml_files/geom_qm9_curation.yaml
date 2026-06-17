@@ -1,0 +1,8 @@
+dataset_name: geom_qm9
+latest: v_4
+v_4:
+  version: 4
+  dataset_download_url:  https://dataverse.harvard.edu/api/access/datafile/4327190
+  dataset_md5_checksum: aad0081ed5d9b8c93c2bd0235987573b
+  dataset_length: 1025881930
+  dataset_filename: qm9_crude.msgpack.tar.gz

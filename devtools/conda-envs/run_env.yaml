@@ -1,7 +1,8 @@
-name: test
+name: modelforge_env
 channels:
   - conda-forge
   - pytorch
+  - nvidia
 dependencies:
   # Base depends
   - python
@@ -23,7 +24,6 @@ dependencies:
   - retry
   - sqlitedict
   - pydantic>=2
-  - ray-all
   - graphviz
   - wandb>=0.18.5
   - pytorch
@@ -31,18 +31,11 @@ dependencies:
   - tad-mctc #==0.4.3
   - msgpack-python
   - jax
-  - flax
   - requests
-
-  # Testing
-  - pytest>=2.1
-  - pytest-cov
-  - codecov
+  - ase
   - versioneer
-
+  - openmm>=8.5.0
 
   - pip:
-      #- git+https://github.com/ArnNag/sake.git@nanometer
-      - pytest-xdist
-      #- nvalchemi-toolkit-ops==0.3.0
+      - nvalchemi-toolkit-ops
 

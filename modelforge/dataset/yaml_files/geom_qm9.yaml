@@ -1,0 +1,67 @@
+dataset: geom_qm9
+latest: full_dataset_v1.0
+latest_test: nc_1000_v1.0
+
+description: "The Geometric Ensemble Of Molecules (GEOM) dataset contains conformers for 133,000 species from the QM9 dataset.
+              Conformer structures were generated with CREST and GFN2-XTB.  Energies were evaluated using
+              DFT via ORCA 5.0.2  using the r2scan-3c functional and mTZVPP basis.
+
+              Citation:   Axelrod, S., Gómez-Bombarelli, R.
+                GEOM, energy-annotated molecular conformations for property prediction and molecular generation.
+                Sci Data 9, 185 (2022).
+                https://doi.org/10.1038/s41597-022-01288-4
+                
+              DOI for dataset: https://doi.org/10.7910/DVN/JNGTDF
+              Download link for qm9 subset of the GEOM dataset:  https://dataverse.harvard.edu/api/access/datafile/4327190"
+
+atomic_self_energies:
+  H: -1371.0299090833762*kilojoule_per_mole
+  C: -5550.745837803016*kilojoule_per_mole
+  N: -7650.888382254842*kilojoule_per_mole
+  O: -10665.859516299233*kilojoule_per_mole
+  F: -12438.055931502735*kilojoule_per_mole
+
+
+full_dataset_v1.0:
+  about: "This provides a curated hdf5 file for the GEOM qm9 dataset designed to be
+    compatible with modelforge. This dataset contains 133258 unique records for 1822137
+    total configurations. Note, the dataset comes from GEOM which uses gfn2-xtb and
+    CREST to generate conformers."
+  hdf5_schema: 2
+  available_properties:
+  - atomic_numbers
+  - positions
+  - total_charge
+  - dft_total_energy
+  remote_dataset:
+    doi: 10.5281/zenodo.20633996
+    url: https://zenodo.org/records/20634091/files/geom_qm9_data_v1.0.hdf5.gz
+    gz_data_file:
+      file_name: geom_qm9_data_v1.0.hdf5.gz
+      length: 906438156
+      md5: 79031ae528e08f7839feab4449fde201
+    hdf5_data_file:
+      file_name: geom_qm9_data_v1.0.hdf5
+      md5: 484280cc7a15729facef1d090b80d6fe
+
+nc_1000_v1.0:
+  about: "This provides a curated hdf5 file for a subset of the GEOM qm9 dataset designed
+    to be compatible with modelforge. This dataset contains 67 unique records for
+    1000 total configurations. Note, the dataset comes from GEOM which uses gfn2-xtb
+    and CREST to generate conformers."
+  available_properties:
+  - atomic_numbers
+  - positions
+  - total_charge
+  - dft_total_energy
+  hdf5_schema: 2
+  remote_dataset:
+    doi: 10.5281/zenodo.20633996
+    url: https://zenodo.org/records/20633997/files/geom_qm9_data_v1.0_ntc_1000.hdf5.gz
+    gz_data_file:
+      file_name: geom_qm9_data_v1.0_ntc_1000.hdf5.gz
+      length: 508291
+      md5: 1627bf69a7029b2822733152f8a3e445
+    hdf5_data_file:
+      file_name: geom_qm9_data_v1.0_ntc_1000.hdf5
+      md5: 4a6aea2f2a01bdd8507dfb4ac95c7b55

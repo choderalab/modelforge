@@ -38,8 +38,8 @@ def main():
     import os
 
     local_prefix = os.path.expanduser("~/mf_datasets")
-    output_file_dir = f"{local_prefix}/hdf5_files/geom_geom_qm9_data"
-    local_cache_dir = f"{local_prefix}/geom_geom_qm9_data"
+    output_file_dir = f"{local_prefix}/hdf5_files/geom_qm9_data"
+    local_cache_dir = f"{local_prefix}/geom_qm9_data"
 
     # We'll want to provide some simple means of versioning
     # if we make updates to either the underlying dataset, curation modules, or parameters given to the code
@@ -135,9 +135,9 @@ def main():
     print(f"Total configs: {n_total_configs}")
 
     #################
-    # 1 configuration version
+    # 10 configuration version
     #################
-    # Curates the test dataset with 1 total configuration
+    # Curates the test dataset with 10 total configuration
 
     hdf5_file_name = f"geom_qm9_data_v{version}_ntc_10.hdf5"
     n_total_records, n_total_configs = geom_qm9_data.to_hdf5(
@@ -170,7 +170,7 @@ def main():
         file_name=f"{version_name}_metadata.yaml", file_path=output_file_dir
     )
 
-    print("1 configuration subset")
+    print("10 configuration subset")
     print(f"Total records: {n_total_records}")
     print(f"Total configs: {n_total_configs}")
 

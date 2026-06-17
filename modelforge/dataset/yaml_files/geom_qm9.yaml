@@ -42,12 +42,12 @@ full_dataset_v1.0:
       md5: 79031ae528e08f7839feab4449fde201
     hdf5_data_file:
       file_name: geom_qm9_data_v1.0.hdf5
-      md5: 4a6aea2f2a01bdd8507dfb4ac95c7b55
+      md5: 484280cc7a15729facef1d090b80d6fe
 
 nc_1000_v1.0:
   about: "This provides a curated hdf5 file for a subset of the GEOM qm9 dataset designed
     to be compatible with modelforge. This dataset contains 67 unique records for
-    1000 total configurations.Note, the dataset comes from GEOM which uses gfn2-xtb
+    1000 total configurations. Note, the dataset comes from GEOM which uses gfn2-xtb
     and CREST to generate conformers."
   available_properties:
   - atomic_numbers

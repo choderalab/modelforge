@@ -11,7 +11,6 @@ import tad_dftd3 as d3
 import tad_mctc as mctc
 from openff.units import unit
 from pathlib import Path
-from torch.backends.quantized import engine
 
 from modelforge.dataset.utils import _ATOMIC_NUMBER_TO_ELEMENT
 
@@ -153,7 +152,6 @@ class AtomicSelfEnergies:
     _ase_tensor_for_indexing = None
 
     def __getitem__(self, key):
-        from modelforge.utils.units import chem_context
         from modelforge.utils.units import GlobalUnitSystem
 
         if isinstance(key, int):
@@ -183,7 +181,6 @@ class AtomicSelfEnergies:
 
     def __iter__(self) -> Iterator[Dict[str, float]]:
         """Iterate over the energies dictionary."""
-        from modelforge.utils.units import chem_context
         from modelforge.utils.units import GlobalUnitSystem
 
         for element, energy in self.energies.items():
@@ -1098,7 +1095,9 @@ class DispersionPotential(torch.nn.Module):
         """
 
         # fill the matrix with ones at interacting pairs
-        interact_fillers = torch.ones(neighbor_list.shape[1], dtype=torch.int64)
+        interact_fillers = torch.ones(
+            neighbor_list.shape[1], dtype=torch.int64, device=neighbor_list.device
+        )
 
         # construct a neighbor matrix where row & col indices indicates pairs of atoms, and interacting pairs are filled
         # with value one in the matrix

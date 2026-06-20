@@ -1,0 +1,30 @@
+# ------------------------------------------------------------ #
+[potential]
+potential_name = "DimeNet"
+# ------------------------------------------------------------ #
+[potential.core_parameter]
+number_of_radial_bessel_functions = 16
+maximum_interaction_radius = "5.0 angstrom"
+dimension_of_bilinear_layer = 16
+number_of_spherical_harmonics = 6
+envelope_exponent = 6
+number_of_blocks = 2
+predicted_properties = ["per_atom_energy", 'per_atom_charge']
+predicted_dim = [1, 1]
+[potential.core_parameter.activation_function_parameter]
+activation_function_name = "SiLU"
+[potential.core_parameter.featurization]
+properties_to_featurize = ['atomic_number']
+[potential.core_parameter.featurization.atomic_number]
+maximum_atomic_number = 101
+number_of_per_atom_features = 32
+# ------------------------------------------------------------ #
+[potential.postprocessing_parameter]
+properties_to_process = ['per_atom_energy']
+[potential.postprocessing_parameter.per_atom_energy]
+normalize = true
+from_atom_to_system_reduction = true
+keep_per_atom_property = true
+[potential.postprocessing_parameter.per_atom_charge]
+conserve = true
+conserve_strategy = "default"

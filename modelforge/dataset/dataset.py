@@ -99,15 +99,17 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
 
         # since total_charge, force, dipole_moment and spin multiplicity are optional
         # we will set them to zero if they are not present
+        print("herhehreheherheheh")
+        print(dataset[property_name.total_charge])
+
         properties["total_charge"] = (
             torch.from_numpy(dataset[property_name.total_charge])
             .to(torch.int32)
             .unsqueeze(-1)
             if property_name.total_charge is not None
-            and False  # FIXME: as soon as I figured out how to make this to a per data point property
             else torch.zeros((dataset[property_name.E].shape[0], 1), dtype=torch.int32)
         )
-
+        print(properties["total_charge"])
         properties["F"] = (
             torch.from_numpy(dataset[property_name.F])
             if property_name.F is not None
@@ -1086,7 +1088,6 @@ class HDF5Dataset:
                     data[value] = np.concatenate(per_system_data[value], axis=0)
                 for value in per_atom_data.keys():
                     data[value] = np.concatenate(per_atom_data[value], axis=0)
-
             self.hdf5data = data
 
     def _from_file_cache(self) -> None:

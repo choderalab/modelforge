@@ -99,8 +99,6 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
 
         # since total_charge, force, dipole_moment and spin multiplicity are optional
         # we will set them to zero if they are not present
-        print("herhehreheherheheh")
-        print(dataset[property_name.total_charge])
 
         properties["total_charge"] = (
             torch.from_numpy(dataset[property_name.total_charge])
@@ -109,7 +107,6 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
             if property_name.total_charge is not None
             else torch.zeros((dataset[property_name.E].shape[0], 1), dtype=torch.int32)
         )
-        print(properties["total_charge"])
         properties["F"] = (
             torch.from_numpy(dataset[property_name.F])
             if property_name.F is not None

@@ -1,0 +1,29 @@
+dataset: local_test
+latest: test_v1
+latest_test: test_v1
+
+description: "Dataset with a handle of fake entries for testing."
+
+atomic_self_energies:
+  H: -1313.4668615546 * kilojoule_per_mole
+  C: -99366.70745535441 * kilojoule_per_mole
+  N: -143309.9379722722 * kilojoule_per_mole
+  O: -197082.0671774158 * kilojoule_per_mole
+  F: -261811.54555874597 * kilojoule_per_mole
+
+test_v1:
+  about: This provides a curated hdf5 file for a series of entries.
+  available_properties:
+  - atomic_numbers
+  - positions
+  - partial_Charges
+  - energies
+  - forces
+  - total_charge
+  - dipole_moment_per_system
+  - spin_multiplicities_per_system
+  hdf5_schema: 2
+  local_dataset:
+    hdf5_data_file:
+      file_name: path_to_file/test_dataset.hdf5 # note in general this should be the full path to the file, path_to_file will be replaced in the tests
+      md5: 7727716384e035b79fd0001b11059435

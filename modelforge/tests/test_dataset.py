@@ -1661,6 +1661,184 @@ def test_element_filter_setting(prep_temp_dir, load_test_dataset, dataset_temp_d
     assert data.element_filter is None
 
 
+def test_hdf5_to_torchdataset(prep_temp_dir):
+    # This will ensure that when create the TorchDataset instance from a datafile
+    # all the tensors are correctly set.
+    # This will use a local_dataset definition
+
+    from modelforge.dataset.dataset import initialize_datamodule
+
+    from modelforge.utils.io import get_path_string
+    from modelforge.tests.data import local_dataset
+    import toml
+    import os
+    import shutil
+
+    local_cache_dir = str(prep_temp_dir) + "/test_hdf5_to_torchdataset"
+
+    # ensure the local cache directory exists
+    os.makedirs(local_cache_dir, exist_ok=True)
+
+    # for some reason resources.files(local_dataset) is returning MultiplexedPath instead of a string
+    # so we need to great _path[0] to get the actual path we can convert to string
+    path_to_local_dataset_dir = get_path_string(local_dataset)
+
+    # read the toml file
+    toml_file = f"{path_to_local_dataset_dir}/local_dataset_test.toml"
+    if not os.path.exists(toml_file):
+        raise FileNotFoundError(
+            f"Dataset toml file {toml_file} not found. Please check the dataset name."
+        )
+
+    config_dict = toml.load(toml_file)
+    version_select = config_dict["dataset"]["version_select"]
+    dataset_name = config_dict["dataset"]["dataset_name"]
+    properties_of_interest = config_dict["dataset"]["properties_of_interest"]
+    properties_assignment = config_dict["dataset"]["properties_assignment"]
+
+    shutil.copy(
+        f"{path_to_local_dataset_dir}/test_dataset.hdf5",
+        local_cache_dir,
+    )
+
+    # we will read in the yaml file and then update the path to the hdf5 file
+    # write this to the local_cache_dir
+    import yaml
+
+    yaml_file_path_in = config_dict["dataset"]["local_yaml_file"].replace(
+        "path_to_file", path_to_local_dataset_dir
+    )
+
+    yaml_file_path_out = config_dict["dataset"]["local_yaml_file"].replace(
+        "path_to_file", local_cache_dir
+    )
+
+    with open(yaml_file_path_in, "r") as yaml_file:
+        yaml_content = yaml.safe_load(yaml_file)
+
+    yaml_content[version_select]["local_dataset"]["hdf5_data_file"][
+        "file_name"
+    ] = yaml_content[version_select]["local_dataset"]["hdf5_data_file"][
+        "file_name"
+    ].replace(
+        "path_to_file", local_cache_dir
+    )
+
+    with open(yaml_file_path_out, "w") as yaml_file:
+        yaml.safe_dump(yaml_content, yaml_file)
+
+    dm = initialize_datamodule(
+        dataset_name=dataset_name,
+        splitting_strategy=FirstComeFirstServeSplittingStrategy(),
+        batch_size=1,
+        version_select=version_select,
+        properties_of_interest=properties_of_interest,
+        properties_assignment=properties_assignment,
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=local_cache_dir,
+        remove_self_energies=False,
+        local_yaml_file=yaml_file_path_out,
+    )
+    dm.prepare_data()
+
+    assert dm.torch_dataset
+    assert dm.torch_dataset.number_of_records == 3
+    assert dm.torch_dataset.length == 6
+
+    # we will directly look at the properties_of_interest dictionary
+    print(dm.torch_dataset.properties_of_interest)
+    assert torch.allclose(
+        dm.torch_dataset.properties_of_interest["atomic_numbers"],
+        torch.tensor([1, 6, 1, 6, 1, 6], dtype=torch.int32),
+    )
+    assert torch.allclose(
+        dm.torch_dataset.properties_of_interest["positions"],
+        torch.tensor(
+            [
+                [1.0000, 1.0000, 1.0000],
+                [1.1000, 1.0000, 1.0000],
+                [2.1000, 1.0000, 1.0000],
+                [2.0000, 1.0000, 1.0000],
+                [1.0000, 1.0000, 1.0000],
+                [1.1000, 1.0000, 1.0000],
+                [2.1000, 1.0000, 1.0000],
+                [2.0000, 1.0000, 1.0000],
+                [1.0000, 1.0000, 1.0000],
+                [1.1000, 1.0000, 1.0000],
+                [2.1000, 1.0000, 1.0000],
+                [2.0000, 1.0000, 1.0000],
+            ],
+            dtype=torch.float32,
+        ),
+    )
+
+    assert torch.allclose(
+        dm.torch_dataset.properties_of_interest["E"],
+        torch.tensor(
+            [[0.1000], [0.2000], [0.1000], [0.2000], [0.1000], [0.2000]],
+            dtype=torch.float64,
+        ),
+    )
+
+    assert torch.allclose(
+        dm.torch_dataset.properties_of_interest["F"],
+        torch.tensor(
+            [
+                [1, 1, 1],
+                [2, 2, 2],
+                [3, 3, 3],
+                [4, 4, 4],
+                [1, 1, 1],
+                [2, 2, 2],
+                [3, 3, 3],
+                [4, 4, 4],
+                [1, 1, 1],
+                [2, 2, 2],
+                [3, 3, 3],
+                [4, 4, 4],
+            ]
+        ),
+    )
+
+    assert torch.allclose(
+        dm.torch_dataset.properties_of_interest["total_charge"],
+        torch.tensor([[-1], [1], [-1], [1], [-1], [1]], dtype=torch.int32),
+    )
+
+    assert torch.allclose(
+        dm.torch_dataset.properties_of_interest["dipole_moment"],
+        torch.tensor(
+            [[1, 1, 1], [2, 2, 2], [1, 1, 1], [2, 2, 2], [1, 1, 1], [2, 2, 2]],
+        ),
+    )
+
+    assert torch.allclose(
+        dm.torch_dataset.properties_of_interest["S"],
+        torch.tensor([[3], [6], [3], [6], [3], [6]]),
+    )
+    assert torch.allclose(
+        dm.torch_dataset.properties_of_interest["partial_charges"],
+        torch.tensor([[1], [1], [2], [2], [1], [1], [2], [2], [1], [1], [2], [2]]),
+    )
+    assert torch.allclose(
+        dm.torch_dataset.properties_of_interest["quadrupole_moment"],
+        torch.tensor(
+            [
+                [[1, 1, 1], [1, 1, 1], [1, 1, 1]],
+                [[2, 2, 2], [2, 2, 2], [2, 2, 2]],
+                [[1, 1, 1], [1, 1, 1], [1, 1, 1]],
+                [[2, 2, 2], [2, 2, 2], [2, 2, 2]],
+                [[1, 1, 1], [1, 1, 1], [1, 1, 1]],
+                [[2, 2, 2], [2, 2, 2], [2, 2, 2]],
+            ]
+        ),
+    )
+    assert torch.allclose(
+        dm.torch_dataset.properties_of_interest["per_atom_spin_multiplicity"],
+        torch.tensor([[1], [1], [2], [2], [1], [1], [2], [2], [1], [1], [2], [2]]),
+    )
+
+
 @pytest.mark.parametrize("grouped", [True, False])
 def test_local_dataset(grouped, prep_temp_dir):
 

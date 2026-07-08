@@ -1,0 +1,22 @@
+[dataset]
+dataset_name = "local_test"
+version_select = "test_v1"
+num_workers = 4
+pin_memory = true
+properties_of_interest = ["atomic_numbers", "positions", "energies", "forces", "total_charge", "partial_charges", "dipole_moment_per_system", "spin_multiplicities_per_system", "quadrupole_moment_per_system", "spin_multiplicities_per_atom"]
+element_filter = []
+local_yaml_file = "path_to_file/local_dataset_test.yaml" #note, this should in general be the full path to the yaml file,
+                                                        #but for testing purposes on CI, we need to use a placeholder
+                                                        #i.e., path_to_file, which the test will replace.
+
+[dataset.properties_assignment]
+atomic_numbers = "atomic_numbers"
+positions = "positions"
+E = "energies"
+F = "forces"
+total_charge = "total_charge"
+spin_multiplicity = "spin_multiplicities_per_system"
+partial_charges = "partial_charges"
+dipole_moment = "dipole_moment_per_system"
+quadrupole_moment = "quadrupole_moment_per_system"
+per_atom_spin_multiplicity = "spin_multiplicities_per_atom"

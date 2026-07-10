@@ -247,6 +247,7 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
             pair_list=self._set_pairlist(idx),
             per_system_total_charge=total_charge,
             per_system_spin_state=spin_state,
+            per_atom_partial_charge=per_atom_charge,
             atomic_subsystem_indices=torch.zeros(number_of_atoms, dtype=torch.int32),
         )
         metadata = Metadata(

@@ -1746,7 +1746,6 @@ def test_hdf5_to_torchdataset(prep_temp_dir):
     assert dm.torch_dataset.length == 6
 
     # we will directly look at the properties_of_interest dictionary
-    print(dm.torch_dataset.properties_of_interest)
     assert torch.allclose(
         dm.torch_dataset.properties_of_interest["atomic_numbers"],
         torch.tensor([1, 6, 1, 6, 1, 6], dtype=torch.int32),
@@ -1779,6 +1778,13 @@ def test_hdf5_to_torchdataset(prep_temp_dir):
             dtype=torch.float64,
         ),
     )
+    assert torch.allclose(
+        dm.torch_dataset[0].metadata.per_system_energy,
+        torch.tensor(
+            [0.1000],
+            dtype=torch.float64,
+        ),
+    )
 
     assert torch.allclose(
         dm.torch_dataset.properties_of_interest["F"],
@@ -1799,10 +1805,18 @@ def test_hdf5_to_torchdataset(prep_temp_dir):
             ]
         ),
     )
+    assert torch.allclose(
+        dm.torch_dataset[0].metadata.per_atom_force,
+        torch.tensor([[1, 1, 1], [2, 2, 2]]),
+    )
 
     assert torch.allclose(
         dm.torch_dataset.properties_of_interest["total_charge"],
         torch.tensor([[-1], [1], [-1], [1], [-1], [1]], dtype=torch.int32),
+    )
+    assert torch.allclose(
+        dm.torch_dataset[0].nnp_input.per_system_total_charge,
+        torch.tensor([[-1]], dtype=torch.int32),
     )
 
     assert torch.allclose(
@@ -1811,14 +1825,27 @@ def test_hdf5_to_torchdataset(prep_temp_dir):
             [[1, 1, 1], [2, 2, 2], [1, 1, 1], [2, 2, 2], [1, 1, 1], [2, 2, 2]],
         ),
     )
+    assert torch.allclose(
+        dm.torch_dataset[0].metadata.per_system_dipole_moment,
+        torch.tensor([[1, 1, 1]]),
+    )
 
     assert torch.allclose(
         dm.torch_dataset.properties_of_interest["S"],
         torch.tensor([[3], [6], [3], [6], [3], [6]]),
     )
+
+    assert torch.allclose(
+        dm.torch_dataset[0].nnp_input.per_system_spin_state, torch.tensor([[3]])
+    )
+
     assert torch.allclose(
         dm.torch_dataset.properties_of_interest["partial_charges"],
         torch.tensor([[1], [1], [2], [2], [1], [1], [2], [2], [1], [1], [2], [2]]),
+    )
+    assert torch.allclose(
+        dm.torch_dataset[0].metadata.per_atom_charge,
+        torch.tensor([[1], [1]], dtype=torch.long),
     )
     assert torch.allclose(
         dm.torch_dataset.properties_of_interest["quadrupole_moment"],
@@ -1834,8 +1861,17 @@ def test_hdf5_to_torchdataset(prep_temp_dir):
         ),
     )
     assert torch.allclose(
+        dm.torch_dataset[0].metadata.per_system_quadrupole_moment,
+        torch.tensor([[1, 1, 1], [1, 1, 1], [1, 1, 1]]),
+    )
+
+    assert torch.allclose(
         dm.torch_dataset.properties_of_interest["per_atom_spin_multiplicity"],
         torch.tensor([[1], [1], [2], [2], [1], [1], [2], [2], [1], [1], [2], [2]]),
+    )
+    assert torch.allclose(
+        dm.torch_dataset[0].metadata.per_atom_spin_multiplicity,
+        torch.tensor([[1], [1]]),
     )
 
 

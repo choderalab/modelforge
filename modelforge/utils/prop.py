@@ -139,6 +139,8 @@ class Metadata:
         Total number of atoms.
     per_atom_force : torch.Tensor, optional
         Forces for each atom.
+    per_atom_charge : torch.Tensor, optional
+        Charges for each atom.
     per_system_dipole_moment : torch.Tensor, optional
         Dipole moments for each system.
     per_atom_spin_multiplicity : torch.Tensor, optional

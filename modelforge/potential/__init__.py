@@ -14,6 +14,7 @@ from .parameters import (
     SAKEParameters,
     SchNetParameters,
     TensorNetParameters,
+    MultipoleNetParameters,
 )
 from .processing import FromAtomToMoleculeReduction
 from .representation import (
@@ -31,6 +32,7 @@ from .schnet import SchNetCore
 from .tensornet import TensorNetCore
 from .aimnet2 import AimNet2Core
 from .ani import ANI2xCore
+from .multipolenet import MultipoleNetCore
 
 
 class _Implemented_NNP_Parameters(Enum):
@@ -41,6 +43,7 @@ class _Implemented_NNP_Parameters(Enum):
     PHYSNET_PARAMETERS = PhysNetParameters
     SAKE_PARAMETERS = SAKEParameters
     AIMNET2_PARAMETERS = AimNet2Parameters
+    MULTIPOLENET_PARAMETERS = MultipoleNetParameters
 
     @classmethod
     def get_neural_network_parameter_class(cls, neural_network_name: str):
@@ -63,6 +66,7 @@ class _Implemented_NNPs(Enum):
     PAINN = PaiNNCore
     SAKE = SAKECore
     AIMNET2 = AimNet2Core
+    MULTIPOLENET = MultipoleNetCore
 
     @classmethod
     def get_neural_network_class(cls, neural_network_name: str):

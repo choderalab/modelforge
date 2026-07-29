@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 from loguru import logger as log
 
+from modelforge.potential.parameters import ActivationFunctionConfig
 from modelforge.utils.prop import NNPInput
 from modelforge.potential.neighbors import PairlistData
 
@@ -21,6 +22,16 @@ from e3nn.math import soft_one_hot_linspace
 class MultipoleNetCore(nn.Module):
     def __init__(
         self,
+        number_of_radial_basis_functions: int,
+        number_of_interaction_modules: int,
+        number_of_monopole_dimensions: int,
+        number_of_dipole_dimensions: int,
+        number_of_quadrupole_dimensions: int,
+        maximum_angular_momentum: int,
+        maximum_interaction_radius: float,
+        number_of_radial_basis_module_dimensions: int,
+        activation_function_parameter: ActivationFunctionConfig,
+        readout_hidden_features: int = 64,
     ) -> None:
         """
         Core MultipoleNet architecture for predicting equivariant per-atom
@@ -32,17 +43,61 @@ class MultipoleNetCore(nn.Module):
 
         log.debug("Initializing the MultipoleNet architecture.")
 
+        self.number_of_radial_basis_functions = number_of_radial_basis_functions
+        self.number_of_interaction_modules = number_of_interaction_modules
+        self.number_of_monopole_dimensions = number_of_monopole_dimensions
+        self.number_of_dipole_dimensions = number_of_dipole_dimensions
+        self.number_of_quadrupole_dimensions = number_of_quadrupole_dimensions
+        self.maximum_angular_momentum = maximum_angular_momentum
+        self.maximum_interaction_radius = maximum_interaction_radius
+        self.number_of_radial_basis_module_dimensions = number_of_radial_basis_module_dimensions
+        self.activation_function = getattr(
+            nn,
+            activation_function_parameter["activation_function"],
+        )
+        self.readout_hidden_features = readout_hidden_features
+
+        self.representation_module = MultipoleRepresentation(
+            self.number_of_interaction_modules,
+            self.number_of_radial_basis_functions,
+            self.number_of_dipole_dimensions,
+            self.number_of_quadrupole_dimensions,
+            self.maximum_angular_momentum,
+            self.maximum_interaction_radius,
+            self.number_of_radial_basis_functions,
+            self.number_of_radial_basis_module_dimensions,
+            self.activation_function,
+        )
+
     def compute_properties(
-        self, data: NNPInput, pairlist_output: PairlistData
+        self,
+        data: NNPInput,
+        pairlist_output: PairlistData
     ) -> Dict[str, torch.Tensor]:
 
+        # systems are represented in multipoles
+        charge_multipole, spin_multipole = self.representation_module(
+            data,
+            pairlist_output,
+        )
+
+        # create atom invariants
+        invariant_charge_multipole = self._multipole_invariants(charge_multipole)
+        invariant_spin_multipole = self._multipole_invariants(spin_multipole)
+        per_atom_scalar_representation = torch.cat(
+            [self.invariants(invariant_charge_multipole),
+            self.invariants(invariant_spin_multipole)],
+            dim=-1,
+        )  # Shape: (number_of_atoms, 6)
+
         return {
-            "per_atom_charge_multipole": None,
-            "per_atom_spin_multipole": None,
-            "per_atom_scalar_representation": None,
+            "per_atom_charge_multipole": charge_multipole,
+            "per_atom_spin_multipole": spin_multipole,
+            "per_atom_scalar_representation": per_atom_scalar_representation,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
             "atomic_numbers": data.atomic_numbers,
-            "per_atom_charge": None,
+            "per_system_charge": charge_multipole[:, 0].sum(),
+            "per_system_spin": spin_multipole[:, 0].sum(),
         }
 
     @staticmethod
@@ -249,11 +304,11 @@ class MultipoleInteractionModule(nn.Module):
 class MultipoleRepresentation(nn.Module):
     def __init__(
         self,
-        number_of_hidden_layers: int,
+        number_of_interaction_modules: int,
         number_of_monopole_dimensions: int,
         number_of_dipole_dimensions: int,
         number_of_quadrupole_dimensions: int,
-        maximum_l_of_spherical_harmonics: int,
+        maximum_angular_momentum: int,
         maximum_interaction_radius: float,
         number_of_radial_basis_functions: int,
         number_of_radial_basis_module_dimensions: int,
@@ -267,12 +322,12 @@ class MultipoleRepresentation(nn.Module):
         number_of_monopole_dimensions
         number_of_dipole_dimensions
         number_of_quadrupole_dimensions
-        maximum_l_of_spherical_harmonics
+        maximum_angular_momentum
         maximum_interaction_radius
         activation_function
         """
         super().__init__()
-        self.number_of_interaction_layers = number_of_hidden_layers
+        self.number_of_interaction_modules = number_of_interaction_modules
         self.number_of_monopole_dimensions = number_of_monopole_dimensions
         self.number_of_dipole_dimensions = number_of_dipole_dimensions
         self.number_of_quadrupole_dimensions = number_of_quadrupole_dimensions
@@ -281,7 +336,7 @@ class MultipoleRepresentation(nn.Module):
         self.number_of_radial_basis_module_dimensions = number_of_radial_basis_module_dimensions
         self.activation_function = activation_function
 
-        self.irreps_spherical_harmonics = o3.Irreps.spherical_harmonics(maximum_l_of_spherical_harmonics)
+        self.irreps_spherical_harmonics = o3.Irreps.spherical_harmonics(maximum_angular_momentum)
         self.irreps_hidden = o3.Irreps(
             f"{self.number_of_monopole_dimensions}x0e"
             f"+{self.number_of_dipole_dimensions}x1o"
@@ -303,7 +358,7 @@ class MultipoleRepresentation(nn.Module):
                 self.activation_function,
                 self.maximum_interaction_radius,
             )
-            for i in range(self.number_of_interaction_layers)])
+            for i in range(self.number_of_interaction_modules)])
 
         irreps_out = o3.Irreps("1x0e + 1x1o + 1x2e")  # monopole, dipole, quadrupole
         self.head_charge = o3.Linear(self.irreps_hidden, irreps_out)
@@ -334,16 +389,16 @@ class MultipoleRepresentation(nn.Module):
         spin_multipole = self.head_spin(x)
 
         # force the sum of partial charges and spin on the monopole dimensions
-        charge_mult = self._project_monopole(
+        charge_multipole = self._project_monopole(
             charge_multipole,
             data.per_system_total_charge,
         )
-        spin_mult = self._project_monopole(
+        spin_multipole = self._project_monopole(
             spin_multipole,
             data.per_system_spin_state - 1,
         )
 
-        return charge_mult, spin_mult
+        return charge_multipole, spin_multipole
 
     @staticmethod
     def _project_monopole(

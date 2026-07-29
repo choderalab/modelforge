@@ -58,13 +58,18 @@ class MultipoleNetCore(nn.Module):
 
         self.representation_module = MultipoleRepresentation(
             self.number_of_interaction_modules,
-            self.number_of_radial_basis_functions,
+            self.number_of_monopole_dimensions,
             self.number_of_dipole_dimensions,
             self.number_of_quadrupole_dimensions,
             self.maximum_angular_momentum,
             self.maximum_interaction_radius,
             self.number_of_radial_basis_functions,
             self.number_of_radial_basis_module_dimensions,
+            self.activation_function,
+        )
+
+        self.readout_module = MultipoleReadout(
+            self.readout_hidden_features,
             self.activation_function,
         )
 
@@ -84,10 +89,12 @@ class MultipoleNetCore(nn.Module):
         invariant_charge_multipole = self._multipole_invariants(charge_multipole)
         invariant_spin_multipole = self._multipole_invariants(spin_multipole)
         per_atom_scalar_representation = torch.cat(
-            [self.invariants(invariant_charge_multipole),
-            self.invariants(invariant_spin_multipole)],
+            [invariant_charge_multipole,
+            invariant_spin_multipole],
             dim=-1,
         )  # Shape: (number_of_atoms, 6)
+
+        number_of_systems = int(data.atomic_subsystem_indices.max()) + 1
 
         return {
             "per_atom_charge_multipole": charge_multipole,
@@ -95,8 +102,25 @@ class MultipoleNetCore(nn.Module):
             "per_atom_scalar_representation": per_atom_scalar_representation,
             "atomic_subsystem_indices": data.atomic_subsystem_indices,
             "atomic_numbers": data.atomic_numbers,
-            "per_system_charge": charge_multipole[:, 0].sum(),
-            "per_system_spin": spin_multipole[:, 0].sum(),
+            "per_system_charge": torch.zeros(
+                number_of_systems,
+                dtype=charge_multipole.dtype,
+                device=charge_multipole.device,
+            ).index_add_(
+                0,
+                data.atomic_subsystem_indices,
+                charge_multipole[:, 0],
+            ),
+            "per_system_spin": torch.zeros(
+                number_of_systems,
+                dtype=spin_multipole.dtype,
+                device=spin_multipole.device,
+            ).index_add_(
+                0,
+                data.atomic_subsystem_indices,
+                spin_multipole[:, 0],
+            ),
+            "per_atom_charge": charge_multipole[:, 0].unsqueeze(-1),
         }
 
     @staticmethod
@@ -108,7 +132,7 @@ class MultipoleNetCore(nn.Module):
     ):
         partial_charge = charge_multipole[:, 0]
         dipole = charge_multipole[:, 1:4]
-        number_of_systems = positions.shape[0]
+        number_of_systems = int(atomic_subsystem_indices.max()) + 1
 
         # default origin is (0, 0, 0)
         if per_system_dipole_origin is not None:
@@ -176,7 +200,7 @@ class MultipoleNetCore(nn.Module):
         atom_invariants = results["per_atom_scalar_representation"]
 
         # Scalar readout: invariants -> per-atom energy / charge.
-        readout = self.readout_module(atom_invariants)
+        readout = self.readout_module(atom_invariants,)
         results.update(readout)
 
         # Calculate dipole moments from the latent charge multipole
@@ -271,11 +295,11 @@ class MultipoleInteractionModule(nn.Module):
         atomic_number_scale = (
                 atomic_numbers[pair_indices[0]].float() * atomic_numbers[pair_indices[1]].float()
         ).sqrt()
-        d_ij_scaled = d_ij / atomic_number_scale.unsqueeze(-1)
+        d_ij_scaled = d_ij.squeeze(-1) / atomic_number_scale
         radial_basis_function_vector = soft_one_hot_linspace(
             d_ij_scaled,
             0.0,
-            self.maximum_interaction_radius / 6,  # the atomic number of C
+            self.maximum_interaction_radius,
             self.number_of_radial_basis_functions,
             basis='gaussian',
             cutoff=True,
@@ -285,11 +309,12 @@ class MultipoleInteractionModule(nn.Module):
         w = self.radial_basis_module(radial_basis_function_vector)
         message = self.tensor_product(
             x[pair_indices[0]],
-            spherical_harmonics_vector[pair_indices[0]],
+            spherical_harmonics_vector,
             w,
         )
+
         agg = torch.zeros(
-            d_ij.shape[0],
+            x.shape[0],
             message.shape[1],
             dtype=message.dtype,
             device=message.device,
@@ -372,8 +397,8 @@ class MultipoleRepresentation(nn.Module):
     ):
         x = self.conditioning(
             torch.stack([
-                (data.per_system_spin_state - 1).to(data.positions.dtype).unsqueeze(-1),
-                data.per_system_total_charge.to(data.positions.dtype),
+                (data.per_system_spin_state - 1).to(data.positions.dtype).reshape(-1),
+                data.per_system_total_charge.to(data.positions.dtype).reshape(-1),
             ], dim=-1)[data.atomic_subsystem_indices]
         )
 
@@ -393,10 +418,12 @@ class MultipoleRepresentation(nn.Module):
         charge_multipole = self._project_monopole(
             charge_multipole,
             data.per_system_total_charge,
+            data.atomic_subsystem_indices,
         )
         spin_multipole = self._project_monopole(
             spin_multipole,
             data.per_system_spin_state - 1,
+            data.atomic_subsystem_indices,
         )
 
         return charge_multipole, spin_multipole
@@ -405,12 +432,38 @@ class MultipoleRepresentation(nn.Module):
     def _project_monopole(
         multipole: torch.Tensor,
         monopole_target: torch.Tensor,
+        atomic_subsystem_indices: torch.Tensor,
     ):
         """"""
-        number_of_atoms = multipole.shape[0]
-        out = multipole.clone()
-        out[:, 0] = multipole[:, 0] - multipole[:, 0].mean() + monopole_target / number_of_atoms
-        return out
+        number_of_systems = int(atomic_subsystem_indices.max()) + 1
+        output = multipole.clone()
+        monopole = multipole[:, 0]
+        monopole_target = monopole_target.reshape(-1)
+
+        per_system_number_of_atoms = torch.zeros(
+            number_of_systems,
+            dtype=monopole.dtype,
+            device=monopole.device,
+        ).index_add_(
+            0,
+            atomic_subsystem_indices,
+            torch.ones_like(monopole),
+        )
+
+        per_system_monopole_sum = torch.zeros(
+            number_of_systems,
+            dtype=monopole.dtype,
+            device=monopole.device,
+        ).index_add_(
+        0,
+            atomic_subsystem_indices,
+            monopole,
+        )
+        per_system_mean = (per_system_monopole_sum / per_system_number_of_atoms)[atomic_subsystem_indices]
+        per_atom_target = (monopole_target.to(monopole.dtype) / per_system_number_of_atoms)[atomic_subsystem_indices]
+        output[:, 0] = monopole - per_system_mean + per_atom_target
+
+        return output
 
 
 class MultipoleReadout(nn.Module):
@@ -445,7 +498,10 @@ class MultipoleReadout(nn.Module):
             nn.Linear(number_of_hidden_features, 1),  # per-atom energy
         )
 
-    def forward(self, atom_invariants: torch.Tensor) -> Dict[str, torch.Tensor]:
+    def forward(
+            self,
+            atom_invariants: torch.Tensor,
+    ) -> Dict[str, torch.Tensor]:
         """
         Forward pass of the readout.
 
@@ -462,7 +518,6 @@ class MultipoleReadout(nn.Module):
         """
         results = {
             "per_atom_energy": self.energy_readout(atom_invariants),
-            "per_atom_charge": atom_invariants[:, 0]
         }
 
         return results

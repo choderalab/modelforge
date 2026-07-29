@@ -430,3 +430,30 @@ class SAKEParameters(ParametersBase):
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
     potential_seed: Optional[int] = None
+
+class MultipoleNetParameters(ParametersBase):
+    class CoreParameter(CoreParameterBase):
+        number_of_radial_basis_functions: int
+        number_of_interaction_modules: int
+        number_of_monopole_dimensions: int
+        number_of_dipole_dimensions: int
+        number_of_quadrupole_dimensions: int
+        maximum_angular_momentum: int
+
+        # note maximum interaction radius should be passed as a string with units
+        # or unit.Quantity; it will be converted to float in appropriate unit system
+        maximum_interaction_radius: float
+
+        number_of_radial_basis_module_dimensions: int
+        activation_function_parameter: ActivationFunctionConfig
+        readout_hidden_features: int = 64
+
+        converted_units = field_validator("maximum_interaction_radius", mode="before")(
+            _convert_str_or_unit_to_unit_length
+        )
+
+    potential_name: str = "MultipoleNet"
+    only_unique_pairs: bool = False
+    core_parameter: CoreParameter
+    postprocessing_parameter: PostProcessingParameter
+    potential_seed: Optional[int] = None

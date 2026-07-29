@@ -447,6 +447,9 @@ class MultipoleNetParameters(ParametersBase):
         activation_function_parameter: ActivationFunctionConfig
         readout_hidden_features: int
 
+        predicted_properties: List[str]
+        predicted_dim: List[int]
+
         converted_units = field_validator("maximum_interaction_radius", mode="before")(
             _convert_str_or_unit_to_unit_length
         )

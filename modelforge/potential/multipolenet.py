@@ -4,7 +4,7 @@ charge and spin multipoles (monopole, dipole, quadrupole) as a latent
 representation, then reads out energy from the multipole latent representation.
 """
 
-from typing import Dict, List, Optional, Callable, Union
+from typing import Dict, List, Optional, Union
 
 import torch
 import torch.nn as nn
@@ -32,6 +32,8 @@ class MultipoleNetCore(nn.Module):
         activation_function_parameter: ActivationFunctionConfig,
         readout_hidden_features: int = 64,
         maximum_angular_momentum: int = 2,  # Careful! Don't change this value.
+        predicted_properties: List[str] = None,
+        predicted_dim: List[int] = None,
     ) -> None:
         """
         Core MultipoleNet architecture for predicting equivariant per-atom
@@ -51,10 +53,7 @@ class MultipoleNetCore(nn.Module):
         self.maximum_angular_momentum = maximum_angular_momentum
         self.maximum_interaction_radius = maximum_interaction_radius
         self.number_of_radial_basis_module_dimensions = number_of_radial_basis_module_dimensions
-        self.activation_function = getattr(
-            nn,
-            activation_function_parameter["activation_function"],
-        )
+        self.activation_function = activation_function_parameter["activation_function"]
         self.readout_hidden_features = readout_hidden_features
 
         self.representation_module = MultipoleRepresentation(
@@ -198,7 +197,7 @@ class MultipoleInteractionModule(nn.Module):
         irreps_spherical_harmonics: Union[o3._irreps.Irreps, str],
         number_of_radial_basis_functions: int,
         number_of_radial_basis_module_dimensions: int,
-        activation_function: Callable[[torch.Tensor], torch.Tensor],
+        activation_function: nn.Module,
         maximum_interaction_radius: float,
     ):
         """
@@ -212,7 +211,7 @@ class MultipoleInteractionModule(nn.Module):
 
         self.irreps_in = o3.Irreps(irreps_in)
         self.irreps_out = o3.Irreps(irreps_out)
-        self.irreps_sh = o3.Irreps(irreps_spherical_harmonics)
+        self.irreps_spherical_harmonics = o3.Irreps(irreps_spherical_harmonics)
         self.number_of_radial_basis_functions = number_of_radial_basis_functions
         self.number_of_radial_basis_module_dimensions = number_of_radial_basis_module_dimensions
         self.activation_function = activation_function
@@ -227,8 +226,10 @@ class MultipoleInteractionModule(nn.Module):
         irreps_gates = o3.Irreps(f"{n_gated}x0e") if n_gated > 0 else o3.Irreps("")
 
         self.gate = Gate(
-            irreps_scalars, [self.activation_function] if len(irreps_scalars) > 0 else [],
-            irreps_gates, [torch.sigmoid] if len(irreps_gates) > 0 else [],  # bounded activation, fixed
+            irreps_scalars,
+            [self.activation_function],
+            irreps_gates,
+            [torch.sigmoid],  # bounded activation, fixed
             irreps_gated,
         )
 
@@ -254,14 +255,14 @@ class MultipoleInteractionModule(nn.Module):
         self,
         x,
         pair_indices,
-        d_ij: torch.Tensor,
         r_ij: torch.Tensor,
+        d_ij: torch.Tensor,
         atomic_numbers,
     ):
         # angular
         spherical_harmonics_vector = o3.spherical_harmonics(
-            self.irreps_sh,
-            d_ij,
+            self.irreps_spherical_harmonics,
+            r_ij,
             normalize=True,
             normalization='component',
         )
@@ -270,9 +271,9 @@ class MultipoleInteractionModule(nn.Module):
         atomic_number_scale = (
                 atomic_numbers[pair_indices[0]].float() * atomic_numbers[pair_indices[1]].float()
         ).sqrt()
-        r_ij_scaled = r_ij / atomic_number_scale
+        d_ij_scaled = d_ij / atomic_number_scale.unsqueeze(-1)
         radial_basis_function_vector = soft_one_hot_linspace(
-            r_ij_scaled,
+            d_ij_scaled,
             0.0,
             self.maximum_interaction_radius / 6,  # the atomic number of C
             self.number_of_radial_basis_functions,
@@ -312,7 +313,7 @@ class MultipoleRepresentation(nn.Module):
         maximum_interaction_radius: float,
         number_of_radial_basis_functions: int,
         number_of_radial_basis_module_dimensions: int,
-        activation_function: Callable[[torch.Tensor], torch.Tensor],
+        activation_function: nn.Module,
     ):
         """
 
@@ -371,7 +372,7 @@ class MultipoleRepresentation(nn.Module):
     ):
         x = self.conditioning(
             torch.stack([
-                (data.per_system_spin_state - 1).to(data.positions.dtype),
+                (data.per_system_spin_state - 1).to(data.positions.dtype).unsqueeze(-1),
                 data.per_system_total_charge.to(data.positions.dtype),
             ], dim=-1)[data.atomic_subsystem_indices]
         )
@@ -380,9 +381,9 @@ class MultipoleRepresentation(nn.Module):
             x = layer(
                 x,
                 pairlist_output.pair_indices,
-                pairlist_output.d_ij,
                 pairlist_output.r_ij,
-                data.atomic_subsystem_indices,
+                pairlist_output.d_ij,
+                data.atomic_numbers,
             )
 
         charge_multipole = self.head_charge(x)

@@ -4,7 +4,7 @@ charge and spin multipoles (monopole, dipole, quadrupole) as a latent
 representation, then reads out energy from the multipole latent representation.
 """
 
-from typing import Dict, List, Optional, Callable
+from typing import Dict, List, Optional, Callable, Union
 
 import torch
 import torch.nn as nn
@@ -27,11 +27,11 @@ class MultipoleNetCore(nn.Module):
         number_of_monopole_dimensions: int,
         number_of_dipole_dimensions: int,
         number_of_quadrupole_dimensions: int,
-        maximum_angular_momentum: int,
         maximum_interaction_radius: float,
         number_of_radial_basis_module_dimensions: int,
         activation_function_parameter: ActivationFunctionConfig,
         readout_hidden_features: int = 64,
+        maximum_angular_momentum: int = 2,  # Careful! Don't change this value.
     ) -> None:
         """
         Core MultipoleNet architecture for predicting equivariant per-atom
@@ -193,9 +193,9 @@ class MultipoleNetCore(nn.Module):
 class MultipoleInteractionModule(nn.Module):
     def __init__(
         self,
-        irreps_in: Optional[o3._irreps.Irreps, str],
-        irreps_out: Optional[o3._irreps.Irreps, str],
-        irreps_spherical_harmonics: Optional[o3._irreps.Irreps, str],
+        irreps_in: Union[o3._irreps.Irreps, str],
+        irreps_out: Union[o3._irreps.Irreps, str],
+        irreps_spherical_harmonics: Union[o3._irreps.Irreps, str],
         number_of_radial_basis_functions: int,
         number_of_radial_basis_module_dimensions: int,
         activation_function: Callable[[torch.Tensor], torch.Tensor],

@@ -1,0 +1,24 @@
+# ------------------------------------------------------------ #
+[potential]
+potential_name = "MultipoleNet"
+
+[potential.core_parameter]
+number_of_radial_basis_functions = 16
+number_of_interaction_modules = 3
+number_of_monopole_dimensions = 64
+number_of_dipole_dimensions = 16
+number_of_quadrupole_dimensions = 8
+maximum_interaction_radius = "5.0 angstrom"
+number_of_radial_basis_module_dimensions = 8
+readout_hidden_fieatures = 64
+
+[potential.core_parameter.activation_function_parameter]
+activation_function_name = "SiLU"
+
+
+[potential.postprocessing_parameter]
+properties_to_process = ['per_atom_energy']
+[potential.postprocessing_parameter.per_atom_energy]
+normalize = true
+keep_per_atom_property = true
+

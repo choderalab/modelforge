@@ -35,7 +35,46 @@ class MultipoleNetCore(nn.Module):
     def compute_properties(
         self, data: NNPInput, pairlist_output: PairlistData
     ) -> Dict[str, torch.Tensor]:
-        pass
+
+        return {
+            "per_atom_charge_multipole": None,
+            "per_atom_spin_multipole": None,
+            "per_atom_scalar_representation": None,
+            "atomic_subsystem_indices": data.atomic_subsystem_indices,
+            "atomic_numbers": data.atomic_numbers,
+            "per_atom_charge": None,
+        }
+
+    @staticmethod
+    def calculate_per_system_dipole_moment(
+        charge_multipole: torch.Tensor,
+        positions: torch.Tensor,
+        atomic_subsystem_indices: torch.Tensor,
+        per_system_dipole_origin: torch.Tensor = None,
+    ):
+        partial_charge = charge_multipole[:, 0]
+        dipole = charge_multipole[:, 1:4]
+        number_of_systems = positions.shape[0]
+
+        # default origin is (0, 0, 0)
+        if per_system_dipole_origin is not None:
+            positions = positions - per_system_dipole_origin
+
+        per_atom_dipole_moment = partial_charge.unsqueeze(-1) * positions + dipole
+        per_system_dipole_moment = torch.zeros(
+            number_of_systems,
+            3,
+            dtype=per_atom_dipole_moment.dtype,
+            device=per_atom_dipole_moment.device
+        )
+        per_system_dipole_moment = per_system_dipole_moment.index_add_(
+            0,
+            atomic_subsystem_indices,
+            per_atom_dipole_moment,
+        )
+
+        return per_system_dipole_moment  # Shape: (number_of_systems, 3)
+
 
     @staticmethod
     def _multipole_invariants(multipole: torch.Tensor) -> torch.Tensor:
@@ -85,6 +124,13 @@ class MultipoleNetCore(nn.Module):
         # Scalar readout: invariants -> per-atom energy / charge.
         readout = self.readout_module(atom_invariants)
         results.update(readout)
+
+        # Calculate dipole moments from the latent charge multipole
+        results["per_system_dipole_moment"] = self.calculate_per_system_dipole_moment(
+            results["per_atom_charge_multipole"],
+            data.positions,
+            results["atomic_subsystem_indices"],
+        )
 
         return results
 
@@ -190,6 +236,7 @@ class MultipoleInteractionModule(nn.Module):
             d_ij.shape[0],
             message.shape[1],
             dtype=message.dtype,
+            device=message.device,
         ).index_add_(
             0,
             pair_indices[1],

@@ -138,7 +138,7 @@ class MultipoleNetCore(nn.Module):
         if per_system_dipole_origin is not None:
             positions = positions - per_system_dipole_origin
 
-        per_atom_dipole_moment = partial_charge.unsqueeze(-1) * positions + dipole
+        per_atom_dipole_moment = partial_charge.unsqueeze(-1) * positions + dipole  # TODO Check math
         per_system_dipole_moment = torch.zeros(
             number_of_systems,
             3,

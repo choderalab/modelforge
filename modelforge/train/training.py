@@ -359,8 +359,13 @@ class CalculateProperties(torch.nn.Module):
             A dictionary containing the true and predicted charges and dipole moments.
         """
 
-        # Predict the dipole moment
-        per_system_dipole_moment = self._predict_dipole_moment(model_prediction, batch)
+        # TODO Double check in MultiPoleNet test and see if it is the one calculated from the network
+
+        if model_prediction["per_system_dipole_moment"] is None:
+            # Predict the dipole moment
+            per_system_dipole_moment = self._predict_dipole_moment(model_prediction, batch)
+        else:
+            per_system_dipole_moment = model_prediction["per_system_dipole_moment"]
 
         return {
             "per_system_dipole_moment_predict": per_system_dipole_moment,

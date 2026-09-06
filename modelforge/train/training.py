@@ -450,7 +450,7 @@ class CalculateProperties(torch.nn.Module):
             The predicted quadrupole moment for each system.
         """
 
-        """
+        r"""
         quadrupole moment Q is a 3x3 tensor, defined as:
         Q_{ij} = \sum_n q_n (3 r_{n,i} * r_{n,j} - r_n^2 \delta_{ij})
         where:

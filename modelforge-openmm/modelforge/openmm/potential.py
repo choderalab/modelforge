@@ -111,7 +111,7 @@ def generate_compute(
     ----------
     potential : modelforge potential instance
         Any ModelForge potential object that implements ``forward(nnp_input)``.
-        The model is moved to ``device`` and put in eval mode in ``__init__``.
+        The model is moved to ``device`` and put in eval_sr mode in ``__init__``.
 
     atomic_numbers : list[int]
         Atomic numbers for every particle in the System, in the same order as

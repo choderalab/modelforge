@@ -740,7 +740,7 @@ class HDF5Dataset:
                 calculated_checksum = calculate_md5_checksum(file_name, file_path)
                 if calculated_checksum != checksum:
                     log.warning(
-                        f"Checksum mismatch for file {file_path}/{file_name}. Expected {checksum}, found {calculated_checksum}."
+                        f"Checksum mismatch for file {full_file_path}. Expected {checksum}, found {calculated_checksum}."
                     )
                     return False
                 return True

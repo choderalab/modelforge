@@ -834,7 +834,6 @@ def setup_potential(
             use_electrostatic_cutoff=use_electrostatic_cutoff,
             electrostatic_only_unique_pairs=electrostatic_only_unique_pairs,
         )
-        log.debug(f"yo yo elecrostatic cutoff: {electrostatic_cutoff}")
     else:
         from modelforge.potential.neighbors import OrthogonalDisplacementFunction
 
@@ -941,7 +940,7 @@ class NeuralNetworkPotentialFactory:
         # Disable gradients for model parameters
         for param in potential.parameters():
             param.requires_grad = False
-        # Set model to eval
+        # Set model to eval_sr
         potential.eval()
 
         if simulation_environment == "JAX":
@@ -1452,6 +1451,7 @@ def load_inference_model_from_checkpoint(
     old_config_only_local_cutoff: Optional[bool] = False,
     only_unique_pairs: Optional[bool] = None,
     jit: bool = True,
+    use_training_mode_neighborlist: Optional[bool] = False,
 ) -> Union[Potential, JAXModel]:
     """
     Creates an inference model from a checkpoint file.
@@ -1490,6 +1490,7 @@ def load_inference_model_from_checkpoint(
         dataset_statistic=dataset_statistic,
         potential_seed=potential_seed,
         jit=jit,
+        use_training_mode_neighborlist=use_training_mode_neighborlist,
     )
 
     if only_unique_pairs is not None:

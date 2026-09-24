@@ -74,6 +74,35 @@ full_dataset_v1.1:
       file_name: spice_2_dataset_v1.1.hdf5
       md5: e2628a66e1f8f428151bcdbbfb1c41a7
 
+full_dataset_neutral_v1.1:
+  about: This provides a curated hdf5 file for the SPICE2 dataset designed to be compatible
+    with modelforge. This dataset contains 93401 unique records for 1834949 total
+    configurations and only considers neutral systems.
+  available_properties:
+  - atomic_numbers
+  - positions
+  - total_charge
+  - dft_total_energy
+  - dft_total_force
+  - formation_energy
+  - mbis_charges
+  - mbis_dipoles
+  - mbis_quadrupoles
+  - mbis_octupoles
+  - scf_dipole
+  - scf_quadrupole
+  hdf5_schema: 2
+  remote_dataset:
+    doi: 10.5281/zenodo.22904937
+    gz_data_file:
+      file_name: spice_2_dataset_neutral_v1.1.hdf5.gz
+      length: 23340814213
+      md5: 35a3bc3020d0aa2d1a5f46e5f3ae89f7
+    hdf5_data_file:
+      file_name: spice_2_dataset_neutral_v1.1.hdf5
+      md5: a3489d5237a078cf551c8afba157f4cc
+    url: https://zenodo.org/records/22904937/files/spice_2_dataset_neutral_v1.1.hdf5.gz
+
 nc_1000_v1.1:
   about: This provides a curated hdf5 file for a subset of the SPICE2 dataset designed
     to be compatible with modelforge. This dataset contains 403 unique records for

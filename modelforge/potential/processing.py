@@ -976,7 +976,9 @@ class ZBLPotential(torch.nn.Module):
         # we need to scatter the energy to the correct molecules using the system_indices_of_pair
         data["per_system_zbl_energy"] = (
             torch.zeros_like(zbl_energy)
-            .scatter_add_(0, system_indices_of_pair.long().unsqueeze(1), energy.unsqueeze(1))
+            .scatter_add_(
+                0, system_indices_of_pair.long().unsqueeze(1), energy.unsqueeze(1)
+            )
             .detach()
         )
 

@@ -1363,6 +1363,104 @@ class SourceDataset:
                 db[record_name] = record
 
 
+def fetch_record_from_hdf5(
+    hdf5_filename: str,
+    record_name: str,
+    property_map: Optional[Dict[str, Type[PropertyBaseModel]]] = None,
+) -> Union[Record, list[Record]]:
+    """
+    Returns an instance of a record with relevant information
+
+    Parameters
+    ----------
+    hdf5_filename
+    dataset_name
+    property_map
+    record_name
+
+    Returns
+    -------
+
+    """
+    import h5py
+    from modelforge.curate.properties import PropertyBaseModel
+    from modelforge.utils.misc import OpenWithLock
+    import os
+
+    hdf5_filename = os.path.expanduser(hdf5_filename)
+
+    if property_map is None:
+        property_map = {}
+
+    with OpenWithLock(f"{hdf5_filename}.lockfile", "w"):
+        log.info(f"Reading dataset from {hdf5_filename}")
+        with h5py.File(hdf5_filename, "r") as f:
+            keys = list(f.keys())
+
+            is_grouped = False
+            key = record_name
+
+            assert key in keys
+
+            properties_keys = f[key].keys()
+            if "grouped_indices" in properties_keys:
+                is_grouped = True
+
+            if is_grouped:
+                record = RecordGroup(name=key)
+            else:
+                record = Record(name=key)
+            for pk in properties_keys:
+                if pk == "n_configs":
+                    n_configs = f[key][pk][()]
+                elif pk == "grouped_n_configs":
+                    record.grouped_n_configs = f[key][pk][()]
+                elif pk == "grouped_names":
+                    temp = f[key][pk][()]
+                    record.grouped_names = [val.decode("utf-8") for val in temp]
+
+                elif pk == "grouped_indices":
+                    record.grouped_indices = f[key][pk][()]
+                else:
+                    property_type = f[key][pk].attrs["property_type"]
+                    property_classification = f[key][pk].attrs["format"]
+                    if "u" in f[key][pk].attrs.keys():
+                        unit_str = f[key][pk].attrs["u"]
+                    else:
+                        unit_str = "dimensionless"
+                    value = f[key][pk][()]
+                    if type(value) is bytes:
+                        value = f[key][pk][()].decode("utf-8")
+
+                    if pk in property_map:
+                        property = property_map[pk](
+                            name=pk,
+                            value=value,
+                            units=unit_str,
+                            property_type=property_type,
+                            classification=property_classification,
+                        )
+                    else:
+                        property = PropertyBaseModel(
+                            name=pk,
+                            value=value,
+                            units=unit_str,
+                            property_type=property_type,
+                            classification=property_classification,
+                        )
+
+                    record.add_property(property)
+
+            if is_grouped:
+                records_temp = record.get_records()
+
+                return records_temp
+            else:
+                assert n_configs == record.n_configs
+
+                return record
+
+
 def create_dataset_from_hdf5(
     hdf5_filename: str,
     dataset_name: str,

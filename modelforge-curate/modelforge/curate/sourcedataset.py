@@ -1400,7 +1400,8 @@ def fetch_record_from_hdf5(
             is_grouped = False
             key = record_name
 
-            assert key in keys
+            if not key in keys:
+                raise KeyError(f"Record {record_name} not found in {hdf5_filename}")
 
             properties_keys = f[key].keys()
             if "grouped_indices" in properties_keys:

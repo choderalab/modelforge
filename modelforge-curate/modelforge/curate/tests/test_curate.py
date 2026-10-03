@@ -396,7 +396,10 @@ def test_write_hdf5(prep_temp_dir):
 
     # test that we can read the dataset back in
 
-    from modelforge.curate.sourcedataset import create_dataset_from_hdf5
+    from modelforge.curate.sourcedataset import (
+        create_dataset_from_hdf5,
+        fetch_record_from_hdf5,
+    )
 
     new_dataset_read = create_dataset_from_hdf5(
         hdf5_filename=str(prep_temp_dir / "test_dataset.hdf5"),
@@ -415,6 +418,26 @@ def test_write_hdf5(prep_temp_dir):
     assert np.all(record_mo1.per_system["energies"].value == np.array([[0.1]]))
     assert np.all(record_mo1.atomic_numbers.value == np.array([[1], [6]]))
     assert record_mo1.meta_data["smiles"].value == "[CH+3]"
+
+    record = fetch_record_from_hdf5(
+        hdf5_filename=str(prep_temp_dir / "test_dataset.hdf5"), record_name="mol1"
+    )
+    assert record.name == "mol1"
+    assert record.n_configs == 1
+    assert record.n_atoms == 2
+    assert np.all(
+        record.per_atom["positions"].value
+        == np.array([[[1.0, 1.0, 1.0], [2.0, 2.0, 2.0]]])
+    )
+    assert np.all(record.per_system["energies"].value == np.array([[0.1]]))
+    assert np.all(record.atomic_numbers.value == np.array([[1], [6]]))
+    assert record.meta_data["smiles"].value == "[CH+3]"
+
+    with pytest.raises(KeyError):
+        fetch_record_from_hdf5(
+            hdf5_filename=str(prep_temp_dir / "test_dataset.hdf5"),
+            record_name="not_exist",
+        )
 
 
 def test_dataset_validation(prep_temp_dir):

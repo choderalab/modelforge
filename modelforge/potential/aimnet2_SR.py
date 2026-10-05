@@ -790,12 +790,13 @@ class AimNet2SRInteractionModule(nn.Module):
         # Aggregate per atom by summing the vectors
         avf_v_sum.index_add_(0, idx_i, avf_v)  # Shape: (number_of_atoms, H, 3)
 
-        # Compute the norm over the last dimension (vector components)
-        # note, we need to add a very small epsilon value to ensure stability
-        # 1e-8 seems to work well.
-        vector_contributions = torch.linalg.norm(
-            avf_v_sum + 1e-8, dim=-1
-        )  #  # Shape: (number_of_atoms, H)
+        # Smoothed norm over the vector components: sqrt(|v|^2 + eps^2) - eps.
+        # Rotation invariant, smooth at v = 0 (e.g., symmetric sites), with
+        # curvature capped at 1/eps for stable force training.
+        eps = 1e-4 # sits between the round-off at symmetric sites (~1e-8) and typical features (RMS about 0.24)
+        vector_contributions = (
+            torch.sqrt(avf_v_sum.pow(2).sum(dim=-1) + eps**2) - eps
+        )  # Shape: (number_of_atoms, H)
 
         # raise an error if we have NaN values in the vector contribution as this will cause problems later on
         if torch.isnan(vector_contributions).any():

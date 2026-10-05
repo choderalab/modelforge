@@ -502,16 +502,17 @@ class PerAtomEnergy(torch.nn.Module):
             data["per_system_energy"] = per_system_energy
             data["per_atom_energy"] = data["per_atom_energy"].detach()
 
-            # if we have a per_atom_electrostatic_energy in the data dict,
-            # let us also sum this into per_system_electrostatic_energy
+            # if the core provides a per_atom_electrostatic_energy (e.g., the
+            # Gaussian-smeared energy of AimNet2SR), sum it into
+            # per_system_electrostatic_energy. An electrostatic post-processing
+            # step (e.g., CoulombPotential) runs before this one; if it has
+            # already set per_system_electrostatic_energy, that value takes
+            # precedence and is not overwritten.
             if "per_atom_electrostatic_energy" in data:
-                per_atom_electrostatic_energy = data["per_atom_electrostatic_energy"]
-                per_system_electrostatic_energy = self.reduction(
-                    indices, per_atom_electrostatic_energy
-                )
-                data["per_system_electrostatic_energy"] = (
-                    per_system_electrostatic_energy
-                )
+                if "per_system_electrostatic_energy" not in data:
+                    data["per_system_electrostatic_energy"] = self.reduction(
+                        indices, data["per_atom_electrostatic_energy"]
+                    )
                 data["per_atom_electrostatic_energy"] = data[
                     "per_atom_electrostatic_energy"
                 ].detach()

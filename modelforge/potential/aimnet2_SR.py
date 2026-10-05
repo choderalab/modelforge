@@ -406,6 +406,21 @@ class AimNet2SRCore(torch.nn.Module):
 
         # non-local long-range polarizable field updates.
         self.electrostatic_smearing_width = electrostatic_smearing_width
+        from openff.units import unit
+        from modelforge.utils.units import GlobalUnitSystem
+
+        self.coulomb_constant = (
+            (
+                unit.avogadro_constant
+                * unit.elementary_charge**2
+                / (4 * math.pi * unit.epsilon_0)
+            )
+            .to(
+                GlobalUnitSystem.get_units("energy")
+                * GlobalUnitSystem.get_units("length")
+            )
+            .m
+        )
         self.long_range_updates = torch.nn.ModuleList(
             [
                 LongRangeElectrostaticUpdate(
@@ -557,7 +572,8 @@ class AimNet2SRCore(torch.nn.Module):
         # a post processing option, similar to normal coulombic potential
         """
         per_atom_electrostatic_energy = (
-            0.5
+            self.coulomb_constant
+            * 0.5
             * partial_charges
             * spin_resolved_gaussian_smeared_potential(
                 d_ij,

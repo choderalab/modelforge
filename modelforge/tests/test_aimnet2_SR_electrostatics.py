@@ -22,6 +22,7 @@ from modelforge.potential.processing import CoulombPotential
 
 SIGMA = 0.1  # nm, AimNet2SRCore default electrostatic_smearing_width
 K_E_CODE = 138.96  # kJ/mol nm e^-2, as hard-coded in CoulombPotential
+K_E = 138.935458  # kJ/mol nm e^-2, N_A e^2 / (4 pi eps_0)
 ES_CUTOFF = 1.5  # nm, aimnet2_sr default electrostatic_maximum_interaction_radius
 _trapz = getattr(np, "trapezoid", None) or np.trapz
 
@@ -173,7 +174,9 @@ def test_far_field_energy_matches_bare_coulomb_and_coulomb_potential(r):
     )
 
 
-def _build_sr_potential(postprocessing: bool):
+def _build_sr_potential(coulomb: bool = False, sum_energy: bool = False):
+    """Untrained AimNet2SR, optionally with the coulomb post-processing step
+    and/or per_system_electrostatic_energy summed into per_system_energy."""
     from modelforge.potential import NeuralNetworkPotentialFactory
     from modelforge.potential.parameters import (
         ElectrostaticPotential,
@@ -183,16 +186,15 @@ def _build_sr_potential(postprocessing: bool):
     from openff.units import unit
 
     config = load_configs_into_pydantic_models("aimnet2_sr", "qm9")
-    if postprocessing:
-        pp = config["potential"].postprocessing_parameter
-        pp.properties_to_process += [
-            "per_system_electrostatic_energy",
-            "sum_per_system_energy",
-        ]
+    pp = config["potential"].postprocessing_parameter
+    if coulomb:
+        pp.properties_to_process += ["per_system_electrostatic_energy"]
         pp.per_system_electrostatic_energy = ElectrostaticPotential(
             electrostatic_strategy="coulomb",
             maximum_interaction_radius=15.0 * unit.angstrom,
         )
+    if sum_energy:
+        pp.properties_to_process += ["sum_per_system_energy"]
         pp.sum_per_system_energy = SumPerSystemEnergy(
             contributions=["per_system_electrostatic_energy"]
         )
@@ -231,7 +233,7 @@ def _water_and_methanol():
 
 
 def _gaussian_energy_reference(positions, charges, system_indices, cutoff):
-    """Brute-force 0.5 sum_i q_i v_i in float64 from the core's charges."""
+    """Brute-force k_e 0.5 q_i v_i (kJ/mol) in float64 from the core's charges."""
     positions = positions.double()
     charges = charges.double()
     idx, d_ij = _full_pair_list(positions, system_indices)
@@ -239,13 +241,13 @@ def _gaussian_energy_reference(positions, charges, system_indices, cutoff):
     v = spin_resolved_gaussian_smeared_potential(
         d_ij[keep], idx[:, keep], positions.shape[0], charges, SIGMA
     )
-    return 0.5 * charges * v
+    return K_E * 0.5 * charges * v
 
 
 def test_core_electrostatic_energy_is_consistent_with_its_charges():
-    """The core's per_atom_electrostatic_energy equals 0.5 q_i v_i recomputed
-    from its own output charges."""
-    potential = _build_sr_potential(postprocessing=False)
+    """The core's per_atom_electrostatic_energy equals k_e 0.5 q_i v_i (kJ/mol)
+    recomputed from its own output charges."""
+    potential = _build_sr_potential()
     data = _water_and_methanol()
     pairlist = potential.neighborlist.forward(data)
     out = potential.core_network.forward(
@@ -261,24 +263,29 @@ def test_core_electrostatic_energy_is_consistent_with_its_charges():
         out["per_atom_electrostatic_energy"].detach().double(),
         expected,
         rtol=1e-4,
-        atol=1e-6,
+        atol=1e-4,
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="PerAtomEnergy overwrites the CoulombPotential result with the "
-    "core's unscaled Gaussian energy (processing.py, per_atom_electrostatic_energy).",
-)
-def test_coulomb_postprocessing_energy_reaches_total_energy():
-    """With coulomb + sum_per_system_energy enabled, the electrostatic energy
-    added to the total should be the CoulombPotential value."""
-    potential = _build_sr_potential(postprocessing=True)
+def _electrostatic_energy_added_to_total(potential, data):
+    """per_system_energy of `potential` minus that of the same core (same
+    seed) without electrostatic post-processing."""
+    base = _build_sr_potential()(data)["per_system_energy"]
+    return (potential(data)["per_system_energy"] - base).detach()
+
+
+def test_coulomb_postprocessing_overrides_gaussian_energy():
+    """With the coulomb step enabled, per_system_electrostatic_energy and the
+    energy added to the total are the CoulombPotential value computed from the
+    core's charges, not the core's Gaussian energy."""
+    potential = _build_sr_potential(coulomb=True, sum_energy=True)
     data = _water_and_methanol()
     output = potential(data)
 
     pairlist = potential.neighborlist.forward(data)
-    coulomb = CoulombPotential(cutoff=ES_CUTOFF)
+    coulomb = potential.postprocessing.registered_chained_operations[
+        "per_system_electrostatic_energy"
+    ]
     expected = coulomb(
         {
             "electrostatic_pair_indices": pairlist.electrostatic_cutoff.pair_indices,
@@ -287,9 +294,43 @@ def test_coulomb_postprocessing_energy_reaches_total_energy():
             "per_atom_charge": output["per_atom_charge"].detach(),
         }
     )["per_system_electrostatic_energy"]
+    gaussian = torch.zeros(2, 1).index_add_(
+        0, data.atomic_subsystem_indices, output["per_atom_electrostatic_energy"]
+    )
+
     torch.testing.assert_close(
         output["per_system_electrostatic_energy"].detach(),
         expected,
         rtol=1e-4,
         atol=1e-6,
     )
+    assert not torch.allclose(expected, gaussian, rtol=1e-2)
+    torch.testing.assert_close(
+        _electrostatic_energy_added_to_total(potential, data),
+        expected,
+        rtol=1e-4,
+        atol=1e-4,
+    )
+
+
+def test_gaussian_energy_used_without_coulomb_postprocessing():
+    """Without the coulomb step, per_system_electrostatic_energy is the sum of
+    the core's per-atom Gaussian energy, and that is what is added to the
+    total."""
+    potential = _build_sr_potential(sum_energy=True)
+    data = _water_and_methanol()
+    output = potential(data)
+
+    gaussian = torch.zeros(2, 1).index_add_(
+        0, data.atomic_subsystem_indices, output["per_atom_electrostatic_energy"]
+    )
+    torch.testing.assert_close(
+        output["per_system_electrostatic_energy"].detach(), gaussian
+    )
+    torch.testing.assert_close(
+        _electrostatic_energy_added_to_total(potential, data),
+        gaussian,
+        rtol=1e-4,
+        atol=1e-5,
+    )
+

@@ -18,11 +18,10 @@ import pytest
 import torch
 
 from modelforge.potential.aimnet2_SR import spin_resolved_gaussian_smeared_potential
-from modelforge.potential.processing import CoulombPotential
+from modelforge.potential.processing import CoulombPotential, _coulomb_constant
 
 SIGMA = 0.1  # nm, AimNet2SRCore default electrostatic_smearing_width
-K_E_CODE = 138.96  # kJ/mol nm e^-2, as hard-coded in CoulombPotential
-K_E = 138.935458  # kJ/mol nm e^-2, N_A e^2 / (4 pi eps_0)
+K_E = _coulomb_constant()  # N_A e^2 / (4 pi eps_0), kJ/mol nm e^-2
 ES_CUTOFF = 1.5  # nm, aimnet2_sr default electrostatic_maximum_interaction_radius
 _trapz = getattr(np, "trapezoid", None) or np.trapz
 
@@ -155,9 +154,9 @@ def test_far_field_energy_matches_bare_coulomb_and_coulomb_potential(r):
     v = spin_resolved_gaussian_smeared_potential(d_ij, idx, 2, charges, SIGMA)
     energy = (0.5 * charges * v).sum()
     self_energy = (0.5 * math.sqrt(2.0 / math.pi) / SIGMA * charges**2).sum()
-    gaussian_pair = K_E_CODE * (energy - self_energy).item()
+    gaussian_pair = K_E * (energy - self_energy).item()
 
-    bare = K_E_CODE * charges[0].item() * charges[1].item() / r
+    bare = K_E * charges[0].item() * charges[1].item() / r
     assert gaussian_pair == pytest.approx(bare, rel=1e-8)
 
     coulomb = CoulombPotential(cutoff=ES_CUTOFF)
@@ -294,8 +293,18 @@ def test_coulomb_postprocessing_overrides_gaussian_energy():
             "per_atom_charge": output["per_atom_charge"].detach(),
         }
     )["per_system_electrostatic_energy"]
+    core = potential.core_network.forward(
+        data, pairlist.local_cutoff, pairlist.electrostatic_cutoff
+    )
     gaussian = torch.zeros(2, 1).index_add_(
-        0, data.atomic_subsystem_indices, output["per_atom_electrostatic_energy"]
+        0,
+        data.atomic_subsystem_indices,
+        core["per_atom_electrostatic_energy"].detach(),
+    )
+    per_atom_sum = torch.zeros(2, 1).index_add_(
+        0,
+        data.atomic_subsystem_indices,
+        output["per_atom_electrostatic_energy"].detach(),
     )
 
     torch.testing.assert_close(
@@ -305,6 +314,8 @@ def test_coulomb_postprocessing_overrides_gaussian_energy():
         atol=1e-6,
     )
     assert not torch.allclose(expected, gaussian, rtol=1e-2)
+    # the per-atom output is the Coulomb split, consistent with the total
+    torch.testing.assert_close(per_atom_sum, expected, rtol=1e-4, atol=1e-4)
     torch.testing.assert_close(
         _electrostatic_energy_added_to_total(potential, data),
         expected,

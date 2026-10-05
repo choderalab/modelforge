@@ -180,7 +180,7 @@ def test_electrostatics():
     )
     # nonsense charges; the sum of q_i q_j over the pairs is 2. The damped
     # kernel varies strongly over these short distances (one pair is only
-    # 0.0126 nm apart), so the energy is not simply 2*138.96.
+    # 0.0126 nm apart), so the energy is not simply 2 * 138.935.
     core_output_dict["per_atom_charge"] = torch.tensor(
         [
             [1.0000],
@@ -203,7 +203,7 @@ def test_electrostatics():
     assert output["per_system_electrostatic_energy"].shape == (2, 1)
     assert torch.allclose(
         output["per_system_electrostatic_energy"],
-        torch.tensor([[551.1582], [551.1582]]),
+        torch.tensor([[551.0609], [551.0609]]),
         1e-4,
         1e-4,
     )
@@ -232,10 +232,37 @@ def test_electrostatics():
     assert torch.allclose(
         output["per_system_electrostatic_energy"],
         torch.tensor(
-            [[-1541.1885], [-1541.1885]],
+            [[-1540.9163], [-1540.9163]],
         ),
         1e-4,
         1e-4,
+    )
+
+
+def test_electrostatics_coulomb_constant():
+    """CoulombPotential uses N_A e^2 / (4 pi epsilon_0) in kJ/mol nm e^-2."""
+    import math
+
+    from openff.units import unit
+
+    from modelforge.potential.processing import CoulombPotential
+
+    k_e = (
+        (unit.avogadro_constant * unit.elementary_charge**2 / (4 * math.pi * unit.epsilon_0))
+        .to(unit.kilojoule_per_mole * unit.nanometer)
+        .m
+    )
+    # q1 = q2 = 1 e at r = 1 nm > cutoff / 2, where the kernel is exactly 1/r
+    output = CoulombPotential(1.5)(
+        {
+            "atomic_subsystem_indices": torch.tensor([0, 0]),
+            "electrostatic_pair_indices": torch.tensor([[0, 1], [1, 0]]),
+            "electrostatic_d_ij": torch.tensor([[1.0], [1.0]], dtype=torch.float64),
+            "per_atom_charge": torch.tensor([[1.0], [1.0]], dtype=torch.float64),
+        }
+    )
+    assert output["per_system_electrostatic_energy"].item() == pytest.approx(
+        k_e, rel=1e-12
     )
 
 
@@ -245,7 +272,7 @@ def test_electrostatics_damped_kernel(r):
     chi(r) = phi(2r) / sqrt(r^2 + a_0^2) + (1 - phi(2r)) / r and a_0 = 1 A."""
     import math
 
-    from modelforge.potential.processing import CoulombPotential
+    from modelforge.potential.processing import CoulombPotential, _coulomb_constant
 
     cutoff, a0 = 1.5, 0.1  # nm
     e_elec = CoulombPotential(cutoff, damping_length=a0)
@@ -262,9 +289,14 @@ def test_electrostatics_damped_kernel(r):
     x = min(2 * r / cutoff, 1.0)
     phi = 1 - 6 * x**5 + 15 * x**4 - 10 * x**3
     chi = phi / math.sqrt(r**2 + a0**2) + (1 - phi) / r
-    expected = 138.96 * q1 * q2 * chi
+    expected = _coulomb_constant() * q1 * q2 * chi
     assert output["per_system_electrostatic_energy"].item() == pytest.approx(
         expected, rel=1e-6
+    )
+    # each atom carries half of the pair energy
+    torch.testing.assert_close(
+        output["per_atom_electrostatic_energy"],
+        torch.tensor([[0.5 * expected], [0.5 * expected]], dtype=torch.float64),
     )
     if r < 1e-3:
         # at r -> 0 the kernel tends to 1 / a_0 = 10 nm^-1, not 1/r

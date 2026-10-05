@@ -2,9 +2,10 @@
 This module contains utility functions and classes for processing the output of the potential model.
 """
 
+import math
 import os
 from dataclasses import dataclass, field
-from typing import Dict, Iterator, Union, List
+from typing import Dict, Final, Iterator, Union, List
 
 import torch
 import tad_dftd3 as d3
@@ -597,8 +598,31 @@ class CalculateAtomicSelfEnergy(torch.nn.Module):
         return data
 
 
+def _coulomb_constant() -> float:
+    """N_A e^2 / (4 pi epsilon_0) in the internal energy and length units."""
+    from modelforge.utils.units import GlobalUnitSystem
+
+    return (
+        (
+            unit.avogadro_constant
+            * unit.elementary_charge**2
+            / (4 * math.pi * unit.epsilon_0)
+        )
+        .to(GlobalUnitSystem.get_units("energy") * GlobalUnitSystem.get_units("length"))
+        .m
+    )
+
+
 class CoulombPotential(torch.nn.Module):
-    def __init__(self, cutoff: float, damping_length: float = 0.1):
+    # Coulomb constant, computed once at import from openff.units in the
+    # internal units (kJ/mol nm e^-2 by default)
+    coulomb_constant: Final[float] = _coulomb_constant()
+
+    def __init__(
+        self,
+        cutoff: float,
+        damping_length: float = 0.1,
+    ):
         """
         Computes the long-range electrostatic energy for a molecular system
         based on predicted partial charges and pairwise distances between atoms.
@@ -657,8 +681,10 @@ class CoulombPotential(torch.nn.Module):
         Returns
         -------
         Dict[str, torch.Tensor]
-            The input data dictionary with an additional key 'long_range_electrostatic_energy'
-            containing the computed long-range electrostatic energy.
+            The input data dictionary with 'per_system_electrostatic_energy'
+            (shape (n_systems, 1)) and 'per_atom_electrostatic_energy'
+            (shape (n_atoms, 1), each pair energy split equally between its
+            two atoms) set to the computed electrostatic energy.
         """
 
         # Here we will use the pairwise properties from the data dictionary
@@ -719,10 +745,23 @@ class CoulombPotential(torch.nn.Module):
             electrostatic_energy.scatter_add_(
                 0, system_indices_of_pair.long(), coulomb_interactions
             )
-            * 138.96
-        ).unsqueeze(
+            * self.coulomb_constant
+        ).unsqueeze(1)
+
+        # per-atom energy: each pair's energy is split equally between its two
+        # atoms, so the per-atom values sum to per_system_electrostatic_energy.
+        # This replaces any per_atom_electrostatic_energy set by the core.
+        half_pair_energy = 0.5 * self.coulomb_constant * coulomb_interactions
+        per_atom_electrostatic_energy = torch.zeros(
+            system_indices.shape[0],
+            dtype=per_atom_charge.dtype,
+            device=per_atom_charge.device,
+        )
+        per_atom_electrostatic_energy.index_add_(0, idx_i, half_pair_energy)
+        per_atom_electrostatic_energy.index_add_(0, idx_j, half_pair_energy)
+        data["per_atom_electrostatic_energy"] = per_atom_electrostatic_energy.unsqueeze(
             1
-        )  # in kj/mol nm
+        )
 
         return data
 

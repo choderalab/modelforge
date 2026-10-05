@@ -121,7 +121,7 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
         properties["S"] = (
             torch.from_numpy(dataset[property_name.spin_multiplicity])
             if property_name.spin_multiplicity is not None
-            else torch.zeros((dataset[property_name.E].shape[0], 1), dtype=torch.int32)
+            else torch.ones((dataset[property_name.E].shape[0], 1), dtype=torch.int32)
         )
 
         properties["partial_charges"] = (

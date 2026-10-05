@@ -444,14 +444,7 @@ class AimNet2SRCore(torch.nn.Module):
             (atomic_embedding.shape[0], 1), device=atomic_embedding.device
         )
 
-        per_system_spin_multiplicity = getattr(
-            data, "per_system_spin_multiplicity", None
-        )
-        if per_system_spin_multiplicity is None:
-            n_systems = int(data.atomic_subsystem_indices.max().item()) + 1
-            per_system_spin_multiplicity = torch.ones(
-                (n_systems, 1), device=atomic_embedding.device, dtype=torch.float32
-            )
+        per_system_spin_multiplicity = data.per_system_spin_state
 
         # Perform message passing using interaction modules
         for i, interaction in enumerate(self.interaction_modules):

@@ -343,12 +343,15 @@ class AimNet2SRCore(torch.nn.Module):
             featurization["atomic_number"]["number_of_per_atom_features"]
         )
 
+        # scale by 1/sqrt(F_atom * G), the fan-in of the einsum contraction,
+        # so vector features start on the same scale as radial features
         self.agh = nn.Parameter(
             torch.randn(
                 number_of_per_atom_features,  # F_atom
                 number_of_radial_basis_functions,  # G
                 number_of_vector_features,  # H
             )
+            / math.sqrt(number_of_per_atom_features * number_of_radial_basis_functions)
         )
 
         # Define interaction modules for message passing

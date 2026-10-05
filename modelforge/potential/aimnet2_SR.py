@@ -273,6 +273,20 @@ class LongRangeElectrostaticUpdate(nn.Module):
 
 class AimNet2SRCore(torch.nn.Module):
 
+    # per-atom properties computed by the core from the equilibrated charge and
+    # spin channels; readout heads must not overwrite them
+    core_output_properties = frozenset(
+        {
+            "per_atom_scalar_representation",
+            "per_atom_charge",
+            "per_atom_charge_up",
+            "per_atom_charge_down",
+            "per_atom_spin_density",
+            "per_atom_spin_multiplicity",
+            "per_atom_electrostatic_energy",
+        }
+    )
+
     def __init__(
         self,
         featurization: Dict[str, Dict[str, int]],
@@ -369,6 +383,14 @@ class AimNet2SRCore(torch.nn.Module):
             ]
         )
         # Define output layers to calculate per-atom predictions
+        overlap = self.core_output_properties.intersection(predicted_properties)
+        if overlap:
+            raise ValueError(
+                f"predicted_properties {sorted(overlap)} are computed by the "
+                "AimNet2SR core from the equilibrated charge and spin channels and "
+                "will not be overwritten by a readout head. Remove them from "
+                "predicted_properties; the core always returns them."
+            )
         self.output_layers = nn.ModuleDict()
         for property, dim in zip(predicted_properties, predicted_dim):
             self.output_layers[property] = mlp_init(
@@ -562,6 +584,7 @@ class AimNet2SRCore(torch.nn.Module):
             "per_atom_charge": partial_charges,
             "per_atom_electrostatic_energy": per_atom_electrostatic_energy,
             "per_atom_spin_density": partial_spin_density,
+            "per_atom_spin_multiplicity": partial_spin_density,
             "per_atom_charge_up": p_up,  # note sure we need to return this, but will for debugging now
             "per_atom_charge_down": p_down,
         }

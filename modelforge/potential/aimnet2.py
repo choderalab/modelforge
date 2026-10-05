@@ -117,6 +117,12 @@ class FukuiEquilibration(nn.Module):
 
 class AimNet2Core(torch.nn.Module):
 
+    # per-atom properties computed by the core (charges are equilibrated);
+    # readout heads must not overwrite them
+    core_output_properties = frozenset(
+        {"per_atom_scalar_representation", "per_atom_charge"}
+    )
+
     def __init__(
         self,
         featurization: Dict[str, Dict[str, int]],
@@ -211,6 +217,14 @@ class AimNet2Core(torch.nn.Module):
             ]
         )
         # Define output layers to calculate per-atom predictions
+        overlap = self.core_output_properties.intersection(predicted_properties)
+        if overlap:
+            raise ValueError(
+                f"predicted_properties {sorted(overlap)} are computed by the "
+                "AimNet2 core (equilibrated charges) and will not be overwritten "
+                "by a readout head. Remove them from predicted_properties; the "
+                "core always returns them."
+            )
         self.output_layers = nn.ModuleDict()
         for property, dim in zip(predicted_properties, predicted_dim):
             self.output_layers[property] = mlp_init(

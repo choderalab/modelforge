@@ -441,10 +441,14 @@ class AimNet2SRCore(torch.nn.Module):
         # Atomic embedding "a" Eqn. (3)
 
         p_up = torch.zeros(
-            (atomic_embedding.shape[0], 1), device=atomic_embedding.device
+            (atomic_embedding.shape[0], 1),
+            dtype=atomic_embedding.dtype,
+            device=atomic_embedding.device,
         )
         p_down = torch.zeros(
-            (atomic_embedding.shape[0], 1), device=atomic_embedding.device
+            (atomic_embedding.shape[0], 1),
+            dtype=atomic_embedding.dtype,
+            device=atomic_embedding.device,
         )
 
         per_system_spin_multiplicity = data.per_system_spin_state
@@ -483,7 +487,7 @@ class AimNet2SRCore(torch.nn.Module):
                 "per_atom_charge_up": p_up,
                 "per_atom_charge_down": p_down,
                 "per_system_total_charge": data.per_system_total_charge.to(
-                    dtype=torch.float32
+                    dtype=atomic_embedding.dtype
                 ),
                 "per_system_spin_multiplicity": per_system_spin_multiplicity,
                 "atomic_subsystem_indices": data.atomic_subsystem_indices.to(
@@ -494,7 +498,9 @@ class AimNet2SRCore(torch.nn.Module):
         p_up = equilibrated["per_atom_charge_up"]
         p_down = equilibrated["per_atom_charge_down"]
 
-        per_system_total_charge = data.per_system_total_charge.to(dtype=torch.float32)
+        per_system_total_charge = data.per_system_total_charge.to(
+            dtype=atomic_embedding.dtype
+        )
         atomic_subsystem_indices = data.atomic_subsystem_indices.to(dtype=torch.int64)
 
         # stage 2 is the non-local polarizable field updates
@@ -837,6 +843,7 @@ class AimNet2SRInteractionModule(nn.Module):
             # Return zeros with shape (number_of_atoms, number_of_vector_features)
             vector_contributions = torch.zeros(
                 (atomic_embedding.shape[0], self.number_of_vector_features),
+                dtype=atomic_embedding.dtype,
                 device=atomic_embedding.device,
             )
 

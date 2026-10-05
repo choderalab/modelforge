@@ -268,7 +268,9 @@ class AimNet2Core(torch.nn.Module):
 
         # Atomic embedding "a" Eqn. (3)
         partial_charges = torch.zeros(
-            (atomic_embedding.shape[0], 1), device=atomic_embedding.device
+            (atomic_embedding.shape[0], 1),
+            dtype=atomic_embedding.dtype,
+            device=atomic_embedding.device,
         )
 
         # Perform message passing using interaction modules
@@ -300,7 +302,7 @@ class AimNet2Core(torch.nn.Module):
                     {
                         "per_atom_charge": partial_charges,
                         "per_system_total_charge": data.per_system_total_charge.to(
-                            dtype=torch.float32
+                            dtype=atomic_embedding.dtype
                         ),
                         "atomic_subsystem_indices": data.atomic_subsystem_indices.to(
                             dtype=torch.int64
@@ -315,7 +317,7 @@ class AimNet2Core(torch.nn.Module):
                         dtype=torch.int64
                     ),
                     per_system_total_charge=data.per_system_total_charge.to(
-                        dtype=torch.float32
+                        dtype=atomic_embedding.dtype
                     ),
                 )["per_atom_charge"]
         # check that none of the tensors are NaN
@@ -599,6 +601,7 @@ class AIMNet2InteractionModule(nn.Module):
             # Return zeros with shape (number_of_atoms, number_of_vector_features)
             vector_contributions = torch.zeros(
                 (atomic_embedding.shape[0], self.number_of_vector_features),
+                dtype=atomic_embedding.dtype,
                 device=atomic_embedding.device,
             )
 

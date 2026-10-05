@@ -178,9 +178,9 @@ def test_electrostatics():
             [1, 2, 3, 4, 2, 3, 4, 3, 4, 4, 6, 7, 8, 9, 7, 8, 9, 8, 9, 9],
         ]
     )
-    # nonsense charges, but summing up all the pairs will result in 2,
-    # so the output will be roughly 2*138.96, slightly less due to the
-    # multiplication by the cutoff function
+    # nonsense charges; the sum of q_i q_j over the pairs is 2. The damped
+    # kernel varies strongly over these short distances (one pair is only
+    # 0.0126 nm apart), so the energy is not simply 2*138.96.
     core_output_dict["per_atom_charge"] = torch.tensor(
         [
             [1.0000],
@@ -203,13 +203,13 @@ def test_electrostatics():
     assert output["per_system_electrostatic_energy"].shape == (2, 1)
     assert torch.allclose(
         output["per_system_electrostatic_energy"],
-        torch.tensor([[277.5938], [277.5938]]),
+        torch.tensor([[551.1582], [551.1582]]),
         1e-4,
         1e-4,
     )
 
-    # this will effectively result in 0 when summing up the pairs
-    # this will be slightly off from 0 due to the cutoff function
+    # the sum of q_i q_j over the pairs is now 0, but the pairs sit at
+    # different distances, so the energy is not 0
     core_output_dict["per_atom_charge"] = torch.tensor(
         [
             [1.5000],
@@ -232,11 +232,46 @@ def test_electrostatics():
     assert torch.allclose(
         output["per_system_electrostatic_energy"],
         torch.tensor(
-            [[-0.4219], [-0.4219]],
+            [[-1541.1885], [-1541.1885]],
         ),
         1e-4,
         1e-4,
     )
+
+
+@pytest.mark.parametrize("r", [1e-4, 0.1, 0.3, 0.8, 1.2])
+def test_electrostatics_damped_kernel(r):
+    """A two-charge energy equals k_e q_1 q_2 chi(r), with the PhysNet kernel
+    chi(r) = phi(2r) / sqrt(r^2 + a_0^2) + (1 - phi(2r)) / r and a_0 = 1 A."""
+    import math
+
+    from modelforge.potential.processing import CoulombPotential
+
+    cutoff, a0 = 1.5, 0.1  # nm
+    e_elec = CoulombPotential(cutoff, damping_length=a0)
+    q1, q2 = 0.7, -0.4
+    output = e_elec(
+        {
+            "atomic_subsystem_indices": torch.tensor([0, 0]),
+            "electrostatic_pair_indices": torch.tensor([[0, 1], [1, 0]]),
+            "electrostatic_d_ij": torch.tensor([[r], [r]], dtype=torch.float64),
+            "per_atom_charge": torch.tensor([[q1], [q2]], dtype=torch.float64),
+        }
+    )
+
+    x = min(2 * r / cutoff, 1.0)
+    phi = 1 - 6 * x**5 + 15 * x**4 - 10 * x**3
+    chi = phi / math.sqrt(r**2 + a0**2) + (1 - phi) / r
+    expected = 138.96 * q1 * q2 * chi
+    assert output["per_system_electrostatic_energy"].item() == pytest.approx(
+        expected, rel=1e-6
+    )
+    if r < 1e-3:
+        # at r -> 0 the kernel tends to 1 / a_0 = 10 nm^-1, not 1/r
+        assert chi == pytest.approx(1 / a0, rel=1e-5)
+    if 2 * r >= cutoff:
+        # beyond cutoff / 2 the kernel is bare 1/r
+        assert chi == pytest.approx(1 / r, rel=1e-12)
 
 
 @pytest.mark.xfail(

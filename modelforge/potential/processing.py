@@ -597,7 +597,7 @@ class CalculateAtomicSelfEnergy(torch.nn.Module):
 
 
 class CoulombPotential(torch.nn.Module):
-    def __init__(self, cutoff: float):
+    def __init__(self, cutoff: float, damping_length: float = 0.1):
         """
         Computes the long-range electrostatic energy for a molecular system
         based on predicted partial charges and pairwise distances between atoms.
@@ -610,6 +610,10 @@ class CoulombPotential(torch.nn.Module):
         cutoff : float
             The cutoff distance beyond which the interactions are not
             considered in nanometer.
+        damping_length : float, optional
+            Length a_0 in the short-range damped kernel 1/sqrt(r^2 + a_0^2), in
+            internal units (nanometer). PhysNet uses a_0 = 1 Angstrom, i.e.,
+            0.1 nm, which is the default.
 
         Attributes
         ----------
@@ -617,11 +621,15 @@ class CoulombPotential(torch.nn.Module):
             The strategy for computing long-range interactions.
         cutoff_function : nn.Module
             The cutoff function applied to the pairwise distances.
+        damping_length_squared : float
+            a_0^2 used in the damped kernel. Stored as a plain attribute (not a
+            buffer) so that existing state dicts still load.
         """
         super().__init__()
         from .representation import PhysNetAttenuationFunction
 
         self.cutoff_function = PhysNetAttenuationFunction(cutoff)
+        self.damping_length_squared = damping_length**2
 
     def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
@@ -696,9 +704,9 @@ class CoulombPotential(torch.nn.Module):
         # Apply the cutoff function to pairwise distances
         phi_2r = self.cutoff_function(2 * pairwise_distances)
 
-        chi_r = phi_2r * (1 / torch.sqrt(pairwise_distances**2 + 1)) + (
-            1 - phi_2r
-        ) * (1 / pairwise_distances)
+        chi_r = phi_2r * (
+            1 / torch.sqrt(pairwise_distances**2 + self.damping_length_squared)
+        ) + (1 - phi_2r) * (1 / pairwise_distances)
 
         # Compute the Coulomb interaction term
         coulomb_interactions = (

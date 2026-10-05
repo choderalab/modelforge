@@ -203,6 +203,10 @@ class PostProcessing(torch.nn.Module):
                     postprocessing_parameter["per_system_electrostatic_energy"][
                         "maximum_interaction_radius"
                     ],
+                    # PhysNet's damping length, 1 Angstrom, in internal units
+                    damping_length=(1.0 * unit.angstrom)
+                    .to(GlobalUnitSystem.get_units("length"))
+                    .m,
                 )
 
                 self._registered_properties.append("per_system_electrostatic_energy")

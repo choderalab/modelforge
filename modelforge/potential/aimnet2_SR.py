@@ -704,7 +704,7 @@ class AimNet2SRInteractionModule(nn.Module):
         gs: Tensor,
         a_j: Tensor,
         number_of_atoms: int,
-        idx_j: Tensor,
+        idx_i: Tensor,
     ) -> Tensor:
         """
         Compute radial contributions for each atom based on pair interactions.
@@ -714,11 +714,11 @@ class AimNet2SRInteractionModule(nn.Module):
         gs : Tensor
             Radial symmetry functions with shape (number_of_pairs, G).
         a_j : Tensor
-            Atomic features for each pair with shape (number_of_pairs, F_atom) or (number_of_pairs, 1).
+            Neighbour (atom j) features for each pair with shape (number_of_pairs, F_atom) or (number_of_pairs, 1).
         number_of_atoms : int
             Total number of atoms in the system.
-        idx_j : Tensor
-            Indices mapping each pair to an atom, with shape (number_of_pairs,).
+        idx_i : Tensor
+            Index of the central atom for each pair, with shape (number_of_pairs,).
 
         Returns
         -------
@@ -738,7 +738,7 @@ class AimNet2SRInteractionModule(nn.Module):
             dtype=avf_s.dtype,
         )
         # Aggregate per atom
-        radial_contributions.index_add_(0, idx_j, avf_s)
+        radial_contributions.index_add_(0, idx_i, avf_s)
 
         return radial_contributions
 
@@ -746,7 +746,7 @@ class AimNet2SRInteractionModule(nn.Module):
         self,
         gv: Tensor,
         a_j: Tensor,
-        idx_j: Tensor,
+        idx_i: Tensor,
         agh: Tensor,
         number_of_atoms: int,
         device: torch.device,
@@ -759,9 +759,9 @@ class AimNet2SRInteractionModule(nn.Module):
         gv : Tensor
             Vector symmetry functions with shape (number_of_pairs, 3, G).
         a_j : Tensor
-            Atomic features for each pair with shape (number_of_pairs, F_atom).
-        idx_j : Tensor
-            Indices mapping each pair to an atom, with shape (number_of_pairs,).
+            Neighbour (atom j) features for each pair with shape (number_of_pairs, F_atom).
+        idx_i : Tensor
+            Index of the central atom for each pair, with shape (number_of_pairs,).
         agh : Tensor
             Transformation tensor with shape (F_atom, G, H).
         number_of_atoms : int
@@ -785,7 +785,7 @@ class AimNet2SRInteractionModule(nn.Module):
             dtype=avf_v.dtype,
         )
         # Aggregate per atom by summing the vectors
-        avf_v_sum.index_add_(0, idx_j, avf_v)  # Shape: (number_of_atoms, H, 3)
+        avf_v_sum.index_add_(0, idx_i, avf_v)  # Shape: (number_of_atoms, H, 3)
 
         # Compute the norm over the last dimension (vector components)
         # note, we need to add a very small epsilon value to ensure stability
@@ -808,21 +808,23 @@ class AimNet2SRInteractionModule(nn.Module):
         agh: Tensor,
         calculate_vector_contributions: bool,
     ) -> Tuple[Tensor, Tensor]:
-        idx_j = pair_indices[1]
+        # central atom i = pair_indices[0] receives the sum over its
+        # neighbours j = pair_indices[1], using the neighbours' features
+        idx_i, idx_j = pair_indices[0], pair_indices[1]
         a_j = atomic_embedding[idx_j]  # Shape: (number_of_pairs, F_atom)
 
         radial_contributions = self.calculate_radial_contributions(
             gs,
             a_j,
             atomic_embedding.shape[0],
-            idx_j,
+            idx_i,
         )
 
         if calculate_vector_contributions:
             vector_contributions = self.calculate_vector_contributions(
                 gv,
                 a_j,
-                idx_j,
+                idx_i,
                 agh,
                 number_of_atoms=atomic_embedding.shape[0],
                 device=atomic_embedding.device,

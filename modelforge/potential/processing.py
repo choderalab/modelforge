@@ -2,9 +2,10 @@
 This module contains utility functions and classes for processing the output of the potential model.
 """
 
+import math
 import os
 from dataclasses import dataclass, field
-from typing import Dict, Iterator, Union, List
+from typing import Dict, Final, Iterator, Union, List
 
 import torch
 import tad_dftd3 as d3
@@ -502,16 +503,17 @@ class PerAtomEnergy(torch.nn.Module):
             data["per_system_energy"] = per_system_energy
             data["per_atom_energy"] = data["per_atom_energy"].detach()
 
-            # if we have a per_atom_electrostatic_energy in the data dict,
-            # let us also sum this into per_system_electrostatic_energy
+            # if the core provides a per_atom_electrostatic_energy (e.g., the
+            # Gaussian-smeared energy of AimNet2SR), sum it into
+            # per_system_electrostatic_energy. An electrostatic post-processing
+            # step (e.g., CoulombPotential) runs before this one; if it has
+            # already set per_system_electrostatic_energy, that value takes
+            # precedence and is not overwritten.
             if "per_atom_electrostatic_energy" in data:
-                per_atom_electrostatic_energy = data["per_atom_electrostatic_energy"]
-                per_system_electrostatic_energy = self.reduction(
-                    indices, per_atom_electrostatic_energy
-                )
-                data["per_system_electrostatic_energy"] = (
-                    per_system_electrostatic_energy
-                )
+                if "per_system_electrostatic_energy" not in data:
+                    data["per_system_electrostatic_energy"] = self.reduction(
+                        indices, data["per_atom_electrostatic_energy"]
+                    )
                 data["per_atom_electrostatic_energy"] = data[
                     "per_atom_electrostatic_energy"
                 ].detach()
@@ -596,8 +598,31 @@ class CalculateAtomicSelfEnergy(torch.nn.Module):
         return data
 
 
+def _coulomb_constant() -> float:
+    """N_A e^2 / (4 pi epsilon_0) in the internal energy and length units."""
+    from modelforge.utils.units import GlobalUnitSystem
+
+    return (
+        (
+            unit.avogadro_constant
+            * unit.elementary_charge**2
+            / (4 * math.pi * unit.epsilon_0)
+        )
+        .to(GlobalUnitSystem.get_units("energy") * GlobalUnitSystem.get_units("length"))
+        .m
+    )
+
+
 class CoulombPotential(torch.nn.Module):
-    def __init__(self, cutoff: float):
+    # Coulomb constant, computed once at import from openff.units in the
+    # internal units (kJ/mol nm e^-2 by default)
+    coulomb_constant: Final[float] = _coulomb_constant()
+
+    def __init__(
+        self,
+        cutoff: float,
+        damping_length: float = 0.1,
+    ):
         """
         Computes the long-range electrostatic energy for a molecular system
         based on predicted partial charges and pairwise distances between atoms.
@@ -610,6 +635,10 @@ class CoulombPotential(torch.nn.Module):
         cutoff : float
             The cutoff distance beyond which the interactions are not
             considered in nanometer.
+        damping_length : float, optional
+            Length a_0 in the short-range damped kernel 1/sqrt(r^2 + a_0^2), in
+            internal units (nanometer). PhysNet uses a_0 = 1 Angstrom, i.e.,
+            0.1 nm, which is the default.
 
         Attributes
         ----------
@@ -617,11 +646,15 @@ class CoulombPotential(torch.nn.Module):
             The strategy for computing long-range interactions.
         cutoff_function : nn.Module
             The cutoff function applied to the pairwise distances.
+        damping_length_squared : float
+            a_0^2 used in the damped kernel. Stored as a plain attribute (not a
+            buffer) so that existing state dicts still load.
         """
         super().__init__()
         from .representation import PhysNetAttenuationFunction
 
         self.cutoff_function = PhysNetAttenuationFunction(cutoff)
+        self.damping_length_squared = damping_length**2
 
     def forward(self, data: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
@@ -648,8 +681,10 @@ class CoulombPotential(torch.nn.Module):
         Returns
         -------
         Dict[str, torch.Tensor]
-            The input data dictionary with an additional key 'long_range_electrostatic_energy'
-            containing the computed long-range electrostatic energy.
+            The input data dictionary with 'per_system_electrostatic_energy'
+            (shape (n_systems, 1)) and 'per_atom_electrostatic_energy'
+            (shape (n_atoms, 1), each pair energy split equally between its
+            two atoms) set to the computed electrostatic energy.
         """
 
         # Here we will use the pairwise properties from the data dictionary
@@ -696,9 +731,9 @@ class CoulombPotential(torch.nn.Module):
         # Apply the cutoff function to pairwise distances
         phi_2r = self.cutoff_function(2 * pairwise_distances)
 
-        chi_r = phi_2r * (1 / torch.sqrt(pairwise_distances**2 + 1)) + (
-            1 - phi_2r
-        ) * (1 / pairwise_distances)
+        chi_r = phi_2r * (
+            1 / torch.sqrt(pairwise_distances**2 + self.damping_length_squared)
+        ) + (1 - phi_2r) * (1 / pairwise_distances)
 
         # Compute the Coulomb interaction term
         coulomb_interactions = (
@@ -710,10 +745,23 @@ class CoulombPotential(torch.nn.Module):
             electrostatic_energy.scatter_add_(
                 0, system_indices_of_pair.long(), coulomb_interactions
             )
-            * 138.96
-        ).unsqueeze(
+            * self.coulomb_constant
+        ).unsqueeze(1)
+
+        # per-atom energy: each pair's energy is split equally between its two
+        # atoms, so the per-atom values sum to per_system_electrostatic_energy.
+        # This replaces any per_atom_electrostatic_energy set by the core.
+        half_pair_energy = 0.5 * self.coulomb_constant * coulomb_interactions
+        per_atom_electrostatic_energy = torch.zeros(
+            system_indices.shape[0],
+            dtype=per_atom_charge.dtype,
+            device=per_atom_charge.device,
+        )
+        per_atom_electrostatic_energy.index_add_(0, idx_i, half_pair_energy)
+        per_atom_electrostatic_energy.index_add_(0, idx_j, half_pair_energy)
+        data["per_atom_electrostatic_energy"] = per_atom_electrostatic_energy.unsqueeze(
             1
-        )  # in kj/mol nm
+        )
 
         return data
 

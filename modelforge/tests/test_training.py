@@ -5,6 +5,7 @@ import pytest
 import torch
 
 from modelforge.potential import NeuralNetworkPotentialFactory, _Implemented_NNPs
+from modelforge.tests.helper_functions import _add_to_predicted_properties
 
 ON_MACOS = platform.system() == "Darwin"
 
@@ -104,12 +105,7 @@ def add_per_atom_spin_to_loss_parameter(config):
     t_config.loss_parameter.mixing_steps["per_atom_spin_multiplicity"] = 1
 
     # we also need to set the per_atom_spin_multiplicity as a predicted property
-    p_config = config["potential"]
-    if "per_atom_spin_multiplicity" not in p_config.core_parameter.predicted_properties:
-        p_config.core_parameter.predicted_properties.append(
-            "per_atom_spin_multiplicity"
-        )
-        p_config.core_parameter.predicted_dim.append(1)
+    _add_to_predicted_properties(config, "per_atom_spin_multiplicity")
 
 
 def add_force_to_loss_parameter(config):
@@ -159,10 +155,7 @@ def add_dipole_moment_to_loss_parameter(config):
 
     # also add per_atom_charge to predicted properties
 
-    p_config = config["potential"]
-    if "per_atom_charge" not in p_config.core_parameter.predicted_properties:
-        p_config.core_parameter.predicted_properties.append("per_atom_charge")
-        p_config.core_parameter.predicted_dim.append(1)
+    _add_to_predicted_properties(config, "per_atom_charge")
 
 
 def add_quadrupole_moment_to_loss_parameter(config):
@@ -182,10 +175,7 @@ def add_quadrupole_moment_to_loss_parameter(config):
 
     # also add per_atom_charge to predicted properties
 
-    p_config = config["potential"]
-    if "per_atom_charge" not in p_config.core_parameter.predicted_properties:
-        p_config.core_parameter.predicted_properties.append("per_atom_charge")
-        p_config.core_parameter.predicted_dim.append(1)
+    _add_to_predicted_properties(config, "per_atom_charge")
 
 
 def replace_per_system_with_per_atom_loss(config):

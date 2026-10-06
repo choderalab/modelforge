@@ -273,6 +273,20 @@ class LongRangeElectrostaticUpdate(nn.Module):
 
 class AimNet2SRCore(torch.nn.Module):
 
+    # per-atom properties computed by the core from the equilibrated charge and
+    # spin channels; readout heads must not overwrite them
+    core_output_properties = frozenset(
+        {
+            "per_atom_scalar_representation",
+            "per_atom_charge",
+            "per_atom_charge_up",
+            "per_atom_charge_down",
+            "per_atom_spin_density",
+            "per_atom_spin_multiplicity",
+            "per_atom_electrostatic_energy",
+        }
+    )
+
     def __init__(
         self,
         featurization: Dict[str, Dict[str, int]],
@@ -343,12 +357,15 @@ class AimNet2SRCore(torch.nn.Module):
             featurization["atomic_number"]["number_of_per_atom_features"]
         )
 
+        # scale by 1/sqrt(F_atom * G), the fan-in of the einsum contraction,
+        # so vector features start on the same scale as radial features
         self.agh = nn.Parameter(
             torch.randn(
                 number_of_per_atom_features,  # F_atom
                 number_of_radial_basis_functions,  # G
                 number_of_vector_features,  # H
             )
+            / math.sqrt(number_of_per_atom_features * number_of_radial_basis_functions)
         )
 
         # Define interaction modules for message passing
@@ -366,6 +383,14 @@ class AimNet2SRCore(torch.nn.Module):
             ]
         )
         # Define output layers to calculate per-atom predictions
+        overlap = self.core_output_properties.intersection(predicted_properties)
+        if overlap:
+            raise ValueError(
+                f"predicted_properties {sorted(overlap)} are computed by the "
+                "AimNet2SR core from the equilibrated charge and spin channels and "
+                "will not be overwritten by a readout head. Remove them from "
+                "predicted_properties; the core always returns them."
+            )
         self.output_layers = nn.ModuleDict()
         for property, dim in zip(predicted_properties, predicted_dim):
             self.output_layers[property] = mlp_init(
@@ -381,6 +406,21 @@ class AimNet2SRCore(torch.nn.Module):
 
         # non-local long-range polarizable field updates.
         self.electrostatic_smearing_width = electrostatic_smearing_width
+        from openff.units import unit
+        from modelforge.utils.units import GlobalUnitSystem
+
+        self.coulomb_constant = (
+            (
+                unit.avogadro_constant
+                * unit.elementary_charge**2
+                / (4 * math.pi * unit.epsilon_0)
+            )
+            .to(
+                GlobalUnitSystem.get_units("energy")
+                * GlobalUnitSystem.get_units("length")
+            )
+            .m
+        )
         self.long_range_updates = torch.nn.ModuleList(
             [
                 LongRangeElectrostaticUpdate(
@@ -438,20 +478,17 @@ class AimNet2SRCore(torch.nn.Module):
         # Atomic embedding "a" Eqn. (3)
 
         p_up = torch.zeros(
-            (atomic_embedding.shape[0], 1), device=atomic_embedding.device
+            (atomic_embedding.shape[0], 1),
+            dtype=atomic_embedding.dtype,
+            device=atomic_embedding.device,
         )
         p_down = torch.zeros(
-            (atomic_embedding.shape[0], 1), device=atomic_embedding.device
+            (atomic_embedding.shape[0], 1),
+            dtype=atomic_embedding.dtype,
+            device=atomic_embedding.device,
         )
 
-        per_system_spin_multiplicity = getattr(
-            data, "per_system_spin_multiplicity", None
-        )
-        if per_system_spin_multiplicity is None:
-            n_systems = int(data.atomic_subsystem_indices.max().item()) + 1
-            per_system_spin_multiplicity = torch.ones(
-                (n_systems, 1), device=atomic_embedding.device, dtype=torch.float32
-            )
+        per_system_spin_multiplicity = data.per_system_spin_state
 
         # Perform message passing using interaction modules
         for i, interaction in enumerate(self.interaction_modules):
@@ -487,7 +524,7 @@ class AimNet2SRCore(torch.nn.Module):
                 "per_atom_charge_up": p_up,
                 "per_atom_charge_down": p_down,
                 "per_system_total_charge": data.per_system_total_charge.to(
-                    dtype=torch.float32
+                    dtype=atomic_embedding.dtype
                 ),
                 "per_system_spin_multiplicity": per_system_spin_multiplicity,
                 "atomic_subsystem_indices": data.atomic_subsystem_indices.to(
@@ -498,7 +535,9 @@ class AimNet2SRCore(torch.nn.Module):
         p_up = equilibrated["per_atom_charge_up"]
         p_down = equilibrated["per_atom_charge_down"]
 
-        per_system_total_charge = data.per_system_total_charge.to(dtype=torch.float32)
+        per_system_total_charge = data.per_system_total_charge.to(
+            dtype=atomic_embedding.dtype
+        )
         atomic_subsystem_indices = data.atomic_subsystem_indices.to(dtype=torch.int64)
 
         # stage 2 is the non-local polarizable field updates
@@ -533,7 +572,8 @@ class AimNet2SRCore(torch.nn.Module):
         # a post processing option, similar to normal coulombic potential
         """
         per_atom_electrostatic_energy = (
-            0.5
+            self.coulomb_constant
+            * 0.5
             * partial_charges
             * spin_resolved_gaussian_smeared_potential(
                 d_ij,
@@ -560,6 +600,7 @@ class AimNet2SRCore(torch.nn.Module):
             "per_atom_charge": partial_charges,
             "per_atom_electrostatic_energy": per_atom_electrostatic_energy,
             "per_atom_spin_density": partial_spin_density,
+            "per_atom_spin_multiplicity": partial_spin_density,
             "per_atom_charge_up": p_up,  # note sure we need to return this, but will for debugging now
             "per_atom_charge_down": p_down,
         }
@@ -711,7 +752,7 @@ class AimNet2SRInteractionModule(nn.Module):
         gs: Tensor,
         a_j: Tensor,
         number_of_atoms: int,
-        idx_j: Tensor,
+        idx_i: Tensor,
     ) -> Tensor:
         """
         Compute radial contributions for each atom based on pair interactions.
@@ -721,11 +762,11 @@ class AimNet2SRInteractionModule(nn.Module):
         gs : Tensor
             Radial symmetry functions with shape (number_of_pairs, G).
         a_j : Tensor
-            Atomic features for each pair with shape (number_of_pairs, F_atom) or (number_of_pairs, 1).
+            Neighbour (atom j) features for each pair with shape (number_of_pairs, F_atom) or (number_of_pairs, 1).
         number_of_atoms : int
             Total number of atoms in the system.
-        idx_j : Tensor
-            Indices mapping each pair to an atom, with shape (number_of_pairs,).
+        idx_i : Tensor
+            Index of the central atom for each pair, with shape (number_of_pairs,).
 
         Returns
         -------
@@ -745,7 +786,7 @@ class AimNet2SRInteractionModule(nn.Module):
             dtype=avf_s.dtype,
         )
         # Aggregate per atom
-        radial_contributions.index_add_(0, idx_j, avf_s)
+        radial_contributions.index_add_(0, idx_i, avf_s)
 
         return radial_contributions
 
@@ -753,7 +794,7 @@ class AimNet2SRInteractionModule(nn.Module):
         self,
         gv: Tensor,
         a_j: Tensor,
-        idx_j: Tensor,
+        idx_i: Tensor,
         agh: Tensor,
         number_of_atoms: int,
         device: torch.device,
@@ -766,9 +807,9 @@ class AimNet2SRInteractionModule(nn.Module):
         gv : Tensor
             Vector symmetry functions with shape (number_of_pairs, 3, G).
         a_j : Tensor
-            Atomic features for each pair with shape (number_of_pairs, F_atom).
-        idx_j : Tensor
-            Indices mapping each pair to an atom, with shape (number_of_pairs,).
+            Neighbour (atom j) features for each pair with shape (number_of_pairs, F_atom).
+        idx_i : Tensor
+            Index of the central atom for each pair, with shape (number_of_pairs,).
         agh : Tensor
             Transformation tensor with shape (F_atom, G, H).
         number_of_atoms : int
@@ -792,14 +833,15 @@ class AimNet2SRInteractionModule(nn.Module):
             dtype=avf_v.dtype,
         )
         # Aggregate per atom by summing the vectors
-        avf_v_sum.index_add_(0, idx_j, avf_v)  # Shape: (number_of_atoms, H, 3)
+        avf_v_sum.index_add_(0, idx_i, avf_v)  # Shape: (number_of_atoms, H, 3)
 
-        # Compute the norm over the last dimension (vector components)
-        # note, we need to add a very small epsilon value to ensure stability
-        # 1e-8 seems to work well.
-        vector_contributions = torch.linalg.norm(
-            avf_v_sum + 1e-8, dim=-1
-        )  #  # Shape: (number_of_atoms, H)
+        # Smoothed norm over the vector components: sqrt(|v|^2 + eps^2) - eps.
+        # Rotation invariant, smooth at v = 0 (e.g., symmetric sites), with
+        # curvature capped at 1/eps for stable force training.
+        eps = 1e-4 # sits between the round-off at symmetric sites (~1e-8) and typical features (RMS about 0.24)
+        vector_contributions = (
+            torch.sqrt(avf_v_sum.pow(2).sum(dim=-1) + eps**2) - eps
+        )  # Shape: (number_of_atoms, H)
 
         # raise an error if we have NaN values in the vector contribution as this will cause problems later on
         if torch.isnan(vector_contributions).any():
@@ -815,21 +857,23 @@ class AimNet2SRInteractionModule(nn.Module):
         agh: Tensor,
         calculate_vector_contributions: bool,
     ) -> Tuple[Tensor, Tensor]:
-        idx_j = pair_indices[1]
+        # central atom i = pair_indices[0] receives the sum over its
+        # neighbours j = pair_indices[1], using the neighbours' features
+        idx_i, idx_j = pair_indices[0], pair_indices[1]
         a_j = atomic_embedding[idx_j]  # Shape: (number_of_pairs, F_atom)
 
         radial_contributions = self.calculate_radial_contributions(
             gs,
             a_j,
             atomic_embedding.shape[0],
-            idx_j,
+            idx_i,
         )
 
         if calculate_vector_contributions:
             vector_contributions = self.calculate_vector_contributions(
                 gv,
                 a_j,
-                idx_j,
+                idx_i,
                 agh,
                 number_of_atoms=atomic_embedding.shape[0],
                 device=atomic_embedding.device,
@@ -838,6 +882,7 @@ class AimNet2SRInteractionModule(nn.Module):
             # Return zeros with shape (number_of_atoms, number_of_vector_features)
             vector_contributions = torch.zeros(
                 (atomic_embedding.shape[0], self.number_of_vector_features),
+                dtype=atomic_embedding.dtype,
                 device=atomic_embedding.device,
             )
 

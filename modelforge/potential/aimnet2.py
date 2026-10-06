@@ -1,3 +1,4 @@
+import math
 from typing import Dict, List, Tuple
 
 import torch
@@ -116,6 +117,12 @@ class FukuiEquilibration(nn.Module):
 
 class AimNet2Core(torch.nn.Module):
 
+    # per-atom properties computed by the core (charges are equilibrated);
+    # readout heads must not overwrite them
+    core_output_properties = frozenset(
+        {"per_atom_scalar_representation", "per_atom_charge"}
+    )
+
     def __init__(
         self,
         featurization: Dict[str, Dict[str, int]],
@@ -183,12 +190,15 @@ class AimNet2Core(torch.nn.Module):
             featurization["atomic_number"]["number_of_per_atom_features"]
         )
 
+        # scale by 1/sqrt(F_atom * G), the fan-in of the einsum contraction,
+        # so vector features start on the same scale as radial features
         self.agh = nn.Parameter(
             torch.randn(
                 number_of_per_atom_features,  # F_atom
                 number_of_radial_basis_functions,  # G
                 number_of_vector_features,  # H
             )
+            / math.sqrt(number_of_per_atom_features * number_of_radial_basis_functions)
         )
         # shape(nr_of_angular_symmetry_functions,nr_of_radial_symmetry_functions,nr_of_vector_features)
 
@@ -207,6 +217,14 @@ class AimNet2Core(torch.nn.Module):
             ]
         )
         # Define output layers to calculate per-atom predictions
+        overlap = self.core_output_properties.intersection(predicted_properties)
+        if overlap:
+            raise ValueError(
+                f"predicted_properties {sorted(overlap)} are computed by the "
+                "AimNet2 core (equilibrated charges) and will not be overwritten "
+                "by a readout head. Remove them from predicted_properties; the "
+                "core always returns them."
+            )
         self.output_layers = nn.ModuleDict()
         for property, dim in zip(predicted_properties, predicted_dim):
             self.output_layers[property] = mlp_init(
@@ -264,7 +282,9 @@ class AimNet2Core(torch.nn.Module):
 
         # Atomic embedding "a" Eqn. (3)
         partial_charges = torch.zeros(
-            (atomic_embedding.shape[0], 1), device=atomic_embedding.device
+            (atomic_embedding.shape[0], 1),
+            dtype=atomic_embedding.dtype,
+            device=atomic_embedding.device,
         )
 
         # Perform message passing using interaction modules
@@ -296,7 +316,7 @@ class AimNet2Core(torch.nn.Module):
                     {
                         "per_atom_charge": partial_charges,
                         "per_system_total_charge": data.per_system_total_charge.to(
-                            dtype=torch.float32
+                            dtype=atomic_embedding.dtype
                         ),
                         "atomic_subsystem_indices": data.atomic_subsystem_indices.to(
                             dtype=torch.int64
@@ -311,7 +331,7 @@ class AimNet2Core(torch.nn.Module):
                         dtype=torch.int64
                     ),
                     per_system_total_charge=data.per_system_total_charge.to(
-                        dtype=torch.float32
+                        dtype=atomic_embedding.dtype
                     ),
                 )["per_atom_charge"]
         # check that none of the tensors are NaN
@@ -465,7 +485,7 @@ class AIMNet2InteractionModule(nn.Module):
         gs: Tensor,
         a_j: Tensor,
         number_of_atoms: int,
-        idx_j: Tensor,
+        idx_i: Tensor,
     ) -> Tensor:
         """
         Compute radial contributions for each atom based on pair interactions.
@@ -475,11 +495,11 @@ class AIMNet2InteractionModule(nn.Module):
         gs : Tensor
             Radial symmetry functions with shape (number_of_pairs, G).
         a_j : Tensor
-            Atomic features for each pair with shape (number_of_pairs, F_atom) or (number_of_pairs, 1).
+            Neighbour (atom j) features for each pair with shape (number_of_pairs, F_atom) or (number_of_pairs, 1).
         number_of_atoms : int
             Total number of atoms in the system.
-        idx_j : Tensor
-            Indices mapping each pair to an atom, with shape (number_of_pairs,).
+        idx_i : Tensor
+            Index of the central atom for each pair, with shape (number_of_pairs,).
 
         Returns
         -------
@@ -499,7 +519,7 @@ class AIMNet2InteractionModule(nn.Module):
             dtype=avf_s.dtype,
         )
         # Aggregate per atom
-        radial_contributions.index_add_(0, idx_j, avf_s)
+        radial_contributions.index_add_(0, idx_i, avf_s)
 
         return radial_contributions
 
@@ -507,7 +527,7 @@ class AIMNet2InteractionModule(nn.Module):
         self,
         gv: Tensor,
         a_j: Tensor,
-        idx_j: Tensor,
+        idx_i: Tensor,
         agh: Tensor,
         number_of_atoms: int,
         device: torch.device,
@@ -520,9 +540,9 @@ class AIMNet2InteractionModule(nn.Module):
         gv : Tensor
             Vector symmetry functions with shape (number_of_pairs, 3, G).
         a_j : Tensor
-            Atomic features for each pair with shape (number_of_pairs, F_atom).
-        idx_j : Tensor
-            Indices mapping each pair to an atom, with shape (number_of_pairs,).
+            Neighbour (atom j) features for each pair with shape (number_of_pairs, F_atom).
+        idx_i : Tensor
+            Index of the central atom for each pair, with shape (number_of_pairs,).
         agh : Tensor
             Transformation tensor with shape (F_atom, G, H).
         number_of_atoms : int
@@ -546,14 +566,15 @@ class AIMNet2InteractionModule(nn.Module):
             dtype=avf_v.dtype,
         )
         # Aggregate per atom by summing the vectors
-        avf_v_sum.index_add_(0, idx_j, avf_v)  # Shape: (number_of_atoms, H, 3)
+        avf_v_sum.index_add_(0, idx_i, avf_v)  # Shape: (number_of_atoms, H, 3)
 
-        # Compute the norm over the last dimension (vector components)
-        # note, we need to add a very small epsilon value to ensure stability
-        # 1e-8 seems to work well.
-        vector_contributions = torch.linalg.norm(
-            avf_v_sum + 1e-8, dim=-1
-        )  #  # Shape: (number_of_atoms, H)
+        # Smoothed norm over the vector components: sqrt(|v|^2 + eps^2) - eps.
+        # Rotation invariant, smooth at v = 0 (e.g., symmetric sites), with
+        # curvature capped at 1/eps for stable force training.
+        eps = 1e-4 # sits between the round-off at symmetric sites (~1e-8) and typical features (RMS about 0.24)
+        vector_contributions = (
+            torch.sqrt(avf_v_sum.pow(2).sum(dim=-1) + eps**2) - eps
+        )  # Shape: (number_of_atoms, H)
 
         # raise an error if we have NaN values in the vector contribution as this will cause problems later on
         if torch.isnan(vector_contributions).any():
@@ -569,21 +590,23 @@ class AIMNet2InteractionModule(nn.Module):
         agh: Tensor,
         calculate_vector_contributions: bool,
     ) -> Tuple[Tensor, Tensor]:
-        idx_j = pair_indices[1]
+        # central atom i = pair_indices[0] receives the sum over its
+        # neighbours j = pair_indices[1], using the neighbours' features
+        idx_i, idx_j = pair_indices[0], pair_indices[1]
         a_j = atomic_embedding[idx_j]  # Shape: (number_of_pairs, F_atom)
 
         radial_contributions = self.calculate_radial_contributions(
             gs,
             a_j,
             atomic_embedding.shape[0],
-            idx_j,
+            idx_i,
         )
 
         if calculate_vector_contributions:
             vector_contributions = self.calculate_vector_contributions(
                 gv,
                 a_j,
-                idx_j,
+                idx_i,
                 agh,
                 number_of_atoms=atomic_embedding.shape[0],
                 device=atomic_embedding.device,
@@ -592,6 +615,7 @@ class AIMNet2InteractionModule(nn.Module):
             # Return zeros with shape (number_of_atoms, number_of_vector_features)
             vector_contributions = torch.zeros(
                 (atomic_embedding.shape[0], self.number_of_vector_features),
+                dtype=atomic_embedding.dtype,
                 device=atomic_embedding.device,
             )
 

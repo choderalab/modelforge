@@ -1,10 +1,31 @@
 from typing import Optional, Literal
 
 
-def _add_per_atom_charge_to_predicted_properties(config):
-    config["potential"].core_parameter.predicted_properties.append("per_atom_charge")
-    config["potential"].core_parameter.predicted_dim.append(1)
+def _core_provides_property(config, property_name: str) -> bool:
+    """True if the potential's core computes `property_name` itself, so it must
+    not be added to predicted_properties (the core raises if it is)."""
+    from modelforge.potential import _Implemented_NNPs
+
+    core_class = _Implemented_NNPs.get_neural_network_class(
+        config["potential"].potential_name
+    )
+    return property_name in getattr(core_class, "core_output_properties", ())
+
+
+def _add_to_predicted_properties(config, property_name: str, dim: int = 1):
+    """Add a readout head for `property_name` unless the core already provides it."""
+    p_config = config["potential"].core_parameter
+    if property_name in p_config.predicted_properties or _core_provides_property(
+        config, property_name
+    ):
+        return config
+    p_config.predicted_properties.append(property_name)
+    p_config.predicted_dim.append(dim)
     return config
+
+
+def _add_per_atom_charge_to_predicted_properties(config):
+    return _add_to_predicted_properties(config, "per_atom_charge")
 
 
 def _add_per_atom_charge_to_properties_to_process(config):

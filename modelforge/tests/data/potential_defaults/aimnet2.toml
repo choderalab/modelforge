@@ -9,6 +9,8 @@ number_of_interaction_modules = 3
 interaction_module_hidden_layers = [[512,380], [512,380], [512,380, 380]]
 output_module_hidden_layers = [128,128]
 predicted_properties = ["per_atom_energy"]
+number_of_charge_channels = 1
+number_of_charge_equilibration_layers = 32
 predicted_dim = [1]
 
 [potential.core_parameter.activation_function_parameter]

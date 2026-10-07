@@ -12,7 +12,7 @@ import tad_dftd3 as d3
 import tad_mctc as mctc
 from openff.units import unit
 from pathlib import Path
-from torch.backends.quantized import engine
+
 
 from modelforge.dataset.utils import _ATOMIC_NUMBER_TO_ELEMENT
 

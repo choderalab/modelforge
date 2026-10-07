@@ -250,9 +250,8 @@ class AimNet2Parameters(ParametersBase):
         predicted_properties: List[str]
         predicted_dim: List[int]
         number_of_vector_features: int
-        charge_equilibration_scheme: ChargeEquilibrationScheme = (
-            ChargeEquilibrationScheme.default
-        )
+        number_of_charge_channels: int
+        number_of_charge_equilibration_layers: int
         converted_units = field_validator("maximum_interaction_radius", mode="before")(
             _convert_str_or_unit_to_unit_length
         )
@@ -273,6 +272,14 @@ class AimNet2Parameters(ParametersBase):
                         "Each interaction module must have at least one size defined."
                     )
             return self
+
+        @field_validator("number_of_charge_channels", mode="after")
+        def validate_number_of_charge_channels(cls, value: int) -> int:
+            if not value in [1, 2]:
+                raise ValueError(
+                    f"The value of 'number_of_charge_channels' must be 1 or 2. provided value: {value}"
+                )
+            return value
 
     potential_name: str = "AimNet2"
     only_unique_pairs: bool = False

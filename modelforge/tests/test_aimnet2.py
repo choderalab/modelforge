@@ -241,6 +241,7 @@ def test_mlp_initialization():
         number_of_per_atom_features=num_per_atom_features,
         number_of_radial_basis_functions=64,
         number_of_vector_features=number_of_vector_features,
+        number_of_charge_channels=1,
         hidden_layers=hidden_layers,
         activation_function=ACTIVATION_FUNCTIONS["GeLU"](),
         is_first_module=True,
@@ -264,6 +265,7 @@ def test_mlp_initialization():
         number_of_per_atom_features=num_per_atom_features,
         number_of_radial_basis_functions=64,
         number_of_vector_features=number_of_vector_features,
+        number_of_charge_channels=1,
         hidden_layers=hidden_layers,
         activation_function=ACTIVATION_FUNCTIONS["GeLU"](),
         is_first_module=False,
@@ -285,6 +287,69 @@ def test_mlp_initialization():
     assert interaction.mlp[2].out_features == hidden_layers[2]
     assert interaction.mlp[3].in_features == hidden_layers[2]
     assert interaction.mlp[3].out_features == num_per_atom_features + 2
+
+    # test number of charge channels, first layer
+    num_per_atom_features = 128
+    number_of_vector_features = 8
+    hidden_layers = [512, 256]
+    number_of_charge_channels = 2
+    interaction = AIMNet2InteractionModule(
+        number_of_per_atom_features=num_per_atom_features,
+        number_of_radial_basis_functions=64,
+        number_of_vector_features=number_of_vector_features,
+        number_of_charge_channels=number_of_charge_channels,
+        hidden_layers=hidden_layers,
+        activation_function=ACTIVATION_FUNCTIONS["GeLU"](),
+        is_first_module=True,
+    )
+
+    assert len(interaction.mlp) == 3, "MLP should have 3 layers."
+    assert (
+        interaction.mlp[0].in_features
+        == num_per_atom_features + number_of_vector_features
+    )
+    assert interaction.mlp[0].out_features == hidden_layers[0]
+    assert interaction.mlp[1].in_features == hidden_layers[0]
+    assert interaction.mlp[1].out_features == hidden_layers[1]
+    assert interaction.mlp[2].in_features == hidden_layers[1]
+    assert (
+        interaction.mlp[2].out_features
+        == num_per_atom_features + 2 * number_of_charge_channels
+    )
+
+    # test number of charge channels, second layer
+    num_per_atom_features = 128
+    number_of_vector_features = 8
+    hidden_layers = [512, 256]
+    number_of_charge_channels = 2
+    interaction = AIMNet2InteractionModule(
+        number_of_per_atom_features=num_per_atom_features,
+        number_of_radial_basis_functions=64,
+        number_of_vector_features=number_of_vector_features,
+        number_of_charge_channels=number_of_charge_channels,
+        hidden_layers=hidden_layers,
+        activation_function=ACTIVATION_FUNCTIONS["GeLU"](),
+        is_first_module=False,
+    )
+
+    assert len(interaction.mlp) == 3, "MLP should have 3 layers."
+    assert (
+        interaction.mlp[0].in_features
+        == num_per_atom_features
+        + number_of_vector_features
+        + num_per_atom_features
+        + number_of_vector_features
+        + num_per_atom_features
+        + number_of_vector_features
+    )
+    assert interaction.mlp[0].out_features == hidden_layers[0]
+    assert interaction.mlp[1].in_features == hidden_layers[0]
+    assert interaction.mlp[1].out_features == hidden_layers[1]
+    assert interaction.mlp[2].in_features == hidden_layers[1]
+    assert (
+        interaction.mlp[2].out_features
+        == num_per_atom_features + 2 * number_of_charge_channels
+    )
 
 
 def test_mlp_init():

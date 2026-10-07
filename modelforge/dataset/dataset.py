@@ -1831,7 +1831,7 @@ def collate_conformers(conf_list: List[BatchData]) -> BatchData:
         torch.float32
     )
     E = torch.stack(E_list)
-    spin_multiplicity = torch.cat(S_list).to(torch.float32)
+    spin_multiplicity = torch.stack(S_list).to(torch.float32)
     if pair_list_present:
         IJ_cat = torch.cat(ij_list, dim=1).to(torch.int64)
     else:

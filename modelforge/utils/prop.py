@@ -49,9 +49,9 @@ class NNPInput:
         atomic_numbers: torch.Tensor,
         positions: torch.Tensor,
         atomic_subsystem_indices: torch.Tensor,
-        per_system_total_charge: torch.Tensor,
+        per_system_total_charge: torch.Tensor,  # during setting up TorchDataset, this will be set to 0 if not defined in the file
+        per_system_spin_state: torch.Tensor,  # during setting up TorchDataset, this will be set to 1 if not defined in the file
         box_vectors: torch.Tensor = torch.zeros(3, 3),
-        per_system_spin_state: torch.Tensor = torch.ones(1),
         is_periodic: torch.Tensor = torch.tensor([False]),
         pair_list: torch.Tensor = torch.tensor([]),
         per_atom_partial_charge: torch.Tensor = torch.tensor([]),

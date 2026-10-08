@@ -1081,7 +1081,6 @@ class NeuralNetworkPotentialFactory:
             training_parameter=training_parameter,
             dataset_parameter=dataset_parameter,
             runtime_parameter=runtime_parameter,
-            potential_seed=potential_seed,
             dataset_statistic=dataset_statistic,
             use_default_dataset_statistic=use_default_dataset_statistic,
         )

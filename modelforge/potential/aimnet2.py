@@ -17,7 +17,7 @@ class FukuiEquilibration(nn.Module):
     """
     Equilibrates per-atom charge to match per-system target totals, using learnable, atom-wise Fukui weights
     rather than a uniform correction.  This is adapted from MACE Polar, but is fundamentally the same as
-    aimnet2-NSE approach, but applied to a single channel
+    aimnet2-NSE approach.  This can handle either 1 or 2 charge channels.
 
     Parameters
     ----------
@@ -137,7 +137,7 @@ class AimNet2Core(torch.nn.Module):
         predicted_dim: List[int],
         maximum_interaction_radius: float,
         number_of_charge_channels: int,
-        number_of_charge_equilibration_layers: int,
+        charge_equilibration_layer_size: int,
     ) -> None:
         """
         Core architecture of the AimNet2 model for molecular property
@@ -174,8 +174,8 @@ class AimNet2Core(torch.nn.Module):
             The cutoff radius for atomic interactions in the model.
         number_of_charge_channels : int
             The number of charge channels in the model.
-        number_of_charge_equilibration_layers:
-            The number of hidden layers in the charge equilibration
+        charge_equilibration_layer_size:
+            The size of hidden layers in the charge equilibration
 
         """
 
@@ -245,7 +245,7 @@ class AimNet2Core(torch.nn.Module):
         self.charge_conservation = FukuiEquilibration(
             number_of_per_atom_features=number_of_per_atom_features,
             number_of_charge_channels=number_of_charge_channels,
-            hidden_dim=number_of_charge_equilibration_layers,
+            hidden_dim=charge_equilibration_layer_size,
         )
 
     def compute_properties(
@@ -357,12 +357,21 @@ class AimNet2Core(torch.nn.Module):
         if torch.isnan(partial_charges).any():
             raise ValueError("NaN values detected in partial charges.")
 
-        return {
-            "per_atom_scalar_representation": atomic_embedding,
-            "atomic_subsystem_indices": data.atomic_subsystem_indices,
-            "atomic_numbers": data.atomic_numbers,
-            "per_atom_charge": partial_charges,
-        }
+        if self.number_of_charge_channels == 1:
+            return {
+                "per_atom_scalar_representation": atomic_embedding,
+                "atomic_subsystem_indices": data.atomic_subsystem_indices,
+                "atomic_numbers": data.atomic_numbers,
+                "per_atom_charge": partial_charges,
+            }
+        elif self.number_of_charge_channels == 2:
+            return {
+                "per_atom_scalar_representation": atomic_embedding,
+                "atomic_subsystem_indices": data.atomic_subsystem_indices,
+                "atomic_numbers": data.atomic_numbers,
+                "per_atom_charge": partial_charges,
+                "per_atom_charge_channels": partial_charge_channels,
+            }
 
     def forward(
         self,

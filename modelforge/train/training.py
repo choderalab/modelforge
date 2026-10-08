@@ -1777,7 +1777,6 @@ class PotentialTrainer:
         dataset_statistic: Dict[str, Dict[str, unit.Quantity]],
         use_default_dataset_statistic: bool,
         optimizer_class: Type[Optimizer] = torch.optim.AdamW,
-        potential_seed: Optional[int] = None,
         verbose: bool = False,
     ):
         """
@@ -1803,8 +1802,7 @@ class PotentialTrainer:
         optimizer_class : Type[Optimizer], optional
             The optimizer class to use for training, by default
             torch.optim.AdamW.
-        potential_seed: Optional[int], optional
-            Seed to initialize the potential training adapter, default is None.
+
         verbose : bool, optional
             If True, enables verbose logging, by default False.
         """
@@ -1818,6 +1816,7 @@ class PotentialTrainer:
         self.runtime_parameter = runtime_parameter
         self.verbose = verbose
 
+        potential_seed = self.potential_parameter.potential_seed
         # Setup data module
         self.datamodule = self.setup_datamodule()
         # Read and assign provided dataset statistics

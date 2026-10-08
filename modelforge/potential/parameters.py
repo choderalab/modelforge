@@ -251,7 +251,7 @@ class AimNet2Parameters(ParametersBase):
         predicted_dim: List[int]
         number_of_vector_features: int
         number_of_charge_channels: int
-        number_of_charge_equilibration_layers: int
+        charge_equilibration_layer_size: int
         converted_units = field_validator("maximum_interaction_radius", mode="before")(
             _convert_str_or_unit_to_unit_length
         )
@@ -271,6 +271,15 @@ class AimNet2Parameters(ParametersBase):
                     raise ValueError(
                         "Each interaction module must have at least one size defined."
                     )
+            return self
+
+        @model_validator(mode="after")
+        def validate_charge_equilibration_hidden_layer_size(self):
+            if self.charge_equilibration_layer_size < self.number_of_charge_channels:
+                raise ValueError(
+                    f"charge_equilibration_layer_size ({self.charge_equilibration_layer_size}) should not be less than the number_of_charge_channels ({self.number_of_charge_channels})."
+                )
+
             return self
 
         @field_validator("number_of_charge_channels", mode="after")

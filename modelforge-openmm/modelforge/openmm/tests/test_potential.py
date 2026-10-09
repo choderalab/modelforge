@@ -11,7 +11,7 @@ def test_openmm_wrapping_with_checkpoint_file():
     from modelforge.utils.io import get_path_string
     from modelforge.openmm.examples import data
 
-    checkpoint_file_path = get_path_string(data) + "/model.ckpt"
+    checkpoint_file_path = get_path_string(data) + "/best_SchNet-qm9-epoch=433.ckpt"
 
     from modelforge.potential.potential import load_inference_model_from_checkpoint
 
@@ -74,16 +74,16 @@ def test_openmm_wrapping_with_checkpoint_file():
     force = state.getForces(asNumpy=True)
     print(force)
     assert np.isclose(
-        energy.value_in_unit(kilojoules_per_mole), 5104.08740234375, atol=1e-3
+        energy.value_in_unit(kilojoules_per_mole), -1025.315185546875, atol=1e-3
     )
-    # we need a high tolerance here because the values are large and we only really care about capturing this to
+    # we need a high tolerance here because the values are large and we only really care about capturing this to reasonable measure
     assert np.allclose(
         force.value_in_unit(kilojoules_per_mole / nanometer),
         np.array(
             [
-                [0.0, -278369.9375, 0.0],
-                [647955.0625, 139184.96875, 0.0],
-                [-647955.0625, 139184.96875, 0.0],
+                [0.0, 846.68719482, 0.0],
+                [89.49356079, -423.34359741, 0.0],
+                [-89.49356079, -423.34359741, 0.0],
             ]
         ),
         atol=1e5,
@@ -130,7 +130,6 @@ def test_potential_wrapping(is_periodic, potential_name, prep_temp_dir):
 
     modelforge_potential = NeuralNetworkPotentialFactory.generate_potential(
         potential_parameter=config["potential"],
-        potential_seed=42,
         jit=False,
     )
 

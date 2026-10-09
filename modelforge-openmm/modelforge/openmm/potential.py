@@ -26,7 +26,7 @@ def _build_nnp_input(
     device: str,
     box_vectors: np.ndarray | None,
     per_system_total_charge: Optional[int] = None,
-    per_system_spin_state: Optional[int] = None,
+    per_system_spin_multiplicity: Optional[int] = None,
 ) -> NNPInput:
     """
     Convert raw OpenMM position data into the dict expected by ModelForge.
@@ -47,7 +47,7 @@ def _build_nnp_input(
         box vectors in nm, as passed by OpenMM
     per_system_total_charge: Optional[int]
         The total charge of the system
-    per_system_spin_state:  Optional[int]
+    per_system_spin_multiplicity:  Optional[int]
         To spin multiplicity of the system
 
 
@@ -77,7 +77,7 @@ def _build_nnp_input(
         [[per_system_total_charge]], dtype=torch.int64, device=device
     )
     total_spin_tensor = torch.tensor(
-        [[per_system_spin_state]], dtype=torch.int64, device=device
+        [[per_system_spin_multiplicity]], dtype=torch.int64, device=device
     )
 
     return NNPInput(
@@ -85,7 +85,7 @@ def _build_nnp_input(
         positions=positions_tensor.detach().requires_grad_(True),
         atomic_subsystem_indices=atomic_subsystem_indices,
         per_system_total_charge=total_charge_tensor,
-        per_system_spin_state=total_spin_tensor,
+        per_system_spin_multiplicity=total_spin_tensor,
         is_periodic=torch.tensor([is_periodic]),
         box_vectors=box_vectors_tensor,
     )
@@ -205,7 +205,7 @@ def _compute_modelforge(
         precision=precision,
         device=device,
         per_system_total_charge=per_system_total_charge,
-        per_system_spin_state=per_system_spin_multiplicity,
+        per_system_spin_multiplicity=per_system_spin_multiplicity,
     )
 
     # just make sure that we are really on the right device

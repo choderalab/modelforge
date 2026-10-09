@@ -555,7 +555,7 @@ class Potential(torch.nn.Module):
         per_system_total_charge: torch.Tensor,
         pair_list: torch.Tensor,
         per_atom_partial_charge: torch.Tensor,
-        per_system_spin_state: torch.Tensor,
+        per_system_spin_multiplicity: torch.Tensor,
         box_vectors: torch.Tensor,
         is_periodic: torch.Tensor,
     ) -> Dict[str, torch.Tensor]:
@@ -567,7 +567,7 @@ class Potential(torch.nn.Module):
             per_system_total_charge=per_system_total_charge,
             pair_list=pair_list,
             per_atom_partial_charge=per_atom_partial_charge,
-            per_system_spin_state=per_system_spin_state,
+            per_system_spin_multiplicity=per_system_spin_multiplicity,
             box_vectors=box_vectors,
             is_periodic=is_periodic,
         )
@@ -746,7 +746,6 @@ def setup_potential(
         }
     },
     use_training_mode_neighborlist: bool = False,
-    potential_seed: Optional[int] = None,
     jit: bool = False,
     neighborlist_strategy: Optional[str] = None,
     verlet_neighborlist_skin: Optional[float] = 0.08,
@@ -754,6 +753,8 @@ def setup_potential(
     from modelforge.potential import _Implemented_NNPs
     from modelforge.potential.utils import remove_units_from_dataset_statistics
     from modelforge.utils.misc import seed_random_number
+
+    potential_seed = potential_parameter.potential_seed
 
     log.debug(f"potential_seed {potential_seed}")
     if potential_seed is not None:
@@ -888,7 +889,6 @@ class NeuralNetworkPotentialFactory:
                 ),
             }
         },
-        potential_seed: Optional[int] = None,
         use_training_mode_neighborlist: bool = False,
         simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
         jit: bool = True,
@@ -908,8 +908,6 @@ class NeuralNetworkPotentialFactory:
             Parameters for configuring the dataset (default is None).
         dataset_statistic : Dict[str, Dict[str, float]], optional
             Dataset statistics for normalization (default is provided).
-        potential_seed : Optional[int], optional
-            Seed for random number generation (default is None).
         use_training_mode_neighborlist : bool, optional
             Whether to use neighborlist during training mode (default is False).
         simulation_environment : Literal["PyTorch", "JAX"], optional
@@ -936,7 +934,6 @@ class NeuralNetworkPotentialFactory:
             potential_parameter=potential_parameter,
             dataset_statistic=dataset_statistic,
             use_training_mode_neighborlist=use_training_mode_neighborlist,
-            potential_seed=potential_seed,
             jit=jit,
             neighborlist_strategy=inference_neighborlist_strategy,
             verlet_neighborlist_skin=verlet_neighborlist_skin,
@@ -1036,7 +1033,6 @@ class NeuralNetworkPotentialFactory:
                 ),
             }
         },
-        potential_seed: Optional[int] = None,
         use_default_dataset_statistic: bool = False,
     ) -> "PotentialTrainer":
         """
@@ -1055,8 +1051,7 @@ class NeuralNetworkPotentialFactory:
             Parameters for configuring the dataset (default is None).
         dataset_statistic : Dict[str, Dict[str, float]], optional
             Dataset statistics for normalization (default is provided).
-        potential_seed : Optional[int], optional
-            Seed for random number generation (default is None).
+
         use_default_dataset_statistic : bool, optional
             Whether to use default dataset statistics (default is False).
         Returns
@@ -1066,6 +1061,8 @@ class NeuralNetworkPotentialFactory:
         """
         from modelforge.utils.misc import seed_random_number
         from modelforge.train.training import PotentialTrainer
+
+        potential_seed = potential_parameter.potential_seed
 
         if potential_seed is not None:
             log.info(f"Setting random seed to: {potential_seed}")
@@ -1081,7 +1078,6 @@ class NeuralNetworkPotentialFactory:
             training_parameter=training_parameter,
             dataset_parameter=dataset_parameter,
             runtime_parameter=runtime_parameter,
-            potential_seed=potential_seed,
             dataset_statistic=dataset_statistic,
             use_default_dataset_statistic=use_default_dataset_statistic,
         )
@@ -1187,7 +1183,7 @@ class PyTorch2JAXConverter:
                 0  positions
                 1  per_system_total_charge
                 2  box_vectors
-                3  per_system_spin_state
+                3  per_system_spin_multiplicity
                 4  per_atom_partial_charge  (may be None)
 
             aux_data  (static torch.Tensors / None, never DLPack-converted):
@@ -1429,8 +1425,8 @@ class PyTorch2JAXConverter:
                 box_vectors=jax.numpy.zeros_like(
                     data.box_vectors, dtype=jax_grad_positions.dtype
                 ),
-                per_system_spin_state=jax.numpy.zeros_like(
-                    data.per_system_spin_state, dtype=jax_grad_positions.dtype
+                per_system_spin_multiplicity=jax.numpy.zeros_like(
+                    data.per_system_spin_multiplicity, dtype=jax_grad_positions.dtype
                 ),
                 is_periodic=torch_to_jax(data.is_periodic),
                 pair_list=data.pair_list,
@@ -1486,13 +1482,11 @@ def load_inference_model_from_checkpoint(
     hyperparams = checkpoint["hyper_parameters"]
     potential_parameter = hyperparams["potential_parameter"]
     dataset_statistic = hyperparams.get("dataset_statistic", None)
-    potential_seed = hyperparams.get("potential_seed", None)
 
     # Create the model in inference mode
     potential = NeuralNetworkPotentialFactory.generate_potential(
         potential_parameter=potential_parameter,
         dataset_statistic=dataset_statistic,
-        potential_seed=potential_seed,
         jit=jit,
         use_training_mode_neighborlist=use_training_mode_neighborlist,
     )

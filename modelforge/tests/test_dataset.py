@@ -1902,7 +1902,7 @@ def test_hdf5_to_torchdataset(prep_temp_dir):
     )
 
     assert torch.allclose(
-        dm.torch_dataset[0].nnp_input.per_system_spin_state, torch.tensor([[3]])
+        dm.torch_dataset[0].nnp_input.per_system_spin_multiplicity, torch.tensor([[3]])
     )
 
     assert torch.allclose(

@@ -248,7 +248,11 @@ def test_electrostatics_coulomb_constant():
     from modelforge.potential.processing import CoulombPotential
 
     k_e = (
-        (unit.avogadro_constant * unit.elementary_charge**2 / (4 * math.pi * unit.epsilon_0))
+        (
+            unit.avogadro_constant
+            * unit.elementary_charge**2
+            / (4 * math.pi * unit.epsilon_0)
+        )
         .to(unit.kilojoule_per_mole * unit.nanometer)
         .m
     )
@@ -750,9 +754,9 @@ def test_energy_scaling_and_offset(
     # initialize model without any postprocessing
     # -------------------------------#
 
+    config["potential"].potential_seed = 42
     potential = NeuralNetworkPotentialFactory.generate_potential(
         potential_parameter=config["potential"],
-        potential_seed=42,
     )
     output_no_postprocessing = potential(methane)
     # -------------------------------#
@@ -760,7 +764,6 @@ def test_energy_scaling_and_offset(
     potential = NeuralNetworkPotentialFactory.generate_potential(
         potential_parameter=config["potential"],
         dataset_statistic=trainer.dataset_statistic,
-        potential_seed=42,
     )
     scaled_output = potential(methane)
 
@@ -842,9 +845,14 @@ def test_state_dict_saving_and_loading(potential_name, prep_temp_dir):
 # @pytest.mark.xfail(
 #     reason="checkpoint file needs to be updated now that non_unique_pairs is registered in nlist"
 # )
-def test_loading_from_checkpoint_file():
+def test_loading_from_checkpoint_file(
+    single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
+):
     from modelforge.utils.io import get_path_string
     from modelforge.tests import data
+
+    local_cache_dir = f"{str(prep_temp_dir)}/test_loading_from_checkpoint_file"
+    dataset_cache_dir = str(dataset_temp_dir)
 
     # checkpoint file is saved in tests/data
     ckpt_file = get_path_string(data) + "/best_SchNet-PhAlkEthOH-epoch=00.ckpt"
@@ -853,10 +861,26 @@ def test_loading_from_checkpoint_file():
     from modelforge.potential.potential import load_inference_model_from_checkpoint
 
     # note this is a legacy file, and thus we need to manually define only_unique_pairs
-    potential = load_inference_model_from_checkpoint(
-        ckpt_file, only_unique_pairs=False, old_config_only_local_cutoff=True
-    )
+    # this will fail because it has a negative value written for the seed entry
+    with pytest.raises(ValueError):
+        potential = load_inference_model_from_checkpoint(
+            ckpt_file, only_unique_pairs=False, old_config_only_local_cutoff=True
+        )
+
+    ckpt_file = get_path_string(data) + "/best_SchNet-qm9-epoch=433.ckpt"
+
+    potential = load_inference_model_from_checkpoint(ckpt_file)
     assert potential is not None
+
+    batch = single_batch_with_batchsize(
+        batch_size=1,
+        dataset_name="QM9",
+        local_cache_dir=local_cache_dir,
+    )
+    nnp_input = batch.nnp_input
+
+    output = potential(nnp_input)
+    assert torch.allclose(output["per_system_energy"], torch.tensor([[-1656.3508]]))
 
 
 @pytest.mark.parametrize(

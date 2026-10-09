@@ -23,7 +23,7 @@ in aux_data so JAX never tries to trace or DLPack-convert them.
   0  positions                  float32
   1  per_system_total_charge    float32
   2  box_vectors                float32
-  3  per_system_spin_state      float32
+  3  per_system_spin_multiplicity      float32
   4  per_atom_partial_charge    float32 | None
 
   aux_data  (static, passed through as Python objects)
@@ -166,7 +166,7 @@ def nnpinput_flatten(nnp_input: NNPInput):
         nnp_input.positions,  # 0  float32 or float64 — differentiable
         nnp_input.per_system_total_charge,  # 1  float32 or float64
         nnp_input.box_vectors,  # 2  float32 or float64
-        nnp_input.per_system_spin_state,  # 3  float32 or float64
+        nnp_input.per_system_spin_multiplicity,  # 3  float32 or float64
         nnp_input.per_atom_partial_charge,  # 4  float32 or float64 | None
     )
     aux_data = (
@@ -188,7 +188,7 @@ def nnpinput_unflatten(aux_data, children):
         positions,
         per_system_total_charge,
         box_vectors,
-        per_system_spin_state,
+        per_system_spin_multiplicity,
         per_atom_partial_charge,
     ) = children
     (
@@ -212,7 +212,7 @@ def nnpinput_unflatten(aux_data, children):
     obj.atomic_subsystem_indices = atomic_subsystem_indices
     obj.per_system_total_charge = per_system_total_charge
     obj.box_vectors = box_vectors
-    obj.per_system_spin_state = per_system_spin_state
+    obj.per_system_spin_multiplicity = per_system_spin_multiplicity
     obj.is_periodic = is_periodic
     obj.pair_list = pair_list
     obj.per_atom_partial_charge = per_atom_partial_charge
@@ -243,7 +243,9 @@ def convert_NNPInput_torch_to_jax(nnp_input: NNPInput) -> NNPInput:
         nnp_input.per_system_total_charge
     )
     nnp_input_out.box_vectors = torch_to_jax(nnp_input.box_vectors)
-    nnp_input_out.per_system_spin_state = torch_to_jax(nnp_input.per_system_spin_state)
+    nnp_input_out.per_system_spin_multiplicity = torch_to_jax(
+        nnp_input.per_system_spin_multiplicity
+    )
 
     # Optional float — None when empty so the pytree carries None cleanly
     nnp_input_out.per_atom_partial_charge = torch_to_jax(
@@ -285,7 +287,7 @@ def convert_NNPInput_jax_to_torch(nnp_input: NNPInput) -> NNPInput:
 
     per_system_total_charge = jax_to_torch(nnp_input.per_system_total_charge)
     box_vectors = jax_to_torch(nnp_input.box_vectors)
-    per_system_spin_state = jax_to_torch(nnp_input.per_system_spin_state)
+    per_system_spin_multiplicity = jax_to_torch(nnp_input.per_system_spin_multiplicity)
 
     # Optional float — None means we set it to an empty tensor with the correct dtype
     if nnp_input.per_atom_partial_charge is None:
@@ -314,5 +316,5 @@ def convert_NNPInput_jax_to_torch(nnp_input: NNPInput) -> NNPInput:
     nnp_input.per_atom_partial_charge = per_atom_partial_charge
     nnp_input.atomic_numbers = nnp_input.atomic_numbers
     nnp_input.atomic_subsystem_indices = nnp_input.atomic_subsystem_indices
-    nnp_input.per_system_spin_state = per_system_spin_state
+    nnp_input.per_system_spin_multiplicity = per_system_spin_multiplicity
     return nnp_input

@@ -67,7 +67,7 @@ def setup_potential_for_test(
     potential_seed: Optional[int] = None,
     simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
     local_cache_dir: Optional[str] = None,
-    dataset_cache_dir: Optional[str] = None,
+    number_of_charge_channels: Optional[int] = 1,
 ):
     from modelforge.potential import NeuralNetworkPotentialFactory
     from modelforge.utils.misc import load_configs_into_pydantic_models
@@ -79,8 +79,16 @@ def setup_potential_for_test(
     config = load_configs_into_pydantic_models(potential_name, "qm9")
     # override defaults to match reference implementation in spk
 
+    if potential_seed is not None:
+        config["potential"].potential_seed = potential_seed
+
     if local_cache_dir is not None:
         config["runtime"].local_cache_dir = local_cache_dir
+
+    if "aimnet2" == potential_name.lower():
+        config["potential"].core_parameter.number_of_charge_channels = (
+            number_of_charge_channels
+        )
 
     if use == "training":
         trainer = NeuralNetworkPotentialFactory.generate_trainer(
@@ -88,7 +96,6 @@ def setup_potential_for_test(
             runtime_parameter=config["runtime"],
             training_parameter=config["training"],
             dataset_parameter=config["dataset"],
-            potential_seed=potential_seed,
             use_default_dataset_statistic=use_default_dataset_statistic,
         )
         potential = trainer.lightning_module.potential
@@ -97,7 +104,6 @@ def setup_potential_for_test(
             potential_parameter=config["potential"],
             training_parameter=config["training"],
             dataset_parameter=config["dataset"],
-            potential_seed=potential_seed,
             simulation_environment=simulation_environment,
             use_training_mode_neighborlist=use_training_mode_neighborlist,
             jit=jit,

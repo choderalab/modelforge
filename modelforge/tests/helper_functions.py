@@ -79,6 +79,9 @@ def setup_potential_for_test(
     config = load_configs_into_pydantic_models(potential_name, "qm9")
     # override defaults to match reference implementation in spk
 
+    if potential_seed is not None:
+        config["potential"].potential_seed = potential_seed
+
     if local_cache_dir is not None:
         config["runtime"].local_cache_dir = local_cache_dir
 
@@ -88,7 +91,6 @@ def setup_potential_for_test(
             runtime_parameter=config["runtime"],
             training_parameter=config["training"],
             dataset_parameter=config["dataset"],
-            potential_seed=potential_seed,
             use_default_dataset_statistic=use_default_dataset_statistic,
         )
         potential = trainer.lightning_module.potential
@@ -97,7 +99,6 @@ def setup_potential_for_test(
             potential_parameter=config["potential"],
             training_parameter=config["training"],
             dataset_parameter=config["dataset"],
-            potential_seed=potential_seed,
             simulation_environment=simulation_environment,
             use_training_mode_neighborlist=use_training_mode_neighborlist,
             jit=jit,

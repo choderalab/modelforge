@@ -13,7 +13,9 @@ from pydantic import (
     computed_field,
     field_validator,
     model_validator,
+    conint,
 )
+
 
 from modelforge.utils.units import _convert_str_or_unit_to_unit_length
 
@@ -294,7 +296,7 @@ class AimNet2Parameters(ParametersBase):
     only_unique_pairs: bool = False
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
-    potential_seed: Optional[int] = None
+    potential_seed: conint(ge=0)
 
 
 class AimNet2SRParameters(ParametersBase):
@@ -341,7 +343,7 @@ class AimNet2SRParameters(ParametersBase):
     only_unique_pairs: bool = False
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
-    potential_seed: Optional[int] = None
+    potential_seed: conint(ge=0)
 
 
 class ANI2xParameters(ParametersBase):
@@ -373,7 +375,7 @@ class ANI2xParameters(ParametersBase):
     only_unique_pairs: bool = True
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
-    potential_seed: Optional[int] = None
+    potential_seed: conint(ge=0)
 
 
 class SchNetParameters(ParametersBase):
@@ -398,7 +400,7 @@ class SchNetParameters(ParametersBase):
     only_unique_pairs: bool = False
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
-    potential_seed: int = -1
+    potential_seed: conint(ge=0)
 
 
 class TensorNetParameters(ParametersBase):
@@ -424,7 +426,7 @@ class TensorNetParameters(ParametersBase):
     only_unique_pairs: bool = False
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
-    potential_seed: Optional[int] = None
+    potential_seed: conint(ge=0)
 
 
 class PaiNNParameters(ParametersBase):
@@ -450,7 +452,7 @@ class PaiNNParameters(ParametersBase):
     only_unique_pairs: bool = False
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
-    potential_seed: Optional[int] = None
+    potential_seed: conint(ge=0)
 
 
 class PhysNetParameters(ParametersBase):
@@ -475,7 +477,7 @@ class PhysNetParameters(ParametersBase):
     only_unique_pairs: bool = False
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
-    potential_seed: Optional[int] = None
+    potential_seed: conint(ge=0)
 
 
 class SAKEParameters(ParametersBase):
@@ -500,4 +502,4 @@ class SAKEParameters(ParametersBase):
     only_unique_pairs: bool = False
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
-    potential_seed: Optional[int] = None
+    potential_seed: conint(ge=0)

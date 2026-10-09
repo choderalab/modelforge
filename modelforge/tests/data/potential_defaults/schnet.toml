@@ -1,6 +1,7 @@
 # ------------------------------------------------------------ #
 [potential]
 potential_name = "SchNet"
+potential_seed = 42
 # ------------------------------------------------------------ #
 [potential.core_parameter]
 number_of_radial_basis_functions = 16

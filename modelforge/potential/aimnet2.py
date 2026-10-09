@@ -77,7 +77,7 @@ class FukuiEquilibration(nn.Module):
         per_system_target : (n_systems, number_of_charge_channels)
             Target per-system value.  This is the total charge (channels=1), or
             [(Q+S)/2, (Q-S)/2] for up/down equilibration (channels=2), where
-            S = per_system_spin_state - 1.
+            S = per_system_spin_multiplicity - 1.
         atomic_subsystem_indices : (n_atoms,)
             Defines which molecule an atom is associated with
         epsilon : float
@@ -285,7 +285,7 @@ class AimNet2Core(torch.nn.Module):
         gv = u_ij.unsqueeze(-1) * gs.unsqueeze(1)  # Broadcasting over G
 
         # get the per system spin multiplicity from nnp_input
-        per_system_spin_multiplicity = data.per_system_spin_state.to(
+        per_system_spin_multiplicity = data.per_system_spin_multiplicity.to(
             dtype=atomic_embedding.dtype
         )
         per_system_total_charge = data.per_system_total_charge.to(
@@ -302,6 +302,25 @@ class AimNet2Core(torch.nn.Module):
             dtype=atomic_embedding.dtype,
             device=atomic_embedding.device,
         )
+        per_system_total_charge = data.per_system_total_charge
+        if per_system_total_charge.shape[0] == 0:
+            n_systems = (
+                int(atomic_subsystem_indices.max().item()) + 1
+                if atomic_subsystem_indices.numel() > 0
+                else 0
+            )
+
+            per_system_total_charge = torch.zeros(
+                n_systems,
+                1,
+                device=atomic_embedding.device,
+                dtype=atomic_embedding.dtype,
+            )
+
+        per_system_spin_multiplicity = data.per_system_spin_multiplicity
+        if per_system_spin_multiplicity.shape[0] == 0:
+
+            per_system_spin_multiplicity = torch.ones_like(per_system_total_charge)
 
         if self.number_of_charge_channels == 2:
             half_spin = 0.5 * (per_system_spin_multiplicity - 1)

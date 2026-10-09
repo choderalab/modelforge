@@ -650,7 +650,6 @@ class TrainingAdapter(pL.LightningModule):
         training_parameter: TrainingParameters,
         optimizer_class: Type[Optimizer],
         nr_of_training_batches: int = -1,
-        potential_seed: Optional[int] = None,
     ):
         """
         Initialize the TrainingAdapter with model and training configuration.
@@ -667,8 +666,6 @@ class TrainingAdapter(pL.LightningModule):
             The optimizer class to use for training.
         nr_of_training_batches : int, optional
             Number of training batches (default is -1).
-        potential_seed : Optional[int], optional
-            Seed for initializing the model (default is None).
         """
         from modelforge.potential.potential import setup_potential
 
@@ -683,7 +680,6 @@ class TrainingAdapter(pL.LightningModule):
             potential_parameter=potential_parameter,
             dataset_statistic=dataset_statistic,
             use_training_mode_neighborlist=True,
-            potential_seed=potential_seed,
             jit=False,
         )
 
@@ -1780,31 +1776,30 @@ class PotentialTrainer:
         verbose: bool = False,
     ):
         """
-        Initializes the TrainingAdapter with the specified model and training
-        configuration.
+                Initializes the TrainingAdapter with the specified model and training
+                configuration.
 
-        Parameters
-        ----------
-        dataset_parameter : DatasetParameters
-            Parameters for the dataset.
-        potential_parameter : Union[ANI2xParameters, SAKEParameters,
-        SchNetParameters, PhysNetParameters, PaiNNParameters,
-        TensorNetParameters]
-            Parameters for the potential model.
-        training_parameter : TrainingParameters
-            Parameters for the training process.
-        runtime_parameter : RuntimeParameters
-            Parameters for runtime configuration.
-        dataset_statistic : Dict[str, Dict[str, unit.Quantity]]
-            Dataset statistics such as mean and standard deviation.
-        use_default_dataset_statistic: bool
-            Whether to use default dataset statistic
-        optimizer_class : Type[Optimizer], optional
-            The optimizer class to use for training, by default
-            torch.optim.AdamW.
-
-        verbose : bool, optional
-            If True, enables verbose logging, by default False.
+                Parameters
+                ----------
+                dataset_parameter : DatasetParameters
+                    Parameters for the dataset.
+                potential_parameter : Union[ANI2xParameters, SAKEParameters,
+                SchNetParameters, PhysNetParameters, PaiNNParameters,
+                TensorNetParameters]
+                    Parameters for the potential model.
+                training_parameter : TrainingParameters
+                    Parameters for the training process.
+                runtime_parameter : RuntimeParameters
+                    Parameters for runtime configuration.
+                dataset_statistic : Dict[str, Dict[str, unit.Quantity]]
+                    Dataset statistics such as mean and standard deviation.
+                use_default_dataset_statistic: bool
+                    Whether to use default dataset statistic
+                optimizer_class : Type[Optimizer], optional
+                    The optimizer class to use for training, by default
+                    torch.optim.AdamW.
+        onal
+                    If True, enables verbose logging, by default False.
         """
 
         super().__init__()
@@ -1816,7 +1811,6 @@ class PotentialTrainer:
         self.runtime_parameter = runtime_parameter
         self.verbose = verbose
 
-        potential_seed = self.potential_parameter.potential_seed
         # Setup data module
         self.datamodule = self.setup_datamodule()
         # Read and assign provided dataset statistics
@@ -1829,7 +1823,7 @@ class PotentialTrainer:
         self.callbacks = self.setup_callbacks()
         self.trainer = self.setup_trainer()
         self.optimizer_class = optimizer_class
-        self.lightning_module = self.setup_lightning_module(potential_seed)
+        self.lightning_module = self.setup_lightning_module()
 
     def read_dataset_statistics(
         self,
@@ -1903,16 +1897,12 @@ class PotentialTrainer:
         dm.setup()
         return dm
 
-    def setup_lightning_module(
-        self, potential_seed: Optional[int] = None
-    ) -> pL.LightningModule:
+    def setup_lightning_module(self) -> pL.LightningModule:
         """
         Set up the model for training.
 
         Parameters
         ----------
-        potential_seed : int, optional
-            Seed to be used to initialize the potential, by default None.
 
         Returns
         -------
@@ -1927,7 +1917,6 @@ class PotentialTrainer:
             training_parameter=self.training_parameter,
             optimizer_class=self.optimizer_class,
             nr_of_training_batches=len(self.datamodule.train_dataloader()),
-            potential_seed=potential_seed,
         )
 
     def setup_logger(self) -> pL.loggers.Logger:

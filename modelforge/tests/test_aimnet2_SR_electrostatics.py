@@ -197,11 +197,13 @@ def _build_sr_potential(coulomb: bool = False, sum_energy: bool = False):
         pp.sum_per_system_energy = SumPerSystemEnergy(
             contributions=["per_system_electrostatic_energy"]
         )
+
+    config["potential"].potential_seed = 42
+
     return NeuralNetworkPotentialFactory.generate_potential(
         potential_parameter=config["potential"],
         training_parameter=config["training"],
         dataset_parameter=config["dataset"],
-        potential_seed=42,
         use_training_mode_neighborlist=True,
     )
 
@@ -246,8 +248,10 @@ def _gaussian_energy_reference(positions, charges, system_indices, cutoff):
 def test_core_electrostatic_energy_is_consistent_with_its_charges():
     """The core's per_atom_electrostatic_energy equals k_e 0.5 q_i v_i (kJ/mol)
     recomputed from its own output charges."""
-    potential = _build_sr_potential()
     data = _water_and_methanol()
+
+    potential = _build_sr_potential()
+
     pairlist = potential.neighborlist.forward(data)
     out = potential.core_network.forward(
         data, pairlist.local_cutoff, pairlist.electrostatic_cutoff
@@ -344,4 +348,3 @@ def test_gaussian_energy_used_without_coulomb_postprocessing():
         rtol=1e-4,
         atol=1e-5,
     )
-

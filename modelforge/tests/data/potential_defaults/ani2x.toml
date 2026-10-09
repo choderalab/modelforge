@@ -1,5 +1,6 @@
 [potential]
 potential_name = "ANI2x"
+potential_seed = 42
 
 [potential.core_parameter]
 angle_sections = 4

@@ -487,8 +487,25 @@ class AimNet2SRCore(torch.nn.Module):
             dtype=atomic_embedding.dtype,
             device=atomic_embedding.device,
         )
+        per_system_total_charge = data.per_system_total_charge
+        if per_system_total_charge.shape[0] == 0:
+            n_systems = (
+                int(atomic_subsystem_indices.max().item()) + 1
+                if atomic_subsystem_indices.numel() > 0
+                else 0
+            )
 
-        per_system_spin_multiplicity = data.per_system_spin_state
+            per_system_total_charge = torch.zeros(
+                n_systems,
+                1,
+                device=atomic_embedding.device,
+                dtype=atomic_embedding.dtype,
+            )
+
+        per_system_spin_multiplicity = data.per_system_spin_multiplicity
+        if per_system_spin_multiplicity.shape[0] == 0:
+
+            per_system_spin_multiplicity = torch.ones_like(per_system_total_charge)
 
         # Perform message passing using interaction modules
         for i, interaction in enumerate(self.interaction_modules):
@@ -523,10 +540,12 @@ class AimNet2SRCore(torch.nn.Module):
                 "atomic_embedding": atomic_embedding,
                 "per_atom_charge_up": p_up,
                 "per_atom_charge_down": p_down,
-                "per_system_total_charge": data.per_system_total_charge.to(
+                "per_system_total_charge": per_system_total_charge.to(
                     dtype=atomic_embedding.dtype
                 ),
-                "per_system_spin_multiplicity": per_system_spin_multiplicity,
+                "per_system_spin_multiplicity": per_system_spin_multiplicity.to(
+                    dtype=atomic_embedding.dtype
+                ),
                 "atomic_subsystem_indices": data.atomic_subsystem_indices.to(
                     dtype=torch.int64
                 ),
@@ -838,7 +857,7 @@ class AimNet2SRInteractionModule(nn.Module):
         # Smoothed norm over the vector components: sqrt(|v|^2 + eps^2) - eps.
         # Rotation invariant, smooth at v = 0 (e.g., symmetric sites), with
         # curvature capped at 1/eps for stable force training.
-        eps = 1e-4 # sits between the round-off at symmetric sites (~1e-8) and typical features (RMS about 0.24)
+        eps = 1e-4  # sits between the round-off at symmetric sites (~1e-8) and typical features (RMS about 0.24)
         vector_contributions = (
             torch.sqrt(avf_v_sum.pow(2).sum(dim=-1) + eps**2) - eps
         )  # Shape: (number_of_atoms, H)

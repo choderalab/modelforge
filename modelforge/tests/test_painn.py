@@ -23,12 +23,13 @@ def setup_painn_model(potential_seed: int):
     ].core_parameter.featurization.atomic_number.number_of_per_atom_features = 8
     config["potential"].core_parameter.number_of_radial_basis_functions = 5
 
+    if potential_seed is not None:
+        config["potential"].potential_seed = potential_seed
     trainer_painn = NeuralNetworkPotentialFactory.generate_trainer(
         potential_parameter=config["potential"],
         training_parameter=config["training"],
         dataset_parameter=config["dataset"],
         runtime_parameter=config["runtime"],
-        potential_seed=potential_seed,
     ).lightning_module.potential
     return trainer_painn
 

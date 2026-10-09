@@ -69,7 +69,7 @@ class FukuiEquilibration(nn.Module):
 
         Parameters
         ----------
-        per_atom_charge : (n_atoms, number_of_charge_channels) where number of channels can be 1 oor 2
+        per_atom_charge : (n_atoms, number_of_charge_channels) where number of channels can be 1 or 2
             This is the original, un-equilibrated per-atom charge (channels = 1) or charge+spin /
             up+down channels (channels = 2).
         per_atom_fukui_weight : (n_atoms, number_of_charge_channels)
@@ -284,13 +284,6 @@ class AimNet2Core(torch.nn.Module):
         # Compute gv with shape (number_of_pairs, 3, G)
         gv = u_ij.unsqueeze(-1) * gs.unsqueeze(1)  # Broadcasting over G
 
-        # get the per system spin multiplicity from nnp_input
-        per_system_spin_multiplicity = data.per_system_spin_multiplicity.to(
-            dtype=atomic_embedding.dtype
-        )
-        per_system_total_charge = data.per_system_total_charge.to(
-            dtype=atomic_embedding.dtype
-        )
         # Atomic embedding "a" Eqn. (3)
         partial_charge_channels = torch.zeros(
             (atomic_embedding.shape[0], self.number_of_charge_channels),
@@ -305,8 +298,8 @@ class AimNet2Core(torch.nn.Module):
         per_system_total_charge = data.per_system_total_charge
         if per_system_total_charge.shape[0] == 0:
             n_systems = (
-                int(atomic_subsystem_indices.max().item()) + 1
-                if atomic_subsystem_indices.numel() > 0
+                int(data.atomic_subsystem_indices.max().item()) + 1
+                if data.atomic_subsystem_indices.numel() > 0
                 else 0
             )
 

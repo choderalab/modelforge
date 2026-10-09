@@ -490,8 +490,8 @@ class AimNet2SRCore(torch.nn.Module):
         per_system_total_charge = data.per_system_total_charge
         if per_system_total_charge.shape[0] == 0:
             n_systems = (
-                int(atomic_subsystem_indices.max().item()) + 1
-                if atomic_subsystem_indices.numel() > 0
+                int(data.atomic_subsystem_indices.max().item()) + 1
+                if data.atomic_subsystem_indices.numel() > 0
                 else 0
             )
 

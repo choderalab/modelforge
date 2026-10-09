@@ -1776,30 +1776,30 @@ class PotentialTrainer:
         verbose: bool = False,
     ):
         """
-                Initializes the TrainingAdapter with the specified model and training
-                configuration.
+        Initializes the TrainingAdapter with the specified model and training
+        configuration.
 
-                Parameters
-                ----------
-                dataset_parameter : DatasetParameters
-                    Parameters for the dataset.
-                potential_parameter : Union[ANI2xParameters, SAKEParameters,
-                SchNetParameters, PhysNetParameters, PaiNNParameters,
-                TensorNetParameters]
-                    Parameters for the potential model.
-                training_parameter : TrainingParameters
-                    Parameters for the training process.
-                runtime_parameter : RuntimeParameters
-                    Parameters for runtime configuration.
-                dataset_statistic : Dict[str, Dict[str, unit.Quantity]]
-                    Dataset statistics such as mean and standard deviation.
-                use_default_dataset_statistic: bool
-                    Whether to use default dataset statistic
-                optimizer_class : Type[Optimizer], optional
-                    The optimizer class to use for training, by default
-                    torch.optim.AdamW.
-        onal
-                    If True, enables verbose logging, by default False.
+        Parameters
+        ----------
+        dataset_parameter : DatasetParameters
+            Parameters for the dataset.
+        potential_parameter : Union[ANI2xParameters, SAKEParameters,
+        SchNetParameters, PhysNetParameters, PaiNNParameters,
+        TensorNetParameters]
+            Parameters for the potential model.
+        training_parameter : TrainingParameters
+            Parameters for the training process.
+        runtime_parameter : RuntimeParameters
+            Parameters for runtime configuration.
+        dataset_statistic : Dict[str, Dict[str, unit.Quantity]]
+            Dataset statistics such as mean and standard deviation.
+        use_default_dataset_statistic: bool
+            Whether to use default dataset statistic
+        optimizer_class : Type[Optimizer], optional
+            The optimizer class to use for training, by default
+            torch.optim.AdamW.
+        verbose: bool, optioonal
+            If True, enables verbose logging, by default False.
         """
 
         super().__init__()

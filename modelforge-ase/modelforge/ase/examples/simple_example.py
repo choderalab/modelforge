@@ -17,7 +17,7 @@ import modelforge.ase.tests as ase_tests
 # `molecule()` expects an ASE-recognized structure name string.
 # Common examples include: "H2O", "NH3", "CH4", "CO2", and "C6H6".
 ASE_MOLECULE_NAME = "H2O"
-MODEL_PATH = f"{get_path_string(ase_tests)}/best_SchNet-qm9-epoch=433.ckpt"
+MODEL_PATH = f"{get_path_string(ase_tests)}/data/best_SchNet-qm9-epoch=433.ckpt"
 OPT_FMAX_EV_PER_ANGSTROM = 0.05
 OPT_LOGFILE = "simple_example_opt.log"
 OPT_TRAJECTORY = "simple_example_opt.traj"

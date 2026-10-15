@@ -95,6 +95,7 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
                 torch.float32
             ),
             "E": torch.from_numpy(dataset[property_name.E]).to(torch.float64),
+            "names": dataset["names"],
         }
 
         # since total_charge, force, dipole_moment and spin multiplicity are optional
@@ -210,6 +211,14 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
                 :, pair_list_indices_start:pair_list_indices_end
             ]
         return pair_list
+
+    def _get_datapoint(self, idx: int) -> tuple[str, torch.Tensor]:
+        # this will return the same as get item, but also will grab the name of the record
+        single_atom_start_idx = self.single_atom_start_idxs_by_conf[idx]
+        single_atom_end_idx = self.single_atom_end_idxs_by_conf[idx]
+        datapoint_name = self.properties_of_interest["names"][idx]
+
+        return (str(datapoint_name), self.__getitem__(idx))
 
     def __getitem__(self, idx: int) -> BatchData:
         """Fetch data for a given conformer index."""
@@ -494,7 +503,6 @@ class HDF5Dataset:
         # user is actually using the correct file.
         else:
             log.debug("Using local yaml file for dataset.")
-            print(self.hdf5_data_file_dict)
             if not self._file_validation(
                 file_name=self.hdf5_data_file_dict["file_name"],
                 checksum=self.hdf5_data_file_dict["md5"],
@@ -666,19 +674,23 @@ class HDF5Dataset:
             import json
 
             from modelforge.utils.misc import OpenWithLock
+            from copy import copy
 
+            properties_with_names = copy(self.properties_of_interest)
+            if "names" not in properties_with_names:
+                properties_with_names.append("names")
             with OpenWithLock(f"{file_path}/{file_name}.lockfile", "w") as fl:
                 with open(f"{file_path}/{file_name}", "r") as f:
                     self._npz_metadata = json.load(f)
 
                     if not self._check_lists(
-                        self._npz_metadata["data_keys"], self.properties_of_interest
+                        self._npz_metadata["data_keys"], properties_with_names
                     ):
                         log.warning(
                             f"Data keys used to generate {file_path}/{file_name} ({self._npz_metadata['data_keys']})"
                         )
                         log.warning(
-                            f"do not match data loader ({self.properties_of_interest})."
+                            f"do not match data loader ({properties_with_names})."
                         )
                         return False
 
@@ -729,7 +741,7 @@ class HDF5Dataset:
         else:
             full_file_path = os.path.expanduser(file_name)
 
-        print(f"Validating file {full_file_path}")
+        log.debug(f"Validating file {full_file_path}")
         with OpenWithLock(f"{full_file_path}.lockfile", "w") as lock_file:
             if not os.path.exists(full_file_path):
                 log.debug(f"File {full_file_path} does not exist.")
@@ -781,11 +793,6 @@ class HDF5Dataset:
         """
         Processes and extracts data from an hdf5 file.
 
-        Examples
-        --------
-        >>> hdf5_data = HDF5Dataset("raw_data.hdf5", "processed_data.npz")
-        >>> hdf5_data._from_hdf5()
-
         """
         from collections import OrderedDict
         from modelforge.utils.units import GlobalUnitSystem, chem_context
@@ -823,6 +830,9 @@ class HDF5Dataset:
 
                 # value shapes: (n_confs, n_atoms, *)
                 per_atom_data: Dict[str, List[np.ndarray]] = OrderedDict()
+
+                # system name shape (n_atoms)
+                system_names_data: List[str] = []
 
                 # initialize each relevant value in data dicts to empty list
 
@@ -931,6 +941,8 @@ class HDF5Dataset:
                                 satisfy_element_filter = self._satisfy_element_filter(
                                     atomic_numbers
                                 )
+                                system_name = grouped_names[i]
+
                                 if satisfy_element_filter:
                                     # we want to exclude configurations with NaN values for any property of interest
                                     configs_nan_by_prop: Dict[str, np.ndarray] = (
@@ -983,89 +995,101 @@ class HDF5Dataset:
                                         list(configs_nan_by_prop.values())
                                     )  # boolean array of size (n_config, self.properties_of_interest, )
                                     n_confs_rec = sum(~configs_nan)
-                                    atomic_subsystem_counts_rec = atomic_numbers.shape[
-                                        0
-                                    ]
 
-                                    self.n_confs.append(n_confs_rec)
-
-                                    self.atomic_subsystem_counts.append(
-                                        atomic_subsystem_counts_rec
-                                    )
-                                    for value in atomic_numbers_data.keys():
-                                        atomic_numbers_data[value].append(
-                                            atomic_numbers
+                                    if n_confs_rec > 0:
+                                        # need to check to ensure n_configs_rec is not zero
+                                        atomic_subsystem_counts_rec = (
+                                            atomic_numbers.shape[0]
                                         )
 
-                                    for value in per_atom_data.keys():
-                                        # exclude any configurations that are nan
-                                        record_array = values_per_prop_temp[value][
-                                            ~configs_nan
-                                        ]
-                                        if "u" in hf[record][value].attrs:
-                                            units = hf[record][value].attrs["u"]
-                                            property_type = hf[record][value].attrs[
-                                                "property_type"
+                                        self.n_confs.append(n_confs_rec)
+
+                                        self.atomic_subsystem_counts.append(
+                                            atomic_subsystem_counts_rec
+                                        )
+                                        for value in atomic_numbers_data.keys():
+                                            atomic_numbers_data[value].append(
+                                                atomic_numbers
+                                            )
+
+                                        for value in per_atom_data.keys():
+                                            # exclude any configurations that are nan
+                                            record_array = values_per_prop_temp[value][
+                                                ~configs_nan
                                             ]
+                                            if "u" in hf[record][value].attrs:
+                                                units = hf[record][value].attrs["u"]
+                                                property_type = hf[record][value].attrs[
+                                                    "property_type"
+                                                ]
 
-                                            if units != "dimensionless":
-                                                record_array = Quantity(
-                                                    record_array, units
-                                                ).to(
-                                                    GlobalUnitSystem.get_units(
-                                                        property_type
-                                                    ),
-                                                    "chem",
-                                                )
-                                                record_array = record_array.magnitude
-
-                                        try:
-                                            if (
-                                                record_array.shape[1]
-                                                != atomic_subsystem_counts_rec
-                                            ):
-                                                raise ValueError(
-                                                    f"Number of atoms for property {value} is inconsistent with other properties for record {record}"
-                                                )
-                                            else:
-                                                per_atom_data[value].append(
-                                                    record_array.reshape(
-                                                        n_confs_rec
-                                                        * atomic_subsystem_counts_rec,
-                                                        -1,
+                                                if units != "dimensionless":
+                                                    record_array = Quantity(
+                                                        record_array, units
+                                                    ).to(
+                                                        GlobalUnitSystem.get_units(
+                                                            property_type
+                                                        ),
+                                                        "chem",
                                                     )
+                                                    record_array = (
+                                                        record_array.magnitude
+                                                    )
+
+                                            try:
+                                                if (
+                                                    record_array.shape[1]
+                                                    != atomic_subsystem_counts_rec
+                                                ):
+                                                    raise ValueError(
+                                                        f"Number of atoms for property {value} is inconsistent with other properties for record {record}"
+                                                    )
+                                                else:
+                                                    per_atom_data[value].append(
+                                                        record_array.reshape(
+                                                            n_confs_rec
+                                                            * atomic_subsystem_counts_rec,
+                                                            -1,
+                                                        )
+                                                    )
+                                            except IndexError:
+                                                log.warning(
+                                                    f"Property {value} has an index error for record {record}."
                                                 )
-                                        except IndexError:
-                                            log.warning(
-                                                f"Property {value} has an index error for record {record}."
-                                            )
-                                            log.warning(
-                                                record_array.shape,
-                                                atomic_subsystem_counts_rec,
-                                            )
+                                                log.warning(
+                                                    record_array.shape,
+                                                    atomic_subsystem_counts_rec,
+                                                )
 
-                                    for value in per_system_data.keys():
+                                        for value in per_system_data.keys():
 
-                                        record_array = values_per_prop_temp[value][
-                                            ~configs_nan
-                                        ]
-                                        if "u" in hf[record][value].attrs:
-                                            units = hf[record][value].attrs["u"]
-                                            property_type = hf[record][value].attrs[
-                                                "property_type"
+                                            record_array = values_per_prop_temp[value][
+                                                ~configs_nan
                                             ]
+                                            if "u" in hf[record][value].attrs:
+                                                units = hf[record][value].attrs["u"]
+                                                property_type = hf[record][value].attrs[
+                                                    "property_type"
+                                                ]
 
-                                            if units != "dimensionless":
-                                                record_array = Quantity(
-                                                    record_array, units
-                                                ).to(
-                                                    GlobalUnitSystem.get_units(
-                                                        property_type
-                                                    ),
-                                                    "chem",
-                                                )
-                                                record_array = record_array.magnitude
-                                        per_system_data[value].append(record_array)
+                                                if units != "dimensionless":
+                                                    record_array = Quantity(
+                                                        record_array, units
+                                                    ).to(
+                                                        GlobalUnitSystem.get_units(
+                                                            property_type
+                                                        ),
+                                                        "chem",
+                                                    )
+                                                    record_array = (
+                                                        record_array.magnitude
+                                                    )
+                                            per_system_data[value].append(record_array)
+                                            system_names_data.append(system_name)
+                                    else:
+                                        log.debug(
+                                            f"skipping record {system_name} as it does not have any valid configurations."
+                                        )
                                 else:
                                     log.debug(
                                         f"skipping record {grouped_names[i]} based on element filter"
@@ -1084,6 +1108,7 @@ class HDF5Dataset:
                     data[value] = np.concatenate(per_system_data[value], axis=0)
                 for value in per_atom_data.keys():
                     data[value] = np.concatenate(per_atom_data[value], axis=0)
+                data["names"] = np.array(system_names_data)
             self.hdf5data = data
 
     def _from_file_cache(self) -> None:

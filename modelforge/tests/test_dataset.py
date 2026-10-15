@@ -34,6 +34,7 @@ def test_dataset_basic_operations():
     geom_shape = (total_atoms_series, 3)
     atomic_numbers_shape = (total_atoms_single, 1)
     internal_energy_shape = (total_confs, 1)
+    names = ["one", "two", "three"]
     input_data = {
         "geometry": np.arange(geom_shape[0] * geom_shape[1]).reshape(geom_shape),
         "atomic_numbers": np.arange(atomic_numbers_shape[0]).reshape(
@@ -44,6 +45,7 @@ def test_dataset_basic_operations():
         ),
         "atomic_subsystem_counts": atomic_subsystem_counts,
         "n_confs": n_confs,
+        "names": np.array(names),
     }
 
     property_names = PropertyNames(
@@ -92,6 +94,13 @@ def test_dataset_basic_operations():
         )
         assert np.array_equal(
             conf_data.metadata.per_system_energy, energy_true[conf_idx]
+        )
+        # test the _get_datapoint operation which will return the name and the output from _get_item
+        fetched_point = dataset._get_datapoint(conf_idx)
+        assert fetched_point[0] == names[conf_idx]
+        assert np.array_equal(
+            fetched_point[1].nnp_input.atomic_numbers,
+            conf_data.nnp_input.atomic_numbers,
         )
 
     for rec_idx in range(dataset.record_len()):
@@ -389,6 +398,7 @@ def test_metadata_validation(prep_temp_dir, load_test_dataset, dataset_temp_dir)
             "internal_energy_at_0K",
             "positions",
             "dipole_moment_per_system",
+            "names",
         ],
         "element_filter": str([[6, 1]]),
         "hdf5_checksum": "befb3ef66d74f436ef399bf68eda9b90",
@@ -419,6 +429,7 @@ def test_metadata_validation(prep_temp_dir, load_test_dataset, dataset_temp_dir)
             "internal_energy_at_0K",
             "not_a_property",
             "dipole_moment_per_system",
+            "names",
         ],
         "element_filter": str([[6, 1]]),
         "hdf5_checksum": "befb3ef66d74f436ef399bf68eda9b90",
@@ -440,6 +451,7 @@ def test_metadata_validation(prep_temp_dir, load_test_dataset, dataset_temp_dir)
             "internal_energy_at_0K",
             "not_a_property",
             "dipole_moment_per_system",
+            "names",
         ],
         "element_filter": str([[6, 1]]),
         "hdf5_checksum": "coiejfweoijfowklewke33883",
@@ -461,6 +473,7 @@ def test_metadata_validation(prep_temp_dir, load_test_dataset, dataset_temp_dir)
             "internal_energy_at_0K",
             "not_a_property",
             "dipole_moment_per_system",
+            "names",
         ],
         "element_filter": str([[6, 12]]),
         "hdf5_checksum": "coiejfweoijfowklewke33883",

@@ -17,8 +17,7 @@ Citation:   Ramakrishnan, R., Dral, P., Rupp, M. et al.
 DOI for original qm9 dataset: 10.6084/m9.figshare.c.978904.v5
 
 The Geometric Ensemble Of Molecules (GEOM) dataset contains conformers for 133,000 species from the QM9 dataset.
-Conformer structures were generated with CREST and GFN2-XTB.  Energies were evaluated using
-DFT via ORCA 5.0.2  using the r2scan-3c functional and mTZVPP basis.
+Conformer structures were generated with CREST and GFN2-XTB.  Energies reported here correspond to xtb energy.
 
 Citation:   Axelrod, S., Gómez-Bombarelli, R.
             GEOM, energy-annotated molecular conformations for property prediction and molecular generation.
@@ -43,7 +42,7 @@ def main():
 
     # We'll want to provide some simple means of versioning
     # if we make updates to either the underlying dataset, curation modules, or parameters given to the code
-    version = "1.0"
+    version = "1.1"
     # version of the dataset to curate
     version_select = f"v_4"
     # Curate the test dataset with 1000 total conformers

@@ -1526,3 +1526,147 @@ def load_inference_model_from_checkpoint(
 
     # Return the model
     return potential
+
+
+def evaluate_batch(
+    dm: DataModule,
+    potential: Potential,
+    subset: Literal["train", "test", "val"],
+    include_metadata: bool = True,
+) -> dict:
+    """
+    This will evaluate the dataset subset using the specified potential.
+
+    This will perform batch processing (for efficiency). which requires we use the NeighborlistForTraining in the potential
+    by setting `use_training_mode_neighborlist` to True when initializing the potential.
+
+
+    Parameters
+    ----------
+    dm: DataModule
+        Instance of the DataModule that contains the dataset
+    potential: Potential
+        Instance of the NNP potential
+    subset: Literal["train", "test", "val"]
+        Which subset to evaluate.
+    include_metadata: bool, default True
+        This will also include metadata information in the output dictionary, providing the reference data used in training.
+
+    Returns
+    -------
+    dict -- this dictionary is keyed on the top most level with the original index in the torch_datset.
+            Each entry includes `name` which corresponds to the name of  record in the original dataset; note, since
+            records in the dataset may have multiple configurations, multiple entries may have the same name.
+            Additionally, in this dict, there is the `output` which stores the output of the potential, and `metadata`
+            which includes data which can be used to train against.
+
+    """
+
+    if not isinstance(potential.neighborlist, NeighborListForTraining):
+        raise Exception(
+            "For batch processing, must use the NeighborListForTraining; set use_training_mode_neighborlist=True when setting up the potential"
+        )
+
+    # we'll want to grab the batch and the associated indices so we can generate a more rich summary output
+    if subset == "train":
+        batches = dm.train_dataloader()
+        indices = dm.train_dataset.indices
+    elif subset == "test":
+        batches = dm.test_dataloader()
+        indices = dm.test_dataset.indices
+    elif subset == "val":
+        batches = dm.val_dataloader()
+        indices = dm.val_dataset.indices
+
+    datapoints = {}
+
+    # first loop over all the indices to get the name of the associated system so we can more easily associated a
+    # datapoint with the dataset
+    for i in indices:
+        name, datapoint = dm.torch_dataset._get_datapoint(i)
+        datapoints[i] = {"name": name, "index": i, "output": {}}
+        if include_metadata:
+            datapoints[i]["metadata"] = {}
+    count = 0
+    # loop over the batch to compute
+    per_atom_properties = []
+    per_system_properties = []
+
+    per_atom_metadata_properties = []
+    per_system_metadata_properties = []
+
+    for batch in batches:
+        output = potential(batch.nnp_input)
+
+        # we'll need to parse the atomic_subsystem_indices
+        atomic_subsystem_indices = output["atomic_subsystem_indices"]
+
+        # we need to the total number of unique systems and length of each
+        mol_ids, atomic_subsystem_counts = torch.unique(
+            atomic_subsystem_indices, return_counts=True
+        )
+        n_systems = len(mol_ids)
+
+        # cumulative sum gives us the indices where each system starts
+        # to be able to use tensor_split for per_atom properties.  these need to be on the CPU
+        atomic_subsystem_counts_sum = torch.cumsum(atomic_subsystem_counts, dim=0).to(
+            "cpu"
+        )
+
+        # if this is our first pass through, figure out what the keys are
+        if count == 0:
+            keys = output.keys()
+
+            for key in keys:
+                if key.startswith("per_atom"):
+                    per_atom_properties.append(key)
+                if key.startswith("per_system"):
+                    per_system_properties.append(key)
+
+        per_atom_properties.append("atomic_numbers")
+
+        for key in per_system_properties:
+            temp = output[key]
+            for i in range(0, n_systems):
+                ii = count + i
+                real_index = indices[ii]
+                datapoints[real_index]["output"][key] = temp[i]
+
+        for key in per_atom_properties:
+            temp = output[key]
+            temp_index = torch.tensor_split(temp, atomic_subsystem_counts_sum[:-1])
+
+            for i in range(0, n_systems):
+                ii = count + i
+                real_index = indices[ii]
+                datapoints[real_index]["output"][key] = temp_index[i]
+        if include_metadata:
+            # let us grab all the keys from metadata slots if the first pass through
+            if count == 0:
+                keys = batch.metadata.__slots__
+
+                for key in keys:
+                    if key.startswith("per_atom"):
+                        per_atom_metadata_properties.append(key)
+                    if key.startswith("per_system"):
+                        per_system_metadata_properties.append(key)
+
+            for key in per_system_metadata_properties:
+                temp = getattr(batch.metadata, key)
+                for i in range(0, n_systems):
+                    ii = count + i
+                    real_index = indices[ii]
+                    datapoints[real_index]["metadata"][key] = temp[i]
+
+            for key in per_atom_metadata_properties:
+                temp = getattr(batch.metadata, key)
+                temp_index = torch.tensor_split(temp, atomic_subsystem_counts_sum[:-1])
+
+                for i in range(0, n_systems):
+                    ii = count + i
+                    real_index = indices[ii]
+                    datapoints[real_index]["metadata"][key] = temp_index[i]
+
+        count = count + n_systems
+
+    return datapoints

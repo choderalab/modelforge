@@ -65,7 +65,6 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
         self.series_mol_start_idxs_by_rec = np.concatenate(
             [np.array([0]), np.cumsum(dataset["n_confs"])]
         )
-
         self.single_atom_start_idxs_by_conf = np.repeat(
             single_atom_start_idxs_by_rec[: self.number_of_records], dataset["n_confs"]
         )
@@ -73,7 +72,6 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
             single_atom_start_idxs_by_rec[1 : self.number_of_records + 1],
             dataset["n_confs"],
         )
-
         self.series_atom_start_idxs_by_conf = np.concatenate(
             [
                 np.array([0]),
@@ -81,6 +79,11 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
                     np.repeat(dataset["atomic_subsystem_counts"], dataset["n_confs"])
                 ),
             ]
+        )
+        # we want a list that is the length of n_configs, but points to values bounded by n_records
+        # so for a n_confs = [5,3,2] and 3 records, we will have [0,0,0,0,0, 1,1,1,2,2]
+        self.indexing_for_name = np.repeat(
+            np.array(range(0, self.number_of_records)), dataset["n_confs"]
         )
 
     def _load_properties(
@@ -95,6 +98,7 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
                 torch.float32
             ),
             "E": torch.from_numpy(dataset[property_name.E]).to(torch.float64),
+            "names": dataset["names"],
         }
 
         # since total_charge, force, dipole_moment and spin multiplicity are optional
@@ -210,6 +214,14 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
                 :, pair_list_indices_start:pair_list_indices_end
             ]
         return pair_list
+
+    def _get_datapoint(self, idx: int) -> tuple[str, BatchData]:
+        # this will return the same as get item, but also will grab the name of the record
+
+        datapoint_name = self.properties_of_interest["names"][
+            self.indexing_for_name[idx]
+        ]
+        return (str(datapoint_name), self.__getitem__(idx))
 
     def __getitem__(self, idx: int) -> BatchData:
         """Fetch data for a given conformer index."""
@@ -494,7 +506,6 @@ class HDF5Dataset:
         # user is actually using the correct file.
         else:
             log.debug("Using local yaml file for dataset.")
-            print(self.hdf5_data_file_dict)
             if not self._file_validation(
                 file_name=self.hdf5_data_file_dict["file_name"],
                 checksum=self.hdf5_data_file_dict["md5"],
@@ -666,19 +677,23 @@ class HDF5Dataset:
             import json
 
             from modelforge.utils.misc import OpenWithLock
+            from copy import copy
 
+            properties_with_names = copy(self.properties_of_interest)
+            if "names" not in properties_with_names:
+                properties_with_names.append("names")
             with OpenWithLock(f"{file_path}/{file_name}.lockfile", "w") as fl:
                 with open(f"{file_path}/{file_name}", "r") as f:
                     self._npz_metadata = json.load(f)
 
                     if not self._check_lists(
-                        self._npz_metadata["data_keys"], self.properties_of_interest
+                        self._npz_metadata["data_keys"], properties_with_names
                     ):
                         log.warning(
                             f"Data keys used to generate {file_path}/{file_name} ({self._npz_metadata['data_keys']})"
                         )
                         log.warning(
-                            f"do not match data loader ({self.properties_of_interest})."
+                            f"do not match data loader ({properties_with_names})."
                         )
                         return False
 
@@ -729,7 +744,7 @@ class HDF5Dataset:
         else:
             full_file_path = os.path.expanduser(file_name)
 
-        print(f"Validating file {full_file_path}")
+        log.debug(f"Validating file {full_file_path}")
         with OpenWithLock(f"{full_file_path}.lockfile", "w") as lock_file:
             if not os.path.exists(full_file_path):
                 log.debug(f"File {full_file_path} does not exist.")
@@ -781,11 +796,6 @@ class HDF5Dataset:
         """
         Processes and extracts data from an hdf5 file.
 
-        Examples
-        --------
-        >>> hdf5_data = HDF5Dataset("raw_data.hdf5", "processed_data.npz")
-        >>> hdf5_data._from_hdf5()
-
         """
         from collections import OrderedDict
         from modelforge.utils.units import GlobalUnitSystem, chem_context
@@ -823,6 +833,9 @@ class HDF5Dataset:
 
                 # value shapes: (n_confs, n_atoms, *)
                 per_atom_data: Dict[str, List[np.ndarray]] = OrderedDict()
+
+                # system name shape (n_atoms)
+                system_names_data: List[str] = []
 
                 # initialize each relevant value in data dicts to empty list
 
@@ -931,6 +944,8 @@ class HDF5Dataset:
                                 satisfy_element_filter = self._satisfy_element_filter(
                                     atomic_numbers
                                 )
+                                system_name = grouped_names[i]
+
                                 if satisfy_element_filter:
                                     # we want to exclude configurations with NaN values for any property of interest
                                     configs_nan_by_prop: Dict[str, np.ndarray] = (
@@ -983,89 +998,101 @@ class HDF5Dataset:
                                         list(configs_nan_by_prop.values())
                                     )  # boolean array of size (n_config, self.properties_of_interest, )
                                     n_confs_rec = sum(~configs_nan)
-                                    atomic_subsystem_counts_rec = atomic_numbers.shape[
-                                        0
-                                    ]
 
-                                    self.n_confs.append(n_confs_rec)
-
-                                    self.atomic_subsystem_counts.append(
-                                        atomic_subsystem_counts_rec
-                                    )
-                                    for value in atomic_numbers_data.keys():
-                                        atomic_numbers_data[value].append(
-                                            atomic_numbers
+                                    if n_confs_rec > 0:
+                                        # need to check to ensure n_configs_rec is not zero
+                                        atomic_subsystem_counts_rec = (
+                                            atomic_numbers.shape[0]
                                         )
 
-                                    for value in per_atom_data.keys():
-                                        # exclude any configurations that are nan
-                                        record_array = values_per_prop_temp[value][
-                                            ~configs_nan
-                                        ]
-                                        if "u" in hf[record][value].attrs:
-                                            units = hf[record][value].attrs["u"]
-                                            property_type = hf[record][value].attrs[
-                                                "property_type"
+                                        self.n_confs.append(n_confs_rec)
+
+                                        self.atomic_subsystem_counts.append(
+                                            atomic_subsystem_counts_rec
+                                        )
+                                        for value in atomic_numbers_data.keys():
+                                            atomic_numbers_data[value].append(
+                                                atomic_numbers
+                                            )
+
+                                        for value in per_atom_data.keys():
+                                            # exclude any configurations that are nan
+                                            record_array = values_per_prop_temp[value][
+                                                ~configs_nan
                                             ]
+                                            if "u" in hf[record][value].attrs:
+                                                units = hf[record][value].attrs["u"]
+                                                property_type = hf[record][value].attrs[
+                                                    "property_type"
+                                                ]
 
-                                            if units != "dimensionless":
-                                                record_array = Quantity(
-                                                    record_array, units
-                                                ).to(
-                                                    GlobalUnitSystem.get_units(
-                                                        property_type
-                                                    ),
-                                                    "chem",
-                                                )
-                                                record_array = record_array.magnitude
-
-                                        try:
-                                            if (
-                                                record_array.shape[1]
-                                                != atomic_subsystem_counts_rec
-                                            ):
-                                                raise ValueError(
-                                                    f"Number of atoms for property {value} is inconsistent with other properties for record {record}"
-                                                )
-                                            else:
-                                                per_atom_data[value].append(
-                                                    record_array.reshape(
-                                                        n_confs_rec
-                                                        * atomic_subsystem_counts_rec,
-                                                        -1,
+                                                if units != "dimensionless":
+                                                    record_array = Quantity(
+                                                        record_array, units
+                                                    ).to(
+                                                        GlobalUnitSystem.get_units(
+                                                            property_type
+                                                        ),
+                                                        "chem",
                                                     )
+                                                    record_array = (
+                                                        record_array.magnitude
+                                                    )
+
+                                            try:
+                                                if (
+                                                    record_array.shape[1]
+                                                    != atomic_subsystem_counts_rec
+                                                ):
+                                                    raise ValueError(
+                                                        f"Number of atoms for property {value} is inconsistent with other properties for record {record}"
+                                                    )
+                                                else:
+                                                    per_atom_data[value].append(
+                                                        record_array.reshape(
+                                                            n_confs_rec
+                                                            * atomic_subsystem_counts_rec,
+                                                            -1,
+                                                        )
+                                                    )
+                                            except IndexError:
+                                                log.warning(
+                                                    f"Property {value} has an index error for record {record}."
                                                 )
-                                        except IndexError:
-                                            log.warning(
-                                                f"Property {value} has an index error for record {record}."
-                                            )
-                                            log.warning(
-                                                record_array.shape,
-                                                atomic_subsystem_counts_rec,
-                                            )
+                                                log.warning(
+                                                    record_array.shape,
+                                                    atomic_subsystem_counts_rec,
+                                                )
 
-                                    for value in per_system_data.keys():
+                                        for value in per_system_data.keys():
 
-                                        record_array = values_per_prop_temp[value][
-                                            ~configs_nan
-                                        ]
-                                        if "u" in hf[record][value].attrs:
-                                            units = hf[record][value].attrs["u"]
-                                            property_type = hf[record][value].attrs[
-                                                "property_type"
+                                            record_array = values_per_prop_temp[value][
+                                                ~configs_nan
                                             ]
+                                            if "u" in hf[record][value].attrs:
+                                                units = hf[record][value].attrs["u"]
+                                                property_type = hf[record][value].attrs[
+                                                    "property_type"
+                                                ]
 
-                                            if units != "dimensionless":
-                                                record_array = Quantity(
-                                                    record_array, units
-                                                ).to(
-                                                    GlobalUnitSystem.get_units(
-                                                        property_type
-                                                    ),
-                                                    "chem",
-                                                )
-                                                record_array = record_array.magnitude
-                                        per_system_data[value].append(record_array)
+                                                if units != "dimensionless":
+                                                    record_array = Quantity(
+                                                        record_array, units
+                                                    ).to(
+                                                        GlobalUnitSystem.get_units(
+                                                            property_type
+                                                        ),
+                                                        "chem",
+                                                    )
+                                                    record_array = (
+                                                        record_array.magnitude
+                                                    )
+                                            per_system_data[value].append(record_array)
+                                        system_names_data.append(system_name)
+                                    else:
+                                        log.debug(
+                                            f"skipping record {system_name} as it does not have any valid configurations."
+                                        )
                                 else:
                                     log.debug(
                                         f"skipping record {grouped_names[i]} based on element filter"
@@ -1084,6 +1111,7 @@ class HDF5Dataset:
                     data[value] = np.concatenate(per_system_data[value], axis=0)
                 for value in per_atom_data.keys():
                     data[value] = np.concatenate(per_atom_data[value], axis=0)
+                data["names"] = np.array(system_names_data)
             self.hdf5data = data
 
     def _from_file_cache(self) -> None:
@@ -1991,3 +2019,83 @@ def initialize_dataset(
     )
 
     return dataset
+
+
+def initialize_datamodule_from_config(
+    config_file: str,
+    local_cache_dir: Optional[str] = None,
+    dataset_cache_dir: Optional[str] = None,
+    local_yaml_file: Optional[str] = None,
+) -> DataModule:
+    """
+    Initialize a datamodule instance using the settings in the training config file
+
+    Since training may have been done on a separate machine, this allows the local_cache_dir, dataset_cache_dir,
+    and local of the local_yaml_file (if used) to be specified as arguments, that will override anything in the config.
+
+    Parameters
+    ----------
+    config_file : str
+        Configuration toml file used for training. this is the "condensed_config_file" that contains information about
+        datasets, training, runtime, and the potential
+    local_cache_dir : str, optional
+        Specify the path to the local_cache_dir; note this will override any parameter set in the config_file.
+        The local_cache_dir is the directory where anything generated by modelforge is stored
+    dataset_cache_dir : str, optional
+        Specify the path to the dataset_cache_dir; note this will override any parameter set in the config_file
+        This is the directory where the dataset hdf5 will be saved; this is also where the code will search to see
+        if an hdf5 (or .npz) file exists to avoid downloading/additional processing.
+    local_yaml_file : str, optional
+        Specify the path to the local_yaml_file; note this will override any parameter set in the config_file
+        The local_yaml_file is used to specify a local dataset; this will point the code to the correct location
+        of the file that specifies the dataset (in case this code is being run on a machine with different file structure
+        than the machine where training was run).
+
+    Examples
+    --------
+    dm = initialize_datamodule_from_config(config_file)
+
+    """
+
+    from modelforge.dataset.utils import REGISTERED_SPLITTING_STRATEGIES
+    from modelforge.train.training import read_config
+    from modelforge.dataset.dataset import DataModule
+
+    training_parameter, dataset_parameter, potential_parameter, runtime_parameter = (
+        read_config(condensed_config_path=config_file)
+    )
+
+    if local_cache_dir is None:
+        local_cache_dir = runtime_parameter.local_cache_dir
+    if dataset_cache_dir is None:
+        dataset_cache_dir = dataset_parameter.dataset_cache_dir
+    if local_yaml_file is None:
+        local_yaml_file = dataset_parameter.local_yaml_file
+
+    dm = DataModule(
+        name=dataset_parameter.dataset_name,
+        batch_size=training_parameter.batch_size,
+        remove_self_energies=training_parameter.remove_self_energies,
+        shift_center_of_mass_to_origin=training_parameter.shift_center_of_mass_to_origin,
+        shift_energies=training_parameter.shift_energies,
+        version_select=dataset_parameter.version_select,
+        local_cache_dir=local_cache_dir,
+        regression_ase=dataset_parameter.regression_ase,
+        splitting_strategy=REGISTERED_SPLITTING_STRATEGIES[
+            training_parameter.splitting_strategy.name
+        ](
+            seed=training_parameter.splitting_strategy.seed,
+            split=training_parameter.splitting_strategy.data_split,
+            test_seed=training_parameter.splitting_strategy.test_seed,
+            enforce_sum_to_unity=training_parameter.splitting_strategy.enforce_sum_to_unity,
+        ),
+        properties_of_interest=dataset_parameter.properties_of_interest,
+        properties_assignment=dataset_parameter.properties_assignment.model_dump(),
+        element_filter=dataset_parameter.element_filter,
+        dataset_cache_dir=dataset_cache_dir,
+        local_yaml_file=local_yaml_file,
+    )
+    dm.prepare_data()
+    dm.setup()
+
+    return dm

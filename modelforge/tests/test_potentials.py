@@ -883,6 +883,100 @@ def test_loading_from_checkpoint_file(
     assert torch.allclose(output["per_system_energy"], torch.tensor([[-1656.3508]]))
 
 
+def test_batch_evaluation(datamodule_factory, prep_temp_dir, dataset_temp_dir):
+
+    from modelforge.dataset.utils import RandomRecordSplittingStrategy
+
+    from modelforge.utils.io import get_path_string
+    from modelforge.tests import data
+
+    local_cache_dir = f"{str(prep_temp_dir)}/test_loading_from_checkpoint_file"
+    dataset_cache_dir = str(dataset_temp_dir)
+
+    from modelforge.potential.potential import load_inference_model_from_checkpoint
+
+    ckpt_file = get_path_string(data) + "/best_SchNet-qm9-epoch=433.ckpt"
+
+    potential = load_inference_model_from_checkpoint(ckpt_file)
+    assert potential is not None
+
+    # prepare reference value
+    dm_min = datamodule_factory(
+        dataset_name="QM9",
+        batch_size=512,
+        splitting_strategy=RandomRecordSplittingStrategy(),
+        remove_self_energies=True,
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
+    )
+
+    from modelforge.potential.potential import evaluate_batch
+
+    # this will raise an exception because we didn't specify to use the neighborlist for training
+    with pytest.raises(Exception):
+        output_batch = evaluate_batch(dm_min, potential, subset="test")
+
+    potential = load_inference_model_from_checkpoint(
+        ckpt_file, jit=False, use_training_mode_neighborlist=True
+    )
+    # this will fail since we are giving it an invalid subset
+    with pytest.raises(Exception):
+        output_batch = evaluate_batch(dm_min, potential, subset="evaluation")
+
+    output_batch = evaluate_batch(dm_min, potential, subset="test")
+
+    temp = output_batch[256]
+
+    # just pick a few outputs to examine
+    assert temp["name"] == "dsgdb9nsd_000257"
+    assert temp["index"] == 256
+    assert torch.allclose(
+        temp["output"]["per_system_total_charge"],
+        torch.tensor([0.0], dtype=torch.float),
+    )
+    assert torch.allclose(
+        temp["output"]["per_system_energy"], torch.tensor([[-5469.7192]])
+    )
+    assert torch.allclose(
+        temp["output"]["per_atom_energy"],
+        torch.tensor(
+            [
+                [2.2452],
+                [2.2952],
+                [2.2451],
+                [-3.1492],
+                [-2.4401],
+                [-3.7545],
+                [2.4187],
+                [2.1685],
+                [2.1486],
+                [1.2201],
+                [2.1487],
+                [2.1684],
+                [2.4188],
+                [2.2497],
+            ]
+        ),
+        atol=1e-3,
+    )
+    assert torch.allclose(
+        temp["metadata"]["per_system_energy"],
+        torch.tensor([-5470.4511], dtype=torch.float64),
+    )
+
+    temp = output_batch[526]
+
+    assert temp["name"] == "dsgdb9nsd_000527"
+    assert temp["index"] == 526
+    assert torch.allclose(
+        temp["output"]["per_system_energy"], torch.tensor([-5405.9854])
+    )
+    assert torch.allclose(
+        temp["metadata"]["per_system_energy"],
+        torch.tensor([-5406.6088], dtype=torch.float64),
+    )
+
+
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )

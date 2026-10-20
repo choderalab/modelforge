@@ -51,9 +51,10 @@ class SourceDataset:
             If True, use an existing database.
             If False, removes the existing database and creates a new one.
         """
+        from collections import OrderedDict
 
         self.name = name
-        self.records = {}
+        self.records = OrderedDict()
         self.append_property = append_property
         self.local_db_dir = local_db_dir
         os.makedirs(self.local_db_dir, exist_ok=True)

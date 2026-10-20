@@ -81,7 +81,7 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
             ]
         )
         # we want a list that is the length of n_configs, but points to values bounded by n_records
-        # so for a n_confs = [5,3,2] and 3 reocrds, we will have [0,0,0,0,0, 1,1,1,2,2]
+        # so for a n_confs = [5,3,2] and 3 records, we will have [0,0,0,0,0, 1,1,1,2,2]
         self.indexing_for_name = np.repeat(
             np.array(range(0, self.number_of_records)), dataset["n_confs"]
         )
@@ -215,7 +215,7 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
             ]
         return pair_list
 
-    def _get_datapoint(self, idx: int) -> tuple[str, torch.Tensor]:
+    def _get_datapoint(self, idx: int) -> tuple[str, BatchData]:
         # this will return the same as get item, but also will grab the name of the record
 
         datapoint_name = self.properties_of_interest["names"][

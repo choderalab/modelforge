@@ -1554,7 +1554,7 @@ def evaluate_batch(
 
     Returns
     -------
-    dict -- this dictionary is keyed on the top most level with the original index in the torch_datset.
+    dict -- this dictionary is keyed on the top most level with the original index in the torch_dataset.
             Each entry includes `name` which corresponds to the name of  record in the original dataset; note, since
             records in the dataset may have multiple configurations, multiple entries may have the same name.
             Additionally, in this dict, there is the `output` which stores the output of the potential, and `metadata`
@@ -1571,7 +1571,9 @@ def evaluate_batch(
 
     # we'll want to grab the batch and the associated indices so we can generate a more rich summary output
     if subset == "train":
-        batches = dm.train_dataloader()
+        # make sure we do not shuffle, since the record name information would not get shuffled and thus we would
+        # point to the wrong record name
+        batches = dm.train_dataloader(shuffle=False)
         indices = dm.train_dataset.indices
     elif subset == "test":
         batches = dm.test_dataloader()
@@ -1625,7 +1627,7 @@ def evaluate_batch(
                 if key.startswith("per_system"):
                     per_system_properties.append(key)
 
-        per_atom_properties.append("atomic_numbers")
+            per_atom_properties.append("atomic_numbers")
 
         for key in per_system_properties:
             temp = output[key]

@@ -1809,7 +1809,6 @@ def test_hdf5_to_torchdataset(prep_temp_dir):
     with open(yaml_file_path_out, "w") as yaml_file:
         yaml.safe_dump(yaml_content, yaml_file)
 
-    print(yaml_content)
     dm = initialize_datamodule(
         dataset_name=dataset_name,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),

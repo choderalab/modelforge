@@ -24,7 +24,7 @@ from openff.units import unit
 from modelforge.utils.units import GlobalUnitSystem, chem_context
 from modelforge.potential.neighbors import PairlistData, PairlistOutputs
 
-from modelforge.dataset.dataset import DatasetParameters
+from modelforge.dataset.dataset import DatasetParameters, DataModule
 from modelforge.utils.prop import NNPInput
 from modelforge.potential.parameters import (
     AimNet2Parameters,

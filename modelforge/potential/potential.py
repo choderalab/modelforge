@@ -1581,6 +1581,10 @@ def evaluate_batch(
     elif subset == "val":
         batches = dm.val_dataloader()
         indices = dm.val_dataset.indices
+    else:
+        raise ValueError(
+            f"subset must be one of ['train', 'test', 'val'], got {subset}"
+        )
 
     datapoints = {}
 

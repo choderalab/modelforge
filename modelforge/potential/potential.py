@@ -1562,6 +1562,8 @@ def evaluate_batch(
 
     """
 
+    from modelforge.potential.neighbors import NeighborListForTraining
+
     if not isinstance(potential.neighborlist, NeighborListForTraining):
         raise Exception(
             "For batch processing, must use the NeighborListForTraining; set use_training_mode_neighborlist=True when setting up the potential"

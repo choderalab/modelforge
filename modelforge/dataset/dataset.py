@@ -65,7 +65,6 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
         self.series_mol_start_idxs_by_rec = np.concatenate(
             [np.array([0]), np.cumsum(dataset["n_confs"])]
         )
-
         self.single_atom_start_idxs_by_conf = np.repeat(
             single_atom_start_idxs_by_rec[: self.number_of_records], dataset["n_confs"]
         )
@@ -73,7 +72,6 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
             single_atom_start_idxs_by_rec[1 : self.number_of_records + 1],
             dataset["n_confs"],
         )
-
         self.series_atom_start_idxs_by_conf = np.concatenate(
             [
                 np.array([0]),
@@ -81,6 +79,11 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
                     np.repeat(dataset["atomic_subsystem_counts"], dataset["n_confs"])
                 ),
             ]
+        )
+        # we want a list that is the length of n_configs, but points to values bounded by n_records
+        # so for a n_confs = [5,3,2] and 3 reocrds, we will have [0,0,0,0,0, 1,1,1,2,2]
+        self.indexing_for_name = np.repeat(
+            np.array(range(0, self.number_of_records)), dataset["n_confs"]
         )
 
     def _load_properties(
@@ -214,10 +217,10 @@ class TorchDataset(torch.utils.data.Dataset[BatchData]):
 
     def _get_datapoint(self, idx: int) -> tuple[str, torch.Tensor]:
         # this will return the same as get item, but also will grab the name of the record
-        single_atom_start_idx = self.single_atom_start_idxs_by_conf[idx]
-        single_atom_end_idx = self.single_atom_end_idxs_by_conf[idx]
-        datapoint_name = self.properties_of_interest["names"][idx]
 
+        datapoint_name = self.properties_of_interest["names"][
+            self.indexing_for_name[idx]
+        ]
         return (str(datapoint_name), self.__getitem__(idx))
 
     def __getitem__(self, idx: int) -> BatchData:
@@ -1085,7 +1088,7 @@ class HDF5Dataset:
                                                         record_array.magnitude
                                                     )
                                             per_system_data[value].append(record_array)
-                                            system_names_data.append(system_name)
+                                        system_names_data.append(system_name)
                                     else:
                                         log.debug(
                                             f"skipping record {system_name} as it does not have any valid configurations."

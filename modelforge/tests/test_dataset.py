@@ -1806,6 +1806,7 @@ def test_hdf5_to_torchdataset(prep_temp_dir):
     with open(yaml_file_path_out, "w") as yaml_file:
         yaml.safe_dump(yaml_content, yaml_file)
 
+    print(yaml_content)
     dm = initialize_datamodule(
         dataset_name=dataset_name,
         splitting_strategy=FirstComeFirstServeSplittingStrategy(),
@@ -1952,6 +1953,14 @@ def test_hdf5_to_torchdataset(prep_temp_dir):
         dm.torch_dataset[0].metadata.per_atom_spin_multiplicity,
         torch.tensor([[1], [1]]),
     )
+
+    # check that we can access the "name" of the system
+
+    data_point_names = ["mol1", "mol1", "mol2", "mol2", "mol3", "mol3"]
+    for i in range(0, len(dm.torch_dataset)):
+
+        datapoint_name, _ = dm.torch_dataset._get_datapoint(i)
+        assert datapoint_name == data_point_names[i]
 
 
 @pytest.mark.parametrize("grouped", [True, False])

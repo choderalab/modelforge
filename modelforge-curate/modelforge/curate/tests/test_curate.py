@@ -785,7 +785,7 @@ def test_limit_atomic_numbers(prep_temp_dir):
 
     atomic_numbers_to_limit = np.array([8, 6])
 
-    assert record.contains_atomic_numbers(atomic_numbers_to_limit) == False
+    assert record.atomic_numbers_are_subset(atomic_numbers_to_limit) == False
     new_dataset = dataset.subset_dataset(
         new_dataset_name="test_dataset11_sub2",
         atomic_numbers_to_limit=atomic_numbers_to_limit,

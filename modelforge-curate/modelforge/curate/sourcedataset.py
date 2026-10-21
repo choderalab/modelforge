@@ -458,7 +458,7 @@ class SourceDataset:
             If "random", configurations will be randomly selected from the record.
         atomic_numbers_to_limit: Optional[np.ndarray], default=None
             An array of atomic species to limit the dataset to.
-            Any molecules that contain elements outside of this list will be igonored
+            Any molecules that contain elements outside of this list will be ignored
         max_force: Optional[unit.Quantity], default=None
             If set, configurations with forces greater than this value will be removed.
         max_force_key: Optional[str], default="forces"
@@ -605,7 +605,7 @@ class SourceDataset:
                         # if the record does not contain the appropriate atomic species, we will skip it
                         # and move on to the next iteration
                         if atomic_numbers_to_limit is not None:
-                            if not record.contains_atomic_numbers(
+                            if not record.atomic_numbers_are_subset(
                                 atomic_numbers_to_limit
                             ):
                                 continue
@@ -712,7 +712,7 @@ class SourceDataset:
                         # if the record does not contain the appropriate atomic species, we will skip it
                         # and move on to the next iteration
                         if atomic_numbers_to_limit is not None:
-                            if not record.contains_atomic_numbers(
+                            if not record.atomic_numbers_are_subset(
                                 atomic_numbers_to_limit
                             ):
                                 continue
@@ -795,7 +795,9 @@ class SourceDataset:
                     # if the record does not contain the appropriate atomic species, we will skip it
                     # and move on to the next iteration
                     if atomic_numbers_to_limit is not None:
-                        if not record.contains_atomic_numbers(atomic_numbers_to_limit):
+                        if not record.atomic_numbers_are_subset(
+                            atomic_numbers_to_limit
+                        ):
                             continue
                     if max_configurations_per_record is not None:
                         n_to_add = min(max_configurations_per_record, record.n_configs)

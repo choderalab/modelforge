@@ -112,6 +112,33 @@ class Record:
 
     def contains_atomic_numbers(self, atomic_numbers_of_interest: np.ndarray) -> bool:
         """
+        Check if the atomic_number_of_interest is in the atomic numbers in the record.
+
+        Parameters
+        ----------
+        atomic_numbers_of_interest: np.ndarray
+            Array of atomic numbers to check against.
+
+        Returns
+        -------
+            bool: True if the atomic numbers are contained within the input, False otherwise.
+        """
+
+        if self.atomic_numbers is None:
+            log.warning(
+                f"No atomic numbers set for record {self.name}. Cannot compare."
+            )
+            raise ValueError(
+                f"No atomic numbers set for record {self.name}. Cannot compare."
+            )
+        status = set(atomic_numbers_of_interest).issubset(
+            self.atomic_numbers.value.flatten()
+        )
+
+        return status
+
+    def atomic_numbers_are_subset(self, atomic_numbers_of_interest: np.ndarray) -> bool:
+        """
         Check if the atomic numbers in the record are a subset of the input.
 
         Parameters

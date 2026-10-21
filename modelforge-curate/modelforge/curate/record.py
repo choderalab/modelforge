@@ -139,7 +139,7 @@ class Record:
 
     def atomic_numbers_are_subset(self, atomic_numbers_of_interest: np.ndarray) -> bool:
         """
-        Check if the atomic numbers in the record are a subset of the input.
+        Check if the atomic numbers in the record are a subset of the atomic_numbers_of_interest input.
 
         Parameters
         ----------

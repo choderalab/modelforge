@@ -12,7 +12,7 @@ def prep_temp_dir(tmp_path_factory):
 
 
 def test_initialize_model(prep_temp_dir):
-    """Test initialization of the Schnet model."""
+    """Test initialization of the AIMNet2 model."""
 
     # read default parameters
     model = setup_potential_for_test(

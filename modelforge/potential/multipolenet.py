@@ -29,7 +29,7 @@ class MultipoleNetCore(nn.Module):
         number_of_quadrupole_dimensions: int,
         maximum_interaction_radius: float,
         number_of_radial_basis_module_dimensions: int,
-        activation_function_parameter: ActivationFunctionConfig,
+        activation_function_parameter: Dict[str, str],
         readout_hidden_features: int = 64,
         maximum_angular_momentum: int = 2,  # Careful! Don't change this value.
         predicted_properties: List[str] = None,
@@ -53,7 +53,7 @@ class MultipoleNetCore(nn.Module):
         self.maximum_angular_momentum = maximum_angular_momentum
         self.maximum_interaction_radius = maximum_interaction_radius
         self.number_of_radial_basis_module_dimensions = number_of_radial_basis_module_dimensions
-        self.activation_function = activation_function_parameter.activation_function
+        self.activation_function = activation_function_parameter["activation_function"]
         self.readout_hidden_features = readout_hidden_features
 
         self.representation_module = MultipoleRepresentation(

@@ -157,70 +157,164 @@ def test_forward(single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir):
 
     ref_per_system_energy = torch.tensor(
         [
-            [-0.2266],
-            [-0.0809],
-            [-0.0964],
-            [-0.0579],
-            [-0.0161],
-            [-0.1187],
-            [-0.2539],
-            [-0.2212],
-            [-0.1264],
-            [-0.0572],
-            [-0.1718],
-            [-0.2028],
-            [-0.3489],
-            [-0.3419],
-            [-0.3395],
-            [-0.2923],
-            [-0.2463],
-            [-0.2625],
-            [-0.3212],
-            [-0.3001],
-            [-0.5242],
-            [-0.4224],
-            [-0.0185],
-            [0.0447],
-            [0.1060],
-            [-0.0768],
-            [-0.0089],
-            [-0.1425],
-            [-0.1875],
-            [-0.2198],
-            [-0.1267],
-            [-0.1189],
-            [-0.2076],
-            [-0.1135],
-            [-0.2596],
-            [-0.3231],
-            [-0.2326],
-            [-0.2488],
-            [-0.4488],
-            [-0.4252],
-            [-0.4315],
-            [-0.3634],
-            [-0.3612],
-            [-0.3296],
-            [-0.4591],
-            [-0.3175],
-            [-0.2176],
-            [-0.2271],
-            [-0.4224],
-            [-0.1699],
-            [-0.2058],
-            [-0.0360],
-            [-0.0941],
-            [-0.8663],
-            [-0.6293],
-            [-0.1353],
-            [-0.0477],
-            [-0.1618],
-            [-0.2111],
-            [-0.2212],
-            [-0.2753],
-            [-0.2646],
-            [-0.3484],
-            [-0.2535],
+            [-0.1976],
+            [-0.1354],
+            [-0.1278],
+            [-0.0687],
+            [-0.0082],
+            [-0.1075],
+            [-0.2910],
+            [-0.2178],
+            [-0.1575],
+            [-0.0973],
+            [-0.1969],
+            [-0.1361],
+            [-0.3826],
+            [-0.3086],
+            [-0.3102],
+            [-0.2712],
+            [-0.1981],
+            [-0.2858],
+            [-0.2252],
+            [-0.1630],
+            [-0.4761],
+            [-0.3999],
+            [-0.0268],
+            [0.0337],
+            [0.0940],
+            [-0.0656],
+            [-0.0049],
+            [-0.1039],
+            [-0.2466],
+            [-0.2493],
+            [-0.1891],
+            [-0.1265],
+            [-0.1764],
+            [-0.1160],
+            [-0.2895],
+            [-0.2280],
+            [-0.2169],
+            [-0.2162],
+            [-0.4758],
+            [-0.4020],
+            [-0.4006],
+            [-0.3274],
+            [-0.3632],
+            [-0.2888],
+            [-0.3012],
+            [-0.2904],
+            [-0.3633],
+            [-0.2885],
+            [-0.3180],
+            [-0.1646],
+            [-0.1045],
+            [-0.1535],
+            [-0.0930],
+            [-0.5737],
+            [-0.4938],
+            [-0.1545],
+            [-0.0939],
+            [-0.0444],
+            [-0.0937],
+            [-0.1930],
+            [-0.1447],
+            [-0.1327],
+            [-0.3414],
+            [-0.2811],
+        ]
+    )
+
+    print(y_hat["per_system_energy"])
+    assert torch.allclose(y_hat["per_system_energy"], ref_per_system_energy, atol=1e-3)
+
+
+def test_forward_two_channels(
+    single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
+):
+    """Test initialization of the AIMNet2 model."""
+    # read default parameters
+    aimnet = setup_potential_for_test(
+        "aimnet2", "training", potential_seed=42, number_of_charge_channels=2
+    )
+
+    assert aimnet is not None, "Aimnet model should be initialized."
+    local_cache_dir = str(prep_temp_dir) + "/aimnet2_forward"
+    batch = single_batch_with_batchsize(
+        batch_size=64,
+        dataset_name="QM9",
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_temp_dir,
+    )
+
+    y_hat = aimnet(batch.nnp_input)
+    assert y_hat is not None, "Aimnet model should be able to make predictions."
+
+    ref_per_system_energy = torch.tensor(
+        [
+            [0.1215],
+            [0.1202],
+            [0.0370],
+            [0.1071],
+            [0.1095],
+            [0.0712],
+            [0.1993],
+            [0.1164],
+            [0.1841],
+            [0.1863],
+            [0.1484],
+            [0.1495],
+            [0.2770],
+            [0.1939],
+            [0.1937],
+            [0.2309],
+            [0.1488],
+            [0.2250],
+            [0.2255],
+            [0.2262],
+            [0.3542],
+            [0.2708],
+            [0.1704],
+            [0.1721],
+            [0.1737],
+            [0.1336],
+            [0.1355],
+            [0.0969],
+            [0.2610],
+            [0.2624],
+            [0.2644],
+            [0.2640],
+            [0.1788],
+            [0.1809],
+            [0.2259],
+            [0.2277],
+            [0.1428],
+            [0.1421],
+            [0.3552],
+            [0.2713],
+            [0.2708],
+            [0.1885],
+            [0.3080],
+            [0.2258],
+            [0.3093],
+            [0.2251],
+            [0.3074],
+            [0.2270],
+            [0.3020],
+            [0.2925],
+            [0.2956],
+            [0.2089],
+            [0.2116],
+            [0.4313],
+            [0.3473],
+            [0.2109],
+            [0.2128],
+            [0.2960],
+            [0.2108],
+            [0.1748],
+            [0.2584],
+            [0.1748],
+            [0.3400],
+            [0.3416],
         ]
     )
 
@@ -241,6 +335,7 @@ def test_mlp_initialization():
         number_of_per_atom_features=num_per_atom_features,
         number_of_radial_basis_functions=64,
         number_of_vector_features=number_of_vector_features,
+        number_of_charge_channels=1,
         hidden_layers=hidden_layers,
         activation_function=ACTIVATION_FUNCTIONS["GeLU"](),
         is_first_module=True,
@@ -264,6 +359,7 @@ def test_mlp_initialization():
         number_of_per_atom_features=num_per_atom_features,
         number_of_radial_basis_functions=64,
         number_of_vector_features=number_of_vector_features,
+        number_of_charge_channels=1,
         hidden_layers=hidden_layers,
         activation_function=ACTIVATION_FUNCTIONS["GeLU"](),
         is_first_module=False,
@@ -285,6 +381,69 @@ def test_mlp_initialization():
     assert interaction.mlp[2].out_features == hidden_layers[2]
     assert interaction.mlp[3].in_features == hidden_layers[2]
     assert interaction.mlp[3].out_features == num_per_atom_features + 2
+
+    # test number of charge channels, first layer
+    num_per_atom_features = 128
+    number_of_vector_features = 8
+    hidden_layers = [512, 256]
+    number_of_charge_channels = 2
+    interaction = AIMNet2InteractionModule(
+        number_of_per_atom_features=num_per_atom_features,
+        number_of_radial_basis_functions=64,
+        number_of_vector_features=number_of_vector_features,
+        number_of_charge_channels=number_of_charge_channels,
+        hidden_layers=hidden_layers,
+        activation_function=ACTIVATION_FUNCTIONS["GeLU"](),
+        is_first_module=True,
+    )
+
+    assert len(interaction.mlp) == 3, "MLP should have 3 layers."
+    assert (
+        interaction.mlp[0].in_features
+        == num_per_atom_features + number_of_vector_features
+    )
+    assert interaction.mlp[0].out_features == hidden_layers[0]
+    assert interaction.mlp[1].in_features == hidden_layers[0]
+    assert interaction.mlp[1].out_features == hidden_layers[1]
+    assert interaction.mlp[2].in_features == hidden_layers[1]
+    assert (
+        interaction.mlp[2].out_features
+        == num_per_atom_features + 2 * number_of_charge_channels
+    )
+
+    # test number of charge channels, second layer
+    num_per_atom_features = 128
+    number_of_vector_features = 8
+    hidden_layers = [512, 256]
+    number_of_charge_channels = 2
+    interaction = AIMNet2InteractionModule(
+        number_of_per_atom_features=num_per_atom_features,
+        number_of_radial_basis_functions=64,
+        number_of_vector_features=number_of_vector_features,
+        number_of_charge_channels=number_of_charge_channels,
+        hidden_layers=hidden_layers,
+        activation_function=ACTIVATION_FUNCTIONS["GeLU"](),
+        is_first_module=False,
+    )
+
+    assert len(interaction.mlp) == 3, "MLP should have 3 layers."
+    assert (
+        interaction.mlp[0].in_features
+        == num_per_atom_features
+        + number_of_vector_features
+        + num_per_atom_features
+        + number_of_vector_features
+        + num_per_atom_features
+        + number_of_vector_features
+    )
+    assert interaction.mlp[0].out_features == hidden_layers[0]
+    assert interaction.mlp[1].in_features == hidden_layers[0]
+    assert interaction.mlp[1].out_features == hidden_layers[1]
+    assert interaction.mlp[2].in_features == hidden_layers[1]
+    assert (
+        interaction.mlp[2].out_features
+        == num_per_atom_features + 2 * number_of_charge_channels
+    )
 
 
 def test_mlp_init():

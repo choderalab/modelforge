@@ -55,6 +55,7 @@ class SAKECore(torch.nn.Module):
         if potential_seed != -1:
             seed_random_number(potential_seed)
         log.debug("Initializing the SAKE architecture.")
+        self.model_name = "sake"
         super().__init__()
 
         self.activation_function = activation_function_parameter["activation_function"]

@@ -744,6 +744,7 @@ class ANI2xCore(torch.nn.Module):
         self.activation_function = activation_function_parameter["activation_function"]
 
         log.debug("Initializing the ANI2x architecture.")
+        self.model_name = "ani2x"
         self.predicted_properties = predicted_properties
 
         # Initialize the representation block (AEVs)

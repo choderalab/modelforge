@@ -275,6 +275,11 @@ class SplittingStrategy(ABC):
         If provided, the dataset will first be split into (train+val) and test using this seed, and then the
         (train+val) set will be split into train and val using the main seed.
         This allows randomization of the train/val split while keeping the test set fixed.
+    enforce_sum_to_unity : bool, optional, default True
+        An optional argument.  If True, we will ensure that the splits sum to unity, and then later that
+        the number of datapoints in each split sum to the total number of datapoints.
+        If False, we only check to ensure that our splits do not exceed unity.  This allows us to use only
+        a subset of the dataset. This is useful for looking at dataset efficiency scaling.
     """
 
     def __init__(
@@ -282,9 +287,11 @@ class SplittingStrategy(ABC):
         split: List[float],
         seed: Optional[int] = None,
         test_seed: Optional[int] = None,
+        enforce_sum_to_unity: Optional[bool] = True,
     ):
         self.seed = seed
         self.test_seed = test_seed
+        self.enforce_sum_to_unity = enforce_sum_to_unity
 
         if self.seed is not None:
             self.generator = torch.Generator().manual_seed(self.seed)
@@ -300,7 +307,12 @@ class SplittingStrategy(ABC):
         self.train_indices: List[int] = []
         self.val_indices: List[int] = []
         self.test_indices: List[int] = []
-        assert np.isclose(sum(split), 1.0), "Splits must sum to 1.0"
+
+        split_sum = sum(split)
+        if split_sum > 1.0 and not np.isclose(split_sum, 1.0):
+            raise ValueError(f"Splits ({split}) sum to more than 1.0")
+        if enforce_sum_to_unity and not np.isclose(split_sum, 1.0):
+            raise ValueError(f"Splits ({split}) do not sum to 1.0")
 
     @abstractmethod
     def split(self, dataset: "TorchDataset") -> Tuple[Subset, Subset, Subset]:
@@ -321,6 +333,7 @@ class RandomSplittingStrategy(SplittingStrategy):
         seed: int = 42,
         split: List[float] = [0.8, 0.1, 0.1],
         test_seed: Optional[int] = None,
+        enforce_sum_to_unity: Optional[bool] = True,
     ):
         """
         Initializes the RandomSplittingStrategy with a specified seed and split ratios.
@@ -341,11 +354,16 @@ class RandomSplittingStrategy(SplittingStrategy):
             If provided, the dataset will first be split into (train+val) and test using this seed, and then the
             (train+val) set will be split into train and val using the main seed.
             This allows randomization of the train/val split while keeping the test set fixed.
+        enforce_sum_to_unity : bool, optional, default True
+            An optional argument.  If True, we will ensure that the splits sum to unity, and then later that
+            the number of datapoints in each split sum to the total number of datapoints.
+            If False, we only check to ensure that our splits do not exceed unity.  This allows us to use only
+            a subset of the dataset. This is useful for looking at dataset efficiency scaling.
 
         Raises
         ------
         AssertionError
-            If the sum of split ratios is not close to 1.0.
+            If the sum of split ratios is not close to 1.0. if enforce_sum_to_unity is True
 
         Examples
         --------
@@ -354,7 +372,12 @@ class RandomSplittingStrategy(SplittingStrategy):
         >>> train_idx, val_idx, test_idx = random_split.split(dataset)
         """
 
-        super().__init__(seed=seed, split=split, test_seed=test_seed)
+        super().__init__(
+            seed=seed,
+            split=split,
+            test_seed=test_seed,
+            enforce_sum_to_unity=enforce_sum_to_unity,
+        )
 
     def split(self, dataset: "TorchDataset") -> Tuple[Subset, Subset, Subset]:
         """
@@ -404,6 +427,7 @@ class RandomSplittingStrategy(SplittingStrategy):
             subset_lengths = calculate_size_of_splits(
                 len(dataset),
                 split_frac=[self.train_size, self.val_size, self.test_size],
+                enforce_sum_to_unity=self.enforce_sum_to_unity,
             )
 
             self.train_indices, self.val_indices, self.test_indices = (
@@ -412,6 +436,7 @@ class RandomSplittingStrategy(SplittingStrategy):
                     split_size=subset_lengths,
                     generator1=self.test_generator,
                     generator2=self.generator,
+                    check_sum_to_dataset=self.enforce_sum_to_unity,
                 )
             )
 
@@ -433,6 +458,7 @@ class RandomRecordSplittingStrategy(SplittingStrategy):
         seed: int = 42,
         split: List[float] = [0.8, 0.1, 0.1],
         test_seed: Optional[int] = None,
+        enforce_sum_to_unity: Optional[bool] = True,
     ):
         """
         This strategy splits a dataset randomly based on provided ratios for training, validation,
@@ -450,6 +476,11 @@ class RandomRecordSplittingStrategy(SplittingStrategy):
             If provided, the dataset will first be split into (train+val) and test using this seed, and then the
             (train+val) set will be split into train and val using the main seed.
             This allows randomization of the train/val split while keeping the test set fixed.
+        enforce_sum_to_unity : bool, optional, default True
+            An optional argument.  If True, we will ensure that the splits sum to unity, and then later that
+            the number of datapoints in each split sum to the total number of datapoints.
+            If False, we only check to ensure that our splits do not exceed unity.  This allows us to use only
+            a subset of the dataset. This is useful for looking at dataset efficiency scaling.
         Raises
         ------
         AssertionError
@@ -462,7 +493,12 @@ class RandomRecordSplittingStrategy(SplittingStrategy):
         >>> train_idx, val_idx, test_idx = random_split.split(dataset)
         """
 
-        super().__init__(split=split, seed=seed, test_seed=test_seed)
+        super().__init__(
+            split=split,
+            seed=seed,
+            test_seed=test_seed,
+            enforce_sum_to_unity=enforce_sum_to_unity,
+        )
 
     def split(self, dataset: "TorchDataset") -> Tuple[Subset, Subset, Subset]:
         """
@@ -498,12 +534,15 @@ class RandomRecordSplittingStrategy(SplittingStrategy):
             lengths=[self.train_size, self.val_size, self.test_size],
             generator=self.generator,
             test_generator=self.test_generator,
+            enforce_sum_to_unity=self.enforce_sum_to_unity,
         )
 
         return (train_d, val_d, test_d)
 
 
-def calculate_size_of_splits(total_size: int, split_frac: List[float]) -> List[int]:
+def calculate_size_of_splits(
+    total_size: int, split_frac: List[float], enforce_sum_to_unity: bool
+) -> List[int]:
     """
     Calculate the size of each split based on the total size and the split ratios.
 
@@ -522,31 +561,41 @@ def calculate_size_of_splits(total_size: int, split_frac: List[float]) -> List[i
     split_frac : List[float]
         List containing three float values representing the ratio of data for
         training, validation, and testing respectively.
+    enforce_sum_to_unity: bool
+        If True, we will check to see if splits sum up to 1.
+        If False, we will not check and allow them to sum less than 1;
+        this will still throw and error if they sum to more than 1
 
     Returns
     -------
     List[int]
         List containing the sizes of each split.
     """
-    if np.isclose(sum(split_frac), 1) and sum(split_frac) <= 1:
-        subset_lengths: List[int] = []
+    subset_lengths: List[int] = []
+    if enforce_sum_to_unity:
+        if not np.isclose(sum(split_frac), 1):
+            raise ValueError(f"Splits ({split_frac}) do not sum to 1.")
+    else:
+        if not sum(split_frac) <= 1:
+            raise ValueError(f"Splits ({split_frac}) sum to more than 1.")
 
-        for i, frac in enumerate(split_frac):
-            if frac < 0 or frac > 1:
-                raise ValueError(f"Fraction at index {i} is not between 0 and 1")
-            n_items_in_split = int(np.floor(total_size * frac))
-            subset_lengths.append(n_items_in_split)
+    for i, frac in enumerate(split_frac):
+        if frac < 0 or frac > 1:
+            raise ValueError(f"Fraction at index {i} is not between 0 and 1")
+        n_items_in_split = int(np.floor(total_size * frac))
+        subset_lengths.append(n_items_in_split)
 
-        remainder = total_size - sum(subset_lengths)
+    remainder = total_size - sum(subset_lengths)
 
-        # add 1 to all the lengths in round-robin fashion until the remainder is 0
+    # add 1 to all the lengths in round-robin fashion until the remainder is 0
+    # only do this if we do not want to enforce that we must sum to 1, otherwise we will end up just
+    # distributing the remainder to all subsets.
+    if enforce_sum_to_unity:
         for i in range(remainder):
             idx_to_add_at = i % len(subset_lengths)
             subset_lengths[idx_to_add_at] += 1
 
-        return subset_lengths
-    else:
-        raise ValueError("Split ratios must sum to 1.0")
+    return subset_lengths
 
 
 def two_stage_random_split(
@@ -554,6 +603,7 @@ def two_stage_random_split(
     split_size: List[int],
     generator1: torch.Generator,
     generator2: torch.Generator,
+    check_sum_to_dataset: bool,
 ) -> Tuple[List[int], List[int], List[int]]:
     """
     Perform a two-stage random split of a dataset.
@@ -574,16 +624,22 @@ def two_stage_random_split(
         Torch random number generator for the first stage of splitting.
     generator2 : torch.Generator
         Torch random number generator for the second stage of splitting.
-
+    check_sum_to_dataset: bool
+        If True, we will check to see if splits sum up to the dataset_size.
     Returns
     -------
     Tuple[List[int], List[int], List[int]]
         A tuple containing three lists of indices for training, validation, and testing subsets, respectively.
     """
-    if len(split_size) != 3 or not np.isclose(sum(split_size), dataset_size):
-        raise ValueError(
-            "Split must be a list of three integers that sum to the total dataset size."
-        )
+
+    if sum(split_size) > dataset_size:
+        raise ValueError(f"Splits ({split_size}) exceed the total dataset size.")
+
+    if len(split_size) != 3:
+        raise ValueError("Split must be a list of three integers.")
+
+    if check_sum_to_dataset and not np.isclose(sum(split_size), dataset_size):
+        raise ValueError(f"Splits ({split_size}) do not sum to the total dataset size.")
 
     train_size, val_size, test_size = split_size
 
@@ -610,6 +666,7 @@ def random_record_split(
     lengths: List[Union[int, float]],
     generator: Optional[torch.Generator] = torch.default_generator,
     test_generator: Optional[torch.Generator] = None,
+    enforce_sum_to_unity: Optional[bool] = True,
 ) -> List[Subset]:
     """
     Randomly split a TorchDataset into non-overlapping new datasets of given lengths, keeping all conformers in a record in the same split
@@ -633,27 +690,33 @@ def random_record_split(
         Generator used for the random permutation, by default None
     test_generator: Optional[torch.Generator], optional
         An optional generator that can be used to provide a fixed set of indices for testing purposes,
+    enforce_sum_to_unity: Optional[bool], optional, default True
+        If True, we will ensure that the subsets sum to 1; if False, we ignore this requirement
     Returns
     -------
     List[Subset]
         List of subsets of the dataset.
 
     """
-    if np.isclose(sum(lengths), 1) and sum(lengths) <= 1:
-        subset_lengths: List[int] = []
 
-        subset_lengths = calculate_size_of_splits(
-            total_size=dataset.record_len(), split_frac=lengths
-        )  # type: ignore[arg-type]
+    subset_lengths: List[int] = []
 
-        lengths = subset_lengths
+    subset_lengths = calculate_size_of_splits(
+        total_size=dataset.record_len(),
+        split_frac=lengths,
+        enforce_sum_to_unity=enforce_sum_to_unity,
+    )  # type: ignore[arg-type]
 
-        for i, length in enumerate(lengths):
-            if length == 0:
-                warnings.warn(
-                    f"Length of split at index {i} is 0. "
-                    f"This might result in an empty dataset."
-                )
+    lengths = subset_lengths
+
+    for i, length in enumerate(lengths):
+        if length == 0:
+            warnings.warn(
+                f"Length of split at index {i} is 0. "
+                f"This might result in an empty dataset."
+            )
+    if lengths[0] == 0:
+        raise ValueError(f"Training split is empty; this will not train")
 
     # Cannot verify that dataset is Sized
     if sum(lengths) != dataset.record_len():  # type: ignore[arg-type]
@@ -673,6 +736,7 @@ def random_record_split(
             split_size=lengths,
             generator1=test_generator,
             generator2=generator,
+            check_sum_to_dataset=enforce_sum_to_unity,
         )
 
         record_indices = training_indices + val_indices + test_indices
@@ -684,10 +748,14 @@ def random_record_split(
             indices.extend(dataset.get_series_mol_idxs(record_idx))
         indices_by_split.append(indices)
 
-    if sum([len(indices) for indices in indices_by_split]) != len(dataset):
-        raise ValueError(
-            "Sum of all split lengths does not equal the length of the input dataset!"
-        )
+    if enforce_sum_to_unity:
+        if sum([len(indices) for indices in indices_by_split]) != len(dataset):
+            raise ValueError(
+                "Sum of all split lengths does not equal the length of the input dataset!"
+            )
+    else:
+        if sum([len(indices) for indices in indices_by_split]) > len(dataset):
+            raise ValueError("Sum of all splits exceeds the size of input dataset!")
 
     return [
         Subset(dataset, indices_by_split[split_idx])
@@ -706,8 +774,15 @@ class FirstComeFirstServeSplittingStrategy(SplittingStrategy):
     >>> train_idx, val_idx, test_idx = strategy.split(dataset)
     """
 
-    def __init__(self, split: List[float] = [0.8, 0.1, 0.1]):
-        super().__init__(seed=42, split=split)
+    def __init__(
+        self, split: List[float] = [0.8, 0.1, 0.1], enforce_sum_to_unity: bool = True
+    ):
+        super().__init__(
+            seed=42,
+            split=split,
+            test_seed=None,
+            enforce_sum_to_unity=enforce_sum_to_unity,
+        )
 
     def split(self, dataset: "TorchDataset") -> Tuple[Subset, Subset, Subset]:
         logger.debug(f"Using first come/first serve splitting strategy ...")
@@ -719,11 +794,22 @@ class FirstComeFirstServeSplittingStrategy(SplittingStrategy):
         first_split_on = int(len_dataset * self.train_size)
         second_split_on = first_split_on + int(len_dataset * self.val_size)
         indices = np.arange(len_dataset, dtype=int)
-        train_d, val_d, test_d = (
-            Subset(dataset, list(indices[0:first_split_on])),
-            Subset(dataset, list(indices[first_split_on:second_split_on])),
-            Subset(dataset, list(indices[second_split_on:])),
-        )
+
+        # if we do not set enforce_sum_to_unity, we'll want to make sure we don't just use everything left over
+        if self.enforce_sum_to_unity == False:
+            third_split_on = second_split_on + int(len_dataset * self.test_size)
+
+            train_d, val_d, test_d = (
+                Subset(dataset, list(indices[0:first_split_on])),
+                Subset(dataset, list(indices[first_split_on:second_split_on])),
+                Subset(dataset, list(indices[second_split_on:third_split_on])),
+            )
+        else:
+            train_d, val_d, test_d = (
+                Subset(dataset, list(indices[0:first_split_on])),
+                Subset(dataset, list(indices[first_split_on:second_split_on])),
+                Subset(dataset, list(indices[second_split_on:])),
+            )
 
         return (train_d, val_d, test_d)
 

@@ -135,8 +135,8 @@ class tmQMOpenFFCuration(DatasetCuration):
         # from sqlitedict import SqliteDict
         from loguru import logger
 
-        PortalClient = import_("qcportal").PortalClient
-        # from qcportal import PortalClient
+        # PortalClient = import_("qcportal").PortalClient
+        from qcportal import PortalClient
 
         client = PortalClient(
             self.qcarchive_server, cache_dir=f"{local_path_dir}/qcarchive_cache1"
@@ -555,3 +555,12 @@ class tmQMOpenFFCuration(DatasetCuration):
             local_database_names,
             dataset_ids,
         )
+
+        # let us remove the sqlite files we generated during this process
+        # because they take up a lot of space
+        # they are mostly useful for allowing us to avoid losing progress if the process dies
+        # (specifically related to downloading records from qcarchive)
+        # we have created a more usable sqlite file when we create and instance of the SourceDataset
+
+        for local_database_name in local_database_names:
+            os.remove(f"{self.local_cache_dir}/{local_database_name}")

@@ -251,10 +251,10 @@ class VersionMetadata:
         if self.remote_dataset:
             self._compress_hdf5()
             with open(f"{file_path}/{file_name}", "w") as f:
-                yaml.dump(self._remote_dataset_to_dict(), f)
+                yaml.safe_dump(self._remote_dataset_to_dict(), f)
         else:
             with open(f"{file_path}/{file_name}", "w") as f:
-                yaml.dump(self._local_dataset_to_dict(), f)
+                yaml.safe_dump(self._local_dataset_to_dict(), f)
 
 
 def download_from_figshare(

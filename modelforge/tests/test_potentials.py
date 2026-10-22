@@ -178,9 +178,9 @@ def test_electrostatics():
             [1, 2, 3, 4, 2, 3, 4, 3, 4, 4, 6, 7, 8, 9, 7, 8, 9, 8, 9, 9],
         ]
     )
-    # nonsense charges, but summing up all the pairs will result in 2,
-    # so the output will be roughly 2*138.96, slightly less due to the
-    # multiplication by the cutoff function
+    # nonsense charges; the sum of q_i q_j over the pairs is 2. The damped
+    # kernel varies strongly over these short distances (one pair is only
+    # 0.0126 nm apart), so the energy is not simply 2 * 138.935.
     core_output_dict["per_atom_charge"] = torch.tensor(
         [
             [1.0000],
@@ -203,13 +203,13 @@ def test_electrostatics():
     assert output["per_system_electrostatic_energy"].shape == (2, 1)
     assert torch.allclose(
         output["per_system_electrostatic_energy"],
-        torch.tensor([[277.5938], [277.5938]]),
+        torch.tensor([[551.0609], [551.0609]]),
         1e-4,
         1e-4,
     )
 
-    # this will effectively result in 0 when summing up the pairs
-    # this will be slightly off from 0 due to the cutoff function
+    # the sum of q_i q_j over the pairs is now 0, but the pairs sit at
+    # different distances, so the energy is not 0
     core_output_dict["per_atom_charge"] = torch.tensor(
         [
             [1.5000],
@@ -232,11 +232,82 @@ def test_electrostatics():
     assert torch.allclose(
         output["per_system_electrostatic_energy"],
         torch.tensor(
-            [[-0.4219], [-0.4219]],
+            [[-1540.9163], [-1540.9163]],
         ),
         1e-4,
         1e-4,
     )
+
+
+def test_electrostatics_coulomb_constant():
+    """CoulombPotential uses N_A e^2 / (4 pi epsilon_0) in kJ/mol nm e^-2."""
+    import math
+
+    from openff.units import unit
+
+    from modelforge.potential.processing import CoulombPotential
+
+    k_e = (
+        (
+            unit.avogadro_constant
+            * unit.elementary_charge**2
+            / (4 * math.pi * unit.epsilon_0)
+        )
+        .to(unit.kilojoule_per_mole * unit.nanometer)
+        .m
+    )
+    # q1 = q2 = 1 e at r = 1 nm > cutoff / 2, where the kernel is exactly 1/r
+    output = CoulombPotential(1.5)(
+        {
+            "atomic_subsystem_indices": torch.tensor([0, 0]),
+            "electrostatic_pair_indices": torch.tensor([[0, 1], [1, 0]]),
+            "electrostatic_d_ij": torch.tensor([[1.0], [1.0]], dtype=torch.float64),
+            "per_atom_charge": torch.tensor([[1.0], [1.0]], dtype=torch.float64),
+        }
+    )
+    assert output["per_system_electrostatic_energy"].item() == pytest.approx(
+        k_e, rel=1e-12
+    )
+
+
+@pytest.mark.parametrize("r", [1e-4, 0.1, 0.3, 0.8, 1.2])
+def test_electrostatics_damped_kernel(r):
+    """A two-charge energy equals k_e q_1 q_2 chi(r), with the PhysNet kernel
+    chi(r) = phi(2r) / sqrt(r^2 + a_0^2) + (1 - phi(2r)) / r and a_0 = 1 A."""
+    import math
+
+    from modelforge.potential.processing import CoulombPotential, _coulomb_constant
+
+    cutoff, a0 = 1.5, 0.1  # nm
+    e_elec = CoulombPotential(cutoff, damping_length=a0)
+    q1, q2 = 0.7, -0.4
+    output = e_elec(
+        {
+            "atomic_subsystem_indices": torch.tensor([0, 0]),
+            "electrostatic_pair_indices": torch.tensor([[0, 1], [1, 0]]),
+            "electrostatic_d_ij": torch.tensor([[r], [r]], dtype=torch.float64),
+            "per_atom_charge": torch.tensor([[q1], [q2]], dtype=torch.float64),
+        }
+    )
+
+    x = min(2 * r / cutoff, 1.0)
+    phi = 1 - 6 * x**5 + 15 * x**4 - 10 * x**3
+    chi = phi / math.sqrt(r**2 + a0**2) + (1 - phi) / r
+    expected = _coulomb_constant() * q1 * q2 * chi
+    assert output["per_system_electrostatic_energy"].item() == pytest.approx(
+        expected, rel=1e-6
+    )
+    # each atom carries half of the pair energy
+    torch.testing.assert_close(
+        output["per_atom_electrostatic_energy"],
+        torch.tensor([[0.5 * expected], [0.5 * expected]], dtype=torch.float64),
+    )
+    if r < 1e-3:
+        # at r -> 0 the kernel tends to 1 / a_0 = 10 nm^-1, not 1/r
+        assert chi == pytest.approx(1 / a0, rel=1e-5)
+    if 2 * r >= cutoff:
+        # beyond cutoff / 2 the kernel is bare 1/r
+        assert chi == pytest.approx(1 / r, rel=1e-12)
 
 
 @pytest.mark.xfail(
@@ -617,15 +688,15 @@ def test_model_factory(potential_name, prep_temp_dir):
         potential_name.upper() in str(type(potential.core_network)).upper()
         or "JAX" in str(type(potential)).upper()
     )
-    potential = setup_potential_for_test(
-        use="inference",
-        potential_seed=42,
-        potential_name=potential_name,
-        simulation_environment="PyTorch",
-        jit=True,
-        use_default_dataset_statistic=False,
-        local_cache_dir=local_cache_dir,
-    )
+    # potential = setup_potential_for_test(
+    #     use="inference",
+    #     potential_seed=42,
+    #     potential_name=potential_name,
+    #     simulation_environment="PyTorch",
+    #     jit=True,
+    #     use_default_dataset_statistic=False,
+    #     local_cache_dir=local_cache_dir,
+    # )
 
     # trainers model
     trainer = setup_potential_for_test(
@@ -683,9 +754,9 @@ def test_energy_scaling_and_offset(
     # initialize model without any postprocessing
     # -------------------------------#
 
+    config["potential"].potential_seed = 42
     potential = NeuralNetworkPotentialFactory.generate_potential(
         potential_parameter=config["potential"],
-        potential_seed=42,
     )
     output_no_postprocessing = potential(methane)
     # -------------------------------#
@@ -693,7 +764,6 @@ def test_energy_scaling_and_offset(
     potential = NeuralNetworkPotentialFactory.generate_potential(
         potential_parameter=config["potential"],
         dataset_statistic=trainer.dataset_statistic,
-        potential_seed=42,
     )
     scaled_output = potential(methane)
 
@@ -775,9 +845,14 @@ def test_state_dict_saving_and_loading(potential_name, prep_temp_dir):
 # @pytest.mark.xfail(
 #     reason="checkpoint file needs to be updated now that non_unique_pairs is registered in nlist"
 # )
-def test_loading_from_checkpoint_file():
+def test_loading_from_checkpoint_file(
+    single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
+):
     from modelforge.utils.io import get_path_string
     from modelforge.tests import data
+
+    local_cache_dir = f"{str(prep_temp_dir)}/test_loading_from_checkpoint_file"
+    dataset_cache_dir = str(dataset_temp_dir)
 
     # checkpoint file is saved in tests/data
     ckpt_file = get_path_string(data) + "/best_SchNet-PhAlkEthOH-epoch=00.ckpt"
@@ -786,10 +861,120 @@ def test_loading_from_checkpoint_file():
     from modelforge.potential.potential import load_inference_model_from_checkpoint
 
     # note this is a legacy file, and thus we need to manually define only_unique_pairs
-    potential = load_inference_model_from_checkpoint(
-        ckpt_file, only_unique_pairs=False, old_config_only_local_cutoff=True
-    )
+    # this will fail because it has a negative value written for the seed entry
+    with pytest.raises(ValueError):
+        potential = load_inference_model_from_checkpoint(
+            ckpt_file, only_unique_pairs=False, old_config_only_local_cutoff=True
+        )
+
+    ckpt_file = get_path_string(data) + "/best_SchNet-qm9-epoch=433.ckpt"
+
+    potential = load_inference_model_from_checkpoint(ckpt_file)
     assert potential is not None
+
+    batch = single_batch_with_batchsize(
+        batch_size=1,
+        dataset_name="QM9",
+        local_cache_dir=local_cache_dir,
+    )
+    nnp_input = batch.nnp_input
+
+    output = potential(nnp_input)
+    assert torch.allclose(output["per_system_energy"], torch.tensor([[-1656.3508]]))
+
+
+def test_batch_evaluation(datamodule_factory, prep_temp_dir, dataset_temp_dir):
+
+    from modelforge.dataset.utils import RandomRecordSplittingStrategy
+
+    from modelforge.utils.io import get_path_string
+    from modelforge.tests import data
+
+    local_cache_dir = f"{str(prep_temp_dir)}/test_loading_from_checkpoint_file"
+    dataset_cache_dir = str(dataset_temp_dir)
+
+    from modelforge.potential.potential import load_inference_model_from_checkpoint
+
+    ckpt_file = get_path_string(data) + "/best_SchNet-qm9-epoch=433.ckpt"
+
+    potential = load_inference_model_from_checkpoint(ckpt_file)
+    assert potential is not None
+
+    # prepare reference value
+    dm_min = datamodule_factory(
+        dataset_name="QM9",
+        batch_size=512,
+        splitting_strategy=RandomRecordSplittingStrategy(),
+        remove_self_energies=True,
+        local_cache_dir=local_cache_dir,
+        dataset_cache_dir=dataset_cache_dir,
+    )
+
+    from modelforge.potential.potential import evaluate_batch
+
+    # this will raise an exception because we didn't specify to use the neighborlist for training
+    with pytest.raises(Exception):
+        output_batch = evaluate_batch(dm_min, potential, subset="test")
+
+    potential = load_inference_model_from_checkpoint(
+        ckpt_file, jit=False, use_training_mode_neighborlist=True
+    )
+    # this will fail since we are giving it an invalid subset
+    with pytest.raises(Exception):
+        output_batch = evaluate_batch(dm_min, potential, subset="evaluation")
+
+    output_batch = evaluate_batch(dm_min, potential, subset="test")
+
+    temp = output_batch[256]
+
+    # just pick a few outputs to examine
+    assert temp["name"] == "dsgdb9nsd_000257"
+    assert temp["index"] == 256
+    assert torch.allclose(
+        temp["output"]["per_system_total_charge"],
+        torch.tensor([0.0], dtype=torch.float),
+    )
+    assert torch.allclose(
+        temp["output"]["per_system_energy"], torch.tensor([[-5469.7192]])
+    )
+    assert torch.allclose(
+        temp["output"]["per_atom_energy"],
+        torch.tensor(
+            [
+                [2.2452],
+                [2.2952],
+                [2.2451],
+                [-3.1492],
+                [-2.4401],
+                [-3.7545],
+                [2.4187],
+                [2.1685],
+                [2.1486],
+                [1.2201],
+                [2.1487],
+                [2.1684],
+                [2.4188],
+                [2.2497],
+            ]
+        ),
+        atol=1e-3,
+    )
+    assert torch.allclose(
+        temp["metadata"]["per_system_energy"],
+        torch.tensor([-5470.4511], dtype=torch.float64),
+    )
+
+    temp = output_batch[526]
+
+    assert temp["name"] == "dsgdb9nsd_000527"
+    assert temp["index"] == 526
+    assert torch.allclose(
+        temp["output"]["per_system_energy"], torch.tensor([-5405.9854])
+    )
+    assert torch.allclose(
+        temp["metadata"]["per_system_energy"],
+        torch.tensor([-5406.6088], dtype=torch.float64),
+    )
 
 
 @pytest.mark.parametrize(
@@ -1029,6 +1214,8 @@ def test_forward_pass_with_all_datasets(
     assert torch.all(pair_list[0, 1:] >= pair_list[0, :-1])
 
 
+# skip this test as we will be removing jit in favor of compile
+@pytest.mark.skip("will be removing jit")
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()
 )

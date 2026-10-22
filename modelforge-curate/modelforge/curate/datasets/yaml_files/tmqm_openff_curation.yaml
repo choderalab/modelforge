@@ -1,18 +1,32 @@
 dataset_name: tmqm_openff
-latest: v_0
-v_0:
+latest: v_0_original
+v_0_original:
   version: 0
+  note: "original dataset, MD sampling at sm=1, evaluated with DFT at sm=1,3,5"
   collection_names:
   - 419
-v0_ext_sm1:
+v0_ext_md_sm1_dft_sm1:
   version: 0
+  note : "extension dataset, MD sampling at sm=1, evaluated with DFT at sm=1"
   collection_names:
   - 469
-v0_ext_sm3:
+v0_ext_md_sm3_dft_sm3:
   version: 0
+  note: "extension dataset, MD sampling at sm=3, evaluated with DFT at sm=3"
   collection_names:
   - 468
-v0_ext_sm5:
+v0_ext_md_sm5_dft_sm5:
   version: 0
+  note: "extension dataset, MD sampling at sm=5, evaluated with DFT at sm=5"
   collection_names:
   - 463
+v0_ext_md_sm1_dft_sm5:
+  version: 0
+  note: "extension dataset, MD sampling at sm=1, evaluated with DFT at sm=5"
+  collection_names:
+  - 462
+v0_ext_md_sm3_dft_sm5:
+  version: 0
+  note: "extension dataset, MD sampling at sm=1, evaluated with DFT at sm=5"
+  collection_names:
+  - 464

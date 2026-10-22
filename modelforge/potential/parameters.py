@@ -13,7 +13,9 @@ from pydantic import (
     computed_field,
     field_validator,
     model_validator,
+    conint,
 )
+
 
 from modelforge.utils.units import _convert_str_or_unit_to_unit_length
 
@@ -81,6 +83,11 @@ class ActivationFunctionName(CaseInsensitiveEnum):
     Tanh = "Tanh"
     LeakyReLU = "LeakyReLU"
     ELU = "ELU"
+
+
+class ChargeEquilibrationScheme(CaseInsensitiveEnum):
+    default = "default"
+    fukui = "fukui"
 
 
 # this enum will tell us if we need to pass additional parameters to the activation function
@@ -245,6 +252,8 @@ class AimNet2Parameters(ParametersBase):
         predicted_properties: List[str]
         predicted_dim: List[int]
         number_of_vector_features: int
+        number_of_charge_channels: int
+        charge_equilibration_layer_size: int
         converted_units = field_validator("maximum_interaction_radius", mode="before")(
             _convert_str_or_unit_to_unit_length
         )
@@ -266,11 +275,75 @@ class AimNet2Parameters(ParametersBase):
                     )
             return self
 
+        @model_validator(mode="after")
+        def validate_charge_equilibration_hidden_layer_size(self):
+            if self.charge_equilibration_layer_size < self.number_of_charge_channels:
+                raise ValueError(
+                    f"charge_equilibration_layer_size ({self.charge_equilibration_layer_size}) should not be less than the number_of_charge_channels ({self.number_of_charge_channels})."
+                )
+
+            return self
+
+        @field_validator("number_of_charge_channels", mode="after")
+        def validate_number_of_charge_channels(cls, value: int) -> int:
+            if not value in [1, 2]:
+                raise ValueError(
+                    f"The value of 'number_of_charge_channels' must be 1 or 2. provided value: {value}"
+                )
+            return value
+
     potential_name: str = "AimNet2"
     only_unique_pairs: bool = False
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
-    potential_seed: Optional[int] = None
+    potential_seed: conint(ge=0)
+
+
+class AimNet2SRParameters(ParametersBase):
+    class CoreParameter(CoreParameterBase):
+        number_of_radial_basis_functions: int
+        # note maximum interaction radius should be passed as a string with units or unit.Quantity;
+        # it will be converted to float in appropriate unit system
+        maximum_interaction_radius: float
+        electrostatic_maximum_interaction_radius: float
+        number_of_interaction_modules: int
+        interaction_module_hidden_layers: List[
+            List[int]
+        ]  # for each interaction module, a list of the sizes of the hidden layers
+        output_module_hidden_layers: List[int]
+        activation_function_parameter: ActivationFunctionConfig
+        featurization: Featurization
+        predicted_properties: List[str]
+        predicted_dim: List[int]
+        number_of_vector_features: int
+        converted_units = field_validator(
+            "maximum_interaction_radius",
+            "electrostatic_maximum_interaction_radius",
+            mode="before",
+        )(_convert_str_or_unit_to_unit_length)
+
+        # validator to ensure that the size of the interaction_module_hidden_layers matches number of interaction modules
+        @model_validator(mode="after")
+        def validate_interaction_module_hidden_layers(self):
+            if (
+                len(self.interaction_module_hidden_layers)
+                != self.number_of_interaction_modules
+            ):
+                raise ValueError(
+                    "The length of 'interaction_module_hidden_layers' list must match 'number_of_interaction_modules'."
+                )
+            for layer_sizes in self.interaction_module_hidden_layers:
+                if len(layer_sizes) < 1:
+                    raise ValueError(
+                        "Each interaction module must have at least one size defined."
+                    )
+            return self
+
+    potential_name: str = "AimNet2_sr"
+    only_unique_pairs: bool = False
+    core_parameter: CoreParameter
+    postprocessing_parameter: PostProcessingParameter
+    potential_seed: conint(ge=0)
 
 
 class ANI2xParameters(ParametersBase):
@@ -302,7 +375,7 @@ class ANI2xParameters(ParametersBase):
     only_unique_pairs: bool = True
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
-    potential_seed: Optional[int] = None
+    potential_seed: conint(ge=0)
 
 
 class SchNetParameters(ParametersBase):
@@ -327,7 +400,7 @@ class SchNetParameters(ParametersBase):
     only_unique_pairs: bool = False
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
-    potential_seed: int = -1
+    potential_seed: conint(ge=0)
 
 
 class TensorNetParameters(ParametersBase):
@@ -353,7 +426,7 @@ class TensorNetParameters(ParametersBase):
     only_unique_pairs: bool = False
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
-    potential_seed: Optional[int] = None
+    potential_seed: conint(ge=0)
 
 
 class PaiNNParameters(ParametersBase):
@@ -379,7 +452,7 @@ class PaiNNParameters(ParametersBase):
     only_unique_pairs: bool = False
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
-    potential_seed: Optional[int] = None
+    potential_seed: conint(ge=0)
 
 
 class PhysNetParameters(ParametersBase):
@@ -404,7 +477,7 @@ class PhysNetParameters(ParametersBase):
     only_unique_pairs: bool = False
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
-    potential_seed: Optional[int] = None
+    potential_seed: conint(ge=0)
 
 
 class SAKEParameters(ParametersBase):
@@ -429,7 +502,7 @@ class SAKEParameters(ParametersBase):
     only_unique_pairs: bool = False
     core_parameter: CoreParameter
     postprocessing_parameter: PostProcessingParameter
-    potential_seed: Optional[int] = None
+    potential_seed: conint(ge=0)
 
 class MultipoleNetParameters(ParametersBase):
     class CoreParameter(CoreParameterBase):

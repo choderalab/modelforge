@@ -1,5 +1,6 @@
 [potential]
 potential_name = "TensorNet"
+potential_seed = 42
 
 [potential.core_parameter]
 number_of_per_atom_features = 8

@@ -24,10 +24,11 @@ from openff.units import unit
 from modelforge.utils.units import GlobalUnitSystem, chem_context
 from modelforge.potential.neighbors import PairlistData, PairlistOutputs
 
-from modelforge.dataset.dataset import DatasetParameters
+from modelforge.dataset.dataset import DatasetParameters, DataModule
 from modelforge.utils.prop import NNPInput
 from modelforge.potential.parameters import (
     AimNet2Parameters,
+    AimNet2SRParameters,
     ANI2xParameters,
     PaiNNParameters,
     PhysNetParameters,
@@ -47,6 +48,7 @@ T_NNP_Parameters = TypeVar(
     PaiNNParameters,
     TensorNetParameters,
     AimNet2Parameters,
+    AimNet2SRParameters,
 )
 
 
@@ -201,6 +203,10 @@ class PostProcessing(torch.nn.Module):
                     postprocessing_parameter["per_system_electrostatic_energy"][
                         "maximum_interaction_radius"
                     ],
+                    # PhysNet's damping length, 1 Angstrom, in internal units
+                    damping_length=(1.0 * unit.angstrom)
+                    .to(GlobalUnitSystem.get_units("length"))
+                    .m,
                 )
 
                 self._registered_properties.append("per_system_electrostatic_energy")
@@ -353,10 +359,13 @@ class Potential(torch.nn.Module):
 
         super().__init__()
 
-        self.core_network = torch.jit.script(core_network) if jit else core_network
-        self.neighborlist = (
-            torch.jit.script(neighborlist) if jit_neighborlist else neighborlist
-        )
+        self.core_network = core_network
+        # self.core_network = torch.jit.script(core_network) if jit else core_network
+        # self.neighborlist = (
+        #    torch.jit.script(neighborlist) if jit_neighborlist else neighborlist
+        # )
+        self.neighborlist = neighborlist
+
         # note cannot jit compile the dispersion interactions as tad-dftd3 is not compatible with torchscript
         if "per_system_vdw_energy" in postprocessing._registered_properties:
             # double check if nvalchemiops works with JIT
@@ -546,7 +555,7 @@ class Potential(torch.nn.Module):
         per_system_total_charge: torch.Tensor,
         pair_list: torch.Tensor,
         per_atom_partial_charge: torch.Tensor,
-        per_system_spin_state: torch.Tensor,
+        per_system_spin_multiplicity: torch.Tensor,
         box_vectors: torch.Tensor,
         is_periodic: torch.Tensor,
     ) -> Dict[str, torch.Tensor]:
@@ -558,7 +567,7 @@ class Potential(torch.nn.Module):
             per_system_total_charge=per_system_total_charge,
             pair_list=pair_list,
             per_atom_partial_charge=per_atom_partial_charge,
-            per_system_spin_state=per_system_spin_state,
+            per_system_spin_multiplicity=per_system_spin_multiplicity,
             box_vectors=box_vectors,
             is_periodic=is_periodic,
         )
@@ -583,9 +592,17 @@ class Potential(torch.nn.Module):
         pairlist_output = self.neighborlist.forward(input_data)
 
         # Step 2: Compute the core network output
-        core_output = self.core_network.forward(
-            input_data, pairlist_output.local_cutoff
-        )
+        if self.core_network.model_name == "aimnet2_sr":
+            core_output = self.core_network.forward(
+                input_data,
+                pairlist_output.local_cutoff,
+                pairlist_output.electrostatic_cutoff,
+            )
+        else:
+            core_output = self.core_network.forward(
+                input_data,
+                pairlist_output.local_cutoff,
+            )
 
         # Step 3: Apply postprocessing using PostProcessing
         core_output = self._add_total_charge(core_output, input_data)
@@ -622,7 +639,15 @@ class Potential(torch.nn.Module):
         pairlist_output = self.neighborlist.forward(input_data)
 
         # Step 2: Compute the core network output
-        return self.core_network.forward(input_data, pairlist_output.local_cutoff)
+        if self.core_network.model_name == "aimnet2_sr":
+            core_output = self.core_network.forward(
+                input_data,
+                pairlist_output.local_cutoff,
+                pairlist_output.electrostatic_cutoff,
+            )
+            return core_output
+        else:
+            return self.core_network.forward(input_data, pairlist_output.local_cutoff)
 
     def load_state_dict(
         self,
@@ -721,7 +746,6 @@ def setup_potential(
         }
     },
     use_training_mode_neighborlist: bool = False,
-    potential_seed: Optional[int] = None,
     jit: bool = False,
     neighborlist_strategy: Optional[str] = None,
     verlet_neighborlist_skin: Optional[float] = 0.08,
@@ -729,6 +753,8 @@ def setup_potential(
     from modelforge.potential import _Implemented_NNPs
     from modelforge.potential.utils import remove_units_from_dataset_statistics
     from modelforge.utils.misc import seed_random_number
+
+    potential_seed = potential_parameter.potential_seed
 
     log.debug(f"potential_seed {potential_seed}")
     if potential_seed is not None:
@@ -787,6 +813,20 @@ def setup_potential(
     log.debug(
         f"Cutoffs: local_cutoff={local_cutoff}, vdw_cutoff={vdw_cutoff}, electrostatic_cutoff={electrostatic_cutoff}"
     )
+    # if we have the spin resolved aimnet2, this will calculate electrostatics as part of it
+    # and will use the appropriate neighborlist
+    electrostatic_only_unique_pairs = True
+    log.debug(f"Model type: {model_type}")
+    if model_type.lower() == "aimnet2_sr":
+        electrostatic_only_unique_pairs = False
+        electrostatic_cutoff = (
+            potential_parameter.core_parameter.electrostatic_maximum_interaction_radius
+        )
+        use_electrostatic_cutoff = True
+        log.debug(
+            "aimnnet2_sr detected,; configuration electrostatic neighborlist settings"
+        )
+
     if use_training_mode_neighborlist:
         from modelforge.potential.neighbors import NeighborListForTraining
 
@@ -797,6 +837,7 @@ def setup_potential(
             local_only_unique_pairs=only_unique_pairs,
             use_vdw_cutoff=use_vdw_cutoff,
             use_electrostatic_cutoff=use_electrostatic_cutoff,
+            electrostatic_only_unique_pairs=electrostatic_only_unique_pairs,
         )
     else:
         from modelforge.potential.neighbors import OrthogonalDisplacementFunction
@@ -813,6 +854,7 @@ def setup_potential(
             local_only_unique_pairs=only_unique_pairs,
             use_vdw_cutoff=use_vdw_cutoff,
             use_electrostatic_cutoff=use_electrostatic_cutoff,
+            electrostatic_only_unique_pairs=electrostatic_only_unique_pairs,
         )
         # we can set the strategy here before passing this to the Potential
         # this can still be modified later using Potential.set_neighborlist_strategy before it has bit JITTED
@@ -847,7 +889,6 @@ class NeuralNetworkPotentialFactory:
                 ),
             }
         },
-        potential_seed: Optional[int] = None,
         use_training_mode_neighborlist: bool = False,
         simulation_environment: Literal["PyTorch", "JAX"] = "PyTorch",
         jit: bool = True,
@@ -867,8 +908,6 @@ class NeuralNetworkPotentialFactory:
             Parameters for configuring the dataset (default is None).
         dataset_statistic : Dict[str, Dict[str, float]], optional
             Dataset statistics for normalization (default is provided).
-        potential_seed : Optional[int], optional
-            Seed for random number generation (default is None).
         use_training_mode_neighborlist : bool, optional
             Whether to use neighborlist during training mode (default is False).
         simulation_environment : Literal["PyTorch", "JAX"], optional
@@ -895,7 +934,6 @@ class NeuralNetworkPotentialFactory:
             potential_parameter=potential_parameter,
             dataset_statistic=dataset_statistic,
             use_training_mode_neighborlist=use_training_mode_neighborlist,
-            potential_seed=potential_seed,
             jit=jit,
             neighborlist_strategy=inference_neighborlist_strategy,
             verlet_neighborlist_skin=verlet_neighborlist_skin,
@@ -903,7 +941,7 @@ class NeuralNetworkPotentialFactory:
         # Disable gradients for model parameters
         for param in potential.parameters():
             param.requires_grad = False
-        # Set model to eval
+        # Set model to eval_sr
         potential.eval()
 
         if simulation_environment == "JAX":
@@ -995,7 +1033,6 @@ class NeuralNetworkPotentialFactory:
                 ),
             }
         },
-        potential_seed: Optional[int] = None,
         use_default_dataset_statistic: bool = False,
     ) -> "PotentialTrainer":
         """
@@ -1014,8 +1051,7 @@ class NeuralNetworkPotentialFactory:
             Parameters for configuring the dataset (default is None).
         dataset_statistic : Dict[str, Dict[str, float]], optional
             Dataset statistics for normalization (default is provided).
-        potential_seed : Optional[int], optional
-            Seed for random number generation (default is None).
+
         use_default_dataset_statistic : bool, optional
             Whether to use default dataset statistics (default is False).
         Returns
@@ -1025,6 +1061,8 @@ class NeuralNetworkPotentialFactory:
         """
         from modelforge.utils.misc import seed_random_number
         from modelforge.train.training import PotentialTrainer
+
+        potential_seed = potential_parameter.potential_seed
 
         if potential_seed is not None:
             log.info(f"Setting random seed to: {potential_seed}")
@@ -1040,7 +1078,6 @@ class NeuralNetworkPotentialFactory:
             training_parameter=training_parameter,
             dataset_parameter=dataset_parameter,
             runtime_parameter=runtime_parameter,
-            potential_seed=potential_seed,
             dataset_statistic=dataset_statistic,
             use_default_dataset_statistic=use_default_dataset_statistic,
         )
@@ -1146,7 +1183,7 @@ class PyTorch2JAXConverter:
                 0  positions
                 1  per_system_total_charge
                 2  box_vectors
-                3  per_system_spin_state
+                3  per_system_spin_multiplicity
                 4  per_atom_partial_charge  (may be None)
 
             aux_data  (static torch.Tensors / None, never DLPack-converted):
@@ -1388,8 +1425,8 @@ class PyTorch2JAXConverter:
                 box_vectors=jax.numpy.zeros_like(
                     data.box_vectors, dtype=jax_grad_positions.dtype
                 ),
-                per_system_spin_state=jax.numpy.zeros_like(
-                    data.per_system_spin_state, dtype=jax_grad_positions.dtype
+                per_system_spin_multiplicity=jax.numpy.zeros_like(
+                    data.per_system_spin_multiplicity, dtype=jax_grad_positions.dtype
                 ),
                 is_periodic=torch_to_jax(data.is_periodic),
                 pair_list=data.pair_list,
@@ -1414,6 +1451,7 @@ def load_inference_model_from_checkpoint(
     old_config_only_local_cutoff: Optional[bool] = False,
     only_unique_pairs: Optional[bool] = None,
     jit: bool = True,
+    use_training_mode_neighborlist: Optional[bool] = False,
 ) -> Union[Potential, JAXModel]:
     """
     Creates an inference model from a checkpoint file.
@@ -1444,14 +1482,13 @@ def load_inference_model_from_checkpoint(
     hyperparams = checkpoint["hyper_parameters"]
     potential_parameter = hyperparams["potential_parameter"]
     dataset_statistic = hyperparams.get("dataset_statistic", None)
-    potential_seed = hyperparams.get("potential_seed", None)
 
     # Create the model in inference mode
     potential = NeuralNetworkPotentialFactory.generate_potential(
         potential_parameter=potential_parameter,
         dataset_statistic=dataset_statistic,
-        potential_seed=potential_seed,
         jit=jit,
+        use_training_mode_neighborlist=use_training_mode_neighborlist,
     )
 
     if only_unique_pairs is not None:
@@ -1489,3 +1526,155 @@ def load_inference_model_from_checkpoint(
 
     # Return the model
     return potential
+
+
+def evaluate_batch(
+    dm: DataModule,
+    potential: Potential,
+    subset: Literal["train", "test", "val"],
+    include_metadata: bool = True,
+) -> dict:
+    """
+    This will evaluate the dataset subset using the specified potential.
+
+    This will perform batch processing (for efficiency). which requires we use the NeighborlistForTraining in the potential
+    by setting `use_training_mode_neighborlist` to True when initializing the potential.
+
+
+    Parameters
+    ----------
+    dm: DataModule
+        Instance of the DataModule that contains the dataset
+    potential: Potential
+        Instance of the NNP potential
+    subset: Literal["train", "test", "val"]
+        Which subset to evaluate.
+    include_metadata: bool, default True
+        This will also include metadata information in the output dictionary, providing the reference data used in training.
+
+    Returns
+    -------
+    dict -- this dictionary is keyed on the top most level with the original index in the torch_dataset.
+            Each entry includes `name` which corresponds to the name of  record in the original dataset; note, since
+            records in the dataset may have multiple configurations, multiple entries may have the same name.
+            Additionally, in this dict, there is the `output` which stores the output of the potential, and `metadata`
+            which includes data which can be used to train against.
+
+    """
+
+    from modelforge.potential.neighbors import NeighborListForTraining
+
+    if not isinstance(potential.neighborlist, NeighborListForTraining):
+        raise Exception(
+            "For batch processing, must use the NeighborListForTraining; set use_training_mode_neighborlist=True when setting up the potential"
+        )
+
+    # we'll want to grab the batch and the associated indices so we can generate a more rich summary output
+    if subset == "train":
+        # make sure we do not shuffle, since the record name information would not get shuffled and thus we would
+        # point to the wrong record name
+        batches = dm.train_dataloader(shuffle=False)
+        indices = dm.train_dataset.indices
+    elif subset == "test":
+        batches = dm.test_dataloader()
+        indices = dm.test_dataset.indices
+    elif subset == "val":
+        batches = dm.val_dataloader()
+        indices = dm.val_dataset.indices
+    else:
+        raise ValueError(
+            f"subset must be one of ['train', 'test', 'val'], got {subset}"
+        )
+
+    datapoints = {}
+
+    # first loop over all the indices to get the name of the associated system so we can more easily associated a
+    # datapoint with the dataset
+    for i in indices:
+        name, datapoint = dm.torch_dataset._get_datapoint(i)
+        datapoints[i] = {"name": name, "index": i, "output": {}}
+        if include_metadata:
+            datapoints[i]["metadata"] = {}
+    count = 0
+    # loop over the batch to compute
+    per_atom_properties = []
+    per_system_properties = []
+
+    per_atom_metadata_properties = []
+    per_system_metadata_properties = []
+
+    for batch in batches:
+        output = potential(batch.nnp_input)
+
+        # we'll need to parse the atomic_subsystem_indices
+        atomic_subsystem_indices = output["atomic_subsystem_indices"]
+
+        # we need to the total number of unique systems and length of each
+        mol_ids, atomic_subsystem_counts = torch.unique(
+            atomic_subsystem_indices, return_counts=True
+        )
+        n_systems = len(mol_ids)
+
+        # cumulative sum gives us the indices where each system starts
+        # to be able to use tensor_split for per_atom properties.  these need to be on the CPU
+        atomic_subsystem_counts_sum = torch.cumsum(atomic_subsystem_counts, dim=0).to(
+            "cpu"
+        )
+
+        # if this is our first pass through, figure out what the keys are
+        if count == 0:
+            keys = output.keys()
+
+            for key in keys:
+                if key.startswith("per_atom"):
+                    per_atom_properties.append(key)
+                if key.startswith("per_system"):
+                    per_system_properties.append(key)
+
+            per_atom_properties.append("atomic_numbers")
+
+        for key in per_system_properties:
+            temp = output[key]
+            for i in range(0, n_systems):
+                ii = count + i
+                real_index = indices[ii]
+                datapoints[real_index]["output"][key] = temp[i]
+
+        for key in per_atom_properties:
+            temp = output[key]
+            temp_index = torch.tensor_split(temp, atomic_subsystem_counts_sum[:-1])
+
+            for i in range(0, n_systems):
+                ii = count + i
+                real_index = indices[ii]
+                datapoints[real_index]["output"][key] = temp_index[i]
+        if include_metadata:
+            # let us grab all the keys from metadata slots if the first pass through
+            if count == 0:
+                keys = batch.metadata.__slots__
+
+                for key in keys:
+                    if key.startswith("per_atom"):
+                        per_atom_metadata_properties.append(key)
+                    if key.startswith("per_system"):
+                        per_system_metadata_properties.append(key)
+
+            for key in per_system_metadata_properties:
+                temp = getattr(batch.metadata, key)
+                for i in range(0, n_systems):
+                    ii = count + i
+                    real_index = indices[ii]
+                    datapoints[real_index]["metadata"][key] = temp[i]
+
+            for key in per_atom_metadata_properties:
+                temp = getattr(batch.metadata, key)
+                temp_index = torch.tensor_split(temp, atomic_subsystem_counts_sum[:-1])
+
+                for i in range(0, n_systems):
+                    ii = count + i
+                    real_index = indices[ii]
+                    datapoints[real_index]["metadata"][key] = temp_index[i]
+
+        count = count + n_systems
+
+    return datapoints

@@ -448,6 +448,7 @@ class PhysNetCore(torch.nn.Module):
         self.activation_function = activation_function_parameter["activation_function"]
 
         log.debug("Initializing the PhysNet architecture.")
+        self.model_name = "physnet"
 
         # Initialize atomic feature dimensions and representation module
         number_of_per_atom_features = int(

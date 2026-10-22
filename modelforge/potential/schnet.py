@@ -62,6 +62,7 @@ class SchNetCore(torch.nn.Module):
         self.activation_function = activation_function_parameter["activation_function"]
 
         log.debug("Initializing the SchNet architecture.")
+        self.model_name = "schnet"
         from modelforge.potential.utils import DenseWithCustomDist
 
         # Set the number of filters and atom features

@@ -1,5 +1,6 @@
 [potential]
 potential_name = "SAKE"
+potential_seed = 42
 
 [potential.core_parameter]
 

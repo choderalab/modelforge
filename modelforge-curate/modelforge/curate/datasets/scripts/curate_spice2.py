@@ -79,6 +79,52 @@ def main():
     ani2x_elements = ["H", "C", "N", "O", "F", "Cl", "S"]
     qm9_elements = ["H", "C", "N", "O", "F"]
 
+    #######################################
+    # full dataset, neutral molecules
+    #######################################
+    # curate the full SPICE 2.0.1 dataset
+    hdf5_file_name = f"spice_2_dataset_neutral_v{version}.hdf5"
+
+    total_records, total_configs = spice2_dataset.to_hdf5(
+        hdf5_file_name=hdf5_file_name,
+        output_file_dir=output_file_dir,
+        total_charge_to_limit=0,
+    )
+
+    version_name = f"neutral_dataset_v{version}"
+    about = f"""This provides a curated hdf5 file for the SPICE2 dataset designed
+                to be compatible with modelforge. This dataset contains {total_records} unique records
+                for {total_configs} total configurations and only considers neutral systems."""
+
+    metadata = VersionMetadata(
+        version_name=version_name,
+        about=about,
+        hdf5_file_name=hdf5_file_name,
+        hdf5_file_dir=output_file_dir,
+        available_properties=[
+            "atomic_numbers",
+            "positions",
+            "total_charge",
+            "dft_total_energy",
+            "dft_total_force",
+            "formation_energy",
+            "mbis_charges",
+            "mbis_dipoles",
+            "mbis_quadrupoles",
+            "mbis_octupoles",
+            "scf_dipole",
+            "scf_quadrupole",
+        ],
+    )
+    # we need to compress the hdf5 file to get the checksum and length for the gzipped file
+    metadata.to_yaml(
+        file_name=f"{version_name}_metadata.yaml", file_path=output_file_dir
+    )
+
+    print("SPICE2: neutral dataset")
+    print(f"Total records: {total_records}")
+    print(f"Total configs: {total_configs}")
+
     ####################################
     # 1000 configuration ani2x elements
     ####################################
@@ -261,6 +307,8 @@ def main():
 
     print("SPICE2: full dataset")
     print(f"Total records: {total_records}")
+    print(f"Total configs: {total_configs}")
+
     print(f"Total configs: {total_configs}")
 
     ########################################

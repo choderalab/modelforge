@@ -1,6 +1,5 @@
 name: test
 channels:
-  - pyg
   - conda-forge
   - pytorch
 dependencies:

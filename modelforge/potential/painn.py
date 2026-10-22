@@ -67,6 +67,7 @@ class PaiNNCore(torch.nn.Module):
 
         super().__init__()
         log.debug("Initializing the PaiNN architecture.")
+        self.model_name = "painn"
         self.activation_function = activation_function_parameter["activation_function"]
 
         self.number_of_interaction_modules = number_of_interaction_modules

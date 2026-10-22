@@ -10,13 +10,12 @@ from modelforge.potential.potential import load_inference_model_from_checkpoint
 from modelforge.utils.io import get_path_string
 import modelforge.ase.tests as ase_tests
 
-
 # =========================
 # USER SETTINGS (EDIT HERE)
 # =========================
 SMILES = "CCCCO"  # Example: "O", "CCO", "NCCCCCCO"
 RDKIT_OPTIMIZE = False  # Set True to run an MMFF94 geometry optimization in RDKit.
-MODEL_PATH = f"{get_path_string(ase_tests)}/data/model.ckpt"
+MODEL_PATH = f"{get_path_string(ase_tests)}/data/best_SchNet-qm9-epoch=433.ckpt"
 OPT_FMAX_EV_PER_ANGSTROM = 0.05
 OPT_LOGFILE = "example_from_smiles_opt.log"
 OPT_TRAJECTORY = "example_from_smiles_opt.traj"
@@ -54,4 +53,3 @@ print(f"Wrote optimizer trajectory: {OPT_TRAJECTORY}")
 if CONVERT_TO_RDKIT:
     mol = ase_to_rdkit(atoms)
     print(f"Converted optimized structure to RDKit object: {type(mol).__name__}")
-

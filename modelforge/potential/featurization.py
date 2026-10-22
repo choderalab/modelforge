@@ -144,7 +144,7 @@ class FeaturizeInput(nn.Module):
         "atomic_period",
         "atomic_group",
         "per_system_total_charge",
-        "per_system_spin_state",
+        "per_system_spin_multiplicity",
     ]
 
     def __init__(self, featurization_config: Dict[str, Dict[str, int]]) -> None:
@@ -265,15 +265,17 @@ class FeaturizeInput(nn.Module):
                 self.registered_appended_properties.append("per_system_total_charge")
             # add per_system spin state to embedding vector
             elif (
-                featurization == "per_system_spin_state"
+                featurization == "per_system_spin_multiplicity"
                 and featurization in self._SUPPORTED_FEATURIZATION_TYPES
             ):
                 # per system spin state needs to be made into a per_atom property; i.e., same value for all atoms in the molecule
                 self.append_to_embedding_tensor.append(
-                    AddPerMoleculeValue("per_system_spin_state")
+                    AddPerMoleculeValue("per_system_spin_multiplicity")
                 )
                 self.increase_dim_of_embedded_tensor += 1
-                self.registered_appended_properties.append("per_system_spin_state")
+                self.registered_appended_properties.append(
+                    "per_system_spin_multiplicity"
+                )
             # add partial charge to embedding vector
             elif (
                 featurization == "per_atom_partial_charge"
@@ -321,7 +323,6 @@ class FeaturizeInput(nn.Module):
 
         atomic_numbers = data.atomic_numbers
         categorial_embedding = self.atomic_number_embedding(atomic_numbers)
-
         if torch.isnan(categorial_embedding).any():
             print(f"categorial_embedding: {categorial_embedding}")
             print(categorial_embedding)
@@ -329,7 +330,6 @@ class FeaturizeInput(nn.Module):
 
         for additional_embedding in self.embeddings:
             categorial_embedding = additional_embedding(categorial_embedding, data)
-
         for append_embedding_vector in self.append_to_embedding_tensor:
             categorial_embedding = append_embedding_vector(categorial_embedding, data)
         return self.mixing(categorial_embedding)

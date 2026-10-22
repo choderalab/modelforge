@@ -51,9 +51,10 @@ class SourceDataset:
             If True, use an existing database.
             If False, removes the existing database and creates a new one.
         """
+        from collections import OrderedDict
 
         self.name = name
-        self.records = {}
+        self.records = OrderedDict()
         self.append_property = append_property
         self.local_db_dir = local_db_dir
         os.makedirs(self.local_db_dir, exist_ok=True)
@@ -457,7 +458,7 @@ class SourceDataset:
             If "random", configurations will be randomly selected from the record.
         atomic_numbers_to_limit: Optional[np.ndarray], default=None
             An array of atomic species to limit the dataset to.
-            Any molecules that contain elements outside of this list will be igonored
+            Any molecules that contain elements outside of this list will be ignored
         max_force: Optional[unit.Quantity], default=None
             If set, configurations with forces greater than this value will be removed.
         max_force_key: Optional[str], default="forces"
@@ -604,7 +605,7 @@ class SourceDataset:
                         # if the record does not contain the appropriate atomic species, we will skip it
                         # and move on to the next iteration
                         if atomic_numbers_to_limit is not None:
-                            if not record.contains_atomic_numbers(
+                            if not record.atomic_numbers_are_subset(
                                 atomic_numbers_to_limit
                             ):
                                 continue
@@ -711,7 +712,7 @@ class SourceDataset:
                         # if the record does not contain the appropriate atomic species, we will skip it
                         # and move on to the next iteration
                         if atomic_numbers_to_limit is not None:
-                            if not record.contains_atomic_numbers(
+                            if not record.atomic_numbers_are_subset(
                                 atomic_numbers_to_limit
                             ):
                                 continue
@@ -794,7 +795,9 @@ class SourceDataset:
                     # if the record does not contain the appropriate atomic species, we will skip it
                     # and move on to the next iteration
                     if atomic_numbers_to_limit is not None:
-                        if not record.contains_atomic_numbers(atomic_numbers_to_limit):
+                        if not record.atomic_numbers_are_subset(
+                            atomic_numbers_to_limit
+                        ):
                             continue
                     if max_configurations_per_record is not None:
                         n_to_add = min(max_configurations_per_record, record.n_configs)
@@ -1361,6 +1364,105 @@ class SourceDataset:
                 record = db[record_name]
                 record.convert_to_global_unit_system()
                 db[record_name] = record
+
+
+def fetch_record_from_hdf5(
+    hdf5_filename: str,
+    record_name: str,
+    property_map: Optional[Dict[str, Type[PropertyBaseModel]]] = None,
+) -> Union[Record, list[Record]]:
+    """
+    Returns an instance of a record with relevant information
+
+    Parameters
+    ----------
+    hdf5_filename
+    dataset_name
+    property_map
+    record_name
+
+    Returns
+    -------
+
+    """
+    import h5py
+    from modelforge.curate.properties import PropertyBaseModel
+    from modelforge.utils.misc import OpenWithLock
+    import os
+
+    hdf5_filename = os.path.expanduser(hdf5_filename)
+
+    if property_map is None:
+        property_map = {}
+
+    with OpenWithLock(f"{hdf5_filename}.lockfile", "w"):
+        log.info(f"Reading dataset from {hdf5_filename}")
+        with h5py.File(hdf5_filename, "r") as f:
+            keys = list(f.keys())
+
+            is_grouped = False
+            key = record_name
+
+            if not key in keys:
+                raise KeyError(f"Record {record_name} not found in {hdf5_filename}")
+
+            properties_keys = f[key].keys()
+            if "grouped_indices" in properties_keys:
+                is_grouped = True
+
+            if is_grouped:
+                record = RecordGroup(name=key)
+            else:
+                record = Record(name=key)
+            for pk in properties_keys:
+                if pk == "n_configs":
+                    n_configs = f[key][pk][()]
+                elif pk == "grouped_n_configs":
+                    record.grouped_n_configs = f[key][pk][()]
+                elif pk == "grouped_names":
+                    temp = f[key][pk][()]
+                    record.grouped_names = [val.decode("utf-8") for val in temp]
+
+                elif pk == "grouped_indices":
+                    record.grouped_indices = f[key][pk][()]
+                else:
+                    property_type = f[key][pk].attrs["property_type"]
+                    property_classification = f[key][pk].attrs["format"]
+                    if "u" in f[key][pk].attrs.keys():
+                        unit_str = f[key][pk].attrs["u"]
+                    else:
+                        unit_str = "dimensionless"
+                    value = f[key][pk][()]
+                    if type(value) is bytes:
+                        value = f[key][pk][()].decode("utf-8")
+
+                    if pk in property_map:
+                        property = property_map[pk](
+                            name=pk,
+                            value=value,
+                            units=unit_str,
+                            property_type=property_type,
+                            classification=property_classification,
+                        )
+                    else:
+                        property = PropertyBaseModel(
+                            name=pk,
+                            value=value,
+                            units=unit_str,
+                            property_type=property_type,
+                            classification=property_classification,
+                        )
+
+                    record.add_property(property)
+
+            if is_grouped:
+                records_temp = record.get_records()
+
+                return records_temp
+            else:
+                assert n_configs == record.n_configs
+
+                return record
 
 
 def create_dataset_from_hdf5(

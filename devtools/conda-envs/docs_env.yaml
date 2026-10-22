@@ -23,6 +23,9 @@ dependencies:
   - sqlitedict
   - pydantic>=2
   - ray-all
+  - flax
+  - jax
+
 
   # Testing
   - pytest>=2.1
@@ -37,10 +40,5 @@ dependencies:
   - ipython
 
   - pip:
-      - jax
-      - flax
-      - pytorch2jax
-      #- "ray[data,train,tune,serve]"
-      #- git+https://github.com/ArnNag/sake.git@nanometer
       - torchviz2
       - sphinx-collections

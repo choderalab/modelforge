@@ -529,32 +529,14 @@ class NeighborlistForInference(torch.nn.Module):
         j_pairs: torch.Tensor,
         d_ij: torch.Tensor,
         r_ij: torch.Tensor,
-        total_unique_pairs: int,
     ):
-        # this will allow us to copy the data for unique pairs to create the non-unique pairs data
-        r_ij_full = torch.zeros(
-            total_unique_pairs * 2, 3, dtype=r_ij.dtype, device=r_ij.device
+
+        r_ij_full = torch.cat([r_ij, -r_ij])
+        d_ij_full = torch.cat([d_ij, d_ij])
+
+        pairs_full = torch.stack(
+            [torch.cat([i_pairs, j_pairs]), torch.cat([j_pairs, i_pairs])]
         )
-        d_ij_full = torch.zeros(
-            total_unique_pairs * 2, 1, dtype=d_ij.dtype, device=d_ij.device
-        )
-
-        r_ij_full[0:total_unique_pairs] = r_ij
-
-        # since we are swapping the order of the pairs, the sign changes
-        r_ij_full[total_unique_pairs : 2 * total_unique_pairs] = -r_ij
-
-        d_ij_full[0:total_unique_pairs] = d_ij
-        d_ij_full[total_unique_pairs : 2 * total_unique_pairs] = d_ij
-
-        pairs_full = torch.zeros(
-            2, total_unique_pairs * 2, dtype=torch.int64, device=i_pairs.device
-        )
-
-        pairs_full[0][0:total_unique_pairs] = i_pairs
-        pairs_full[1][0:total_unique_pairs] = j_pairs
-        pairs_full[0][total_unique_pairs : 2 * total_unique_pairs] = j_pairs
-        pairs_full[1][total_unique_pairs : 2 * total_unique_pairs] = i_pairs
 
         return pairs_full, d_ij_full, r_ij_full
 
@@ -637,7 +619,6 @@ class NeighborlistForInference(torch.nn.Module):
                 self.j_pairs[in_cutoff],
                 d_ij[in_cutoff],
                 r_ij[in_cutoff],
-                total_pairs,
             )
 
             return PairlistData(
@@ -701,7 +682,6 @@ class NeighborlistForInference(torch.nn.Module):
                 self.nlist_j_pairs[in_cutoff],
                 d_ij[in_cutoff],
                 r_ij[in_cutoff],
-                total_pairs,
             )
             return PairlistData(
                 pair_indices=pairs_full,

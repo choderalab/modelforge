@@ -202,6 +202,8 @@ For example, the following snippet would specify the RandomRecordSplittingStrate
     seed = 42
     test_seed = 7
 
+
+By default, the code will ensure that the values in `split` sum to 1, and will raise an error if they do not.  To override this, we can set `enforce_sum_to_unity` to be `false` to allow us to use a smaller subset of a total dataset. Note, even when set `false`, this will still raise an error if the sum is more than 1, we cannot load more data than what exists.
 Train a Model
 ----------------------
 

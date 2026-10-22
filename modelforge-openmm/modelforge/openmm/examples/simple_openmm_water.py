@@ -8,7 +8,7 @@ from modelforge.openmm.examples import data
 from modelforge.potential.potential import load_inference_model_from_checkpoint
 
 # checkpoint file is saved in tests/data
-checkpoint_file_path = get_path_string(data) + "/model.ckpt"
+checkpoint_file_path = get_path_string(data) + "/best_SchNet-qm9-epoch=433.ckpt"
 potential = load_inference_model_from_checkpoint(checkpoint_file_path, jit=False)
 
 # helper functions to load up a water topology and positions for use in OpenMM.

@@ -15,6 +15,8 @@ from typing import (
 )
 
 import torch
+import numpy as np
+
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator, Field
 from loguru import logger as log
 
@@ -357,14 +359,25 @@ class TrainingParameters(ParametersBase):
         data_split: List[float]
         seed: int
         test_seed: Optional[int] = None
+        enforce_sum_to_unity: Optional[bool] = True
 
         @field_validator("data_split")
-        def data_split_must_sum_to_one_and_length_three(cls, v) -> List[float]:
+        def data_split_must_have_length_three(cls, v) -> List[float]:
             if len(v) != 3:
                 raise ValueError("data_split must have length of 3")
-            if sum(v) != 1:
-                raise ValueError("data_split must sum to 1")
+            if sum(v) > 1:
+                raise ValueError("data_split must not sum to more than 1")
             return v
+
+        @model_validator(mode="after")
+        def check_enforce_sum_to_unity(self):
+            # we want to check that the sum ==1 if enforce_sum_to_unity is true
+            if self.enforce_sum_to_unity:
+                if not np.isclose(sum(self.data_split), 1):
+                    raise ValueError(
+                        f"sum of data_split must equal 1, got {sum(self.data_split)}"
+                    )
+            return self
 
     class StochasticWeightAveraging(ParametersBase):
         """

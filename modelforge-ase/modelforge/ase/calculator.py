@@ -50,7 +50,7 @@ def _init_nnp_input(
     device: torch.device,
     precision: torch.dtype,
     per_system_total_charge: Optional[int] = None,
-    per_system_spin_state: Optional[int] = None,
+    per_system_spin_multiplicity: Optional[int] = None,
 ):
     """
     Convert an ASE ``Atoms`` object into a modelforge ``NNPinput`` Dataclass, applying unit conversions.
@@ -63,7 +63,7 @@ def _init_nnp_input(
         Pytorch device to use for all tensors.
     per_system_total_charge: Optional[int]
         Total charge of the system. This is optional and only required if a system has total charge embedding.
-    per_system_spin_state: Optional[int]
+    per_system_spin_multiplicity: Optional[int]
         Total spin multiplicity of the system.  This is optional and only required if a system has total spin embedding.
 
 
@@ -90,7 +90,7 @@ def _init_nnp_input(
         [[per_system_total_charge]], dtype=torch.int64, device=device
     )
     total_spin_tensor = torch.tensor(
-        [[per_system_spin_state]], dtype=torch.int64, device=device
+        [[per_system_spin_multiplicity]], dtype=torch.int64, device=device
     )
 
     is_periodic = False
@@ -107,6 +107,7 @@ def _init_nnp_input(
         box_vectors = torch.tensor(
             [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
             dtype=precision,
+            device=device,
         )
 
     return NNPInput(
@@ -114,7 +115,7 @@ def _init_nnp_input(
         positions=positions,
         atomic_subsystem_indices=atomic_subsystem_indices,
         per_system_total_charge=total_charge_tensor,
-        per_system_spin_state=total_spin_tensor,
+        per_system_spin_multiplicity=total_spin_tensor,
         is_periodic=torch.tensor([is_periodic]),
         box_vectors=box_vectors,
     )
@@ -165,7 +166,7 @@ class ModelForgeCalculator(Calculator):
         super().__init__(**kwargs)
         if device is None:
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-            print(f"Running on device {device}.")
+            # print(f"Running on device {device}.")
         self.potential = potential.to(device).eval()
         # set the neighborlist strategy for the potential
         self.potential.set_neighborlist_strategy(
@@ -191,7 +192,7 @@ class ModelForgeCalculator(Calculator):
             per_system_total_charge=self.per_system_total_charge,
             device=self.device,
             precision=self.precision,
-            per_system_spin_state=self.per_system_spin_multiplicity,
+            per_system_spin_multiplicity=self.per_system_spin_multiplicity,
         )
 
         output: dict = self.potential(nnp_input)

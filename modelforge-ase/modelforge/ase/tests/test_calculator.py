@@ -28,7 +28,6 @@ def test_potential_wrapping(is_periodic, potential_name, prep_temp_dir):
 
     modelforge_potential = NeuralNetworkPotentialFactory.generate_potential(
         potential_parameter=config["potential"],
-        potential_seed=42,
         jit=False,
     )
 

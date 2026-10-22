@@ -20,12 +20,14 @@ def setup_schnet_model(potential_seed: Optional[int] = None):
     config["potential"].core_parameter.number_of_radial_basis_functions = 5
     config["potential"].core_parameter.number_of_filters = 12
 
+    if potential_seed is not None:
+        config["potential"].potential_seed = potential_seed
+
     model = NeuralNetworkPotentialFactory.generate_trainer(
         potential_parameter=config["potential"],
         training_parameter=config["training"],
         dataset_parameter=config["dataset"],
         runtime_parameter=config["runtime"],
-        potential_seed=potential_seed,
     ).lightning_module.potential
     return model
 

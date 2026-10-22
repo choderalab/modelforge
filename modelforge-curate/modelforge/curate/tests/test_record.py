@@ -272,6 +272,14 @@ def test_get_property_value():
     with pytest.raises(ValueError):
         record.get_property_value("non_existent")
 
+    status = record.contains_atomic_numbers(np.array([1]))
+    assert status == True
+
+    status = record.contains_atomic_numbers(np.array([1, 6]))
+    assert status == True
+    status = record.contains_atomic_numbers(np.array([17]))
+    assert status == False
+
 
 def test_infer_bonds_and_length():
     from modelforge.curate.record import infer_bonds, calculate_max_bond_length_change
@@ -873,9 +881,7 @@ def test_grouped_record_errors(prep_temp_dir):
     )
 
     # per system properties
-    energies1 = Energies(
-        value=np.array([[0.1], [0.11]]), units=unit.kilojoule_per_mole
-    )
+    energies1 = Energies(value=np.array([[0.1], [0.11]]), units=unit.kilojoule_per_mole)
     energies_b1 = Energies(
         name="dft_energy",
         value=np.array([[0.1], [0.11]]),

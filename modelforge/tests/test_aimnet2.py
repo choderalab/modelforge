@@ -139,7 +139,6 @@ def test_radial_symmetry_function_regression():
 
 
 def test_forward(single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir):
-    """Test initialization of the AIMNet2 model."""
     # read default parameters
     aimnet = setup_potential_for_test("aimnet2", "training", potential_seed=42)
 

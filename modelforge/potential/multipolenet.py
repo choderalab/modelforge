@@ -429,26 +429,33 @@ class MultipoleRepresentation(nn.Module):
         return charge_multipole, spin_multipole
 
     @staticmethod
-    def _project_monopole(
+    def _scale_monopole(
         multipole: torch.Tensor,
         monopole_target: torch.Tensor,
         atomic_subsystem_indices: torch.Tensor,
     ):
-        """"""
+        """
+        This function takes the predicted monopole and shift the values according to the given per system monopoles
+        (charge or spin). This function does not alter the terms of dipoles and quadrupoles.
+
+        Parameters
+        ----------
+        multipole : torch.Tensor
+            The input per atom multipole tensor, consists of monopole, dipole and quadrupole dimensions.
+        monopole_target : torch.Tensor
+            Per system value of the monopole targets
+        atomic_subsystem_indices : torch.Tensor
+            The indices of the atomic subsystem indices corresponding to the per atom multipole tensors.
+
+        Returns
+        -------
+        torch.Tensor
+            The updated multipole tensor.
+        """
         number_of_systems = int(atomic_subsystem_indices.max()) + 1
         output = multipole.clone()
         monopole = multipole[:, 0]
         monopole_target = monopole_target.reshape(-1)
-
-        per_system_number_of_atoms = torch.zeros(
-            number_of_systems,
-            dtype=monopole.dtype,
-            device=monopole.device,
-        ).index_add_(
-            0,
-            atomic_subsystem_indices,
-            torch.ones_like(monopole),
-        )
 
         per_system_monopole_sum = torch.zeros(
             number_of_systems,
@@ -459,9 +466,8 @@ class MultipoleRepresentation(nn.Module):
             atomic_subsystem_indices,
             monopole,
         )
-        per_system_mean = (per_system_monopole_sum / per_system_number_of_atoms)[atomic_subsystem_indices]
-        per_atom_target = (monopole_target.to(monopole.dtype) / per_system_number_of_atoms)[atomic_subsystem_indices]
-        output[:, 0] = monopole - per_system_mean + per_atom_target
+        scaling_factor =  monopole_target / per_system_monopole_sum
+        output[:, 0] = monopole * scaling_factor[atomic_subsystem_indices]
 
         return output
 

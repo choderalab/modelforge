@@ -3,6 +3,9 @@ import torch
 from openff.units import unit
 
 from modelforge.tests.helper_functions import setup_potential_for_test
+from modelforge.potential.neighbors import NeighborListForTraining, PairlistData
+from modelforge.utils.prop import NNPInput
+
 
 @pytest.fixture(scope="session")
 def prep_temp_dir(tmp_path_factory):
@@ -18,6 +21,40 @@ def prep_temp_dir(tmp_path_factory):
     """
     fn = tmp_path_factory.mktemp("test_multipolenet_temp")
     return fn
+
+
+def setup_test_system_nnp_input():
+
+    # 12 atoms in 3 systems
+    atomic_numbers = torch.tensor([
+        26, 8, 8, 29, 17, 17, 30, 16, 8, 8, 8, 8
+    ])
+    atomic_subsystem_indices = torch.tensor([
+        0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 2, 2
+    ])
+
+    # random positions for 12 atoms
+    positions = torch.rand(12, 3)
+
+    per_system_total_charge = torch.tensor([-1, 0, 1])
+    per_system_spin_multiplicity = torch.tensor([1, 3, 5])
+
+    data = NNPInput(
+        atomic_numbers=atomic_numbers,
+        positions=positions,
+        atomic_subsystem_indices=atomic_subsystem_indices,
+        per_system_total_charge=per_system_total_charge,
+        per_system_spin_multiplicity=per_system_spin_multiplicity,
+    )
+
+    neighborlist_module = NeighborListForTraining(
+        local_cutoff=5,
+    )
+    neighborlist = neighborlist_module(
+        data,
+    )
+
+    return data, neighborlist
 
 
 def test_initialize_model(prep_temp_dir):
@@ -87,3 +124,20 @@ def test_shift_monopole(prep_temp_dir):
     )
 
     assert torch.allclose(shifted_multipole, shifted_multipole_true, atol=1e-4)
+
+
+def test_representation_forward(prep_temp_dir):
+    multipolenet = setup_potential_for_test(
+        "multipolenet",
+        "training",
+        local_cache_dir=str(prep_temp_dir),
+    )
+
+    representation_module = multipolenet.core_network.representation_module
+
+    nnp_input, neighborlist = setup_test_system_nnp_input()
+
+    representation = representation_module(nnp_input, neighborlist.local_cutoff)
+
+    assert representation[0].shape == torch.Size([12, 9])  # 12 atoms, 1+3+5 channels
+    assert representation[1].shape == torch.Size([12, 9])  # 12 atoms, 1+3+5 channels

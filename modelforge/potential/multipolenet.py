@@ -397,7 +397,7 @@ class MultipoleRepresentation(nn.Module):
     ):
         x = self.conditioning(
             torch.stack([
-                (data.per_system_spin_state - 1).to(data.positions.dtype).reshape(-1),
+                (data.per_system_spin_multiplicity - 1).to(data.positions.dtype).reshape(-1),
                 data.per_system_total_charge.to(data.positions.dtype).reshape(-1),
             ], dim=-1)[data.atomic_subsystem_indices]
         )
@@ -415,14 +415,14 @@ class MultipoleRepresentation(nn.Module):
         spin_multipole = self.head_spin(x)
 
         # force the sum of partial charges and spin on the monopole dimensions
-        charge_multipole = self._project_monopole(
+        charge_multipole = self._scale_monopole(
             charge_multipole,
             data.per_system_total_charge,
             data.atomic_subsystem_indices,
         )
-        spin_multipole = self._project_monopole(
+        spin_multipole = self._scale_monopole(
             spin_multipole,
-            data.per_system_spin_state - 1,
+            data.per_system_spin_multiplicity - 1,
             data.atomic_subsystem_indices,
         )
 

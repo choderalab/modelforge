@@ -130,15 +130,10 @@ class MultipoleNetCore(nn.Module):
         atomic_subsystem_indices: torch.Tensor,
         per_system_dipole_origin: torch.Tensor = None,
     ):
-        partial_charge = charge_multipole[:, 0]
         dipole = charge_multipole[:, 1:4]
         number_of_systems = int(atomic_subsystem_indices.max()) + 1
 
-        # default origin is (0, 0, 0)
-        if per_system_dipole_origin is not None:
-            positions = positions - per_system_dipole_origin
-
-        per_atom_dipole_moment = partial_charge.unsqueeze(-1) * positions + dipole  # TODO Check math
+        per_atom_dipole_moment = dipole
         per_system_dipole_moment = torch.zeros(
             number_of_systems,
             3,

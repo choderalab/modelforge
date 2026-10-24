@@ -199,7 +199,6 @@ class MultipoleNetCore(nn.Module):
         # Calculate dipole moments from the latent charge multipole
         results["per_system_dipole_moment"] = self.calculate_per_system_dipole_moment(
             results["per_atom_charge_multipole"],
-            data.positions,
             results["atomic_subsystem_indices"],
         )
 

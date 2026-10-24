@@ -141,3 +141,39 @@ def test_representation_forward(prep_temp_dir):
 
     assert representation[0].shape == torch.Size([12, 9])  # 12 atoms, 1+3+5 channels
     assert representation[1].shape == torch.Size([12, 9])  # 12 atoms, 1+3+5 channels
+
+
+def test_multipole_invariants(prep_temp_dir):
+    multipolenet = setup_potential_for_test(
+        "multipolenet",
+        "training",
+        local_cache_dir=str(prep_temp_dir),
+    )
+    representation_module = multipolenet.core_network.representation_module
+
+    nnp_input, neighborlist = setup_test_system_nnp_input()
+
+    charge_representation = representation_module(nnp_input, neighborlist.local_cutoff)[0]
+    charge_invariants = multipolenet.core_network._multipole_invariants(charge_representation)
+
+    assert charge_invariants.shape == torch.Size([12, 3])
+
+
+def test_core_forward(prep_temp_dir):
+    multipolenet = setup_potential_for_test(
+        "multipolenet",
+        "training",
+        local_cache_dir=str(prep_temp_dir),
+    )
+
+    nnp_input, neighborlist = setup_test_system_nnp_input()
+
+    output = multipolenet.core_network(nnp_input, neighborlist.local_cutoff)
+
+    assert "per_atom_charge_multipole" in output.keys()
+    assert "per_atom_spin_multipole" in output.keys()
+    assert "per_atom_scalar_representation" in output.keys()
+    assert "per_atom_charge" in output.keys()
+    assert "per_system_charge" in output.keys()
+    assert "per_system_spin" in output.keys()
+    assert "per_system_dipole_moment" in output.keys()

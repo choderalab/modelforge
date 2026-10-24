@@ -150,17 +150,17 @@ class MultipoleNetCore(nn.Module):
     @staticmethod
     def _multipole_invariants(multipole: torch.Tensor) -> torch.Tensor:
         """
-        Reduce an (A, 9) multipole to (A, 3) rotation invariants:
+        Reduce a (number_of_systems, 9) multipole to (number_of_systems, 3) rotation invariants:
         [monopole, |dipole|, ||quadrupole||].
 
         Parameters
         ----------
-        multipole : torch.Tensor, shape [n_atoms, 9]
+        multipole : torch.Tensor, shape [number_of_atoms, 9]
             Per-atom multipoles [monopole | dipole(3) | quadrupole(5)].
 
         Returns
         -------
-        torch.Tensor, shape [n_atoms, 3]
+        torch.Tensor, shape [number_of_atoms, 3]
             Per-atom rotation invariants.
         """
         monopole = multipole[:, 0:1]
@@ -320,6 +320,11 @@ class MultipoleInteractionModule(nn.Module):
         return self.gate(x_pre_gate)
 
 class MultipoleRepresentation(nn.Module):
+    """
+    This class takes the input batch and i) makes an initial [q, S] vector for each system, and ii) calls the
+        interaction modules forward to apply message-passing across atom pairs. The output of this class is the
+        * updated * neighbor-aware representations of the input systems.
+    """
     def __init__(
         self,
         number_of_interaction_modules: int,
@@ -332,18 +337,6 @@ class MultipoleRepresentation(nn.Module):
         number_of_radial_basis_module_dimensions: int,
         activation_function: nn.Module,
     ):
-        """
-
-        Parameters
-        ----------
-        number_of_hidden_layers
-        number_of_monopole_dimensions
-        number_of_dipole_dimensions
-        number_of_quadrupole_dimensions
-        maximum_angular_momentum
-        maximum_interaction_radius
-        activation_function
-        """
         super().__init__()
         self.number_of_interaction_modules = number_of_interaction_modules
         self.number_of_monopole_dimensions = number_of_monopole_dimensions
@@ -428,7 +421,7 @@ class MultipoleRepresentation(nn.Module):
     ):
         """
         This function takes the predicted monopole and shift the values according to the given per system monopoles
-        (charge or spin). This function does not alter the terms of dipoles and quadrupoles.
+            (charge or spin). This function does not alter the terms of dipoles and quadrupoles.
 
         Parameters
         ----------
@@ -472,9 +465,9 @@ class MultipoleReadout(nn.Module):
     ):
         """
         Scalar readout module. Consumes the per-atom rotation invariants of the
-        charge and spin multipoles and predicts the requested per-atom energy.
-        Only energy gets its output neural network, while charges will be
-        read out from the charge monopole directly.
+            charge and spin multipoles and predicts the requested per-atom energy.
+            Only energy gets its output neural network, while charges will be
+            read out from the charge monopole directly.
 
         Parameters
         ----------

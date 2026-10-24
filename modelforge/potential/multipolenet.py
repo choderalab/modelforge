@@ -126,9 +126,7 @@ class MultipoleNetCore(nn.Module):
     @staticmethod
     def calculate_per_system_dipole_moment(
         charge_multipole: torch.Tensor,
-        positions: torch.Tensor,
         atomic_subsystem_indices: torch.Tensor,
-        per_system_dipole_origin: torch.Tensor = None,
     ):
         dipole = charge_multipole[:, 1:4]
         number_of_systems = int(atomic_subsystem_indices.max()) + 1

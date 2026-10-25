@@ -1,6 +1,8 @@
+import copy
+
+from e3nn import o3
 import pytest
 import torch
-from openff.units import unit
 
 from modelforge.tests.helper_functions import setup_potential_for_test
 from modelforge.potential.neighbors import NeighborListForTraining, PairlistData
@@ -104,13 +106,13 @@ def test_shift_monopole(prep_temp_dir):
     monopole_target = torch.tensor([-1, 2])
     atomic_subsystem_indices = torch.tensor([0, 0, 0, 1, 1, 1, 1])
 
-    shifted_multipole = representation_module._scale_monopole(
+    scaled_multipole = representation_module._scale_monopole(
         multipole_input,
         monopole_target,
         atomic_subsystem_indices
     )
 
-    shifted_multipole_true = torch.tensor(
+    scaled_multipole_true = torch.tensor(
         [
             [-0.25, 1, 2, 3, 1, 2, 3, 4, 5],
             [-0.3333, 1, 2, 3, 1, 2, 3, 4, 5],
@@ -123,7 +125,7 @@ def test_shift_monopole(prep_temp_dir):
         dtype=torch.float32,
     )
 
-    assert torch.allclose(shifted_multipole, shifted_multipole_true, atol=1e-4)
+    assert torch.allclose(scaled_multipole, scaled_multipole_true, atol=1e-4)
 
 
 def test_representation_forward(prep_temp_dir):
@@ -177,3 +179,65 @@ def test_core_forward(prep_temp_dir):
     assert "per_system_charge" in output.keys()
     assert "per_system_spin" in output.keys()
     assert "per_system_dipole_moment" in output.keys()
+    assert "per_atom_energy" in output.keys()
+
+
+def test_multipole_symmetry(prep_temp_dir):
+    # This is a sanity check of the symmetry in the multipole representation (i.e. rotation of an input system
+    # should result in the representation rotating accordingly).
+
+    multipolenet = setup_potential_for_test(
+        "multipolenet",
+        "training",
+        local_cache_dir=str(prep_temp_dir),
+    )
+
+    nnp_input, neighborlist = setup_test_system_nnp_input()
+
+    # Create a rotation matrix for the test system with size (number_of_atoms, 3, 3)
+    number_of_systems = int(nnp_input.atomic_subsystem_indices.max()) + 1
+    rotation = o3.rand_matrix(number_of_systems)
+    d_matrix = o3.Irreps("1x0e + 1x1o + 1x2e").D_from_matrix(rotation)
+    per_atom_rotation = rotation[nnp_input.atomic_subsystem_indices]
+    per_atom_d_matrix = d_matrix[nnp_input.atomic_subsystem_indices]
+
+    rotated_nnp_input = copy.deepcopy(nnp_input)
+    rotated_nnp_input.positions = torch.einsum(
+        "nij,nj->ni",
+        per_atom_rotation,
+        nnp_input.positions,
+    )
+
+    # updated neighborlist for the rotated input
+    neighborlist_module = NeighborListForTraining(
+        local_cutoff=5,
+    )
+    rotated_neighborlist = neighborlist_module(
+        rotated_nnp_input,
+    )
+
+    # charge_dipole from the original input
+    output = multipolenet.core_network(nnp_input, neighborlist.local_cutoff)
+
+    # rotate the charge multipole
+    charge_multipole = output["per_atom_charge_multipole"]
+    rotated_charge_multipole = torch.einsum(
+        "nij,nj->ni",
+        per_atom_d_matrix,
+        charge_multipole,
+    )
+
+    # charge dipole from the rotated input
+    rotated_output = multipolenet.core_network(rotated_nnp_input, rotated_neighborlist.local_cutoff)
+
+    assert torch.allclose(
+        rotated_charge_multipole,
+        rotated_output["per_atom_charge_multipole"],
+        atol=1e-4,
+    ), "Model doesn't preserve rotational equivariance."
+
+    assert torch.allclose(
+        rotated_output["per_atom_energy"],
+        output["per_atom_energy"],
+        atol=1e-4,
+    ), "Model doesn't preserve energy invariance."

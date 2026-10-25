@@ -29,7 +29,7 @@ class MultipoleNetCore(nn.Module):
         number_of_quadrupole_dimensions: int,
         maximum_interaction_radius: float,
         number_of_radial_basis_module_dimensions: int,
-        activation_function_parameter: Dict[str, str],
+        activation_function_parameter: Dict[str, nn.Module()],
         readout_hidden_features: int = 64,
         maximum_angular_momentum: int = 2,  # Careful! Don't change this value.
         predicted_properties: List[str] = None,
@@ -213,7 +213,7 @@ class MultipoleInteractionModule(nn.Module):
         irreps_spherical_harmonics: Union[o3._irreps.Irreps, str],
         number_of_radial_basis_functions: int,
         number_of_radial_basis_module_dimensions: int,
-        activation_function: nn.Module,
+        activation_function: nn.Module(),
         maximum_interaction_radius: float,
     ):
         """
@@ -258,7 +258,7 @@ class MultipoleInteractionModule(nn.Module):
 
         self.radial_basis_module = FullyConnectedNet(
             [
-                number_of_radial_basis_functions,
+                self.number_of_radial_basis_functions,
                 self.number_of_radial_basis_module_dimensions,
                 self.tensor_product.weight_numel,
             ],
@@ -335,7 +335,7 @@ class MultipoleRepresentation(nn.Module):
         maximum_interaction_radius: float,
         number_of_radial_basis_functions: int,
         number_of_radial_basis_module_dimensions: int,
-        activation_function: nn.Module,
+        activation_function: nn.Module(),
     ):
         super().__init__()
         self.number_of_interaction_modules = number_of_interaction_modules
@@ -461,13 +461,12 @@ class MultipoleReadout(nn.Module):
     def __init__(
         self,
         number_of_hidden_features: int,
-        activation_function: nn.Module,
+        activation_function: nn.Module(),
     ):
         """
-        Scalar readout module. Consumes the per-atom rotation invariants of the
-            charge and spin multipoles and predicts the requested per-atom energy.
-            Only energy gets its output neural network, while charges will be
-            read out from the charge monopole directly.
+        Scalar readout module. Takes in the per-atom rotation invariants of the charge and spin multipoles
+            and outputs the requested per-atom energy. Only energy gets its output neural network, while charges
+            will be read out from the charge monopole directly, and thus is not handled by this module.
 
         Parameters
         ----------

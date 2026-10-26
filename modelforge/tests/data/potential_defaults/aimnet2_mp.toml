@@ -1,0 +1,42 @@
+[potential]
+potential_name = "AimNet2_mp"
+potential_seed = 42
+
+[potential.core_parameter]
+number_of_radial_basis_functions = 64
+number_of_vector_features = 8
+maximum_interaction_radius = "5.0 angstrom"
+number_of_interaction_modules = 3
+interaction_module_hidden_layers = [[512,380], [512,380], [512,380, 380]]
+output_module_hidden_layers = [128,128]
+predicted_properties = ["per_atom_energy"]
+number_of_charge_channels = 1
+charge_equilibration_layer_size = 32
+predicted_dim = [1]
+# below defines MultipoleNet
+number_of_radial_basis_functions_mp = 16
+number_of_interaction_modules_mp = 3
+number_of_monopole_dimensions = 64
+number_of_dipole_dimensions = 16
+number_of_quadrupole_dimensions = 8
+maximum_interaction_radius_mp = "5.0 angstrom"
+number_of_radial_basis_module_dimensions = 8
+
+[potential.core_parameter.activation_function_parameter]
+activation_function_name = "GeLU"
+
+[potential.core_parameter.activation_function_parameter_mp]
+activation_function_name = "SiLU"
+
+[potential.core_parameter.featurization]
+properties_to_featurize = ['atomic_number']
+[potential.core_parameter.featurization.atomic_number]
+maximum_atomic_number = 101
+number_of_per_atom_features = 64
+
+[potential.postprocessing_parameter]
+properties_to_process = ['per_atom_energy']
+[potential.postprocessing_parameter.per_atom_energy]
+normalize = true
+from_atom_to_system_reduction = true
+keep_per_atom_property = true

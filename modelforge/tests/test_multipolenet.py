@@ -106,13 +106,13 @@ def test_shift_monopole(prep_temp_dir):
     monopole_target = torch.tensor([-1, 2])
     atomic_subsystem_indices = torch.tensor([0, 0, 0, 1, 1, 1, 1])
 
-    scaled_multipole = representation_module._scale_monopole(
+    shifted_multipole = representation_module._shift_monopole(
         multipole_input,
         monopole_target,
         atomic_subsystem_indices
     )
 
-    scaled_multipole_true = torch.tensor(
+    shifted_multipole_true = torch.tensor(
         [
             [-0.25, 1, 2, 3, 1, 2, 3, 4, 5],
             [-0.3333, 1, 2, 3, 1, 2, 3, 4, 5],
@@ -125,7 +125,7 @@ def test_shift_monopole(prep_temp_dir):
         dtype=torch.float32,
     )
 
-    assert torch.allclose(scaled_multipole, scaled_multipole_true, atol=1e-4)
+    assert torch.allclose(shifted_multipole, shifted_multipole_true, atol=1e-4)
 
 
 def test_representation_forward(prep_temp_dir):

@@ -401,12 +401,12 @@ class MultipoleRepresentation(nn.Module):
         spin_multipole = self.head_spin(x)
 
         # force the sum of partial charges and spin on the monopole dimensions
-        charge_multipole = self._scale_monopole(
+        charge_multipole = self._shift_monopole(
             charge_multipole,
             data.per_system_total_charge,
             data.atomic_subsystem_indices,
         )
-        spin_multipole = self._scale_monopole(
+        spin_multipole = self._shift_monopole(
             spin_multipole,
             data.per_system_spin_multiplicity - 1,
             data.atomic_subsystem_indices,
@@ -415,7 +415,7 @@ class MultipoleRepresentation(nn.Module):
         return charge_multipole, spin_multipole
 
     @staticmethod
-    def _scale_monopole(
+    def _shift_monopole(
         multipole: torch.Tensor,
         monopole_target: torch.Tensor,
         atomic_subsystem_indices: torch.Tensor,
@@ -443,6 +443,16 @@ class MultipoleRepresentation(nn.Module):
         monopole = multipole[:, 0]
         monopole_target = monopole_target.reshape(-1)
 
+        per_system_number_of_atoms = torch.zeros(
+            number_of_systems,
+            dtype=monopole.dtype,
+            device=monopole.device,
+        ).index_add_(
+            0,
+            atomic_subsystem_indices,
+            torch.ones_like(monopole),
+        )
+
         per_system_monopole_sum = torch.zeros(
             number_of_systems,
             dtype=monopole.dtype,
@@ -452,8 +462,10 @@ class MultipoleRepresentation(nn.Module):
             atomic_subsystem_indices,
             monopole,
         )
-        scaling_factor =  monopole_target / per_system_monopole_sum
-        output[:, 0] = monopole * scaling_factor[atomic_subsystem_indices]
+
+        per_system_mean = (per_system_monopole_sum / per_system_number_of_atoms)[atomic_subsystem_indices]
+        per_atom_target = (monopole_target.to(monopole.dtype) / per_system_number_of_atoms)[atomic_subsystem_indices]
+        output[:, 0] = monopole - per_system_mean + per_atom_target
 
         return output
 

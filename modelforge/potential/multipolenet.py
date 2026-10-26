@@ -44,6 +44,7 @@ class MultipoleNetCore(nn.Module):
         super().__init__()
 
         log.debug("Initializing the MultipoleNet architecture.")
+        self.model_name = "multipolenet"
 
         self.number_of_radial_basis_functions = number_of_radial_basis_functions
         self.number_of_interaction_modules = number_of_interaction_modules

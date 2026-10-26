@@ -361,7 +361,7 @@ class CalculateProperties(torch.nn.Module):
 
         # TODO Double check in MultiPoleNet test and see if it is the one calculated from the network
 
-        if model_prediction["per_system_dipole_moment"] is None:
+        if model_prediction.get("per_system_dipole_moment") is None:
             # Predict the dipole moment
             per_system_dipole_moment = self._predict_dipole_moment(model_prediction, batch)
         else:

@@ -364,7 +364,11 @@ class AimNet2MPParameters(ParametersBase):
         number_of_vector_features: int
         number_of_charge_channels: int
         charge_equilibration_layer_size: int
-        converted_units = field_validator("maximum_interaction_radius", mode="before")(
+        converted_units = field_validator(
+            "maximum_interaction_radius",
+            "maximum_interaction_radius_mp",
+            mode="before"
+        )(
             _convert_str_or_unit_to_unit_length
         )
 

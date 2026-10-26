@@ -4,6 +4,7 @@ This module contains the implemented neural network potentials and their paramet
 
 from enum import Enum
 
+from .aimnet2_MP import AimNet2MPCore
 from .potential import NeuralNetworkPotentialFactory
 from .painn import PaiNNCore
 from .parameters import (
@@ -15,7 +16,7 @@ from .parameters import (
     SchNetParameters,
     TensorNetParameters,
     MultipoleNetParameters,
-    AimNet2SRParameters,
+    AimNet2SRParameters, AimNet2MPParameters,
 )
 from .processing import FromAtomToMoleculeReduction
 from .representation import (
@@ -47,6 +48,7 @@ class _Implemented_NNP_Parameters(Enum):
     AIMNET2_PARAMETERS = AimNet2Parameters
     MULTIPOLENET_PARAMETERS = MultipoleNetParameters
     AIMNET2_SR_PARAMETERS = AimNet2SRParameters
+    AIMNET2_MP_PARAMETERS = AimNet2MPParameters
 
     @classmethod
     def get_neural_network_parameter_class(cls, neural_network_name: str):
@@ -71,6 +73,7 @@ class _Implemented_NNPs(Enum):
     AIMNET2 = AimNet2Core
     MULTIPOLENET = MultipoleNetCore
     AIMNET2_SR = AimNet2SRCore
+    AIMNET2_MP = AimNet2MPCore
 
     @classmethod
     def get_neural_network_class(cls, neural_network_name: str):

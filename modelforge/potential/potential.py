@@ -1606,7 +1606,11 @@ def evaluate_batch(
 
     for batch in batches:
         batch.to_device(device)
+        # to save memory let us copy this back to the cpu and get rid of gradients
         output = potential(batch.nnp_input)
+
+        for key in output.keys():
+            output[key] = output[key].detach().clone().cpu()
 
         # we'll need to parse the atomic_subsystem_indices
         atomic_subsystem_indices = output["atomic_subsystem_indices"]
@@ -1678,5 +1682,6 @@ def evaluate_batch(
                     datapoints[real_index]["metadata"][key] = temp_index[i]
 
         count = count + n_systems
+        torch.cuda.empty_cache()
 
     return datapoints

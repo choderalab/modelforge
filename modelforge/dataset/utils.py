@@ -719,10 +719,12 @@ def random_record_split(
         raise ValueError(f"Training split is empty; this will not train")
 
     # Cannot verify that dataset is Sized
-    if sum(lengths) != dataset.record_len():  # type: ignore[arg-type]
-        raise ValueError(
-            "Sum of input lengths does not equal the number of records of the input dataset!"
-        )
+
+    if enforce_sum_to_unity:
+        if sum(lengths) != dataset.record_len():  # type: ignore[arg-type]
+            raise ValueError(
+                "Sum of input lengths does not equal the number of records of the input dataset!"
+            )
     if test_generator is None:
         record_indices = torch.randperm(sum(lengths), generator=generator).tolist()  # type: ignore[arg-type, call-overload]
 

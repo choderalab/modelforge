@@ -1533,6 +1533,7 @@ def evaluate_batch(
     potential: Potential,
     subset: Literal["train", "test", "val"],
     include_metadata: bool = True,
+    device: Optional[Union[str, torch.device]] = None,
 ) -> dict:
     """
     This will evaluate the dataset subset using the specified potential.
@@ -1551,6 +1552,10 @@ def evaluate_batch(
         Which subset to evaluate.
     include_metadata: bool, default True
         This will also include metadata information in the output dictionary, providing the reference data used in training.
+    device: Optional[Union[str, torch.device]], optional
+        Device used for batch inference. If not provided, batches are moved to the
+        same device as the potential parameters. If ``"cuda"`` is requested but
+        CUDA is unavailable, CPU is used.
 
     Returns
     -------
@@ -1603,7 +1608,18 @@ def evaluate_batch(
     per_atom_metadata_properties = []
     per_system_metadata_properties = []
 
+    if device is None:
+        first_parameter = next(potential.parameters(), None)
+        batch_device = (
+            first_parameter.device if first_parameter is not None else torch.device("cpu")
+        )
+    else:
+        batch_device = torch.device(device)
+        if batch_device.type == "cuda" and not torch.cuda.is_available():
+            batch_device = torch.device("cpu")
+
     for batch in batches:
+        batch.to_device(batch_device)
         output = potential(batch.nnp_input)
 
         # we'll need to parse the atomic_subsystem_indices

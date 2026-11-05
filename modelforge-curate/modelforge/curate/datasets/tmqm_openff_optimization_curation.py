@@ -9,8 +9,11 @@ from modelforge.curate.properties import (
     Positions,
     Forces,
     DipoleMomentPerSystem,
-    MetaData,
     SpinMultiplicitiesPerSystem,
+    SpinMultiplicitiesPerAtom,
+    QuadrupoleMomentPerSystem,
+    MetaData,
+    PartialCharges,
 )
 from modelforge.curate.datasets.curation_baseclass import DatasetCuration
 from modelforge.utils.io import import_, check_import
@@ -283,14 +286,8 @@ class tmQMOpenFFOptCuration(DatasetCuration):
                         properties, config = state
 
                         if properties["molecule_"] is not None:
+
                             name = f'{key[: key.rfind("-")]}_{properties["molecule_"]["name"]}'
-                            # for kk, vv in properties.items():
-                            #     if isinstance(vv, dict):
-                            #         for kk1, vv1 in vv.items():
-                            #             print(kk, kk1, vv1)
-                            #     else:
-                            #         print(kk, vv)
-                            # wefe
 
                             record = dataset.get_record(name)
 
@@ -307,23 +304,27 @@ class tmQMOpenFFOptCuration(DatasetCuration):
                                 ).reshape(1, 1),
                             )
 
+                            # add the mulliken partial charges
+                            mulliken_charges = PartialCharges(
+                                name="mulliken_partial_charges",
+                                value=np.array(
+                                    properties["properties"]["mulliken charges"]
+                                ).reshape(1, -1, 1),
+                                units=unit.elementary_charge,
+                            )
+
+                            # add the lowdin charges
+                            lowdin_charges = PartialCharges(
+                                name="lowdin_partial_charges",
+                                value=np.array(
+                                    properties["properties"]["lowdin charges"]
+                                ).reshape(1, -1, 1),
+                                units=unit.elementary_charge,
+                            )
+
                             positions = Positions(
                                 value=config.reshape(1, -1, 3), units=unit.bohr
                             )
-
-                            # Note need to typecast here because of a bug in the
-                            # # qcarchive entry: see issue: https://github.com/MolSSI/QCFractal/issues/766
-                            # dispersion_correction_energy = Energies(
-                            #     name="dispersion_correction_energy",
-                            #     value=np.array(
-                            #         float(
-                            #             properties["properties"][
-                            #                 "dispersion correction energy"
-                            #             ]
-                            #         )
-                            #     ).reshape(1, 1),
-                            #     units=unit.hartree,
-                            # )
 
                             dft_total_energy = Energies(
                                 name="dft_total_energy",
@@ -332,22 +333,6 @@ class tmQMOpenFFOptCuration(DatasetCuration):
                                 ).reshape(1, 1),
                                 units=unit.hartree,
                             )
-
-                            # dispersion_correction_gradient = Forces(
-                            #     name="dispersion_correction_gradient",
-                            #     value=np.array(
-                            #         properties["properties"][
-                            #             "dispersion correction gradient"
-                            #         ]
-                            #     ).reshape(1, -1, 3),
-                            #     units=unit.hartree / unit.bohr,
-                            # )
-                            #
-                            # dispersion_correction_force = Forces(
-                            #     name="dispersion_correction_force",
-                            #     value=-dispersion_correction_gradient.value,
-                            #     units=unit.hartree / unit.bohr,
-                            # )
 
                             dft_total_gradient = Forces(
                                 name="dft_total_gradient",
@@ -370,15 +355,32 @@ class tmQMOpenFFOptCuration(DatasetCuration):
                                 ).reshape(1, 3),
                                 units=unit.elementary_charge * unit.bohr,
                             )
+                            n_atoms = dft_total_force.n_atoms
+                            spin_multiplicity_per_atom = SpinMultiplicitiesPerAtom(
+                                name="spin_multiplicity_per_atom",
+                                value=np.array(
+                                    properties["properties"]["lowdin_spins"]
+                                ).reshape(1, n_atoms, 1),
+                                units=unit.dimensionless,
+                            )
+                            # per system quadrupole moment
+                            quadrupole_moment = QuadrupoleMomentPerSystem(
+                                name="scf_quadrupole",
+                                value=np.array(
+                                    properties["properties"]["scf quadrupole"]
+                                ).reshape(1, 3, 3),
+                                units=unit.elementary_charge * unit.bohr**2,
+                            )
                             record.add_properties(
                                 [
                                     total_charge,
                                     positions,
                                     per_system_spin_multiplicity,
-                                    # dispersion_correction_energy,
+                                    mulliken_charges,
+                                    lowdin_charges,
+                                    spin_multiplicity_per_atom,
+                                    quadrupole_moment,
                                     dft_total_energy,
-                                    # dispersion_correction_gradient,
-                                    # dispersion_correction_force,
                                     dft_total_gradient,
                                     dft_total_force,
                                     scf_dipole,

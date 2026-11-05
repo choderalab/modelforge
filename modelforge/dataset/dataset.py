@@ -819,7 +819,7 @@ class HDF5Dataset:
         log.debug(f"Reading data from {temp_hdf5_file}")
         log.debug(f"element filter: {self.element_filter}")
         # h5py does file locking internally, but will exit immediately if the file is locked by another program
-        # we create a simple lockfile to prevent this, as OpenWithLock will just wait until the lockfile is unlocked
+        # we can create a simple lockfile to prevent this, as OpenWithLock will just wait until the lockfile is unlocked
         # before proceeding
         with OpenWithLock(f"{temp_hdf5_file}.lockfile", "w") as lock_file:
             with h5py.File(temp_hdf5_file, "r") as hf:
@@ -930,7 +930,7 @@ class HDF5Dataset:
                                 start_id = end_id
                                 end_id = cumulative_counts[i]
 
-                                # The convention we decided atomic numbers is that it should be defined as a 2d array,
+                                # The convention we decided: atomic numbers should be defined as a 2d array,
                                 # i.e., [[1],[6]], and defined only once per record, as it is the same for all configs.
                                 # To handle grouped records, we follow the same convention, but make this a 3d array
                                 # where the first dimension is for each unique system that is grouped.

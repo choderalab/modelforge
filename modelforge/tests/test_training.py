@@ -362,7 +362,7 @@ implemented_potentials = list(_Implemented_NNPs.get_all_neural_network_names())
 @pytest.mark.xdist_group("training_tests")
 # @pytest.mark.xdist_group("test_training_with_lightning")
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
-@pytest.mark.parametrize("potential_name", implemented_potentials)
+@pytest.mark.parametrize("index", len(implemented_potentials))
 # this will grab the toml file for the spice2_hcnocls subset
 @pytest.mark.parametrize("dataset_name", ["SPICE2_HCNOCLS"])
 @pytest.mark.parametrize(
@@ -376,7 +376,7 @@ implemented_potentials = list(_Implemented_NNPs.get_all_neural_network_names())
     ],
 )
 def test_train_with_lightning(
-    loss, potential_name, dataset_name, prep_temp_dir, dataset_temp_dir
+    loss, index, dataset_name, prep_temp_dir, dataset_temp_dir
 ):
     """
     Test that we can train, save and load checkpoints.
@@ -389,7 +389,7 @@ def test_train_with_lightning(
     and that the loss function is calculated;  we do not test for accuracy here and do not want to waste additional time
 
     """
-
+    potential_name = implemented_potentials[index]
     local_cache_dir = str(prep_temp_dir) + "/test_train_with_lightning"
     # SKIP if potential is ANI and dataset is SPICE2 -- no longer need to skip as this will use the spice2_hcnocls subset
     # if "ANI" in potential_name and dataset_name == "SPICE2":

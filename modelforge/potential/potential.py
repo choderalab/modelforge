@@ -1552,6 +1552,8 @@ def evaluate_batch(
         Which subset to evaluate.
     include_metadata: bool, default True
         This will also include metadata information in the output dictionary, providing the reference data used in training.
+    device: str, optional, default "cuda"
+        which device to run compute on, options "cpu", "cuda"
 
     Returns
     -------
@@ -1559,7 +1561,7 @@ def evaluate_batch(
             Each entry includes `name` which corresponds to the name of  record in the original dataset; note, since
             records in the dataset may have multiple configurations, multiple entries may have the same name.
             Additionally, in this dict, there is the `output` which stores the output of the potential, and `metadata`
-            which includes data which can be used to train against.
+            which includes data which can be used to train against. Returned to device "cpu"
 
     """
 

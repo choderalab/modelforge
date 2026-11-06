@@ -314,7 +314,7 @@ import pytest
 from modelforge.train.parameters import TrainingParameters
 
 
-@pytest.mark.xdist_group(name="training_tests")
+@pytest.mark.xdist_group("training_tests")
 @pytest.mark.parametrize("potential_name", ["ANI2x"])
 @pytest.mark.parametrize("dataset_name", ["PHALKETHOH"])
 @pytest.mark.parametrize(
@@ -356,12 +356,12 @@ def test_learning_rate_scheduler(
     get_trainer(config).train_potential().save_checkpoint("test.chp")  # save checkpoint
 
 
-@pytest.mark.xdist_group(name="training_tests")
-@pytest.mark.xdist_group(name="test_training_with_lightning")
+implemented_potentials = list(_Implemented_NNPs.get_all_neural_network_names())
+
+
+@pytest.mark.xdist_group("training_tests")
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
-@pytest.mark.parametrize(
-    "potential_name", _Implemented_NNPs.get_all_neural_network_names()
-)
+@pytest.mark.parametrize("index", range(len(implemented_potentials)))
 # this will grab the toml file for the spice2_hcnocls subset
 @pytest.mark.parametrize("dataset_name", ["SPICE2_HCNOCLS"])
 @pytest.mark.parametrize(
@@ -375,7 +375,7 @@ def test_learning_rate_scheduler(
     ],
 )
 def test_train_with_lightning(
-    loss, potential_name, dataset_name, prep_temp_dir, dataset_temp_dir
+    loss, index, dataset_name, prep_temp_dir, dataset_temp_dir
 ):
     """
     Test that we can train, save and load checkpoints.
@@ -388,7 +388,7 @@ def test_train_with_lightning(
     and that the loss function is calculated;  we do not test for accuracy here and do not want to waste additional time
 
     """
-
+    potential_name = implemented_potentials[index]
     local_cache_dir = str(prep_temp_dir) + "/test_train_with_lightning"
     # SKIP if potential is ANI and dataset is SPICE2 -- no longer need to skip as this will use the spice2_hcnocls subset
     # if "ANI" in potential_name and dataset_name == "SPICE2":
@@ -422,7 +422,7 @@ def test_train_with_lightning(
     # get_trainer(config).train_potential()
 
 
-@pytest.mark.xdist_group(name="training_tests")
+@pytest.mark.xdist_group("training_tests")
 def test_train_from_single_toml_file(prep_temp_dir, dataset_temp_dir):
     from modelforge.utils.io import get_path_string
 
@@ -437,7 +437,7 @@ def test_train_from_single_toml_file(prep_temp_dir, dataset_temp_dir):
     )
 
 
-@pytest.mark.xdist_group(name="training_tests")
+@pytest.mark.xdist_group("training_tests")
 def test_train_from_single_toml_file_element_filter(prep_temp_dir, dataset_temp_dir):
     from modelforge.utils.io import get_path_string
 
@@ -470,7 +470,7 @@ def test_train_from_single_toml_file_element_filter(prep_temp_dir, dataset_temp_
     assert np.all(np.array(trainer.datamodule.element_filter) == np.array([[6, 1]]))
 
 
-@pytest.mark.xdist_group(name="training_tests")
+@pytest.mark.xdist_group("training_tests")
 def test_error_calculation(
     single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
 ):
@@ -536,7 +536,7 @@ def test_error_calculation(
     assert torch.allclose(torch.mean(F_error), reference_F_error)
 
 
-@pytest.mark.xdist_group(name="training_tests")
+@pytest.mark.xdist_group("training_tests")
 def test_loss_with_dipole_moment(
     single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
 ):
@@ -633,7 +633,7 @@ def test_loss_with_dipole_moment(
     ).all(), "Total loss contains non-finite values."
 
 
-@pytest.mark.xdist_group(name="training_tests")
+@pytest.mark.xdist_group("training_tests")
 def test_per_atom_charge_loss(
     single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir
 ):
@@ -674,7 +674,7 @@ def test_per_atom_charge_loss(
     assert torch.allclose(scaled_loss_value, torch.tensor([[0.51]]))
 
 
-@pytest.mark.xdist_group(name="training_tests")
+@pytest.mark.xdist_group("training_tests")
 def test_loss(single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir):
     from modelforge.train.losses import Loss
 

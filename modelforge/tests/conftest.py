@@ -594,3 +594,11 @@ def equivariance_test_utils():
     reflection = lambda x: x @ p.to(x.device, x.dtype)
 
     return translation, rotation, reflection
+
+
+#
+# @pytest.hookimpl(tryfirst=True)
+# def pytest_collection_modifyitems(config, items):
+#     for item in items:
+#         if "test_train_with_lightning" in item.nodeid:
+#             item.add_marker(pytest.mark.xdist_group("training_tests"))

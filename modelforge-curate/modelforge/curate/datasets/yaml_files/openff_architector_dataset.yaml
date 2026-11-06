@@ -1,0 +1,7 @@
+dataset_name: openff_architector
+latest: v_0_original
+v_0_original:
+  version: 0
+  note: "architector dataset, partial"
+  collection_names:
+  - 483

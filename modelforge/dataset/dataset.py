@@ -819,7 +819,7 @@ class HDF5Dataset:
         log.debug(f"Reading data from {temp_hdf5_file}")
         log.debug(f"element filter: {self.element_filter}")
         # h5py does file locking internally, but will exit immediately if the file is locked by another program
-        # we create a simple lockfile to prevent this, as OpenWithLock will just wait until the lockfile is unlocked
+        # we can create a simple lockfile to prevent this, as OpenWithLock will just wait until the lockfile is unlocked
         # before proceeding
         with OpenWithLock(f"{temp_hdf5_file}.lockfile", "w") as lock_file:
             with h5py.File(temp_hdf5_file, "r") as hf:
@@ -930,7 +930,7 @@ class HDF5Dataset:
                                 start_id = end_id
                                 end_id = cumulative_counts[i]
 
-                                # The convention we decided atomic numbers is that it should be defined as a 2d array,
+                                # The convention we decided: atomic numbers should be defined as a 2d array,
                                 # i.e., [[1],[6]], and defined only once per record, as it is the same for all configs.
                                 # To handle grouped records, we follow the same convention, but make this a 3d array
                                 # where the first dimension is for each unique system that is grouped.
@@ -2026,6 +2026,7 @@ def initialize_datamodule_from_config(
     local_cache_dir: Optional[str] = None,
     dataset_cache_dir: Optional[str] = None,
     local_yaml_file: Optional[str] = None,
+    batch_size: Optional[int] = None,
 ) -> DataModule:
     """
     Initialize a datamodule instance using the settings in the training config file
@@ -2050,6 +2051,8 @@ def initialize_datamodule_from_config(
         The local_yaml_file is used to specify a local dataset; this will point the code to the correct location
         of the file that specifies the dataset (in case this code is being run on a machine with different file structure
         than the machine where training was run).
+    batch_size: int, optional
+        Specify the batch size; note this will override any parameter set in the config_file
 
     Examples
     --------
@@ -2071,10 +2074,12 @@ def initialize_datamodule_from_config(
         dataset_cache_dir = dataset_parameter.dataset_cache_dir
     if local_yaml_file is None:
         local_yaml_file = dataset_parameter.local_yaml_file
+    if batch_size is None:
+        batch_size = training_parameter.batch_size
 
     dm = DataModule(
         name=dataset_parameter.dataset_name,
-        batch_size=training_parameter.batch_size,
+        batch_size=batch_size,
         remove_self_energies=training_parameter.remove_self_energies,
         shift_center_of_mass_to_origin=training_parameter.shift_center_of_mass_to_origin,
         shift_energies=training_parameter.shift_energies,

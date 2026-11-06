@@ -30,3 +30,8 @@ v0_ext_md_sm3_dft_sm5:
   note: "extension dataset, MD sampling at sm=1, evaluated with DFT at sm=5"
   collection_names:
   - 464
+v0_arch:
+  version: 0
+  note: "architector dataset, partial"
+  collection_names:
+  - 483

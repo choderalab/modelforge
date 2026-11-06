@@ -1533,6 +1533,7 @@ def evaluate_batch(
     potential: Potential,
     subset: Literal["train", "test", "val"],
     include_metadata: bool = True,
+    device="cuda",
 ) -> dict:
     """
     This will evaluate the dataset subset using the specified potential.
@@ -1551,6 +1552,8 @@ def evaluate_batch(
         Which subset to evaluate.
     include_metadata: bool, default True
         This will also include metadata information in the output dictionary, providing the reference data used in training.
+    device: str, optional, default "cuda"
+        which device to run compute on, options "cpu", "cuda"
 
     Returns
     -------
@@ -1558,7 +1561,7 @@ def evaluate_batch(
             Each entry includes `name` which corresponds to the name of  record in the original dataset; note, since
             records in the dataset may have multiple configurations, multiple entries may have the same name.
             Additionally, in this dict, there is the `output` which stores the output of the potential, and `metadata`
-            which includes data which can be used to train against.
+            which includes data which can be used to train against. Returned to device "cpu"
 
     """
 
@@ -1604,7 +1607,12 @@ def evaluate_batch(
     per_system_metadata_properties = []
 
     for batch in batches:
+        batch.to_device(device)
+        # to save memory let us copy this back to the cpu and get rid of gradients
         output = potential(batch.nnp_input)
+
+        for key in output.keys():
+            output[key] = output[key].detach().clone().cpu()
 
         # we'll need to parse the atomic_subsystem_indices
         atomic_subsystem_indices = output["atomic_subsystem_indices"]
@@ -1676,5 +1684,6 @@ def evaluate_batch(
                     datapoints[real_index]["metadata"][key] = temp_index[i]
 
         count = count + n_systems
+        torch.cuda.empty_cache()
 
     return datapoints

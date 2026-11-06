@@ -359,8 +359,7 @@ def test_learning_rate_scheduler(
 implemented_potentials = list(_Implemented_NNPs.get_all_neural_network_names())
 
 
-@pytest.mark.xdist_group("training_tests")
-# @pytest.mark.xdist_group("test_training_with_lightning")
+@pytest.mark.xdist_group("training_tests_lightning")
 @pytest.mark.skipif(ON_MACOS, reason="Skipping this test on MacOS GitHub Actions")
 @pytest.mark.parametrize("index", range(len(implemented_potentials)))
 # this will grab the toml file for the spice2_hcnocls subset

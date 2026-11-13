@@ -978,6 +978,11 @@ def test_batch_evaluation(datamodule_factory, prep_temp_dir, dataset_temp_dir):
         torch.tensor([-5406.6088], dtype=torch.float64),
     )
 
+    # just test to see if we can evaluate other subsets
+    output_batch = evaluate_batch(dm_min, potential, subset="val", device="cpu")
+    output_batch = evaluate_batch(dm_min, potential, subset="train", device="cpu")
+    output_batch = evaluate_batch(dm_min, potential, subset="all", device="cpu")
+
 
 @pytest.mark.parametrize(
     "potential_name", _Implemented_NNPs.get_all_neural_network_names()

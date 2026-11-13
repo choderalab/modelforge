@@ -1730,6 +1730,11 @@ class DataModule(pl.LightningDataModule):
         """
         Create a DataLoader for the training dataset.
 
+        Parameters
+        ----------
+        num_workers, default=4
+            Number of workers to use for the dataloader.
+
         Returns
         -------
         DataLoader
@@ -1749,6 +1754,11 @@ class DataModule(pl.LightningDataModule):
         """
         Create a DataLoader for the validation dataset.
 
+        Parameters
+        ----------
+        num_workers, default=4
+            Number of workers to use for the dataloader.
+
         Returns
         -------
         DataLoader
@@ -1766,6 +1776,11 @@ class DataModule(pl.LightningDataModule):
         """
         Create a DataLoader for the test dataset.
 
+        Parameters
+        ----------
+        num_workers, default=4
+            Number of workers to use for the dataloader.
+
         Returns
         -------
         DataLoader
@@ -1777,6 +1792,31 @@ class DataModule(pl.LightningDataModule):
             collate_fn=collate_conformers,
             num_workers=num_workers,
             multiprocessing_context="fork",
+        )
+
+    def all_dataloader(self, num_workers: int = 4, shuffle: bool = False) -> DataLoader:
+        """
+        Create a DataLoader for the full dataset.
+
+        Parameters
+        ----------
+        num_workers, default=4
+            Number of workers to use for the dataloader.
+
+        Returns
+        -------
+        DataLoader
+            DataLoader containing the full dataset.
+
+        """
+
+        return DataLoader(
+            self.torch_dataset,
+            batch_size=self.batch_size,
+            collate_fn=collate_conformers,
+            num_workers=num_workers,
+            multiprocessing_context="fork",
+            shuffle=shuffle,
         )
 
 

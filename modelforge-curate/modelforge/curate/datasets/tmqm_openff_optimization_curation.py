@@ -233,6 +233,11 @@ class tmQMOpenFFOptCuration(DatasetCuration):
                     # (saturated vs unsaturated ring); appending the chemical formula should make it unique
                     name = f'{key[: key.rfind("-")]}_{val["initial_molecule"]["name"]}'
 
+                    # names are formatted as:
+                    # ABACAL-charge=-1_ABACAL-charge=-1-m2
+                    # we just need the first "name" to be consistent with the original dataset
+                    name = name.split("-")[0]
+
                     # these properties only need to be added once
                     # so we need to check if
                     if not name in dataset.records.keys():
@@ -288,6 +293,12 @@ class tmQMOpenFFOptCuration(DatasetCuration):
                         if properties["molecule_"] is not None:
 
                             name = f'{key[: key.rfind("-")]}_{properties["molecule_"]["name"]}'
+
+                            # names are formatted as:
+                            # ABACAL-charge=-1_ABACAL-charge=-1-m2
+                            # we just need the first "name" to be consistent with the original dataset
+                            name = name.split("-")[0]
+                            # we need to aggregate
 
                             record = dataset.get_record(name)
 
@@ -371,6 +382,8 @@ class tmQMOpenFFOptCuration(DatasetCuration):
                                 ).reshape(1, 3, 3),
                                 units=unit.elementary_charge * unit.bohr**2,
                             )
+                            # since we have initialized the dataset with append_property=True
+                            # this should automatically merge properties in the record
                             record.add_properties(
                                 [
                                     total_charge,

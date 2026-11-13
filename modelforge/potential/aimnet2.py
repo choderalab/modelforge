@@ -347,7 +347,10 @@ class AimNet2Core(torch.nn.Module):
             scaled_delta_q = f * delta_q
 
             # Update partial charges
-            partial_charge_channels = scaled_delta_q  # Initialize charges
+            if i == 0:
+                partial_charge_channels = scaled_delta_q  # Initialize charges
+            else:
+                partial_charge_channels = partial_charge_channels + scaled_delta_q
 
             partial_charge_channels = self.charge_conservation(
                 atomic_embedding=atomic_embedding,

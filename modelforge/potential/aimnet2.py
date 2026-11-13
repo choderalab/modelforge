@@ -363,7 +363,10 @@ class AimNet2Core(torch.nn.Module):
 
         # if we have two charge channels we need to sum them up to get partial charge
         if self.number_of_charge_channels == 2:
+            # partial charges are the sum of p_up and p_down
             partial_charges = partial_charge_channels.sum(dim=-1).unsqueeze(-1)
+            # partial spins are the difference between p_up and p_down
+            partial_spin_density = partial_charge_channels.diff(dim=-1).unsqueeze(-1)
         else:
             partial_charges = partial_charge_channels
         # check that none of the tensors are NaN
@@ -380,11 +383,15 @@ class AimNet2Core(torch.nn.Module):
                 "per_atom_charge": partial_charges,
             }
         elif self.number_of_charge_channels == 2:
+            if torch.isnan(partial_spin_density).any():
+                raise ValueError("NaN values detected in partial spin density.")
+
             return {
                 "per_atom_scalar_representation": atomic_embedding,
                 "atomic_subsystem_indices": data.atomic_subsystem_indices,
                 "atomic_numbers": data.atomic_numbers,
                 "per_atom_charge": partial_charges,
+                "per_atom_spin_multiplicity": partial_spin_density,
                 "per_atom_charge_channels": partial_charge_channels,
             }
 

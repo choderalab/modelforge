@@ -138,6 +138,7 @@ class AimNet2Core(torch.nn.Module):
         maximum_interaction_radius: float,
         number_of_charge_channels: int,
         charge_equilibration_layer_size: int,
+        update_embedding_with_charge_channels: bool,
     ) -> None:
         """
         Core architecture of the AimNet2 model for molecular property
@@ -176,6 +177,9 @@ class AimNet2Core(torch.nn.Module):
             The number of charge channels in the model.
         charge_equilibration_layer_size:
             The size of hidden layers in the charge equilibration
+        update_embedding_with_charge_channels : bool
+            If number of charge channels =2 and this is True, it will include partial spins into atomic embedding,
+            sending it through a Fully connected linear layer with the activation function
 
         """
 
@@ -184,6 +188,7 @@ class AimNet2Core(torch.nn.Module):
         log.debug("Initializing the AimNet2 architecture.")
         self.model_name = "aimnet2"
         self.activation_function = activation_function_parameter["activation_function"]
+        self.update_embedding_with_spin = update_embedding_with_charge_channels
 
         self.number_of_charge_channels = number_of_charge_channels
 
@@ -247,6 +252,13 @@ class AimNet2Core(torch.nn.Module):
             number_of_charge_channels=number_of_charge_channels,
             hidden_dim=charge_equilibration_layer_size,
         )
+        if self.update_embedding_with_spin:
+            self.update_embedding_with_spin = Dense(
+                in_features=number_of_per_atom_features
+                + self.number_of_charge_channels,
+                out_features=number_of_per_atom_features,
+                activation_function=self.activation_function,
+            )
 
     def compute_properties(
         self,
@@ -364,11 +376,29 @@ class AimNet2Core(torch.nn.Module):
         # if we have two charge channels we need to sum them up to get partial charge
         if self.number_of_charge_channels == 2:
             # partial charges are the sum of p_up and p_down
-            partial_charges = partial_charge_channels.sum(dim=-1).unsqueeze(-1)
+
+            p_up = partial_charge_channels[:, 0]
+            p_down = partial_charge_channels[:, 1]
+
+            partial_charges = p_up + p_down
+            partial_charges = partial_charges.unsqueeze(-1)
+            # partial_charges = partial_charge_channels.sum(dim=-1).unsqueeze(-1)
+
+            partial_spin_density = p_up - p_down
+            partial_spin_density = partial_spin_density.unsqueeze(-1)
+            # partial_charges = partial_charge_channels.sum(dim=-1).unsqueeze(-1)
             # partial spins are the difference between p_up and p_down
-            partial_spin_density = partial_charge_channels.diff(dim=-1).unsqueeze(-1)
+            # partial_spin_density = partial_charge_channels.diff(dim=-1).unsqueeze(-1)
+
         else:
             partial_charges = partial_charge_channels
+            partial_charges = partial_charges
+
+        if self.update_embedding_with_spin:
+            atomic_embedding = self.update_embedding_with_spin(
+                torch.cat((atomic_embedding, partial_charge_channels), dim=1)
+            )
+
         # check that none of the tensors are NaN
         if torch.isnan(atomic_embedding).any():
             raise ValueError("NaN values detected in atomic embeddings.")

@@ -254,6 +254,7 @@ class AimNet2Parameters(ParametersBase):
         number_of_vector_features: int
         number_of_charge_channels: int
         charge_equilibration_layer_size: int
+        update_embedding_with_charge_channels: bool
         converted_units = field_validator("maximum_interaction_radius", mode="before")(
             _convert_str_or_unit_to_unit_length
         )

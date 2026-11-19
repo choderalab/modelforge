@@ -65,11 +65,26 @@ class AtomicGroup(BaseModel):
     number_of_per_group_features: int = 32
 
 
+class PerSystemSpinMultiplicity(BaseModel):
+    scaling_factor: int = 1
+
+
+class PerSystemSpinMultiplicityOneHot(BaseModel):
+    min_sm: int = 1
+    max_sm: int = 1
+
+
 class Featurization(ParametersBase):
     properties_to_featurize: List[str]
     atomic_number: AtomicNumber = Field(default_factory=AtomicNumber)
     atomic_period: AtomicPeriod = Field(default_factory=AtomicPeriod)
     atomic_group: AtomicGroup = Field(default_factory=AtomicGroup)
+    per_system_spin_multiplicity: PerSystemSpinMultiplicity = Field(
+        default_factory=PerSystemSpinMultiplicity
+    )
+    per_system_spin_multiplicity_one_hot: PerSystemSpinMultiplicityOneHot = Field(
+        default_factory=PerSystemSpinMultiplicityOneHot
+    )
 
 
 class ActivationFunctionName(CaseInsensitiveEnum):
@@ -254,6 +269,7 @@ class AimNet2Parameters(ParametersBase):
         number_of_vector_features: int
         number_of_charge_channels: int
         charge_equilibration_layer_size: int
+        update_embedding_with_charge_channels: bool
         converted_units = field_validator("maximum_interaction_radius", mode="before")(
             _convert_str_or_unit_to_unit_length
         )

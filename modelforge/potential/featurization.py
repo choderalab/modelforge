@@ -6,6 +6,55 @@ from modelforge.potential.utils import DenseWithCustomDist
 from modelforge.utils.prop import NNPInput
 
 
+class AddPerMoleculeValueOneHot(nn.Module):
+    """
+    Module that adds a per-molecule value to a per_atom property tensor, but as a 1 hot encoded vector
+    The per-molecule value is expanded to match the length of the per-atom property tensor.
+
+    Parameters:
+    -----------
+    key: str
+        The key to access the per-atom value from the input data.
+    min_value: int, optional, default 1
+        The minimum value of the property
+    max_value: int, optional, default 1
+        The maximum value of the property
+
+
+    """
+
+    def __init__(self, key: str, min_value: int = 1, max_value: int = 1):
+        super().__init__()
+        self.key = key
+
+        self.min_value = min_value
+        self.max_value = max_value
+
+        self.num_classes = int(self.max_value - self.min_value) + 1
+
+    def forward(
+        self, per_atom_property_tensor: torch.Tensor, data: NNPInput
+    ) -> torch.Tensor:
+
+        values_to_append = getattr(data, self.key)
+        # we need to shift to a 0-based indices
+        value_idx = torch.clamp(
+            values_to_append - self.min_value,
+            min=0,
+            max=self.max_value - self.min_value,
+        ).to(dtype=torch.long)
+        one_hot_values = nn.functional.one_hot(
+            value_idx, num_classes=self.num_classes
+        ).to(per_atom_property_tensor.dtype)
+
+        _, counts = torch.unique(data.atomic_subsystem_indices, return_counts=True)
+        expanded_values = torch.repeat_interleave(
+            one_hot_values.squeeze(dim=1), counts, dim=0
+        )
+
+        return torch.cat((per_atom_property_tensor, expanded_values), dim=1)
+
+
 class AddPerMoleculeValue(nn.Module):
     """
     Module that adds a per-molecule value to a per-atom property tensor.
@@ -20,11 +69,15 @@ class AddPerMoleculeValue(nn.Module):
     ----------
     key : str
         The key to access the per-molecule value from the input data.
+    scaling_factor : int, optional, default 1
+        The value of the property associated with the key will be scaled by this value.
+        Used to scale values that would be greater than 1 to the scale of 0 to 1 (e.g., spin multiplicity).
     """
 
-    def __init__(self, key: str):
+    def __init__(self, key: str, scaling_factor: int = 1):
         super().__init__()
         self.key = key
+        self.inv_scaling_factor = 1.0 / scaling_factor
 
     def forward(
         self, per_atom_property_tensor: torch.Tensor, data: NNPInput
@@ -38,16 +91,18 @@ class AddPerMoleculeValue(nn.Module):
             The per-atom property tensor.
         data : NNPInput
             The input data containing the per-molecule value.
-
         Returns
         -------
         torch.Tensor
             The updated per-atom property tensor with the per-molecule value appended.
         """
         values_to_append = getattr(data, self.key)
+        values_to_append_scaled = values_to_append * self.inv_scaling_factor
 
         _, counts = torch.unique(data.atomic_subsystem_indices, return_counts=True)
-        expanded_values = torch.repeat_interleave(values_to_append, counts).unsqueeze(1)
+        expanded_values = torch.repeat_interleave(
+            values_to_append_scaled, counts
+        ).unsqueeze(1)
         return torch.cat((per_atom_property_tensor, expanded_values), dim=1)
 
 
@@ -145,6 +200,7 @@ class FeaturizeInput(nn.Module):
         "atomic_group",
         "per_system_total_charge",
         "per_system_spin_multiplicity",
+        "per_system_spin_multiplicity_one_hot",
     ]
 
     def __init__(self, featurization_config: Dict[str, Dict[str, int]]) -> None:
@@ -269,13 +325,38 @@ class FeaturizeInput(nn.Module):
                 and featurization in self._SUPPORTED_FEATURIZATION_TYPES
             ):
                 # per system spin state needs to be made into a per_atom property; i.e., same value for all atoms in the molecule
+                scaling_factor = featurization_config[featurization]["scaling_factor"]
                 self.append_to_embedding_tensor.append(
-                    AddPerMoleculeValue("per_system_spin_multiplicity")
+                    AddPerMoleculeValue(
+                        key="per_system_spin_multiplicity", scale_factor=scaling_factor
+                    )
                 )
                 self.increase_dim_of_embedded_tensor += 1
                 self.registered_appended_properties.append(
                     "per_system_spin_multiplicity"
                 )
+            # add in a per_system spin state one hot encoded
+            elif (
+                featurization == "per_system_spin_multiplicity_one_hot"
+                and featurization in self._SUPPORTED_FEATURIZATION_TYPES
+            ):
+                min_sm = featurization_config[featurization]["min_sm"]
+                max_sm = featurization_config[featurization]["max_sm"]
+
+                self.append_to_embedding_tensor.append(
+                    AddPerMoleculeValueOneHot(
+                        key="per_system_spin_multiplicity",
+                        min_value=min_sm,
+                        max_value=max_sm,
+                    )
+                )
+
+                max_bins = int(max_sm - min_sm) + 1
+                self.increase_dim_of_embedded_tensor += max_bins
+                self.registered_appended_properties.append(
+                    "per_system_spin_multiplicity_one_hot"
+                )
+
             # add partial charge to embedding vector
             elif (
                 featurization == "per_atom_partial_charge"

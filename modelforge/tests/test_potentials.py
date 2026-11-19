@@ -914,16 +914,18 @@ def test_batch_evaluation(datamodule_factory, prep_temp_dir, dataset_temp_dir):
 
     # this will raise an exception because we didn't specify to use the neighborlist for training
     with pytest.raises(Exception):
-        output_batch = evaluate_batch(dm_min, potential, subset="test")
+        output_batch = evaluate_batch(dm_min, potential, subset="test", device="cpu")
 
     potential = load_inference_model_from_checkpoint(
         ckpt_file, jit=False, use_training_mode_neighborlist=True
     )
     # this will fail since we are giving it an invalid subset
     with pytest.raises(Exception):
-        output_batch = evaluate_batch(dm_min, potential, subset="evaluation")
+        output_batch = evaluate_batch(
+            dm_min, potential, subset="evaluation", device="cpu"
+        )
 
-    output_batch = evaluate_batch(dm_min, potential, subset="test")
+    output_batch = evaluate_batch(dm_min, potential, subset="test", device="cpu")
 
     temp = output_batch[256]
 
@@ -975,6 +977,11 @@ def test_batch_evaluation(datamodule_factory, prep_temp_dir, dataset_temp_dir):
         temp["metadata"]["per_system_energy"],
         torch.tensor([-5406.6088], dtype=torch.float64),
     )
+
+    # just test to see if we can evaluate other subsets
+    output_batch = evaluate_batch(dm_min, potential, subset="val", device="cpu")
+    output_batch = evaluate_batch(dm_min, potential, subset="train", device="cpu")
+    output_batch = evaluate_batch(dm_min, potential, subset="all", device="cpu")
 
 
 @pytest.mark.parametrize(

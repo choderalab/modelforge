@@ -1531,8 +1531,10 @@ def load_inference_model_from_checkpoint(
 def evaluate_batch(
     dm: DataModule,
     potential: Potential,
-    subset: Literal["train", "test", "val"],
+    subset: Literal["train", "test", "val", "all"],
     include_metadata: bool = True,
+    device: str = "cuda",
+    num_workers: int = 4,
 ) -> dict:
     """
     This will evaluate the dataset subset using the specified potential.
@@ -1547,18 +1549,21 @@ def evaluate_batch(
         Instance of the DataModule that contains the dataset
     potential: Potential
         Instance of the NNP potential
-    subset: Literal["train", "test", "val"]
-        Which subset to evaluate.
+    subset: Literal["train", "test", "val", "all"]
+        Which subset to evaluate, or the entire dataset "all"
     include_metadata: bool, default True
         This will also include metadata information in the output dictionary, providing the reference data used in training.
-
+    device: str, optional, default "cuda"
+        Which device to run compute on, options "cpu", "cuda"
+    num_workers: int, optional, default 4
+        The number of workers for the dataloader
     Returns
     -------
     dict -- this dictionary is keyed on the top most level with the original index in the torch_dataset.
             Each entry includes `name` which corresponds to the name of  record in the original dataset; note, since
             records in the dataset may have multiple configurations, multiple entries may have the same name.
             Additionally, in this dict, there is the `output` which stores the output of the potential, and `metadata`
-            which includes data which can be used to train against.
+            which includes data which can be used to train against. Returned to device "cpu"
 
     """
 
@@ -1581,9 +1586,12 @@ def evaluate_batch(
     elif subset == "val":
         batches = dm.val_dataloader()
         indices = dm.val_dataset.indices
+    elif subset == "all":
+        batches = dm.all_dataloader(shuffle=False)
+        indices = range(0, len(dm.torch_dataset))
     else:
         raise ValueError(
-            f"subset must be one of ['train', 'test', 'val'], got {subset}"
+            f"subset must be one of ['train', 'test', 'val', 'all'], got {subset}"
         )
 
     datapoints = {}
@@ -1604,7 +1612,12 @@ def evaluate_batch(
     per_system_metadata_properties = []
 
     for batch in batches:
+        batch.to_device(device)
+        # to save memory let us copy this back to the cpu and get rid of gradients
         output = potential(batch.nnp_input)
+
+        for key in output.keys():
+            output[key] = output[key].detach().clone().cpu()
 
         # we'll need to parse the atomic_subsystem_indices
         atomic_subsystem_indices = output["atomic_subsystem_indices"]
@@ -1674,7 +1687,19 @@ def evaluate_batch(
                     ii = count + i
                     real_index = indices[ii]
                     datapoints[real_index]["metadata"][key] = temp_index[i]
+        # get input per system spin multiplicity used in emebedding
+        for key in [
+            "per_system_spin_multiplicity",
+            "per_system_total_charge",
+            "atomic_numbers",
+        ]:
+            temp = getattr(batch.nnp_input, key)
+            for i in range(0, n_systems):
+                ii = count + i
+                real_index = indices[ii]
+                datapoints[real_index][key] = temp[i]
 
         count = count + n_systems
+        torch.cuda.empty_cache()
 
     return datapoints

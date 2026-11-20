@@ -69,7 +69,7 @@ class ANI1xCuration(DatasetCuration):
         # this yaml file should be stored along with the curated dataset
 
         from importlib import resources
-        from modelforge.curation import yaml_files
+        from modelforge.curate.datasets import yaml_files
         import yaml
 
         yaml_file = resources.files(yaml_files) / "ani1x_curation.yaml"

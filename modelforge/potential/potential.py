@@ -1051,7 +1051,6 @@ class NeuralNetworkPotentialFactory:
             Parameters for configuring the dataset (default is None).
         dataset_statistic : Dict[str, Dict[str, float]], optional
             Dataset statistics for normalization (default is provided).
-
         use_default_dataset_statistic : bool, optional
             Whether to use default dataset statistics (default is False).
         Returns

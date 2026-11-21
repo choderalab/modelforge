@@ -12,6 +12,7 @@ from typing import (
     Union,
     Literal,
     Annotated,
+    Tuple,
 )
 
 import torch
@@ -19,6 +20,7 @@ import numpy as np
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator, Field
 from loguru import logger as log
+from torch.nn import AdaptiveMaxPool2d
 
 
 # So we do not need to set Config parameters in each model
@@ -107,6 +109,43 @@ class Profilers(CaseInsensitiveEnum):
     advanced = "advanced"
     pytorch = "pytorch"
     xla = "xla"
+
+
+class OptimizerName(CaseInsensitiveEnum):
+    """
+    Enum class for the Optimizers
+    """
+
+    AdamW = "AdamW"
+    Adam = "Adam"
+    ASGD = "ASGD"
+
+
+class AdamWConfig(ParametersBase):
+    optimizer_name: Literal[OptimizerName.AdamW] = OptimizerName.AdamW
+    betas: Tuple[float, float]
+    eps: float
+    weight_decay: float
+    amsgrad: bool
+    maximize: bool
+
+
+class ASGDConfig(ParametersBase):
+    optimizer_name: Literal[OptimizerName.ASGD] = OptimizerName.ASGD
+    lambd: float
+    alpha: float
+    t0: float
+    weight_decay: float
+    maximize: bool
+
+
+class AdamConfig(ParametersBase):
+    optimizer_name: Literal[OptimizerName.Adam] = OptimizerName.Adam
+    betas: Tuple[float, float]
+    eps: float
+    weight_decay: float
+    amsgrad: bool
+    maximize: bool
 
 
 class TensorboardConfig(ParametersBase):
@@ -276,6 +315,9 @@ SchedulerConfig = Annotated[
     ],
     Field(discriminator="scheduler_name"),
 ]
+OptimizerConfig = Annotated[
+    Union[AdamConfig, AdamWConfig, ASGDConfig], Field(discriminator="optimizer_name")
+]
 
 
 class TrainingParameters(ParametersBase):
@@ -427,8 +469,10 @@ class TrainingParameters(ParametersBase):
     limit_val_batches: Union[float, int, None] = None
     limit_test_batches: Union[float, int, None] = None
     profiler: Optional[Profilers] = None
-    optimizer: Type[torch.optim.Optimizer] = torch.optim.AdamW
+    optimizer: OptimizerConfig
     min_number_of_epochs: Union[int, None] = None
+
+    # check to make sure that the optimizer
 
     @model_validator(mode="after")
     def validate_dipole_and_shift_com(self):

@@ -10,7 +10,7 @@ from lightning import Trainer
 from loguru import logger as log
 from openff.units import unit
 from torch.nn import ModuleDict
-from torch.optim import Optimizer
+from torch.optim import Optimizer, AdamW
 from torch.optim.lr_scheduler import (
     ReduceLROnPlateau,
     CosineAnnealingLR,
@@ -648,7 +648,6 @@ class TrainingAdapter(pL.LightningModule):
         potential_parameter: T_NNP_Parameters,
         dataset_statistic: Dict[str, Dict[str, unit.Quantity]],
         training_parameter: TrainingParameters,
-        optimizer_class: Type[Optimizer],
         nr_of_training_batches: int = -1,
     ):
         """
@@ -662,8 +661,6 @@ class TrainingAdapter(pL.LightningModule):
             Dataset statistics such as mean and standard deviation.
         training_parameter : TrainingParameters
             Training configuration, including optimizer, learning rate, and loss functions.
-        optimizer_class : Type[Optimizer]
-            The optimizer class to use for training.
         nr_of_training_batches : int, optional
             Number of training batches (default is -1).
         """
@@ -692,10 +689,9 @@ class TrainingAdapter(pL.LightningModule):
         self.calculate_predictions = CalculateProperties(
             training_parameter.loss_parameter.loss_components
         )
-        self.optimizer_class = optimizer_class
         self.learning_rate = training_parameter.lr
         self.lr_scheduler = training_parameter.lr_scheduler
-
+        self.optimizer = training_parameter.optimizer
         # Setup logging flags based on verbosity
         self.log_histograms = training_parameter.verbose
         self.log_on_training_step = training_parameter.verbose
@@ -1633,6 +1629,9 @@ class TrainingAdapter(pL.LightningModule):
             CosineAnnealingWarmRestartsConfig,
             OneCycleLRConfig,
             CyclicLRConfig,
+            AdamWConfig,
+            AdamConfig,
+            ASGDConfig,
         )
 
         # Separate parameters into weight and bias groups
@@ -1658,7 +1657,8 @@ class TrainingAdapter(pL.LightningModule):
             {
                 "params": weight_params,
                 "lr": self.learning_rate,
-                "weight_decay": 1e-3,  # Apply weight decay to weights
+                **self.optimizer.model_dump(exclude={"optimizer_name"}),
+                # "weight_decay": 1e-3,  # Apply weight decay to weights
             },
             {
                 "params": bias_params,
@@ -1666,8 +1666,15 @@ class TrainingAdapter(pL.LightningModule):
                 "weight_decay": 0.0,  # No weight decay for biases
             },
         ]
-
-        optimizer = torch.optim.AdamW(param_groups)
+        if isinstance(self.optimizer, AdamWConfig):
+            optimizer = torch.optim.AdamW(param_groups)
+            log.debug(f"Using AdamW optimizer")
+        elif isinstance(self.optimizer, ASGDConfig):
+            optimizer = torch.optim.ASGD(param_groups)
+            log.debug(f"Using ASGD optimizer")
+        elif isinstance(self.optimizer, AdamConfig):
+            optimizer = torch.optim.Adam(param_groups)
+            log.debug(f"Using Adam optimizer")
 
         lr_scheduler_config = self.lr_scheduler
 
@@ -1772,7 +1779,7 @@ class PotentialTrainer:
         runtime_parameter: RuntimeParameters,
         dataset_statistic: Dict[str, Dict[str, unit.Quantity]],
         use_default_dataset_statistic: bool,
-        optimizer_class: Type[Optimizer] = torch.optim.AdamW,
+        # optimizer_class: Type[Optimizer] = torch.optim.AdamW,
         verbose: bool = False,
     ):
         """
@@ -1795,9 +1802,6 @@ class PotentialTrainer:
             Dataset statistics such as mean and standard deviation.
         use_default_dataset_statistic: bool
             Whether to use default dataset statistic
-        optimizer_class : Type[Optimizer], optional
-            The optimizer class to use for training, by default
-            torch.optim.AdamW.
         verbose: bool, optioonal
             If True, enables verbose logging, by default False.
         """
@@ -1822,7 +1826,6 @@ class PotentialTrainer:
         self.experiment_logger = self.setup_logger()
         self.callbacks = self.setup_callbacks()
         self.trainer = self.setup_trainer()
-        self.optimizer_class = optimizer_class
         self.lightning_module = self.setup_lightning_module()
 
     def read_dataset_statistics(
@@ -1915,7 +1918,6 @@ class PotentialTrainer:
             potential_parameter=self.potential_parameter,
             dataset_statistic=self.dataset_statistic,
             training_parameter=self.training_parameter,
-            optimizer_class=self.optimizer_class,
             nr_of_training_batches=len(self.datamodule.train_dataloader()),
         )
 

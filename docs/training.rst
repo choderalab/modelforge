@@ -1,8 +1,9 @@
+*********
 Training
-========
+*********
 
 Training: Overview
-------------------------------------------
+##################
 
 During training the parameters of a potential are fitted to reproduce the target properties provided by a dataset. These are typically energies and forces, but can also be other properties provided by a dataset (e.g., dipole moments).
 
@@ -12,8 +13,7 @@ The properties a given potential can be trained on are determined by the potenti
 
 
 Training Configuration
-------------------------------------------
-
+======================
 The training process is controlled by a configuration file, typically written in TOML format. This file includes various sections for configuring different aspects of the training, such as logging, learning rate scheduling, loss functions, dataset splitting strategies, and early stopping criteria.
 
 
@@ -32,12 +32,222 @@ Note, as discussed in the :doc:`datasets` documentation, the dataset can have th
 
 
 Learning rate scheduler
-^^^^^^^^^^^^^^^^^^^^^^^^
+-----------------------
 
-The learning rate scheduler is responsible for adjusting the learning rate during training. *Modelforge* uses the `REduceLROnPlateau scheduler`, which reduces the learning rate by a factor when the RMSE of the energy prediction on the validation set does not improve for a given number of epochs. The scheduler is controlled by the parameters in the `[training.lr_scheduler]` section of the `training.toml` file.
+The learning rate scheduler is responsible for adjusting the learning rate during training. For example, *Modelforge*
+can use the `ReduceLROnPlateau scheduler`, which reduces the learning rate by a factor when the RMSE of the energy
+prediction on the validation set does not improve for a given number of epochs.
+The scheduler is controlled by the parameters in the `[training.lr_scheduler]` section of the `training.toml` file.
+Several different schedulers are supported:
+
+* ReduceLROnPlateau
+* CosineAnnealingLR
+* CosineAnnealingWarmRestarts
+* OneCycleLR
+* CyclicLR
+
+The arguments required in the `[training.lr_scheduler]` section are different for each scheme.
+
+
+
+ReduceLROnPlateau
+*****************
+
+Reduces the learning rate when a monitored metric has stopped improving.
+After the metric fails to improve for ``patience`` evaluations, the learning
+rate is multiplied by ``factor``. Models often benefit from reducing the
+learning rate by a factor of 2-10 once learning stagnates.
+
+
+.. code-block:: yaml
+
+   [training.lr_scheduler]
+     scheduler_name = "ReduceLROnPlateau"
+     frequency = 1
+     interval = epoch
+     monitor = "val/per_system_energy/rmse"
+     mode = "min"
+     factor = 0.1
+     patience =10
+     threshold = 1.0e-4
+     threshold_mode = "rel"
+     cooldown = 0
+     min_lr = 0.0
+     eps = 1.0e-8
+
+
+CosineAnnealingLR
+*****************
+
+Anneals the learning rate from its initial value down to ``eta_min`` along
+half a cosine curve over ``T_max`` steps:
+
+.. math::
+
+   \eta_t = \eta_{min} + \frac{1}{2}(\eta_{max} - \eta_{min})
+   \left(1 + \cos\left(\frac{T_{cur}}{T_{max}}\pi\right)\right)
+
+where :math:`\eta_{max}` is the initial learning rate and :math:`T_{cur}` is
+the number of steps since the start. The schedule is smooth, starts and ends
+with a small slope, and does not restart.
+
+
+``T_max`` has no PyTorch default; ``100`` is illustrative.
+
+.. code-block:: toml
+
+   [training.lr_scheduler]
+     scheduler_name = "CosineAnnealingLR"
+     frequency = 1
+     interval = "epoch"
+     T_max = 100
+     eta_min = 0.0
+     last_epoch = -1
+
+
+CosineAnnealingWarmRestarts
+***************************
+
+Applies the same cosine annealing curve as ``CosineAnnealingLR``, but
+periodically *restarts* the learning rate back to its initial value (SGDR,
+"Stochastic Gradient Descent with Warm Restarts"). The first cycle lasts
+``T_0`` steps, and each following cycle is ``T_mult`` times longer than the
+previous one.
+
+
+``T_0`` has no PyTorch default; ``10`` is illustrative.
+
+.. code-block:: toml
+
+   [training.lr_scheduler]
+     scheduler_name = "CosineAnnealingWarmRestarts"
+     frequency = 1
+     interval = "epoch"
+     T_0 = 10
+     T_mult = 1
+     eta_min = 0.0
+     last_epoch = -1
+
+
+OneCycleLR
+**********
+
+Implements the 1cycle policy. The learning rate rises from an initial value
+to ``max_lr`` and then anneals to a value far below the initial one, over a
+single cycle covering the whole training run. When ``cycle_momentum`` is
+enabled, momentum moves in the opposite direction: it falls from
+``max_momentum`` to ``base_momentum`` while the learning rate rises, then
+climbs back.
+
+The learning rates at the start and end of the cycle are derived as:
+
+.. math::
+
+   \text{initial\_lr} = \frac{\text{max\_lr}}{\text{div\_factor}}
+   \qquad
+   \text{min\_lr} = \frac{\text{initial\_lr}}{\text{final\_div\_factor}}
+
+**When to use:** for fast, "super-convergence" style training with a known
+total number of steps. The scheduler must be stepped once per batch.
+
+
+``max_lr`` and ``epochs`` have no PyTorch default; ``0.1`` and ``30`` are
+illustrative.
+
+.. code-block:: toml
+
+  [training.lr_scheduler]
+     scheduler_name = "OneCycleLR"
+     frequency = 1
+     interval = "step"          # must be "step"
+     max_lr = 0.1
+     epochs = 30
+     pct_start = 0.3
+     anneal_strategy = "cos"
+     cycle_momentum = true
+     base_momentum = 0.85
+     max_momentum = 0.95
+     div_factor = 25.0
+     final_div_factor = 1.0e+4
+     three_phase = false
+     last_epoch = -1
+
+
+CyclicLR
+********
+
+Cycles the learning rate between ``base_lr`` and ``max_lr`` at a constant
+frequency, following the cyclical learning rate policy. The learning rate
+rises for ``epochs_up``, falls for ``epochs_down``, and the cycle repeats
+until training ends. The amplitude of the cycle can be left constant or
+scaled down over time using ``mode`` and ``gamma``.
+
+
+``base_lr``, ``max_lr`` and ``epochs_up`` have no direct PyTorch default;
+``1e-4``, ``1e-2`` and ``2.0`` are illustrative.
+
+.. code-block:: toml
+
+   [training.lr_scheduler]
+     scheduler_name = "CyclicLR"
+     frequency = 1
+     interval = step          # must be "step"
+     base_lr = 1.0e-4
+     max_lr = 1.0e-2
+     epochs_up = 2.0
+     epochs_down = null       # symmetric cycle
+     mode = "triangular"
+     gamma = 1.0
+     scale_mode = "cycle"
+     cycle_momentum = true
+     base_momentum = 0.8
+     max_momentum = 0.9
+     last_epoch = -1
+
+
+Optimizer
+---------
+
+Currently, the `Adam`, `AdamW`, and `ASGD` optimizers are available.
+
+Adam
+****
+.. code-block:: toml
+  [training.optimizer]
+    optimizer_name = "AdamW"
+    betas = [0.95, 0.999]
+    eps = 1e-8
+    weight_decay = 0.0
+    amsgrad = false
+    maximize = false
+
+AdamW
+*****
+.. code-block:: toml
+  [training.optimizer]
+    optimizer_name = "AdamW"
+    betas = [0.95, 0.999]
+    eps = 1e-8
+    weight_decay = 0.01
+    amsgrad = false
+    maximize = false
+
+ASGD
+*****
+.. code-block:: toml
+  [training.optimizer]
+    optimizer_name = "ASGD"
+    lambd = 1e-4
+    alpha = 0.75
+    t0 = 1e6
+    weight_decay = 0
+    maximize = false
+
+
 
 Loss function
-^^^^^^^^^^^^^^^^^^^^^^^^
+-------------
+
 The loss function quantifies the discrepancy between the model's predictions and the target properties, providing a scalar value that guides the optimizer in updating the model's parameters. This function is configured in the `[training.loss]` section of the training TOML file.
 
 Depending on the specified `loss_components`` section, the loss function can combine various individual loss functions. *Modelforge* always includes the mean squared error (MSE) for energy prediction, and may also incorporate MSE for force prediction, dipole moment prediction (computed from predicted partial charges), quadrupole moment prediction (computed from predicted partial charges),  total_charge, and partial charge prediction.

@@ -5,7 +5,7 @@ This module contains utility functions and classes for processing the output of 
 import math
 import os
 from dataclasses import dataclass, field
-from typing import Dict, Final, Iterator, Union, List
+from typing import Dict, Final, Iterator, Union, List, Literal
 
 import torch
 import tad_dftd3 as d3

@@ -1083,7 +1083,8 @@ class DispersionPotential(torch.nn.Module):
         parameter_set : str, optional
             The parameter set to use for the dispersion calculation.
             Default is "wB97M-D3(BJ)".
-            Currently, only "wB97M-D3(BJ)" is supported. at this time.
+            Currently, only "wB97M-D3(BJ)" is supported for nvalchemiops at this time.
+            Other option "B3LYP-D3(BJ)"
         d3_engine : str, optional
             The optional parameter to set the d3 engine to use.
             Currently, "tad-dftd3" and "nvalchemiops" are supported.
@@ -1097,12 +1098,21 @@ class DispersionPotential(torch.nn.Module):
         super().__init__()
 
         """
-        parameters from:
+        parameters for wB97M-D3(BJ) from:
         Najibi, Asim, and Lars Goerigk. 
         "The nonlocal kernel in van der Waals density functionals as an additive correction: 
         An extensive analysis with special emphasis on the B97M-V and ωB97M-V approaches." 
         Journal of Chemical Theory and Computation 14.11 (2018): 5725-5738.
         DOI:10.1021/acs.jctc.8b00842
+        
+        B3LYP-D3(BJ) from: 
+        Grimme, S., Ehrlich, S. and Goerigk, L. (2011), 
+        Effect of the damping function in dispersion corrected density functional theory. 
+        J. Comput. Chem., 32: 1456-1465. 
+        https://doi.org/10.1002/jcc.21759
+        
+        simple-dftd3 provides a clear list of parameters and their sources:
+        https://github.com/dftd3/simple-dftd3/blob/main/assets/parameters.toml
         """
         if parameter_set == "wB97M-D3(BJ)":
             self.params = dict(
@@ -1110,8 +1120,16 @@ class DispersionPotential(torch.nn.Module):
                 s8=torch.tensor(0.3908),
                 a2=torch.tensor(3.1280),
             )
+        elif parameter_set == "B3LYP-D3(BJ)":
+            self.params = dict(
+                a1=torch.tensor(0.3981),
+                s8=torch.tensor(1.9889),
+                a2=torch.tensor(4.4211),
+            )
         else:
-            raise NotImplementedError("Only 'wB97M-D3(BJ)' is supported.")
+            raise NotImplementedError(
+                "Only 'wB97M-D3(BJ)' and `B3LYP-D3(BJ) are supported."
+            )
 
         self.length_conversion_factor = length_conversion_factor
         self.energy_conversion_factor = energy_conversion_factor

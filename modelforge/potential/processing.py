@@ -1180,7 +1180,9 @@ class DispersionPotential(torch.nn.Module):
         """
 
         # fill the matrix with ones at interacting pairs
-        interact_fillers = torch.ones(neighbor_list.shape[1], dtype=torch.int64)
+        interact_fillers = torch.ones(
+            neighbor_list.shape[1], dtype=torch.int64, device=neighbor_list.device
+        )
 
         # construct a neighbor matrix where row & col indices indicates pairs of atoms, and interacting pairs are filled
         # with value one in the matrix

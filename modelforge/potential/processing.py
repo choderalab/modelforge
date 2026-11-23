@@ -1064,7 +1064,7 @@ class DispersionPotential(torch.nn.Module):
         length_conversion_factor: float,
         energy_conversion_factor: float,
         parameter_set: str = "wB97M-D3(BJ)",
-        d3_engine: str = "nvalchemiops",
+        d3_engine: Literal["nvalchemiops", "tad-dftd3"] = "tad-dftd3",
         d3_parameters_path: str = "None",
     ):
         """
@@ -1114,22 +1114,23 @@ class DispersionPotential(torch.nn.Module):
         simple-dftd3 provides a clear list of parameters and their sources:
         https://github.com/dftd3/simple-dftd3/blob/main/assets/parameters.toml
         """
-        if parameter_set == "wB97M-D3(BJ)":
-            self.params = dict(
-                a1=torch.tensor(0.5660),
-                s8=torch.tensor(0.3908),
-                a2=torch.tensor(3.1280),
-            )
-        elif parameter_set == "B3LYP-D3(BJ)":
-            self.params = dict(
-                a1=torch.tensor(0.3981),
-                s8=torch.tensor(1.9889),
-                a2=torch.tensor(4.4211),
-            )
-        else:
-            raise NotImplementedError(
-                "Only 'wB97M-D3(BJ)' and `B3LYP-D3(BJ) are supported."
-            )
+        if d3_engine == "tad-dftd3":
+            if parameter_set == "wB97M-D3(BJ)":
+                self.params = dict(
+                    a1=torch.tensor(0.5660),
+                    s8=torch.tensor(0.3908),
+                    a2=torch.tensor(3.1280),
+                )
+            elif parameter_set == "B3LYP-D3(BJ)":
+                self.params = dict(
+                    a1=torch.tensor(0.3981),
+                    s8=torch.tensor(1.9889),
+                    a2=torch.tensor(4.4211),
+                )
+            else:
+                raise NotImplementedError(
+                    "Only 'wB97M-D3(BJ)' and `B3LYP-D3(BJ) are supported."
+                )
 
         self.length_conversion_factor = length_conversion_factor
         self.energy_conversion_factor = energy_conversion_factor

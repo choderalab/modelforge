@@ -5,7 +5,7 @@ This module contains utility functions and classes for processing the output of 
 import math
 import os
 from dataclasses import dataclass, field
-from typing import Dict, Final, Iterator, Union, List
+from typing import Dict, Final, Iterator, Union, List, Literal
 
 import torch
 import tad_dftd3 as d3
@@ -1064,7 +1064,7 @@ class DispersionPotential(torch.nn.Module):
         length_conversion_factor: float,
         energy_conversion_factor: float,
         parameter_set: str = "wB97M-D3(BJ)",
-        d3_engine: str = "nvalchemiops",
+        d3_engine: Literal["nvalchemiops", "tad-dftd3"] = "tad-dftd3",
         d3_parameters_path: str = "None",
     ):
         """
@@ -1082,8 +1082,7 @@ class DispersionPotential(torch.nn.Module):
             This factor is provided here rather than using the global unit system directly.
         parameter_set : str, optional
             The parameter set to use for the dispersion calculation.
-            Default is "wB97M-D3(BJ)".
-            Currently, only "wB97M-D3(BJ)" is supported. at this time.
+            Default is "wB97M-D3(BJ)", other option "B3LYP-D3(BJ)"
         d3_engine : str, optional
             The optional parameter to set the d3 engine to use.
             Currently, "tad-dftd3" and "nvalchemiops" are supported.
@@ -1097,12 +1096,21 @@ class DispersionPotential(torch.nn.Module):
         super().__init__()
 
         """
-        parameters from:
+        parameters for wB97M-D3(BJ) from:
         Najibi, Asim, and Lars Goerigk. 
         "The nonlocal kernel in van der Waals density functionals as an additive correction: 
         An extensive analysis with special emphasis on the B97M-V and ωB97M-V approaches." 
         Journal of Chemical Theory and Computation 14.11 (2018): 5725-5738.
         DOI:10.1021/acs.jctc.8b00842
+        
+        B3LYP-D3(BJ) from: 
+        Grimme, S., Ehrlich, S. and Goerigk, L. (2011), 
+        Effect of the damping function in dispersion corrected density functional theory. 
+        J. Comput. Chem., 32: 1456-1465. 
+        https://doi.org/10.1002/jcc.21759
+        
+        simple-dftd3 provides a clear list of parameters and their sources:
+        https://github.com/dftd3/simple-dftd3/blob/main/assets/parameters.toml
         """
         if parameter_set == "wB97M-D3(BJ)":
             self.params = dict(
@@ -1110,8 +1118,16 @@ class DispersionPotential(torch.nn.Module):
                 s8=torch.tensor(0.3908),
                 a2=torch.tensor(3.1280),
             )
+        elif parameter_set == "B3LYP-D3(BJ)":
+            self.params = dict(
+                a1=torch.tensor(0.3981),
+                s8=torch.tensor(1.9889),
+                a2=torch.tensor(4.4211),
+            )
         else:
-            raise NotImplementedError("Only 'wB97M-D3(BJ)' is supported.")
+            raise NotImplementedError(
+                "Only 'wB97M-D3(BJ)' and `B3LYP-D3(BJ) are supported."
+            )
 
         self.length_conversion_factor = length_conversion_factor
         self.energy_conversion_factor = energy_conversion_factor
@@ -1162,7 +1178,9 @@ class DispersionPotential(torch.nn.Module):
         """
 
         # fill the matrix with ones at interacting pairs
-        interact_fillers = torch.ones(neighbor_list.shape[1], dtype=torch.int64)
+        interact_fillers = torch.ones(
+            neighbor_list.shape[1], dtype=torch.int64, device=neighbor_list.device
+        )
 
         # construct a neighbor matrix where row & col indices indicates pairs of atoms, and interacting pairs are filled
         # with value one in the matrix

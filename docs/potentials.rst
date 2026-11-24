@@ -149,6 +149,8 @@ Note, the order these are defined or listed in `properties_to_process` does not 
 
     [potential.postprocessing_parameter.per_system_vdw_energy]
     maximum_interaction_radius = "10.0 angstrom"
+    parameter_set: str = "wB97M-D3(BJ)"
+    d3_engine: str = "tad-dftd3"
 
     # this will be added to the `per_system_energy` that results from the `per_atom_energy` reduction operation
     [potential.postprocessing_parameter.sum_per_system_energy]
@@ -156,6 +158,8 @@ Note, the order these are defined or listed in `properties_to_process` does not 
 
 
 .. note:: All parameters in the configuration files have units attached where applicable. Units within modelforge a represented using the `openff.units` package (https://docs.openforcefield.org/projects/units/en/stable/index.html), which is a wrapper around the `pint` package. Definition of units within the TOML files must unit names available in the `openff.units` package (https://github.com/openforcefield/openff-units/blob/main/openff/units/data/defaults.txt).
+
+Note `per_system_vdw_energy` supports `tad-dftd3` and `nvalchemiops` for the d3_engine parameter.  Currently tad-dftd3 option includes parameters for both  "wB97M-D3(BJ)" and "B3LYP-D3(BJ)".
 
 
 Featurization options

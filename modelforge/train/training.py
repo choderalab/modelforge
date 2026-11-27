@@ -1661,6 +1661,8 @@ class TrainingAdapter(pL.LightningModule):
                 )
                 # let us accumulate the RMSE error and weight it by the
                 # sqrt of the loss weight so we can directly compare to total loss of the training set
+                # note we will calculated the mse, as that is what weights are tuned for
+                # then take the square root at tiem of logging
                 if metric_name == "MeanSquaredError":
                     weight = self.loss.get_loss_weight(prop, self.current_epoch)
                     total_weighted_mse += weight * metric_value * metric_value
@@ -1668,8 +1670,8 @@ class TrainingAdapter(pL.LightningModule):
         # for val and test, log the total_error/mse that we just accumulated
         if phase == "val" or phase == "test":
             self.log(
-                f"{phase}/total_error/mse",
-                total_weighted_mse,
+                f"{phase}/total_loss/rmse",
+                math.sqrt(total_weighted_mse),
                 prog_bar=True,
                 sync_dist=True,
             )

@@ -131,7 +131,7 @@ def _exchange_per_atom_energy_for_per_system_energy(prop: str) -> str:
 
 class CalculateProperties(torch.nn.Module):
     _SUPPORTED_PROPERTIES = [
-        "per_atom_energy",
+        "per_system_energy_normalized",
         "per_atom_force",
         "per_system_energy",
         "per_atom_charge",
@@ -169,6 +169,9 @@ class CalculateProperties(torch.nn.Module):
         )
         self.include_per_atom_spin_multiplicity = (
             "per_atom_spin_multiplicity" in self.requested_properties
+        )
+        self.include_per_system_energy_normalized = (
+            "per_system_energy_normalized" in self.requested_properties
         )
 
         # Ensure all requested properties are supported
@@ -268,6 +271,46 @@ class CalculateProperties(torch.nn.Module):
         return {
             "per_system_energy_true": per_system_energy_true,
             "per_system_energy_predict": per_system_energy_predict,
+        }
+
+    @staticmethod
+    def _get_energies_normalized(
+        batch: BatchData,
+        model_prediction: Dict[str, torch.Tensor],
+    ):
+        """
+        Compute the energies from a given batch using the model normalized by number of atoms per system.
+
+        Parameters
+        ----------
+        batch: BatchData
+            A single batch of data, including input features and target energies
+        model_prediction: Dict[str, torch.Tensor]
+            The neural network model used to compute the energies.
+
+
+        Returns
+        -------
+        Dict[str, torch.Tensor]
+            A dictionary containing the true and predicted energies.
+        """
+
+        per_system_energy_true = batch.metadata.per_system_energy.to(torch.float32)
+        per_system_energy_predict = model_prediction["per_system_energy"]
+
+        atomic_subsystem_counts = batch.metadata.atomic_subsystem_counts
+
+        # scale these by number of atoms
+        per_system_energy_normalized_true = (
+            per_system_energy_true / atomic_subsystem_counts
+        )
+        per_system_energy_normalized_predict = (
+            per_system_energy_predict / atomic_subsystem_counts
+        )
+
+        return {
+            "per_system_energy_normalized_true": per_system_energy_normalized_true,
+            "per_system_energy_normalized_predict": per_system_energy_normalized_predict,
         }
 
     @staticmethod
@@ -606,6 +649,10 @@ class CalculateProperties(torch.nn.Module):
         energies = self._get_energies(batch, model_prediction)
         predict_target.update(energies)
 
+        if self.include_per_system_energy_normalized:
+            energies_normalized = self._get_energies_normalized(batch, model_prediction)
+            predict_target.update(energies_normalized)
+
         # Get forces if they are included in the requested properties
         if self.include_force:
             forces = self._get_forces(batch, model_prediction, train_mode)
@@ -849,9 +896,19 @@ class TrainingAdapter(pL.LightningModule):
         """
 
         for prop, metric_collection in metrics.items():
-            prop = _exchange_per_atom_energy_for_per_system_energy(
-                prop
-            )  # only exchange per_atom_energy for per_system_energy
+
+            # prop = _exchange_per_atom_energy_for_per_system_energy(
+            #     prop
+            # )  # only exchange per_atom_energy for per_system_energy
+            preds = predict_target[f"{prop}_predict"].detach()
+            targets = predict_target[f"{prop}_true"].detach()
+            metric_collection.update(preds, targets)
+
+        # we want to always have the per_system_energy in our val/test, even if we are using
+        # per_atom_energy in the training
+        # In the past, if we were using per_atom_energy we would swap it for per_system_energy
+        # but this is not necessarily great practice because we probably want the per atom energy
+        if not "per_system_energy" in metrics.keys():
             preds = predict_target[f"{prop}_predict"].detach()
             targets = predict_target[f"{prop}_true"].detach()
             metric_collection.update(preds, targets)
@@ -915,7 +972,8 @@ class TrainingAdapter(pL.LightningModule):
                 grad_norm = compute_grad_norm(metric.mean(), self)
                 self.log(f"grad_norm/{key}", grad_norm, sync_dist=True)
                 log.info(f"Gradient norm for {key}: {grad_norm}")
-        # Save energy predictions and targets
+
+        # Save energy predictions and targets (used for making the histogram/regression plots)
         self._update_predictions(
             predict_target,
             self.train_preds,
@@ -945,7 +1003,7 @@ class TrainingAdapter(pL.LightningModule):
         # Update validation metrics
         self._update_metrics(self.val_metrics, predict_target)
 
-        # Save energy predictions and targets
+        # Save energy predictions and targets (used for making the histogram/regression plots)
         self._update_predictions(
             predict_target,
             self.val_preds,
@@ -969,7 +1027,7 @@ class TrainingAdapter(pL.LightningModule):
         # Update and log metrics
         self._update_metrics(self.test_metrics, predict_target)
 
-        # Save energy predictions and targets
+        # Save energy predictions and targets (used for making the histogram/regression plots)
         self._update_predictions(
             predict_target,
             self.test_preds,
@@ -1584,9 +1642,12 @@ class TrainingAdapter(pL.LightningModule):
         # abbreviate long names to shorter versions
         abbreviate = {
             "MeanAbsoluteError": "mae",
-            "MeanSquaredError": "rmse",
+            "MeanSquaredError": "rmse",  # NOTE, we defined this to use square root when set up; it uses the same class
             "MeanMetric": "mse",  # NOTE: MeanMetric is the MSE since we accumulate the squared error
         }  # NOTE: MeanSquaredError(squared=False) is RMSE
+
+        total_weighted_mse = 0
+        import math
 
         for prop, metric_collection in metrics.items():
             for metric_name, metric in metric_collection.items():
@@ -1598,6 +1659,20 @@ class TrainingAdapter(pL.LightningModule):
                     prog_bar=True,
                     sync_dist=True,
                 )
+                # let us accumulate the RMSE error and weight it by the
+                # sqrt of the loss weight so we can directly compare to total loss of the training set
+                if metric_name == "MeanSquaredError":
+                    weight = self.loss.get_loss_weight(prop, self.current_epoch)
+                    total_weighted_mse += weight * metric_value * metric_value
+
+        # for val and test, log the total_error/mse that we just accumulated
+        if phase == "val" or phase == "test":
+            self.log(
+                f"{phase}/total_error/mse",
+                total_weighted_mse,
+                prog_bar=True,
+                sync_dist=True,
+            )
 
     def _log_histograms(self):
         """

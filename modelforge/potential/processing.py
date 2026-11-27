@@ -85,16 +85,8 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
 
         Parameters
         ----------
-        per_atom_property_name : str
+        reduction_mode : str
             The name of the per-atom property that will be reduced.
-        index_name : str
-            The name of the index used to identify the molecules.
-        output_name : str
-            The name of the output property.
-        reduction_mode : str, optional
-            The reduction mode. Default is "sum".
-        keep_per_atom_property : bool, optional
-            Whether to keep the per-atom property. Default is False.
         """
         super().__init__()
         self.reduction_mode = reduction_mode
@@ -107,14 +99,15 @@ class FromAtomToMoleculeReduction(torch.nn.Module):
 
         Parameters
         ----------
-        data : Dict[str, torch.Tensor]
-            The input data dictionary containing the per-atom property and
-            index.
+        indices : torch.Tensor
+            Atomic subsystem indices
+        per_atom_property : torch.Tensor
+            per_atom_property to be reduced
 
         Returns
         -------
-        Dict[str, torch.Tensor]
-            The output data dictionary containing the per-molecule property.
+        torch.Tensor
+            The output containing the per-molecule property.
         """
 
         # Perform scatter add operation for atoms belonging to the same molecule

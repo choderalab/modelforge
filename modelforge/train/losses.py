@@ -471,7 +471,8 @@ class PerSystemDipoleMomentError(Error):
 class Loss(nn.Module):
 
     _SUPPORTED_PROPERTIES = [
-        "per_atom_energy",
+        # "per_atom_energy",
+        "per_system_energy_normalized",
         "per_system_energy",
         "per_atom_force",
         "per_system_total_charge",
@@ -519,7 +520,8 @@ class Loss(nn.Module):
 
             if prop == "per_atom_force":
                 self.loss_functions[prop] = ForceSquaredError(
-                    scale_by_number_of_atoms=True
+                    # scale_by_number_of_atoms=True
+                    scale_by_number_of_atoms=False
                 )
             elif prop == "per_atom_energy":
                 self.loss_functions[prop] = EnergySquaredError(
@@ -533,18 +535,45 @@ class Loss(nn.Module):
                 self.loss_functions[prop] = TotalChargeError(
                     scale_by_number_of_atoms=False
                 )
+            elif prop == "per_system_energy_normalized":
+                self.loss_functions[prop] = EnergySquaredError(
+                    scale_by_number_of_atoms=False
+                )
             elif prop == "per_system_dipole_moment":
-                self.loss_functions[prop] = PerSystemDipoleMomentError()
+                self.loss_functions[prop] = PerSystemDipoleMomentError(
+                    scale_by_number_of_atoms=False
+                )
             elif prop == "per_atom_charge":
-                self.loss_functions[prop] = PerAtomError(scale_by_number_of_atoms=True)
+                self.loss_functions[prop] = PerAtomError(scale_by_number_of_atoms=False)
             elif prop == "per_atom_spin_multiplicity":
-                self.loss_functions[prop] = PerAtomError(scale_by_number_of_atoms=True)
+                self.loss_functions[prop] = PerAtomError(scale_by_number_of_atoms=False)
             elif prop == "per_system_quadrupole_moment":
-                self.loss_functions[prop] = PerSystemQuadrupoleMomentError()
+                self.loss_functions[prop] = PerSystemQuadrupoleMomentError(
+                    scale_by_number_of_atoms=False
+                )
             else:
                 raise NotImplementedError(f"Loss type {prop} not implemented.")
 
             self.register_buffer(prop, self.weights_scheduling[prop])
+
+    def get_loss_weight(self, prop: str, epoch_idx: int) -> float:
+        """
+        Returns the loss weight for a given property at the specified epoch.
+
+
+        Parameters
+        ----------
+        prop: str
+            property_name
+        epoch_idx:
+            epoch number
+
+        Returns
+        -------
+        float:
+            weight for given property
+        """
+        return self.weights_scheduling[prop][epoch_idx]
 
     def forward(
         self,
@@ -672,7 +701,9 @@ def create_error_metrics(
         metric_dict = ModuleDict(
             {prop: MetricCollection([MeanMetric()]) for prop in loss_properties}
         )
+
         metric_dict["total_loss"] = MetricCollection([MeanMetric()])
+
     else:
         from modelforge.train.training import (
             _exchange_per_atom_energy_for_per_system_energy,
@@ -682,11 +713,22 @@ def create_error_metrics(
         # _exchange_per_atom_energy_for_per_system_energy function because, if
         # the `per_atom_energy` loss (i.e., the normalize per_system_energy
         # loss) is used, the validation error is still per_system_energy
+        # metric_dict = ModuleDict(
+        #     {
+        #         _exchange_per_atom_energy_for_per_system_energy(prop): MetricCollection(
+        #             [MeanAbsoluteError(), MeanSquaredError(squared=False)]
+        #         )  # only exchange per_atom_energy for per_system_energy
+        #         for prop in loss_properties
+        #     }
+        # )
         metric_dict = ModuleDict(
             {
-                _exchange_per_atom_energy_for_per_system_energy(prop): MetricCollection(
-                    [MeanAbsoluteError(), MeanSquaredError(squared=False)]
-                )  # only exchange per_atom_energy for per_system_energy
+                prop: MetricCollection(
+                    [
+                        MeanAbsoluteError(),
+                        MeanSquaredError(squared=False),
+                    ]
+                )
                 for prop in loss_properties
             }
         )

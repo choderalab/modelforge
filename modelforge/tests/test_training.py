@@ -125,6 +125,24 @@ def add_force_to_loss_parameter(config):
     t_config.loss_parameter.mixing_steps["per_atom_force"] = 1
 
 
+def add_energy_normalized_to_loss_parameter(config):
+    """
+    [training.loss_parameter]
+    loss_components = ['per_system_energy', 'per_system_energy_normalized']
+    # ------------------------------------------------------------ #
+    [training.loss_parameter.weight]
+    per_system_energy = 0.999 #NOTE: reciprocal units
+    per_system_energy_normalized = 1
+
+    """
+    t_config = config["training"]
+    t_config.loss_parameter.loss_components.append("per_system_energy_normalized")
+    t_config.loss_parameter.weight["per_system_energy_normalized"] = 0.001
+
+    t_config.loss_parameter.target_weight["per_system_energy_normalized"] = 0.001
+    t_config.loss_parameter.mixing_steps["per_system_energy_normalized"] = 1
+
+
 def add_dipole_moment_to_loss_parameter(config):
     """
     [training.loss_parameter]
@@ -181,22 +199,20 @@ def add_quadrupole_moment_to_loss_parameter(config):
 def replace_per_system_with_per_atom_loss(config):
     t_config = config["training"]
     t_config.loss_parameter.loss_components.remove("per_system_energy")
-    t_config.loss_parameter.loss_components.append("per_atom_energy")
+    t_config.loss_parameter.loss_components.append("per_system_energy_normalized")
 
     t_config.loss_parameter.weight.pop("per_system_energy")
-    t_config.loss_parameter.weight["per_atom_energy"] = 0.999
+    t_config.loss_parameter.weight["per_system_energy_normalized"] = 0.999
 
     t_config.loss_parameter.target_weight.pop("per_system_energy")
-    t_config.loss_parameter.target_weight["per_atom_energy"] = 0.999
+    t_config.loss_parameter.target_weight["per_system_energy_normalized"] = 0.999
 
     t_config.loss_parameter.mixing_steps.pop("per_system_energy")
-    t_config.loss_parameter.mixing_steps["per_atom_energy"] = 1
+    t_config.loss_parameter.mixing_steps["per_system_energy_normalized"] = 1
 
-    # NOTE: the loss is calculate per_atom, but the validation set error is
-    # per_system. This is because otherwise it's difficult to compare.
-    t_config.early_stopping.monitor = "val/per_system_energy/rmse"
-    t_config.monitor = "val/per_system_energy/rmse"
-    t_config.lr_scheduler.monitor = "val/per_system_energy/rmse"
+    t_config.early_stopping.monitor = "val/per_system_energy_normalized/rmse"
+    t_config.monitor = "val/per_system_energy_normalized/rmse"
+    t_config.lr_scheduler.monitor = "val/per_system_energy_normalized/rmse"
 
 
 from typing import Literal
@@ -687,11 +703,15 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir):
         dataset_cache_dir=dataset_cache_dir,
     )
 
-    loss_property = ["per_system_energy", "per_atom_force", "per_atom_energy"]
+    loss_property = [
+        "per_system_energy",
+        "per_atom_force",
+        "per_system_energy_normalized",
+    ]
     loss_weights = {
         "per_system_energy": torch.tensor([0.5]),
         "per_atom_force": torch.tensor([0.5]),
-        "per_atom_energy": torch.tensor([0.1]),
+        "per_system_energy_normalized": torch.tensor([0.1]),
     }
     loss = Loss(loss_property, loss_weights)
     assert loss is not None
@@ -704,6 +724,7 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir):
         dataset_cache_dir=dataset_cache_dir,
     )
     add_force_to_loss_parameter(config)
+    add_energy_normalized_to_loss_parameter(config)
 
     trainer = get_trainer(
         config,
@@ -737,20 +758,20 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir):
             ).pow(2)
         )
     )
-    # compare to reference evalue obtained from Loos class
+    # compare to reference value obtained from Loss class
     ref = torch.mean(loss_output["per_system_energy"])
     assert torch.allclose(ref, E_loss)
     E_loss = torch.mean(
         (
             (
-                prediction["per_system_energy_predict"]
-                - prediction["per_system_energy_true"]
+                prediction["per_system_energy_normalized_predict"]
+                - prediction["per_system_energy_normalized_true"]
             ).pow(2)
-            / batch.metadata.atomic_subsystem_counts.unsqueeze(1)
         )
     )
     # compare to reference evalue obtained from Loos class
-    ref = torch.mean(loss_output["per_atom_energy"])
+
+    ref = torch.mean(loss_output["per_system_energy_normalized"])
     assert torch.allclose(ref, E_loss)
 
     # --------------------------------------------- #
@@ -759,24 +780,24 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir):
         (prediction["per_atom_force_predict"] - prediction["per_atom_force_true"])
         .pow(2)
         .sum(dim=1, keepdim=True)
-    ).squeeze(-1)
-
-    # # Aggregate error per molecule
-    per_system_squared_error = torch.zeros_like(
-        batch.metadata.per_system_energy.squeeze(-1),
-        dtype=per_atom_force_squared_error.dtype,
-    )
-    per_system_squared_error.scatter_add_(
-        0,
-        batch.nnp_input.atomic_subsystem_indices.long(),
-        per_atom_force_squared_error,
-    )
-    # divide by number of atoms
-    per_system_squared_error = per_system_squared_error / (
-        3 * batch.metadata.atomic_subsystem_counts
     )
 
-    per_atom_force_mse = torch.mean(per_system_squared_error)
+    # # # Aggregate error per molecule
+    # per_system_squared_error = torch.zeros_like(
+    #     batch.metadata.per_system_energy.squeeze(-1),
+    #     dtype=per_atom_force_squared_error.dtype,
+    # )
+    # per_system_squared_error.scatter_add_(
+    #     0,
+    #     batch.nnp_input.atomic_subsystem_indices.long(),
+    #     per_atom_force_squared_error,
+    # )
+    # # divide by number of atoms
+    # per_system_squared_error = per_system_squared_error / (
+    #     3 * batch.metadata.atomic_subsystem_counts
+    # )
+
+    per_atom_force_mse = torch.mean(per_atom_force_squared_error)
     assert torch.allclose(torch.mean(loss_output["per_atom_force"]), per_atom_force_mse)
 
     # --------------------------------------------- #
@@ -784,9 +805,10 @@ def test_loss(single_batch_with_batchsize, prep_temp_dir, dataset_temp_dir):
     # calculate the total loss
 
     assert torch.allclose(
-        loss_weights["per_system_energy"] * loss_output["per_system_energy"]
-        + loss_weights["per_atom_force"] * loss_output["per_atom_force"]
-        + +loss_weights["per_atom_energy"] * loss_output["per_atom_energy"],
+        loss_weights["per_system_energy"] * torch.mean(loss_output["per_system_energy"])
+        + loss_weights["per_atom_force"] * torch.mean(loss_output["per_atom_force"])
+        + loss_weights["per_system_energy_normalized"]
+        * torch.mean(loss_output["per_system_energy_normalized"]),
         loss_output["total_loss"].to(torch.float32),
     )
 

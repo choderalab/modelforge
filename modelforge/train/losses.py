@@ -33,11 +33,14 @@ class Error(nn.Module, ABC):
 
     def __init__(self, scale_by_number_of_atoms: bool = True):
         super().__init__()
-        self.scale_by_number_of_atoms = (
-            self._scale_by_number_of_atoms
-            if scale_by_number_of_atoms
-            else lambda error, atomic_subsystem_counts, prefactor=1: error
-        )
+
+        self.scale_by_number_of_atoms = scale_by_number_of_atoms
+
+        # self.scale_by_number_of_atoms = (
+        #     self._scale_by_number_of_atoms
+        #     if scale_by_number_of_atoms
+        #     else lambda error, atomic_subsystem_counts, prefactor=1: error
+        # )
 
     @abstractmethod
     def calculate_error(
@@ -128,26 +131,31 @@ class ForceSquaredError(Error):
             per_atom_prediction, per_atom_reference
         )
 
-        # Initialize per-system squared error tensor
-        per_system_squared_error = torch.zeros_like(
-            batch.metadata.per_system_energy, dtype=per_atom_squared_error.dtype
-        )
+        # if we set scale by number of atoms, we will be returning a per_system quantity
 
-        # Aggregate error per system
-        per_system_squared_error = per_system_squared_error.scatter_add(
-            0,
-            batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
-            per_atom_squared_error,
-        )
+        if self.scale_by_number_of_atoms:
+            # Initialize per-system squared error tensor
+            per_system_squared_error = torch.zeros_like(
+                batch.metadata.per_system_energy, dtype=per_atom_squared_error.dtype
+            )
 
-        # Scale error by number of atoms
-        per_system_square_error_scaled = self.scale_by_number_of_atoms(
-            per_system_squared_error,
-            batch.metadata.atomic_subsystem_counts,
-            prefactor=per_atom_prediction.shape[-1],
-        )
+            # Aggregate error per system
+            per_system_squared_error = per_system_squared_error.scatter_add(
+                0,
+                batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
+                per_atom_squared_error,
+            )
 
-        return per_system_square_error_scaled.contiguous()
+            # Scale error by number of atoms
+            per_system_square_error_scaled = self._scale_by_number_of_atoms(
+                per_system_squared_error,
+                batch.metadata.atomic_subsystem_counts,
+                prefactor=per_atom_prediction.shape[-1],
+            )
+
+            return per_system_square_error_scaled.contiguous()
+        else:
+            return per_atom_squared_error.contiguous()
 
 
 class EnergySquaredError(Error):
@@ -191,13 +199,16 @@ class EnergySquaredError(Error):
         per_system_squared_error = self.calculate_error(
             per_system_prediction, per_system_reference
         )
-        # Scale error by number of atoms
-        per_system_square_error_scaled = self.scale_by_number_of_atoms(
-            per_system_squared_error,
-            batch.metadata.atomic_subsystem_counts,
-        )
+        if self.scale_by_number_of_atoms:
+            # Scale error by number of atoms if requested
+            per_system_square_error_scaled = self._scale_by_number_of_atoms(
+                per_system_squared_error,
+                batch.metadata.atomic_subsystem_counts,
+            )
 
-        return per_system_square_error_scaled
+            return per_system_square_error_scaled
+        else:
+            return per_system_squared_error
 
 
 class PerAtomError(Error):
@@ -242,26 +253,29 @@ class PerAtomError(Error):
             per_atom_prediction, per_atom_reference
         )
 
-        # Initialize per-system squared error tensor
-        per_system_squared_error = torch.zeros_like(
-            batch.metadata.per_system_energy, dtype=per_atom_squared_error.dtype
-        )
+        if self.scale_by_number_of_atoms:
+            # Initialize per-system squared error tensor
+            per_system_squared_error = torch.zeros_like(
+                batch.metadata.per_system_energy, dtype=per_atom_squared_error.dtype
+            )
 
-        # Aggregate error per system
-        per_system_squared_error = per_system_squared_error.scatter_add(
-            0,
-            batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
-            per_atom_squared_error,
-        )
+            # Aggregate error per system
+            per_system_squared_error = per_system_squared_error.scatter_add(
+                0,
+                batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
+                per_atom_squared_error,
+            )
 
-        # Scale error by number of atoms
-        per_system_square_error_scaled = self.scale_by_number_of_atoms(
-            per_system_squared_error,
-            batch.metadata.atomic_subsystem_counts,
-            prefactor=1,
-        )
+            # Scale error by number of atoms
+            per_system_square_error_scaled = self._scale_by_number_of_atoms(
+                per_system_squared_error,
+                batch.metadata.atomic_subsystem_counts,
+                prefactor=1,
+            )
 
-        return per_system_square_error_scaled.contiguous()
+            return per_system_square_error_scaled.contiguous()
+        else:
+            return per_atom_squared_error.contiguous()
 
 
 class PerAtomChargeError(Error):
@@ -305,27 +319,29 @@ class PerAtomChargeError(Error):
         per_atom_squared_error = self.calculate_error(
             per_atom_prediction, per_atom_reference
         )
+        if self.scale_by_number_of_atoms:
+            # Initialize per-system squared error tensor
+            per_system_squared_error = torch.zeros_like(
+                batch.metadata.per_system_energy, dtype=per_atom_squared_error.dtype
+            )
 
-        # Initialize per-system squared error tensor
-        per_system_squared_error = torch.zeros_like(
-            batch.metadata.per_system_energy, dtype=per_atom_squared_error.dtype
-        )
+            # Aggregate error per system
+            per_system_squared_error = per_system_squared_error.scatter_add(
+                0,
+                batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
+                per_atom_squared_error,
+            )
 
-        # Aggregate error per system
-        per_system_squared_error = per_system_squared_error.scatter_add(
-            0,
-            batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
-            per_atom_squared_error,
-        )
+            # Scale error by number of atoms
+            per_system_square_error_scaled = self._scale_by_number_of_atoms(
+                per_system_squared_error,
+                batch.metadata.atomic_subsystem_counts,
+                prefactor=1,
+            )
 
-        # Scale error by number of atoms
-        per_system_square_error_scaled = self.scale_by_number_of_atoms(
-            per_system_squared_error,
-            batch.metadata.atomic_subsystem_counts,
-            prefactor=1,
-        )
-
-        return per_system_square_error_scaled.contiguous()
+            return per_system_square_error_scaled.contiguous()
+        else:
+            return per_atom_squared_error.contiguous()
 
 
 class TotalChargeError(Error):
@@ -338,12 +354,6 @@ class TotalChargeError(Error):
         total_charge_predict: torch.Tensor,
         total_charge_true: torch.Tensor,
     ) -> torch.Tensor:
-        # previous code block, where we were return absolute value instead of the squared difference
-        # """
-        # Computes the absolute difference between predicted and true total charges.
-        # """
-        # error = torch.abs(total_charge_predict - total_charge_true)
-        # return error  # Shape: [batch_size, 1]
 
         return self.calculate_squared_error(
             total_charge_predict, total_charge_true
@@ -373,6 +383,7 @@ class TotalChargeError(Error):
             The error for total charges.
         """
         error = self.calculate_error(total_charge_predict, total_charge_true)
+
         return error  # No scaling needed
 
 
@@ -471,7 +482,8 @@ class PerSystemDipoleMomentError(Error):
 class Loss(nn.Module):
 
     _SUPPORTED_PROPERTIES = [
-        "per_atom_energy",
+        # "per_atom_energy",
+        "per_system_energy_normalized",
         "per_system_energy",
         "per_atom_force",
         "per_system_total_charge",
@@ -519,12 +531,13 @@ class Loss(nn.Module):
 
             if prop == "per_atom_force":
                 self.loss_functions[prop] = ForceSquaredError(
-                    scale_by_number_of_atoms=True
+                    # scale_by_number_of_atoms=True
+                    scale_by_number_of_atoms=False
                 )
-            elif prop == "per_atom_energy":
-                self.loss_functions[prop] = EnergySquaredError(
-                    scale_by_number_of_atoms=True
-                )
+            # elif prop == "per_atom_energy":
+            #     self.loss_functions[prop] = EnergySquaredError(
+            #         scale_by_number_of_atoms=True
+            #     )
             elif prop == "per_system_energy":
                 self.loss_functions[prop] = EnergySquaredError(
                     scale_by_number_of_atoms=False
@@ -533,18 +546,48 @@ class Loss(nn.Module):
                 self.loss_functions[prop] = TotalChargeError(
                     scale_by_number_of_atoms=False
                 )
+            elif prop == "per_system_energy_normalized":
+                self.loss_functions[prop] = EnergySquaredError(
+                    scale_by_number_of_atoms=False
+                )
             elif prop == "per_system_dipole_moment":
-                self.loss_functions[prop] = PerSystemDipoleMomentError()
+                self.loss_functions[prop] = PerSystemDipoleMomentError(
+                    scale_by_number_of_atoms=False
+                )
             elif prop == "per_atom_charge":
-                self.loss_functions[prop] = PerAtomError(scale_by_number_of_atoms=True)
+                self.loss_functions[prop] = PerAtomError(scale_by_number_of_atoms=False)
             elif prop == "per_atom_spin_multiplicity":
-                self.loss_functions[prop] = PerAtomError(scale_by_number_of_atoms=True)
+                self.loss_functions[prop] = PerAtomError(scale_by_number_of_atoms=False)
             elif prop == "per_system_quadrupole_moment":
-                self.loss_functions[prop] = PerSystemQuadrupoleMomentError()
+                self.loss_functions[prop] = PerSystemQuadrupoleMomentError(
+                    scale_by_number_of_atoms=False
+                )
             else:
                 raise NotImplementedError(f"Loss type {prop} not implemented.")
 
             self.register_buffer(prop, self.weights_scheduling[prop])
+
+    def get_loss_weight(self, prop: str, epoch_idx: int) -> float:
+        """
+        Returns the loss weight for a given property at the specified epoch.
+
+
+        Parameters
+        ----------
+        prop: str
+            property_name
+        epoch_idx:
+            epoch number
+
+        Returns
+        -------
+        float:
+            weight for given property
+        """
+        if epoch_idx < len(self.weights_scheduling[prop]):
+            return self.weights_scheduling[prop][epoch_idx]
+        else:
+            return self.weights_scheduling[prop][-1]
 
     def forward(
         self,
@@ -574,7 +617,7 @@ class Loss(nn.Module):
         # Save the loss as a dictionary
         loss_dict = {}
         # Accumulate loss
-        total_loss = torch.zeros_like(batch.metadata.per_system_energy)
+        total_loss = 0  # torch.zeros_like(batch.metadata.per_system_energy)
 
         # Iterate over loss properties
         for prop in self.loss_components:
@@ -597,7 +640,9 @@ class Loss(nn.Module):
                 raise ValueError(f"NaN values detected in {prop_} loss.")
 
             # Accumulate weighted per-sample losses
-            weighted_loss = self.weights_scheduling[prop][epoch_idx] * prop_loss
+            weighted_loss = torch.mean(
+                self.weights_scheduling[prop][epoch_idx] * prop_loss.flatten()
+            )
 
             total_loss += weighted_loss  # Note: total_loss is still per-sample
             loss_dict[prop] = prop_loss  # Store per-sample loss
@@ -672,7 +717,9 @@ def create_error_metrics(
         metric_dict = ModuleDict(
             {prop: MetricCollection([MeanMetric()]) for prop in loss_properties}
         )
+
         metric_dict["total_loss"] = MetricCollection([MeanMetric()])
+
     else:
         from modelforge.train.training import (
             _exchange_per_atom_energy_for_per_system_energy,
@@ -682,11 +729,22 @@ def create_error_metrics(
         # _exchange_per_atom_energy_for_per_system_energy function because, if
         # the `per_atom_energy` loss (i.e., the normalize per_system_energy
         # loss) is used, the validation error is still per_system_energy
+        # metric_dict = ModuleDict(
+        #     {
+        #         _exchange_per_atom_energy_for_per_system_energy(prop): MetricCollection(
+        #             [MeanAbsoluteError(), MeanSquaredError(squared=False)]
+        #         )  # only exchange per_atom_energy for per_system_energy
+        #         for prop in loss_properties
+        #     }
+        # )
         metric_dict = ModuleDict(
             {
-                _exchange_per_atom_energy_for_per_system_energy(prop): MetricCollection(
-                    [MeanAbsoluteError(), MeanSquaredError(squared=False)]
-                )  # only exchange per_atom_energy for per_system_energy
+                prop: MetricCollection(
+                    [
+                        MeanAbsoluteError(),
+                        MeanSquaredError(squared=False),
+                    ]
+                )
                 for prop in loss_properties
             }
         )

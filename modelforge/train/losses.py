@@ -206,7 +206,9 @@ class EnergySquaredError(Error):
                 batch.metadata.atomic_subsystem_counts,
             )
 
-        return per_system_square_error_scaled
+            return per_system_square_error_scaled
+        else:
+            return per_system_squared_error
 
 
 class PerAtomError(Error):

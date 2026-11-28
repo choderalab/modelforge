@@ -614,7 +614,7 @@ class Loss(nn.Module):
         # Save the loss as a dictionary
         loss_dict = {}
         # Accumulate loss
-        total_loss = torch.zeros_like(batch.metadata.per_system_energy)
+        total_loss = 0  # torch.zeros_like(batch.metadata.per_system_energy)
 
         # Iterate over loss properties
         for prop in self.loss_components:
@@ -637,7 +637,9 @@ class Loss(nn.Module):
                 raise ValueError(f"NaN values detected in {prop_} loss.")
 
             # Accumulate weighted per-sample losses
-            weighted_loss = self.weights_scheduling[prop][epoch_idx] * prop_loss
+            weighted_loss = torch.mean(
+                self.weights_scheduling[prop][epoch_idx] * prop_loss.flatten()
+            )
 
             total_loss += weighted_loss  # Note: total_loss is still per-sample
             loss_dict[prop] = prop_loss  # Store per-sample loss

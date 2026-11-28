@@ -984,7 +984,8 @@ class TrainingAdapter(pL.LightningModule):
         )
 
         # Compute the mean loss for optimization
-        total_loss = loss_dict["total_loss"].mean()
+        # total_loss = loss_dict["total_loss"].mean()
+        total_loss = loss_dict["total_loss"]
         return total_loss
 
     def validation_step(self, batch: BatchData, batch_idx: int) -> None:

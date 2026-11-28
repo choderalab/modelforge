@@ -534,10 +534,10 @@ class Loss(nn.Module):
                     # scale_by_number_of_atoms=True
                     scale_by_number_of_atoms=False
                 )
-            elif prop == "per_atom_energy":
-                self.loss_functions[prop] = EnergySquaredError(
-                    scale_by_number_of_atoms=True
-                )
+            # elif prop == "per_atom_energy":
+            #     self.loss_functions[prop] = EnergySquaredError(
+            #         scale_by_number_of_atoms=True
+            #     )
             elif prop == "per_system_energy":
                 self.loss_functions[prop] = EnergySquaredError(
                     scale_by_number_of_atoms=False
@@ -584,7 +584,10 @@ class Loss(nn.Module):
         float:
             weight for given property
         """
-        return self.weights_scheduling[prop][epoch_idx]
+        if epoch_idx < len(self.weights_scheduling[prop]):
+            return self.weights_scheduling[prop][epoch_idx]
+        else:
+            return self.weights_scheduling[prop][-1]
 
     def forward(
         self,

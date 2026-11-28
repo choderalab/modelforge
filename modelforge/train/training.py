@@ -302,10 +302,10 @@ class CalculateProperties(torch.nn.Module):
 
         # scale these by number of atoms
         per_system_energy_normalized_true = (
-            per_system_energy_true / atomic_subsystem_counts
+            per_system_energy_true / atomic_subsystem_counts.unsqueeze(-1)
         )
         per_system_energy_normalized_predict = (
-            per_system_energy_predict / atomic_subsystem_counts
+            per_system_energy_predict / atomic_subsystem_counts.unsqueeze(-1)
         )
 
         return {

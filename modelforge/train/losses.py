@@ -33,11 +33,14 @@ class Error(nn.Module, ABC):
 
     def __init__(self, scale_by_number_of_atoms: bool = True):
         super().__init__()
-        self.scale_by_number_of_atoms = (
-            self._scale_by_number_of_atoms
-            if scale_by_number_of_atoms
-            else lambda error, atomic_subsystem_counts, prefactor=1: error
-        )
+
+        self.scale_by_number_of_atoms = scale_by_number_of_atoms
+
+        # self.scale_by_number_of_atoms = (
+        #     self._scale_by_number_of_atoms
+        #     if scale_by_number_of_atoms
+        #     else lambda error, atomic_subsystem_counts, prefactor=1: error
+        # )
 
     @abstractmethod
     def calculate_error(
@@ -128,26 +131,31 @@ class ForceSquaredError(Error):
             per_atom_prediction, per_atom_reference
         )
 
-        # Initialize per-system squared error tensor
-        per_system_squared_error = torch.zeros_like(
-            batch.metadata.per_system_energy, dtype=per_atom_squared_error.dtype
-        )
+        # if we set scale by number of atoms, we will be returning a per_system quantity
 
-        # Aggregate error per system
-        per_system_squared_error = per_system_squared_error.scatter_add(
-            0,
-            batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
-            per_atom_squared_error,
-        )
+        if self.scale_by_number_of_atoms:
+            # Initialize per-system squared error tensor
+            per_system_squared_error = torch.zeros_like(
+                batch.metadata.per_system_energy, dtype=per_atom_squared_error.dtype
+            )
 
-        # Scale error by number of atoms
-        per_system_square_error_scaled = self.scale_by_number_of_atoms(
-            per_system_squared_error,
-            batch.metadata.atomic_subsystem_counts,
-            prefactor=per_atom_prediction.shape[-1],
-        )
+            # Aggregate error per system
+            per_system_squared_error = per_system_squared_error.scatter_add(
+                0,
+                batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
+                per_atom_squared_error,
+            )
 
-        return per_system_square_error_scaled.contiguous()
+            # Scale error by number of atoms
+            per_system_square_error_scaled = self._scale_by_number_of_atoms(
+                per_system_squared_error,
+                batch.metadata.atomic_subsystem_counts,
+                prefactor=per_atom_prediction.shape[-1],
+            )
+
+            return per_system_square_error_scaled.contiguous()
+        else:
+            return per_atom_squared_error.contiguous()
 
 
 class EnergySquaredError(Error):
@@ -191,11 +199,12 @@ class EnergySquaredError(Error):
         per_system_squared_error = self.calculate_error(
             per_system_prediction, per_system_reference
         )
-        # Scale error by number of atoms
-        per_system_square_error_scaled = self.scale_by_number_of_atoms(
-            per_system_squared_error,
-            batch.metadata.atomic_subsystem_counts,
-        )
+        if self.scale_by_number_of_atoms:
+            # Scale error by number of atoms if requested
+            per_system_square_error_scaled = self._scale_by_number_of_atoms(
+                per_system_squared_error,
+                batch.metadata.atomic_subsystem_counts,
+            )
 
         return per_system_square_error_scaled
 
@@ -242,26 +251,29 @@ class PerAtomError(Error):
             per_atom_prediction, per_atom_reference
         )
 
-        # Initialize per-system squared error tensor
-        per_system_squared_error = torch.zeros_like(
-            batch.metadata.per_system_energy, dtype=per_atom_squared_error.dtype
-        )
+        if self.scale_by_number_of_atoms:
+            # Initialize per-system squared error tensor
+            per_system_squared_error = torch.zeros_like(
+                batch.metadata.per_system_energy, dtype=per_atom_squared_error.dtype
+            )
 
-        # Aggregate error per system
-        per_system_squared_error = per_system_squared_error.scatter_add(
-            0,
-            batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
-            per_atom_squared_error,
-        )
+            # Aggregate error per system
+            per_system_squared_error = per_system_squared_error.scatter_add(
+                0,
+                batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
+                per_atom_squared_error,
+            )
 
-        # Scale error by number of atoms
-        per_system_square_error_scaled = self.scale_by_number_of_atoms(
-            per_system_squared_error,
-            batch.metadata.atomic_subsystem_counts,
-            prefactor=1,
-        )
+            # Scale error by number of atoms
+            per_system_square_error_scaled = self._scale_by_number_of_atoms(
+                per_system_squared_error,
+                batch.metadata.atomic_subsystem_counts,
+                prefactor=1,
+            )
 
-        return per_system_square_error_scaled.contiguous()
+            return per_system_square_error_scaled.contiguous()
+        else:
+            return per_atom_squared_error.contiguous()
 
 
 class PerAtomChargeError(Error):
@@ -305,27 +317,29 @@ class PerAtomChargeError(Error):
         per_atom_squared_error = self.calculate_error(
             per_atom_prediction, per_atom_reference
         )
+        if self.scale_by_number_of_atoms:
+            # Initialize per-system squared error tensor
+            per_system_squared_error = torch.zeros_like(
+                batch.metadata.per_system_energy, dtype=per_atom_squared_error.dtype
+            )
 
-        # Initialize per-system squared error tensor
-        per_system_squared_error = torch.zeros_like(
-            batch.metadata.per_system_energy, dtype=per_atom_squared_error.dtype
-        )
+            # Aggregate error per system
+            per_system_squared_error = per_system_squared_error.scatter_add(
+                0,
+                batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
+                per_atom_squared_error,
+            )
 
-        # Aggregate error per system
-        per_system_squared_error = per_system_squared_error.scatter_add(
-            0,
-            batch.nnp_input.atomic_subsystem_indices.long().unsqueeze(1),
-            per_atom_squared_error,
-        )
+            # Scale error by number of atoms
+            per_system_square_error_scaled = self._scale_by_number_of_atoms(
+                per_system_squared_error,
+                batch.metadata.atomic_subsystem_counts,
+                prefactor=1,
+            )
 
-        # Scale error by number of atoms
-        per_system_square_error_scaled = self.scale_by_number_of_atoms(
-            per_system_squared_error,
-            batch.metadata.atomic_subsystem_counts,
-            prefactor=1,
-        )
-
-        return per_system_square_error_scaled.contiguous()
+            return per_system_square_error_scaled.contiguous()
+        else:
+            return per_atom_squared_error.contiguous()
 
 
 class TotalChargeError(Error):
@@ -338,12 +352,6 @@ class TotalChargeError(Error):
         total_charge_predict: torch.Tensor,
         total_charge_true: torch.Tensor,
     ) -> torch.Tensor:
-        # previous code block, where we were return absolute value instead of the squared difference
-        # """
-        # Computes the absolute difference between predicted and true total charges.
-        # """
-        # error = torch.abs(total_charge_predict - total_charge_true)
-        # return error  # Shape: [batch_size, 1]
 
         return self.calculate_squared_error(
             total_charge_predict, total_charge_true
@@ -373,6 +381,7 @@ class TotalChargeError(Error):
             The error for total charges.
         """
         error = self.calculate_error(total_charge_predict, total_charge_true)
+
         return error  # No scaling needed
 
 
